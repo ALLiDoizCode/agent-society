@@ -1,0 +1,53 @@
+schema: 1
+story: '1.5'
+story_title: 'ILP Peer Info Discovery'
+gate: CONCERNS
+status_reason: 'TypeScript compilation fails with 3 type errors in test file due to VerifiedEvent casting. Implementation is solid, tests pass at runtime.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-02-06T06:20:00Z'
+
+waiver: { active: false }
+
+top_issues:
+  - id: 'TS-001'
+    severity: medium
+    finding: 'Test helper createIlpPeerInfoEvent uses direct cast to VerifiedEvent missing [verifiedSymbol] property'
+    suggested_action: 'Cast through unknown first: `as unknown as VerifiedEvent` or use NostrEvent type'
+    suggested_owner: dev
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 1, low: 0 }
+  recommendations:
+    must_fix:
+      - 'Fix TypeScript type casting in test file (3 locations)'
+    monitor: []
+
+quality_score: 90
+expires: '2026-02-20T00:00:00Z'
+
+evidence:
+  tests_reviewed: 11
+  risks_identified: 1
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Proper pubkey validation, uses established parsing with validation'
+  performance:
+    status: PASS
+    notes: 'Batch query pattern efficient, performance test confirms <5s for 100 follows'
+  reliability:
+    status: PASS
+    notes: 'Graceful handling of missing/malformed events, proper error propagation'
+  maintainability:
+    status: PASS
+    notes: 'Clean code, follows existing patterns, well-documented'
+
+recommendations:
+  immediate:
+    - action: 'Fix VerifiedEvent type casting in test helpers'
+      refs: ['packages/core/src/discovery/NostrPeerDiscovery.test.ts:31', 'packages/core/src/discovery/NostrPeerDiscovery.test.ts:421', 'packages/core/src/discovery/NostrPeerDiscovery.test.ts:458']
+  future: []

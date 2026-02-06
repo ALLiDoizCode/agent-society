@@ -1,0 +1,28 @@
+{
+  "name": "@agent-society/examples",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Example applications for agent-society protocol",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "keywords": [
+    "examples"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@agent-society/core": "workspace:*",
+    "@agent-society/relay": "workspace:*"
+  }
+}
