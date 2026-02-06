@@ -1,0 +1,50 @@
+# Quality Gate: Story 2.1 - Static SPSP Info Query
+schema: 1
+story: "2.1"
+story_title: "Static SPSP Info Query"
+gate: PASS
+status_reason: "All 5 acceptance criteria met with comprehensive test coverage. Code follows established patterns, no issues found."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-02-06T08:00:00Z"
+
+waiver: { active: false }
+
+top_issues: []
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - action: "Consider extracting PUBKEY_REGEX to shared validation utility"
+        refs: ["packages/core/src/spsp/NostrSpspClient.ts:14", "packages/core/src/discovery/NostrPeerDiscovery.ts:13"]
+
+quality_score: 100
+expires: "2026-02-20T08:00:00Z"
+
+evidence:
+  tests_reviewed: 21
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Pubkey validation in place, no sensitive data exposure"
+  performance:
+    status: PASS
+    notes: "Efficient single-query pattern with SimplePool.querySync()"
+  reliability:
+    status: PASS
+    notes: "Graceful handling of malformed events, proper error cause chaining"
+  maintainability:
+    status: PASS
+    notes: "Follows established NostrPeerDiscovery pattern, well-documented"
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Extract PUBKEY_REGEX to shared validation utility to reduce duplication"
+      refs: ["packages/core/src/spsp/NostrSpspClient.ts:14"]
