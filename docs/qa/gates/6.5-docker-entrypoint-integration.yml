@@ -1,0 +1,45 @@
+schema: 1
+story: "6.5"
+story_title: "Docker Entrypoint Integration"
+gate: PASS
+status_reason: "All 5 acceptance criteria met with 14 new tests. Clean refactoring of entrypoint to use BootstrapService with layered discovery + SocialPeerDiscovery. 0 regressions across 854-test suite."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-02-08T00:20:00Z"
+
+waiver: { active: false }
+
+top_issues: []
+
+quality_score: 100
+expires: "2026-02-22T00:20:00Z"
+
+evidence:
+  tests_reviewed: 14
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "No new attack surfaces. Admin API URL from env var, NOSTR_SECRET_KEY validated, no secrets logged. ADDITIONAL_PEERS validated by BootstrapService internally."
+  performance:
+    status: PASS
+    notes: "Sequential bootstrap appropriate for startup. SocialPeerDiscovery has configurable cooldown. 500ms relay warmup is pre-existing pattern."
+  reliability:
+    status: PASS
+    notes: "Bootstrap failures non-fatal (returns successful results only). Social discovery errors isolated per-peer. Graceful shutdown in correct order: social → SPSP → relay → BLS."
+  maintainability:
+    status: PASS
+    notes: "Clean separation of exported utility functions for testability. VITEST env guard prevents auto-execution. Follows established connector admin client interface from core."
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Add parseConfig() test for missing ILP_ADDRESS (third required var)"
+      refs: ["docker/src/entrypoint.test.ts"]
+    - action: "Remove removePeer type cast in tests by declaring it non-optional in docker's ConnectorAdminClient implementation"
+      refs: ["docker/src/entrypoint.test.ts:203", "docker/src/entrypoint.test.ts:220"]
+    - action: "Fix pre-existing TS7016 declaration file issue for docker package standalone type-checking"
+      refs: ["docker/package.json"]

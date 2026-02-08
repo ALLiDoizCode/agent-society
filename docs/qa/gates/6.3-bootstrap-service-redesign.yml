@@ -1,0 +1,53 @@
+schema: 1
+story: "6.3"
+story_title: "Bootstrap Service Redesign"
+gate: PASS
+status_reason: "All 6 ACs met. Clean refactoring removes SPSP from bootstrap, updates ConnectorAdminClient to agent-runtime API shape, adds loadPeers() with genesis+ArDrive merge, and makes admin/publish failures non-fatal. 826 tests pass, 0 regressions."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-02-07T23:22:00Z"
+
+waiver: { active: false }
+
+top_issues: []
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 2 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Pre-existing ESLint violations (any[] at L294, inferrable type at L514) — not introduced by this story"
+      - "ArDrive peers silently skipped when defaultRelayUrl is unset — consider adding a warning log"
+
+quality_score: 90
+expires: "2026-02-21T23:22:00Z"
+
+evidence:
+  tests_reviewed: 16
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Pubkey validation enforced, SPSP secrets removed from bootstrap flow, no injection vectors"
+  performance:
+    status: PASS
+    notes: "Bootstrap is startup-only, ArDrive fetch is optional and gated behind config flag"
+  reliability:
+    status: PASS
+    notes: "Non-fatal error handling for admin API and publish failures, per-peer failure isolation"
+  maintainability:
+    status: PASS
+    notes: "Clean interface separation, proper barrel exports, co-located tests, good mock patterns"
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Fix pre-existing any[] at bootstrap.ts:294 to unknown[]"
+      refs: ["packages/core/src/bootstrap.ts:294"]
+    - action: "Remove inferrable type annotation at bootstrap.ts:514"
+      refs: ["packages/core/src/bootstrap.ts:514"]
+    - action: "Add console.warn when ArDrive peers are skipped due to missing defaultRelayUrl"
+      refs: ["packages/core/src/bootstrap.ts:149"]
