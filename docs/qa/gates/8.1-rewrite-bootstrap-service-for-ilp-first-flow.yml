@@ -1,0 +1,67 @@
+schema: 1
+story: '8.1'
+story_title: 'Rewrite Bootstrap Service for ILP-First Flow'
+gate: PASS
+status_reason: 'All 10 acceptance criteria are implemented and tested. 36 tests passing (7 agent-runtime-client + 29 BootstrapService). Three-phase bootstrap is backward compatible. Minor code quality items noted but no blocking issues.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-02-08T22:30:00Z'
+
+waiver: { active: false }
+
+top_issues:
+  - id: 'CODE-001'
+    severity: low
+    finding: 'PUBKEY_REGEX duplicated in types.ts and BootstrapService.ts instead of importing from types'
+    suggested_action: 'Import PUBKEY_REGEX from types.ts in BootstrapService.ts'
+    suggested_owner: dev
+  - id: 'DOC-001'
+    severity: low
+    finding: 'TOKEN_NETWORK_*, SETTLEMENT_TIMEOUT, INITIAL_DEPOSIT env vars documented in entrypoint header but not parsed'
+    suggested_action: 'Either parse these env vars or remove from header comments to avoid confusion'
+    suggested_owner: dev
+  - id: 'CODE-002'
+    severity: low
+    finding: 'setAgentRuntimeClient() uses type assertion to write readonly field'
+    suggested_action: 'Make agentRuntimeClient non-readonly or use a setter-friendly pattern'
+    suggested_owner: dev
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 3 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - 'Unparsed env vars in entrypoint header comments may confuse operators'
+
+quality_score: 90
+expires: '2026-02-22T22:30:00Z'
+
+evidence:
+  tests_reviewed: 36
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'NIP-44 encrypted SPSP, TOON decode failures caught, no exposed credentials'
+  performance:
+    status: PASS
+    notes: 'Appropriate timeouts, BigInt pricing, no unnecessary allocations'
+  reliability:
+    status: PASS
+    notes: 'Phase 2/3 failures are non-fatal, event emitter errors caught, graceful degradation'
+  maintainability:
+    status: PASS
+    notes: 'Clean module separation (types/client/service/index), DI for TOON encoding, backward compatible'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Import PUBKEY_REGEX from types.ts instead of redeclaring in BootstrapService.ts'
+      refs: ['packages/core/src/bootstrap/BootstrapService.ts:323']
+    - action: 'Remove or parse TOKEN_NETWORK_*, SETTLEMENT_TIMEOUT, INITIAL_DEPOSIT from entrypoint header'
+      refs: ['docker/src/entrypoint.ts:27-29']
+    - action: 'Refactor setAgentRuntimeClient() to avoid type assertion on readonly field'
+      refs: ['packages/core/src/bootstrap/BootstrapService.ts:112']

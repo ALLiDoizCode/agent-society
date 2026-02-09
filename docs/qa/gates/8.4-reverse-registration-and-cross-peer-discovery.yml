@@ -1,0 +1,70 @@
+schema: 1
+story: '8.4'
+story_title: 'Reverse Registration and Cross-Peer Discovery'
+gate: PASS
+status_reason: 'Independent verification confirms all 8 ACs met with comprehensive test coverage (15 new tests, 1006 total, 0 failures). Clean architecture with proper separation from BootstrapService, non-fatal error handling, and correct relay subscription patterns.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-02-09T17:30:00Z'
+
+waiver: { active: false }
+
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Entrypoint test envKeysToClean does not include SUPPORTED_CHAINS and SETTLEMENT_ADDRESS_* vars (carried from 8.2/8.3)'
+    suggested_action: 'Add settlement-related env vars to envKeysToClean in docker/src/entrypoint.test.ts'
+    suggested_owner: dev
+  - id: 'TEST-002'
+    severity: low
+    finding: 'No explicit test for addPeer() registration failure path (code handles correctly but lacks test)'
+    suggested_action: 'Add test where mockAdmin.addPeer rejects to verify handshake-failed event emission'
+    suggested_owner: dev
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 2 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - 'Entrypoint test env cleanup for settlement vars'
+
+quality_score: 90
+expires: '2026-02-23T17:30:00Z'
+
+evidence:
+  tests_reviewed: 15
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'No secrets exposed, DI-based key handling, pubkey validation via excludeSet, no raw user input in ILP packets'
+  performance:
+    status: PASS
+    notes: 'Sequential peer processing is deliberate to avoid connector admin overload. No unbounded resource growth.'
+  reliability:
+    status: PASS
+    notes: 'Non-fatal error handling for registration, SPSP handshake, and deregistration. Graceful shutdown wired in entrypoint.'
+  maintainability:
+    status: PASS
+    notes: 'Clean separation from BootstrapService, follows established event emitter and DI patterns, JSDoc on all public methods'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Add unit test for off() listener removal'
+      refs: ['packages/core/src/bootstrap/RelayMonitor.test.ts']
+    - action: 'Add unit test for addPeer() registration failure path'
+      refs: ['packages/core/src/bootstrap/RelayMonitor.test.ts']
+    - action: 'Add settlement env vars to entrypoint test envKeysToClean (carried from 8.2/8.3)'
+      refs: ['docker/src/entrypoint.test.ts:17-31']
+
+history:
+  - at: '2026-02-09T17:10:00Z'
+    gate: PASS
+    note: 'Initial review - all ACs met, quality_score 100'
+  - at: '2026-02-09T17:30:00Z'
+    gate: PASS
+    note: 'Independent verification - confirmed PASS, adjusted quality_score to 90 for 2 low-severity test coverage gaps'

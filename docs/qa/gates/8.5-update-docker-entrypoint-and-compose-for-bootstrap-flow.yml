@@ -1,0 +1,55 @@
+schema: 1
+story: '8.5'
+story_title: 'Update Docker Entrypoint and Compose for Bootstrap Flow'
+gate: PASS
+status_reason: 'All in-scope ACs (1-3) fully implemented with 9 new tests (26 total in entrypoint tests, 1006 total suite). Clean health-check polling, SPSP_MIN_PRICE parsing, and settlement validation. Addresses carry-over test cleanup from 8.4 gate.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-02-09T18:15:00Z'
+
+waiver: { active: false }
+
+top_issues:
+  - id: 'CFG-001'
+    severity: low
+    finding: 'Negative SPSP_MIN_PRICE values (e.g., -1) accepted without validation — semantically invalid but non-exploitable'
+    suggested_action: 'Consider adding validation to reject negative values in parseConfig()'
+    suggested_owner: dev
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 1 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - 'Negative SPSP_MIN_PRICE validation'
+
+quality_score: 95
+expires: '2026-02-23T18:15:00Z'
+
+evidence:
+  tests_reviewed: 9
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'No secrets in logs, health check over local network only, settlement addresses stored in memory not logged'
+  performance:
+    status: PASS
+    notes: 'Health check polling runs once at startup only. setTimeout-based retry avoids overlapping requests.'
+  reliability:
+    status: PASS
+    notes: 'Proper timeout handling in waitForAgentRuntime, non-fatal settlement warnings, BigInt parse with error handling'
+  maintainability:
+    status: PASS
+    notes: 'Follows established patterns from prior stories, clean separation of concerns, co-located tests, good JSDoc'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Add validation to reject negative SPSP_MIN_PRICE values'
+      refs: ['docker/src/entrypoint.ts:168-176']
+    - action: 'Implement agent-runtime repo Docker Compose changes per integration notes'
+      refs: ['docs/stories/8.5.story.md#integration-notes']

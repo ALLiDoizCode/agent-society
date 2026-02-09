@@ -1,0 +1,60 @@
+schema: 1
+story: '8.2'
+story_title: 'Send SPSP Handshakes as ILP Packets via Agent-Runtime'
+gate: PASS
+status_reason: 'All 9 acceptance criteria fully implemented and tested. 25 IlpSpspClient tests + 2 entrypoint tests = 27 new tests (984 total, 0 failures). Clean extraction of SPSP-over-ILP pattern from BootstrapService into reusable client. No blocking issues.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-02-09T07:15:00Z'
+
+waiver: { active: false }
+
+top_issues:
+  - id: 'CODE-001'
+    severity: low
+    finding: 'NostrSpspClient still has a local PUBKEY_REGEX duplicate (line 18) instead of importing from bootstrap/types'
+    suggested_action: 'Import PUBKEY_REGEX from bootstrap/types in NostrSpspClient.ts for consistency (carried over from 8.1)'
+    suggested_owner: dev
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Entrypoint test envKeysToClean does not include SUPPORTED_CHAINS and SETTLEMENT_ADDRESS_* vars'
+    suggested_action: 'Add settlement-related env vars to envKeysToClean to prevent cross-test pollution'
+    suggested_owner: dev
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 2 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - 'PUBKEY_REGEX duplication across modules (NostrSpspClient vs bootstrap/types)'
+
+quality_score: 90
+expires: '2026-02-23T07:15:00Z'
+
+evidence:
+  tests_reviewed: 27
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'NIP-44 encrypted SPSP via existing event builders, TOON failures wrapped in SpspError, URL validated before use'
+  performance:
+    status: PASS
+    notes: '30s default timeout appropriate for on-chain channel opening, retry bounded at 2 attempts'
+  reliability:
+    status: PASS
+    notes: 'Retry on timeout, immediate throw on REJECT, proper error differentiation (SpspError vs SpspTimeoutError), cause chaining'
+  maintainability:
+    status: PASS
+    notes: 'Clean DI for TOON encoding, reuses AgentRuntimeClient interface, return type matches NostrSpspClient for drop-in compatibility'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Deduplicate PUBKEY_REGEX in NostrSpspClient.ts by importing from bootstrap/types'
+      refs: ['packages/core/src/spsp/NostrSpspClient.ts:18']
+    - action: 'Add settlement env vars to entrypoint test envKeysToClean'
+      refs: ['docker/src/entrypoint.test.ts:17-31']

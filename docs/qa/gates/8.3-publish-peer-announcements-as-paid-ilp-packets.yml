@@ -1,0 +1,60 @@
+schema: 1
+story: '8.3'
+story_title: 'Publish Peer Announcements as Paid ILP Packets'
+gate: PASS
+status_reason: 'All 8 acceptance criteria fully implemented and tested. 7 new tests (991 total, 0 failures) verify TOON encoding, configurable pricing, ILP destination, and event emission for both success and failure paths. Clean enhancement of existing announceViaIlp() method with no architectural changes.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-02-09T08:00:00Z'
+
+waiver: { active: false }
+
+top_issues:
+  - id: 'TEST-001'
+    severity: low
+    finding: 'Entrypoint test envKeysToClean does not include SUPPORTED_CHAINS and SETTLEMENT_ADDRESS_* vars (carried from 8.2)'
+    suggested_action: 'Add settlement-related env vars to envKeysToClean to prevent cross-test pollution'
+    suggested_owner: dev
+  - id: 'CODE-001'
+    severity: low
+    finding: 'PUBKEY_REGEX duplication in NostrSpspClient.ts (carried from 8.1/8.2)'
+    suggested_action: 'Import PUBKEY_REGEX from bootstrap/types instead of local declaration'
+    suggested_owner: dev
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 2 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - 'Entrypoint test env cleanup coverage for settlement vars'
+
+quality_score: 90
+expires: '2026-02-23T08:00:00Z'
+
+evidence:
+  tests_reviewed: 7
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Events signed with node secret key, BigInt pricing prevents overflow, no raw user input in ILP packets'
+  performance:
+    status: PASS
+    notes: 'Linear in peer count (typically 1-3), no retry on announce failure (correct design)'
+  reliability:
+    status: PASS
+    notes: 'Non-fatal announce failures with event emission and WARNING logging, catch block handles both REJECT and thrown exceptions'
+  maintainability:
+    status: PASS
+    notes: 'Follows existing DI pattern for TOON encoding, basePricePerByte configurable with sensible default, event types added to existing union type'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Add settlement env vars to entrypoint test envKeysToClean'
+      refs: ['docker/src/entrypoint.test.ts:17-31']
+    - action: 'Deduplicate PUBKEY_REGEX in NostrSpspClient.ts by importing from bootstrap/types'
+      refs: ['packages/core/src/spsp/NostrSpspClient.ts:18']
