@@ -1,0 +1,42 @@
+schema: 1
+story: '7.6'
+story_title: 'Add Settlement Negotiation to BLS /handle-payment Handler'
+gate: PASS
+status_reason: 'All 9 acceptance criteria met with 13 new tests. Shared settlement negotiation function correctly extracted and integrated into both SPSP code paths. Clean lint, no security or performance concerns.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-02-09T19:30:00Z'
+
+waiver: { active: false }
+top_issues: []
+
+quality_score: 100
+expires: '2026-02-23T19:30:00Z'
+
+evidence:
+  tests_reviewed: 13
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Settlement negotiation uses existing NIP-44 encrypted channel. Channel client calls are local-only (connector admin API).'
+  performance:
+    status: PASS
+    notes: 'Configurable polling timeout/interval prevents indefinite blocking. Test suite uses short intervals for speed.'
+  reliability:
+    status: PASS
+    notes: 'Clear error handling contract: null for graceful degradation, throw for errors. Peer registration is non-fatal.'
+  maintainability:
+    status: PASS
+    notes: 'Shared function eliminates code duplication between SPSP paths. Well-documented interfaces and error semantics.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Import SpspResponse type in BLS handler instead of inline type literal'
+      refs: ['docker/src/entrypoint.ts:422-432']
+    - action: 'Parse TOKEN_NETWORK_* env vars in parseConfig() to populate ownTokenNetworks'
+      refs: ['docker/src/entrypoint.ts:146-158']

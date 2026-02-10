@@ -1,0 +1,49 @@
+schema: 1
+story: '7.5'
+story_title: 'Wire ConnectorChannelClient and Settlement Config in Entrypoint'
+gate: PASS
+status_reason: 'All 9 acceptance criteria met with 18 new tests. Clean HTTP client implementation follows established patterns. Backward compatible when SUPPORTED_CHAINS not set.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-02-09T00:00:00Z'
+
+waiver: { active: false }
+
+top_issues: []
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }
+  recommendations:
+    must_fix: []
+    monitor: []
+
+quality_score: 100
+expires: '2026-02-23T00:00:00Z'
+
+evidence:
+  tests_reviewed: 18
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Internal admin API calls only, no secrets transmitted, input validation on env vars'
+  performance:
+    status: PASS
+    notes: 'Thin HTTP wrapper, infrequent settlement negotiation calls'
+  reliability:
+    status: PASS
+    notes: 'Descriptive error messages with status codes, graceful degradation via NostrSpspServer guard checks'
+  maintainability:
+    status: PASS
+    notes: 'Follows established createConnectorAdminClient pattern, co-located factory functions, consistent env var parsing'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Add constructor-spy test verifying NostrSpspServer receives settlementConfig and channelClient'
+      refs: ['docker/src/entrypoint.test.ts']
+    - action: 'Add negative INITIAL_DEPOSIT test (e.g., "-100") to document rejection behavior'
+      refs: ['docker/src/entrypoint.test.ts']

@@ -75,6 +75,15 @@ agent-society/
 │       ├── package.json
 │       └── tsconfig.json
 │
+├── docker/                              # Docker entrypoint (BLS + relay + bootstrap)
+│   ├── src/
+│   │   ├── entrypoint.ts             # Main entrypoint: config, BLS server, SPSP server, bootstrap
+│   │   └── entrypoint.test.ts        # Unit tests for entrypoint
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vitest.config.ts
+│
 ├── docs/
 │   ├── architecture.md                 # This document
 │   ├── prd.md                         # Product requirements

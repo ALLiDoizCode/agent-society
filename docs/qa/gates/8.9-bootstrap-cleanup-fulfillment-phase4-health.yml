@@ -1,0 +1,55 @@
+schema: 1
+story: "8.9"
+story_title: "Bootstrap Cleanup — Fulfillment Generation, Phase 4 Flow, Health Check"
+gate: PASS
+status_reason: "All 7 acceptance criteria met. Build-breaking type error found and fixed during review. 4 new tests added, 102 total tests passing across relevant packages, lint clean."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-02-09T22:55:00Z"
+
+waiver: { active: false }
+
+top_issues:
+  - id: "TYPE-001"
+    severity: low
+    finding: "Removing fulfillment from HandlePaymentAcceptResponse broke relay package build — BusinessLogicServer still returns fulfillment"
+    suggested_action: "Fixed during review: made fulfillment optional+deprecated instead of removing entirely"
+    suggested_owner: dev
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 1 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Track deprecation of fulfillment field — plan full removal in a future story when BusinessLogicServer callers are updated"
+
+quality_score: 90
+expires: "2026-02-23T22:55:00Z"
+
+evidence:
+  tests_reviewed: 102
+  risks_identified: 1
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Fulfillment removal is safe — agent-runtime already computes own fulfillment. Health endpoint exposes only operational counts."
+  performance:
+    status: PASS
+    notes: "Closure-based counters are O(1). No measurable overhead added."
+  reliability:
+    status: PASS
+    notes: "Health endpoint gracefully handles missing getBootstrapCounts and non-ready phases."
+  maintainability:
+    status: PASS
+    notes: "@deprecated JSDoc on generateFulfillment signals intent. Optional fulfillment field is backward compatible."
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Remove fulfillment field entirely from HandlePaymentAcceptResponse and BusinessLogicServer.handlePayment() return values"
+      refs: ["packages/relay/src/bls/types.ts", "packages/relay/src/bls/BusinessLogicServer.ts:140-148", "packages/relay/src/bls/BusinessLogicServer.ts:206-208", "packages/bls/src/bls/BusinessLogicServer.ts"]
+    - action: "Add test verifying BusinessLogicServer still returns fulfillment (deprecated path coverage)"
+      refs: ["packages/relay/src/bls/BusinessLogicServer.test.ts"]

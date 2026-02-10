@@ -85,6 +85,20 @@ The key economic design: **the bootstrap node (peer1) earns routing fees** from 
    → Network grows organically
 ```
 
+### Phase 4 Implementation Note: Reverse SPSP (RelayMonitor)
+
+> **Actual flow vs. original plan:** The original design had peers responding to kind:10032 announcements within the same ILP FULFILL (peer announces → bootstrap responds with SPSP in the FULFILL payload). The implemented flow uses a separate round-trip:
+>
+> 1. Peer publishes kind:10032 as paid ILP PREPARE → stored on bootstrap relay
+> 2. Bootstrap node's `RelayMonitor` (Story 8.4) detects the new kind:10032 event on its relay
+> 3. Bootstrap node **initiates** a paid SPSP handshake (kind:23194) back to the new peer via `POST /ilp/send`
+> 4. Peer responds with SPSP FULFILL (kind:23195) including channel details
+>
+> **Rationale for current design:**
+> - Cleaner separation of concerns: relay event monitoring is decoupled from SPSP handling
+> - Independent retry on handshake failure without re-sending the announcement
+> - RelayMonitor can process events at its own pace (no blocking within ILP packet handling)
+
 ---
 
 ## Story 8.1: Rewrite Bootstrap Service for ILP-First Flow
@@ -280,6 +294,73 @@ The key economic design: **the bootstrap node (peer1) earns routing fees** from 
 3. Peers fall back to static YAML config in connector
 4. Settlement reverts to static env var configuration
 
+## Story 8.6: Fix IlpSendResult Field Name Mismatch
+
+**As a** node bootstrapping into the network,
+**I want** the `IlpSendResult` interface to match what agent-runtime actually returns,
+**so that** SPSP handshakes and peer announcements correctly detect FULFILL vs REJECT responses.
+
+**Integration Gap Addressed:** Gap 6 (`accepted` vs `fulfilled` field mismatch — CRITICAL)
+
+**Acceptance Criteria:**
+
+1. `IlpSendResult` field name aligned — `AgentRuntimeClient` normalizes both `accepted` and `fulfilled` fields
+2. All consumers (`BootstrapService`, `IlpSpspClient`, `RelayMonitor`) correctly detect FULFILL responses
+3. Backward compatible with both field names
+4. Unit tests verify both field names handled
+
+---
+
+## Story 8.7: TOON + NIP-44 Round-Trip Integration Test
+
+**As a** developer maintaining the SPSP-over-ILP flow,
+**I want** an integration test verifying the full TOON + NIP-44 encode/decode round-trip,
+**so that** encoding/encryption issues are caught before they silently break settlement handshakes.
+
+**Integration Gap Addressed:** Gap 9 (no round-trip test for TOON + NIP-44)
+
+**Acceptance Criteria:**
+
+1. Test exercises full encode/send/receive/decode cycle for kind:23194 and kind:23195
+2. NIP-44 encrypted content survives TOON round-trip byte-for-byte
+3. Settlement fields preserved through the full pipeline
+4. Uses real cryptography and real TOON encoder/decoder
+
+---
+
+## Story 8.8: Fix Peer Registration Circular Dependency
+
+**As a** peer node opening payment channels during bootstrap,
+**I want** the channel opening flow to work without requiring settlement info that isn't available yet,
+**so that** the bootstrap flow can register peers, handshake, and open channels in sequence.
+
+**Integration Gaps Addressed:** Gap 5 (circular dependency in peer registration), Gap 11 (POST /admin/peers called twice)
+
+**Acceptance Criteria:**
+
+1. `peerAddress` flows through from SPSP request to `channelClient.openChannel()`
+2. Agent-runtime changes documented: `POST /admin/channels` accepts `peerAddress`, `POST /admin/peers` made idempotent
+3. Agent-society side verified as correct (peerAddress already in interface)
+
+---
+
+## Story 8.9: Bootstrap Cleanup — Fulfillment Generation, Phase 4 Flow, Health Check
+
+**As a** node operator,
+**I want** cleanup items addressed: unnecessary fulfillment generation removed, Phase 4 flow documented, health check enhanced,
+**so that** the bootstrap system follows design contracts and provides accurate observability.
+
+**Integration Gaps Addressed:** Gap 7 (BLS fulfillment generation), Gap 10 (Phase 4 flow inversion), Gap 13 (health check)
+
+**Acceptance Criteria:**
+
+1. BLS `/handle-payment` no longer returns `fulfillment` in responses
+2. Phase 4 (RelayMonitor) flow documented with rationale for current design
+3. Health endpoint includes `peerCount` and `channelCount` when bootstrap is ready
+4. Unit tests verify fulfillment removal and health counts
+
+---
+
 ## Definition of Done
 
 - [ ] Bootstrap service implements three-phase flow (free discovery → 0-amount SPSP → paid announcements)
@@ -290,6 +371,10 @@ The key economic design: **the bootstrap node (peer1) earns routing fees** from 
 - [ ] Docker Compose deploys 5-peer network that self-organizes
 - [ ] Deploy script verifies routing, channels, and end-to-end packet delivery
 - [ ] No regression in existing discovery or SPSP functionality
+- [ ] IlpSendResult field mismatch fixed — bootstrap correctly detects FULFILL/REJECT
+- [ ] TOON + NIP-44 round-trip verified by integration test
+- [ ] Peer registration circular dependency resolved (with agent-runtime coordination)
+- [ ] BLS fulfillment generation removed, health check enhanced
 
 ## Related Work
 

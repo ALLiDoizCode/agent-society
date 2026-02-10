@@ -250,6 +250,62 @@ interface SpspResponse {
 3. Remove connector Admin API calls from SPSP negotiation
 4. Settlement reverts to static env var configuration
 
+## Story 7.5: Wire ConnectorChannelClient and Settlement Config in Entrypoint
+
+**As a** node operator,
+**I want** the Docker entrypoint to create a `ConnectorChannelClient` HTTP implementation and pass `settlementConfig` + `channelClient` to `NostrSpspServer`,
+**so that** the direct Nostr SPSP path can negotiate settlement and open payment channels via the connector Admin API.
+
+**Integration Gaps Addressed:** Gap 2 (ConnectorChannelClient never created), Gap 3 (NostrSpspServer not configured), Gap 8 (settlement config not passed)
+
+**Acceptance Criteria:**
+
+1. `ConnectorChannelClient` HTTP implementation created in entrypoint calling connector Admin API (`POST /admin/channels`, `GET /admin/channels/:channelId`)
+2. `SettlementNegotiationConfig` built from parsed environment variables
+3. `NostrSpspServer` instantiated with all 5 constructor arguments (currently only 2)
+4. Error handling for connector Admin API HTTP errors
+5. Backward compatible when `SUPPORTED_CHAINS` is not set
+6. Unit tests for channel client and settlement config construction
+
+---
+
+## Story 7.6: Add Settlement Negotiation to BLS /handle-payment Handler
+
+**As a** peer receiving an SPSP request via ILP,
+**I want** the BLS `/handle-payment` handler to negotiate settlement and open payment channels,
+**so that** SPSP handshakes routed through the ILP network (bootstrap flow) establish payment channels.
+
+**Integration Gaps Addressed:** Gap 1 (BLS /handle-payment missing settlement — CRITICAL), Gap 4 (two SPSP code paths never converge)
+
+**Acceptance Criteria:**
+
+1. BLS `/handle-payment` extracts settlement fields from decrypted SPSP request
+2. Settlement logic extracted into shared function usable by both SPSP code paths
+3. kind:23195 response includes settlement fields when channel opened
+4. Graceful degradation when no chain intersection
+5. ILP REJECT on channel opening failure
+6. Backward compatible for requests without settlement fields
+7. Unit tests for settlement in ILP-routed path
+
+---
+
+## Story 7.7: Parse TOKEN_NETWORK Environment Variables
+
+**As a** node operator deploying on EVM chains,
+**I want** the Docker entrypoint to parse `TOKEN_NETWORK_*` environment variables,
+**so that** settlement negotiation can include `tokenNetworkAddress` in SPSP responses.
+
+**Integration Gap Addressed:** Gap 12 (missing token network parsing)
+
+**Acceptance Criteria:**
+
+1. `TOKEN_NETWORK_*` env vars parsed following `SETTLEMENT_ADDRESS_*` pattern
+2. Stored in `settlementInfo.tokenNetworks` as `Record<string, string>`
+3. Backward compatible when no `TOKEN_NETWORK_*` vars set
+4. Unit tests for parsing
+
+---
+
 ## Definition of Done
 
 - [ ] kind:10032 advertises settlement capabilities
@@ -259,6 +315,9 @@ interface SpspResponse {
 - [ ] 0-amount SPSP acceptance configurable for bootstrap nodes
 - [ ] Backward compatible with existing events and handshakes
 - [ ] Integration test: two peers negotiate chain and open channel via SPSP
+- [ ] ConnectorChannelClient HTTP implementation wired in entrypoint
+- [ ] Settlement negotiation works in both direct Nostr and ILP-routed SPSP paths
+- [ ] TOKEN_NETWORK_* env vars parsed and passed through to settlement config
 
 ## Related Work
 
