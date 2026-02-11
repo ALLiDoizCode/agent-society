@@ -1,0 +1,49 @@
+schema: 1
+story: "9.5"
+story_title: "Validate Package Contents"
+gate: PASS
+status_reason: "All 8 acceptance criteria independently verified. npm pack succeeds for all three packages, tarballs contain only expected files, fresh project install and TypeScript imports resolve correctly, and cleanup leaves no artifacts."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-02-11T11:15:00Z"
+
+waiver: { active: false }
+
+top_issues: []
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 0 }
+  recommendations:
+    must_fix: []
+    monitor: []
+
+quality_score: 100
+expires: "2026-02-25T11:15:00Z"
+
+evidence:
+  tests_reviewed: 1022
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Read-only validation; tarballs exclude source and test files; no secrets or config files leaked"
+  performance:
+    status: PASS
+    notes: "No runtime impact; one-time validation activity"
+  reliability:
+    status: PASS
+    notes: "1020 tests pass; 2 pre-existing failures unrelated to this story"
+  maintainability:
+    status: PASS
+    notes: "Thorough documentation in story file; all edge cases noted (bls chunks, npm cache EACCES, skipLibCheck)"
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Add a LICENSE file to the repository root so tarballs include it per epic AC"
+      refs: ["packages/bls/", "packages/core/", "packages/relay/"]
+    - action: "Fix pre-existing subscribeMany test failures"
+      refs: ["packages/core/src/discovery/SocialPeerDiscovery.test.ts", "packages/core/src/bootstrap/RelayMonitor.test.ts"]

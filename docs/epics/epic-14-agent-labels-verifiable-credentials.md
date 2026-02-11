@@ -1,11 +1,11 @@
-# Epic 12: Agent Capability Labels & Verifiable Credentials
+# Epic 14: Agent Capability Labels & Verifiable Credentials
 
 **Phase:** 2b (Trust Infrastructure)
 **NIPs:** NIP-32 (Labeling), NIP-58 (Badges)
 **Signal Score:** 4/5 (strong when composed with DVMs and Zaps)
 **Estimated Stories:** 5
-**Dependencies:** Epic 10 (DVMs — quality labels on DVM results), Epic 11 (Zaps — multi-signal trust model)
-**Blocks:** Epic 14 (Swarms — badge-gated membership)
+**Dependencies:** Epic 12 (DVMs — quality labels on DVM results), Epic 13 (Zaps — multi-signal trust model)
+**Blocks:** Epic 16 (Swarms — badge-gated membership)
 
 ---
 

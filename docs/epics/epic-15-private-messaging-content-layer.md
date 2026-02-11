@@ -1,10 +1,10 @@
-# Epic 13: Private Messaging & Content Layer
+# Epic 15: Private Messaging & Content Layer
 
 **Phase:** 3 (Communication & Content)
 **NIPs:** NIP-17 (Private DMs), NIP-10 (Text Notes & Threads), NIP-18 (Reposts), NIP-23 (Long-form Content), NIP-72 (Moderated Communities)
 **Estimated Stories:** 5
-**Dependencies:** Epic 9 (Social Fabric — identity + relay lists), Epic 10 (DVMs — content to discuss and repost), Epic 11 (Zaps — content monetization)
-**Blocks:** Epic 14 (Swarms — group communication patterns used in swarm coordination)
+**Dependencies:** Epic 11 (Social Fabric — identity + relay lists), Epic 12 (DVMs — content to discuss and repost), Epic 13 (Zaps — content monetization)
+**Blocks:** Epic 16 (Swarms — group communication patterns used in swarm coordination)
 
 ---
 

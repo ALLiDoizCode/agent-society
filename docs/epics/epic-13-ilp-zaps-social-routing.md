@@ -1,11 +1,11 @@
-# Epic 11: ILP Zaps & Social Routing
+# Epic 13: ILP Zaps & Social Routing
 
 **Phase:** 2a (Trust Infrastructure)
 **NIPs:** NIP-57 (Zaps — adapted for ILP), NIP-51 (Lists — for route preferences)
 **Signal Score:** 5/5
 **Estimated Stories:** 5
-**Dependencies:** Epic 9 (Social Fabric — NIP-25 reactions as baseline reputation), Epic 10 (DVMs — zaps compose with DVM quality feedback)
-**Blocks:** Epic 12 (Labels/Badges — multi-signal trust model), Epic 14 (Swarms — trust-gated membership)
+**Dependencies:** Epic 11 (Social Fabric — NIP-25 reactions as baseline reputation), Epic 12 (DVMs — zaps compose with DVM quality feedback)
+**Blocks:** Epic 14 (Labels/Badges — multi-signal trust model), Epic 16 (Swarms — trust-gated membership)
 
 ---
 

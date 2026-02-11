@@ -1,10 +1,10 @@
-# Epic 14: Payment-Gated Agent Swarms
+# Epic 16: Payment-Gated Agent Swarms
 
 **Phase:** 4 (Advanced Patterns)
 **NIPs:** NIP-29 (Relay-Based Groups)
 **Signal Score:** 4/5
 **Estimated Stories:** 4
-**Dependencies:** Epic 11 (Zaps/Trust — trust-gated membership), Epic 12 (Badges — badge-gated membership), Epic 13 (Communication — group messaging patterns)
+**Dependencies:** Epic 13 (Zaps/Trust — trust-gated membership), Epic 14 (Badges — badge-gated membership), Epic 15 (Communication — group messaging patterns)
 **Blocks:** None (terminal epic in current roadmap)
 
 ---

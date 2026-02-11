@@ -1,11 +1,11 @@
-# Epic 10: Paid Computation Marketplace — Agent DVMs
+# Epic 12: Paid Computation Marketplace — Agent DVMs
 
 **Phase:** 1 (Computation Marketplace)
 **NIPs:** NIP-90 (Data Vending Machines), NIP-89 (Recommended Application Handlers / Service Discovery)
 **Signal Score:** 5/5
 **Estimated Stories:** 5
-**Dependencies:** Epic 9 (Social Fabric Foundation — NIP-05 identity, NIP-65 relay lists)
-**Blocks:** Epic 12 (Labels/Badges — quality ratings on DVM results)
+**Dependencies:** Epic 11 (Social Fabric Foundation — NIP-05 identity, NIP-65 relay lists)
+**Blocks:** Epic 14 (Labels/Badges — quality ratings on DVM results)
 
 ---
 

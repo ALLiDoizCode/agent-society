@@ -1,10 +1,10 @@
-# Epic 9: Social Fabric Foundation
+# Epic 11: Social Fabric Foundation
 
 **Phase:** 0 (Prerequisite for all NIP adoption)
 **NIPs:** NIP-05 (DNS Identity), NIP-25 (Reactions), NIP-65 (Relay List Metadata), NIP-09 (Event Deletion), NIP-56 (Reporting)
 **Estimated Stories:** 5
 **Dependencies:** Epics 1-4 (core library, SPSP, trust engine, relay)
-**Blocks:** Epics 10-14 (all subsequent NIP-based epics)
+**Blocks:** Epics 12-16 (all subsequent NIP-based epics)
 
 ---
 
