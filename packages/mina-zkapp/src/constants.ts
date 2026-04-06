@@ -53,14 +53,17 @@ export const ASSERT_MESSAGES = {
   BALANCE_SUM_MUST_EQUAL_DEPOSIT: 'balanceA + balanceB must equal depositTotal',
   CHALLENGE_PERIOD_NOT_ELAPSED: 'challenge period has not elapsed',
   COMMITMENT_MISMATCH: 'balance commitment does not match revealed balances',
-  CHANNEL_HASH_MISMATCH: 'participant keys and nonce do not match stored channelHash',
+  CHANNEL_HASH_MISMATCH:
+    'participant keys and nonce do not match stored channelHash',
   AMOUNT_EXCEEDS_SAFE_RANGE: 'amount exceeds safe range (max 2^64 - 1)',
-  DEPOSIT_TOTAL_OVERFLOW: 'deposit total would exceed safe range (max 2^64 - 1)',
+  DEPOSIT_TOTAL_OVERFLOW:
+    'deposit total would exceed safe range (max 2^64 - 1)',
   BALANCE_EXCEEDS_DEPOSIT: 'individual balance must not exceed depositTotal',
 
   // Story 34.2 -- claim verification
   NONCE_MUST_INCREASE: 'nonce must be greater than current nonce',
-  BALANCE_CONSERVATION_VIOLATED: 'claim violates balance conservation invariant',
+  BALANCE_CONSERVATION_VIOLATED:
+    'claim violates balance conservation invariant',
   INVALID_SIGNATURE_A: 'participant A signature verification failed',
   INVALID_SIGNATURE_B: 'participant B signature verification failed',
   NONCE_EXCEEDS_SAFE_RANGE: 'nonce exceeds safe range (max 2^64 - 1)',

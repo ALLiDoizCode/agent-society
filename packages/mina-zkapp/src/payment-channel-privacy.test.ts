@@ -18,7 +18,12 @@ import { Mina, PrivateKey, Field, Poseidon } from 'o1js';
 
 import { PaymentChannel } from './PaymentChannel';
 import { CHANNEL_STATE } from './constants';
-import { deployZkApp, initializeChannel, depositToChannel, submitClaim } from './test-helpers';
+import {
+  deployZkApp,
+  initializeChannel,
+  depositToChannel,
+  submitClaim,
+} from './test-helpers';
 
 jest.setTimeout(60000); // 60 seconds — privacy test submits 3 claims + setup
 
@@ -68,15 +73,36 @@ describe('PaymentChannel zkApp -- Privacy Verification (Story 34.3)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
-    const channelHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
+    const channelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
 
     // Define 3 different balance splits with unique salts
     const claims = [
-      { balA: Field(700_000_000), balB: Field(300_000_000), salt: Field(11111), nonce: Field(1) },
-      { balA: Field(400_000_000), balB: Field(600_000_000), salt: Field(22222), nonce: Field(2) },
-      { balA: Field(100_000_000), balB: Field(900_000_000), salt: Field(33333), nonce: Field(3) },
+      {
+        balA: Field(700_000_000),
+        balB: Field(300_000_000),
+        salt: Field(11111),
+        nonce: Field(1),
+      },
+      {
+        balA: Field(400_000_000),
+        balB: Field(600_000_000),
+        salt: Field(22222),
+        nonce: Field(2),
+      },
+      {
+        balA: Field(100_000_000),
+        balB: Field(900_000_000),
+        salt: Field(33333),
+        nonce: Field(3),
+      },
     ];
 
     const commitments: string[] = [];
@@ -138,19 +164,39 @@ describe('PaymentChannel zkApp -- Privacy Verification (Story 34.3)', () => {
 
     // Verify: the current commitment is a Poseidon hash, not plaintext balances
     const lastClaim = claims[claims.length - 1]!;
-    const expectedCommitment = Poseidon.hash([lastClaim.balA, lastClaim.balB, lastClaim.salt]);
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedCommitment.toString());
+    const expectedCommitment = Poseidon.hash([
+      lastClaim.balA,
+      lastClaim.balB,
+      lastClaim.salt,
+    ]);
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedCommitment.toString()
+    );
 
     // Verify: commitments change after each claim (privacy refresh)
-    const commitment1 = Poseidon.hash([claims[0]!.balA, claims[0]!.balB, claims[0]!.salt]);
-    const commitment2 = Poseidon.hash([claims[1]!.balA, claims[1]!.balB, claims[1]!.salt]);
-    const commitment3 = Poseidon.hash([lastClaim.balA, lastClaim.balB, lastClaim.salt]);
+    const commitment1 = Poseidon.hash([
+      claims[0]!.balA,
+      claims[0]!.balB,
+      claims[0]!.salt,
+    ]);
+    const commitment2 = Poseidon.hash([
+      claims[1]!.balA,
+      claims[1]!.balB,
+      claims[1]!.salt,
+    ]);
+    const commitment3 = Poseidon.hash([
+      lastClaim.balA,
+      lastClaim.balB,
+      lastClaim.salt,
+    ]);
 
     expect(commitment1.toString()).not.toBe(commitment2.toString());
     expect(commitment2.toString()).not.toBe(commitment3.toString());
     expect(commitment1.toString()).not.toBe(commitment3.toString());
 
     // Verify: the channel is still OPEN (claims don't change state)
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.OPEN.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.OPEN.toString()
+    );
   });
 });

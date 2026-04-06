@@ -11,7 +11,16 @@
  * @module PaymentChannel
  */
 
-import { SmartContract, State, state, method, Field, PublicKey, Poseidon, Signature } from 'o1js';
+import {
+  SmartContract,
+  State,
+  state,
+  method,
+  Field,
+  PublicKey,
+  Poseidon,
+  Signature,
+} from 'o1js';
 
 import { CHANNEL_STATE, ASSERT_MESSAGES, MAX_SAFE_AMOUNT } from './constants';
 
@@ -103,23 +112,35 @@ export class PaymentChannel extends SmartContract {
   @method async deposit(amount: Field, _depositor: PublicKey): Promise<void> {
     // Require channel is OPEN
     const currentState = this.channelState.getAndRequireEquals();
-    currentState.assertEquals(CHANNEL_STATE.OPEN, ASSERT_MESSAGES.CHANNEL_MUST_BE_OPEN);
+    currentState.assertEquals(
+      CHANNEL_STATE.OPEN,
+      ASSERT_MESSAGES.CHANNEL_MUST_BE_OPEN
+    );
 
     // Require amount > 0
-    amount.assertGreaterThan(Field(0), ASSERT_MESSAGES.DEPOSIT_MUST_BE_POSITIVE);
+    amount.assertGreaterThan(
+      Field(0),
+      ASSERT_MESSAGES.DEPOSIT_MUST_BE_POSITIVE
+    );
 
     // Range-check amount to prevent Field arithmetic overflow.
     // Field elements are modular (mod ~2^254), so adding two large Fields
     // can silently wrap around. Bounding amount to MAX_SAFE_AMOUNT ensures
     // depositTotal stays within a safe integer range and cannot overflow.
-    amount.assertLessThanOrEqual(MAX_SAFE_AMOUNT, ASSERT_MESSAGES.AMOUNT_EXCEEDS_SAFE_RANGE);
+    amount.assertLessThanOrEqual(
+      MAX_SAFE_AMOUNT,
+      ASSERT_MESSAGES.AMOUNT_EXCEEDS_SAFE_RANGE
+    );
 
     // Increment deposit total
     const currentDeposit = this.depositTotal.getAndRequireEquals();
     const newDeposit = currentDeposit.add(amount);
 
     // Verify the new total also remains within safe range (defense-in-depth)
-    newDeposit.assertLessThanOrEqual(MAX_SAFE_AMOUNT, ASSERT_MESSAGES.DEPOSIT_TOTAL_OVERFLOW);
+    newDeposit.assertLessThanOrEqual(
+      MAX_SAFE_AMOUNT,
+      ASSERT_MESSAGES.DEPOSIT_TOTAL_OVERFLOW
+    );
 
     this.depositTotal.set(newDeposit);
   }
@@ -148,20 +169,32 @@ export class PaymentChannel extends SmartContract {
   ): Promise<void> {
     // Require channel is OPEN
     const currentState = this.channelState.getAndRequireEquals();
-    currentState.assertEquals(CHANNEL_STATE.OPEN, ASSERT_MESSAGES.CHANNEL_MUST_BE_OPEN);
+    currentState.assertEquals(
+      CHANNEL_STATE.OPEN,
+      ASSERT_MESSAGES.CHANNEL_MUST_BE_OPEN
+    );
 
     // Verify balance conservation: balanceA + balanceB == depositTotal
     const currentDeposit = this.depositTotal.getAndRequireEquals();
     balanceA
       .add(balanceB)
-      .assertEquals(currentDeposit, ASSERT_MESSAGES.BALANCE_SUM_MUST_EQUAL_DEPOSIT);
+      .assertEquals(
+        currentDeposit,
+        ASSERT_MESSAGES.BALANCE_SUM_MUST_EQUAL_DEPOSIT
+      );
 
     // Verify each balance is individually <= depositTotal to prevent modular
     // arithmetic exploits. Without this check, a malicious actor could provide
     // a "negative" balance (a huge Field value close to the field modulus) for
     // one participant such that the modular sum still equals depositTotal.
-    balanceA.assertLessThanOrEqual(currentDeposit, ASSERT_MESSAGES.BALANCE_EXCEEDS_DEPOSIT);
-    balanceB.assertLessThanOrEqual(currentDeposit, ASSERT_MESSAGES.BALANCE_EXCEEDS_DEPOSIT);
+    balanceA.assertLessThanOrEqual(
+      currentDeposit,
+      ASSERT_MESSAGES.BALANCE_EXCEEDS_DEPOSIT
+    );
+    balanceB.assertLessThanOrEqual(
+      currentDeposit,
+      ASSERT_MESSAGES.BALANCE_EXCEEDS_DEPOSIT
+    );
 
     // Read channelHash to bind this operation to the channel identity.
     // getAndRequireEquals() creates a precondition that the on-chain channelHash
@@ -195,7 +228,8 @@ export class PaymentChannel extends SmartContract {
     // Note: globalSlotSinceGenesis is a UInt32 -- `.value` extracts the inner
     // Field. This is the standard o1js pattern for converting UInt32 to Field
     // for on-chain state storage (UInt32.value is part of the public API).
-    const currentSlot = this.network.globalSlotSinceGenesis.getAndRequireEquals();
+    const currentSlot =
+      this.network.globalSlotSinceGenesis.getAndRequireEquals();
     this.closedAtSlot.set(currentSlot.value);
 
     // Transition to CLOSING
@@ -233,21 +267,32 @@ export class PaymentChannel extends SmartContract {
   ): Promise<void> {
     // Require channel is CLOSING
     const currentState = this.channelState.getAndRequireEquals();
-    currentState.assertEquals(CHANNEL_STATE.CLOSING, ASSERT_MESSAGES.CHANNEL_MUST_BE_CLOSING);
+    currentState.assertEquals(
+      CHANNEL_STATE.CLOSING,
+      ASSERT_MESSAGES.CHANNEL_MUST_BE_CLOSING
+    );
 
     // Verify participant identity: recompute channelHash and compare to stored value.
     // This ensures the caller provides the correct participants for this channel,
     // preventing settlement with fabricated participant addresses.
     const storedChannelHash = this.channelHash.getAndRequireEquals();
-    const computedChannelHash = Poseidon.hash([participantA.x, participantB.x, nonce]);
-    computedChannelHash.assertEquals(storedChannelHash, ASSERT_MESSAGES.CHANNEL_HASH_MISMATCH);
+    const computedChannelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      nonce,
+    ]);
+    computedChannelHash.assertEquals(
+      storedChannelHash,
+      ASSERT_MESSAGES.CHANNEL_HASH_MISMATCH
+    );
 
     // Verify challenge period has elapsed
     const closedAt = this.closedAtSlot.getAndRequireEquals();
     const timeout = this.settlementTimeout.getAndRequireEquals();
     const deadline = closedAt.add(timeout);
 
-    const currentSlot = this.network.globalSlotSinceGenesis.getAndRequireEquals();
+    const currentSlot =
+      this.network.globalSlotSinceGenesis.getAndRequireEquals();
     currentSlot.value.assertGreaterThanOrEqual(
       deadline,
       ASSERT_MESSAGES.CHALLENGE_PERIOD_NOT_ELAPSED
@@ -256,7 +301,10 @@ export class PaymentChannel extends SmartContract {
     // Verify balance commitment matches revealed balances
     const storedCommitment = this.balanceCommitment.getAndRequireEquals();
     const computedCommitment = Poseidon.hash([balanceA, balanceB, salt]);
-    computedCommitment.assertEquals(storedCommitment, ASSERT_MESSAGES.COMMITMENT_MISMATCH);
+    computedCommitment.assertEquals(
+      storedCommitment,
+      ASSERT_MESSAGES.COMMITMENT_MISMATCH
+    );
 
     // Transition to SETTLED
     this.channelState.set(CHANNEL_STATE.SETTLED);
@@ -302,7 +350,10 @@ export class PaymentChannel extends SmartContract {
   ): Promise<void> {
     // 1. Require channel is OPEN (AC: 7 -- claims only when OPEN)
     const currentState = this.channelState.getAndRequireEquals();
-    currentState.assertEquals(CHANNEL_STATE.OPEN, ASSERT_MESSAGES.CHANNEL_MUST_BE_OPEN);
+    currentState.assertEquals(
+      CHANNEL_STATE.OPEN,
+      ASSERT_MESSAGES.CHANNEL_MUST_BE_OPEN
+    );
 
     // 2. Read and bind on-chain state with preconditions (security)
     const storedChannelHash = this.channelHash.getAndRequireEquals();
@@ -310,39 +361,78 @@ export class PaymentChannel extends SmartContract {
     const currentNonce = this.nonceField.getAndRequireEquals();
 
     // 3. Commitment validity: Poseidon(newBalanceA, newBalanceB, newSalt) == newBalanceCommitment (AC: 1, 8)
-    const computedCommitment = Poseidon.hash([newBalanceA, newBalanceB, newSalt]);
-    computedCommitment.assertEquals(newBalanceCommitment, ASSERT_MESSAGES.COMMITMENT_MISMATCH);
+    const computedCommitment = Poseidon.hash([
+      newBalanceA,
+      newBalanceB,
+      newSalt,
+    ]);
+    computedCommitment.assertEquals(
+      newBalanceCommitment,
+      ASSERT_MESSAGES.COMMITMENT_MISMATCH
+    );
 
     // 4. Conservation: newBalanceA + newBalanceB == depositTotal (AC: 2)
     newBalanceA
       .add(newBalanceB)
-      .assertEquals(currentDeposit, ASSERT_MESSAGES.BALANCE_CONSERVATION_VIOLATED);
+      .assertEquals(
+        currentDeposit,
+        ASSERT_MESSAGES.BALANCE_CONSERVATION_VIOLATED
+      );
 
     // 5. Non-negativity + range checks (AC: 3)
     // Fields are unsigned in o1js, so >= 0 is inherent. However, modular
     // arithmetic can produce large values that "wrap around" to appear valid.
     // The <= depositTotal check prevents this exploit (same pattern as initiateClose).
-    newBalanceA.assertLessThanOrEqual(currentDeposit, ASSERT_MESSAGES.BALANCE_EXCEEDS_DEPOSIT);
-    newBalanceB.assertLessThanOrEqual(currentDeposit, ASSERT_MESSAGES.BALANCE_EXCEEDS_DEPOSIT);
+    newBalanceA.assertLessThanOrEqual(
+      currentDeposit,
+      ASSERT_MESSAGES.BALANCE_EXCEEDS_DEPOSIT
+    );
+    newBalanceB.assertLessThanOrEqual(
+      currentDeposit,
+      ASSERT_MESSAGES.BALANCE_EXCEEDS_DEPOSIT
+    );
 
     // Defense-in-depth: bound balances to MAX_SAFE_AMOUNT (same as deposit())
-    newBalanceA.assertLessThanOrEqual(MAX_SAFE_AMOUNT, ASSERT_MESSAGES.AMOUNT_EXCEEDS_SAFE_RANGE);
-    newBalanceB.assertLessThanOrEqual(MAX_SAFE_AMOUNT, ASSERT_MESSAGES.AMOUNT_EXCEEDS_SAFE_RANGE);
+    newBalanceA.assertLessThanOrEqual(
+      MAX_SAFE_AMOUNT,
+      ASSERT_MESSAGES.AMOUNT_EXCEEDS_SAFE_RANGE
+    );
+    newBalanceB.assertLessThanOrEqual(
+      MAX_SAFE_AMOUNT,
+      ASSERT_MESSAGES.AMOUNT_EXCEEDS_SAFE_RANGE
+    );
 
     // 6. Monotonic nonce: newNonce > currentNonce (AC: 4)
-    newNonce.assertGreaterThan(currentNonce, ASSERT_MESSAGES.NONCE_MUST_INCREASE);
+    newNonce.assertGreaterThan(
+      currentNonce,
+      ASSERT_MESSAGES.NONCE_MUST_INCREASE
+    );
 
     // Nonce range check to prevent Field overflow
-    newNonce.assertLessThanOrEqual(MAX_SAFE_AMOUNT, ASSERT_MESSAGES.NONCE_EXCEEDS_SAFE_RANGE);
+    newNonce.assertLessThanOrEqual(
+      MAX_SAFE_AMOUNT,
+      ASSERT_MESSAGES.NONCE_EXCEEDS_SAFE_RANGE
+    );
 
     // 7. Participant binding: verify supplied keys match channelHash (AC: 5, 9)
-    const computedHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
-    computedHash.assertEquals(storedChannelHash, ASSERT_MESSAGES.CHANNEL_HASH_MISMATCH);
+    const computedHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
+    computedHash.assertEquals(
+      storedChannelHash,
+      ASSERT_MESSAGES.CHANNEL_HASH_MISMATCH
+    );
 
     // 8. Dual-party authorization: both participants signed [newBalanceCommitment, newNonce, channelHash] (AC: 5)
     const message = [newBalanceCommitment, newNonce, storedChannelHash];
-    signatureA.verify(participantA, message).assertTrue(ASSERT_MESSAGES.INVALID_SIGNATURE_A);
-    signatureB.verify(participantB, message).assertTrue(ASSERT_MESSAGES.INVALID_SIGNATURE_B);
+    signatureA
+      .verify(participantA, message)
+      .assertTrue(ASSERT_MESSAGES.INVALID_SIGNATURE_A);
+    signatureB
+      .verify(participantB, message)
+      .assertTrue(ASSERT_MESSAGES.INVALID_SIGNATURE_B);
 
     // 9. Update on-chain state (AC: 1) -- only commitment and nonce are visible
     this.balanceCommitment.set(newBalanceCommitment);

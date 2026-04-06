@@ -75,13 +75,21 @@ describe('PaymentChannel zkApp -- Full Lifecycle Integration (Story 34.3)', () =
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.OPEN.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.OPEN.toString()
+    );
 
     // Step 2: Deposit
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
     expect(zkApp.depositTotal.get().toString()).toBe(depositAmount.toString());
 
-    const channelHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
+    const channelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
 
     // Step 3: First claim -- split 700M / 300M
     const balA1 = Field(700_000_000);
@@ -102,9 +110,13 @@ describe('PaymentChannel zkApp -- Full Lifecycle Integration (Story 34.3)', () =
     );
 
     const expectedCommitment1 = Poseidon.hash([balA1, balB1, salt1]);
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedCommitment1.toString());
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedCommitment1.toString()
+    );
     expect(zkApp.nonceField.get().toString()).toBe(Field(1).toString());
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.OPEN.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.OPEN.toString()
+    );
 
     // Step 4: Second claim -- split 400M / 600M
     const balA2 = Field(400_000_000);
@@ -125,9 +137,13 @@ describe('PaymentChannel zkApp -- Full Lifecycle Integration (Story 34.3)', () =
     );
 
     const expectedCommitment2 = Poseidon.hash([balA2, balB2, salt2]);
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedCommitment2.toString());
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedCommitment2.toString()
+    );
     expect(zkApp.nonceField.get().toString()).toBe(Field(2).toString());
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.OPEN.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.OPEN.toString()
+    );
 
     // Step 5: Initiate close with latest balances
     const closeSalt = salt2;
@@ -136,11 +152,21 @@ describe('PaymentChannel zkApp -- Full Lifecycle Integration (Story 34.3)', () =
     const sigB = Signature.create(participantB.key, closeMsg);
 
     Local.setGlobalSlot(100);
-    await closeChannel(deployer, zkApp, balA2, balB2, closeSalt, Field(3), sigA, sigB, [
-      deployer.key,
-    ]);
+    await closeChannel(
+      deployer,
+      zkApp,
+      balA2,
+      balB2,
+      closeSalt,
+      Field(3),
+      sigA,
+      sigB,
+      [deployer.key]
+    );
 
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.CLOSING.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.CLOSING.toString()
+    );
     expect(zkApp.closedAtSlot.get().toBigInt()).toBeGreaterThanOrEqual(100n);
 
     // Step 6: Settle after challenge period
@@ -157,7 +183,9 @@ describe('PaymentChannel zkApp -- Full Lifecycle Integration (Story 34.3)', () =
       [deployer.key]
     );
 
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.SETTLED.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.SETTLED.toString()
+    );
   });
 
   // T-34.3-03: Balance conservation holds at every state transition
@@ -180,11 +208,17 @@ describe('PaymentChannel zkApp -- Full Lifecycle Integration (Story 34.3)', () =
     expect(initDeposit.toString()).toBe(Field(0).toString());
 
     // Deposit 1B nanomina
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
     const afterDepositTotal = zkApp.depositTotal.get();
     expect(afterDepositTotal.toString()).toBe(depositAmount.toString());
 
-    const channelHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
+    const channelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
 
     // Claim 1: 600M / 400M -- conservation: 600M + 400M == 1B
     const balA1 = Field(600_000_000);
@@ -233,7 +267,17 @@ describe('PaymentChannel zkApp -- Full Lifecycle Integration (Story 34.3)', () =
     const sigB = Signature.create(participantB.key, closeMsg);
 
     Local.setGlobalSlot(100);
-    await closeChannel(deployer, zkApp, balA2, balB2, salt2, Field(3), sigA, sigB, [deployer.key]);
+    await closeChannel(
+      deployer,
+      zkApp,
+      balA2,
+      balB2,
+      salt2,
+      Field(3),
+      sigA,
+      sigB,
+      [deployer.key]
+    );
 
     // depositTotal unchanged after close
     expect(zkApp.depositTotal.get().toString()).toBe(depositAmount.toString());
@@ -253,7 +297,9 @@ describe('PaymentChannel zkApp -- Full Lifecycle Integration (Story 34.3)', () =
     );
 
     // Final state: SETTLED, depositTotal still 1B
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.SETTLED.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.SETTLED.toString()
+    );
     expect(zkApp.depositTotal.get().toString()).toBe(depositAmount.toString());
   });
 });

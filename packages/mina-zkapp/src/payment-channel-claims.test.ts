@@ -15,7 +15,15 @@
  * @module payment-channel-claims.test
  */
 
-import { Mina, PrivateKey, PublicKey, Field, AccountUpdate, Poseidon, Signature } from 'o1js';
+import type { PublicKey } from 'o1js';
+import {
+  Mina,
+  PrivateKey,
+  Field,
+  AccountUpdate,
+  Poseidon,
+  Signature,
+} from 'o1js';
 
 import { PaymentChannel } from './PaymentChannel';
 import { CHANNEL_STATE, ASSERT_MESSAGES } from './constants';
@@ -50,7 +58,13 @@ async function initializeChannel(
   signers: PrivateKey[]
 ): Promise<void> {
   const tx = await Mina.transaction(sender, async () => {
-    await zkApp.initializeChannel(participantA, participantB, nonce, timeout, tokenId);
+    await zkApp.initializeChannel(
+      participantA,
+      participantB,
+      nonce,
+      timeout,
+      tokenId
+    );
   });
   await tx.prove();
   await tx.sign(signers).send();
@@ -103,7 +117,14 @@ async function settleChannel(
   signers: PrivateKey[]
 ): Promise<void> {
   const tx = await Mina.transaction(sender, async () => {
-    await zkApp.settle(balanceA, balanceB, salt, participantA, participantB, nonce);
+    await zkApp.settle(
+      balanceA,
+      balanceB,
+      salt,
+      participantA,
+      participantB,
+      nonce
+    );
   });
   await tx.prove();
   await tx.sign(signers).send();
@@ -180,7 +201,11 @@ function buildValidClaimParams(
   newNonce: Field;
 } {
   const newSalt = Field(99999);
-  const newBalanceCommitment = Poseidon.hash([newBalanceA, newBalanceB, newSalt]);
+  const newBalanceCommitment = Poseidon.hash([
+    newBalanceA,
+    newBalanceB,
+    newSalt,
+  ]);
   const message = [newBalanceCommitment, newNonce, channelHash];
   const signatureA = Signature.create(participantAKey, message);
   const signatureB = Signature.create(participantBKey, message);
@@ -210,11 +235,16 @@ async function setupOpenChannelWithDeposit(
   pB: Mina.TestPublicKey,
   params: { nonce: Field; timeout: Field; tokenId: Field; deposit: Field }
 ): Promise<{ channelHash: Field; depositTotal: Field }> {
-  await initializeChannel(deployer, zkApp, pA, pB, params.nonce, params.timeout, params.tokenId, [
-    deployer.key,
-    pA.key,
-    pB.key,
-  ]);
+  await initializeChannel(
+    deployer,
+    zkApp,
+    pA,
+    pB,
+    params.nonce,
+    params.timeout,
+    params.tokenId,
+    [deployer.key, pA.key, pB.key]
+  );
   await depositToChannel(pA, zkApp, params.deposit, pA, [pA.key]);
 
   const channelHash = Poseidon.hash([pA.x, pB.x, params.nonce]);
@@ -230,13 +260,24 @@ async function setupClosingChannel(
   zkApp: PaymentChannel,
   pA: Mina.TestPublicKey,
   pB: Mina.TestPublicKey,
-  params: { nonce: Field; timeout: Field; tokenId: Field; deposit: Field; salt: Field }
+  params: {
+    nonce: Field;
+    timeout: Field;
+    tokenId: Field;
+    deposit: Field;
+    salt: Field;
+  }
 ): Promise<{ channelHash: Field; balanceA: Field; balanceB: Field }> {
-  await initializeChannel(deployer, zkApp, pA, pB, params.nonce, params.timeout, params.tokenId, [
-    deployer.key,
-    pA.key,
-    pB.key,
-  ]);
+  await initializeChannel(
+    deployer,
+    zkApp,
+    pA,
+    pB,
+    params.nonce,
+    params.timeout,
+    params.tokenId,
+    [deployer.key, pA.key, pB.key]
+  );
   await depositToChannel(pA, zkApp, params.deposit, pA, [pA.key]);
 
   const balanceA = params.deposit;
@@ -246,9 +287,17 @@ async function setupClosingChannel(
   const sigB = Signature.create(pB.key, closeMsg);
 
   local.setGlobalSlot(100);
-  await closeChannel(deployer, zkApp, balanceA, balanceB, params.salt, Field(1), sigA, sigB, [
-    deployer.key,
-  ]);
+  await closeChannel(
+    deployer,
+    zkApp,
+    balanceA,
+    balanceB,
+    params.salt,
+    Field(1),
+    sigA,
+    sigB,
+    [deployer.key]
+  );
 
   const channelHash = Poseidon.hash([pA.x, pB.x, params.nonce]);
   return { channelHash, balanceA, balanceB };
@@ -263,14 +312,35 @@ async function setupSettledChannel(
   zkApp: PaymentChannel,
   pA: Mina.TestPublicKey,
   pB: Mina.TestPublicKey,
-  params: { nonce: Field; timeout: Field; tokenId: Field; deposit: Field; salt: Field }
+  params: {
+    nonce: Field;
+    timeout: Field;
+    tokenId: Field;
+    deposit: Field;
+    salt: Field;
+  }
 ): Promise<{ channelHash: Field }> {
-  const { balanceA, balanceB } = await setupClosingChannel(local, deployer, zkApp, pA, pB, params);
+  const { balanceA, balanceB } = await setupClosingChannel(
+    local,
+    deployer,
+    zkApp,
+    pA,
+    pB,
+    params
+  );
 
   local.setGlobalSlot(200);
-  await settleChannel(deployer, zkApp, balanceA, balanceB, params.salt, pA, pB, params.nonce, [
-    deployer.key,
-  ]);
+  await settleChannel(
+    deployer,
+    zkApp,
+    balanceA,
+    balanceB,
+    params.salt,
+    pA,
+    pB,
+    params.nonce,
+    [deployer.key]
+  );
 
   const channelHash = Poseidon.hash([pA.x, pB.x, params.nonce]);
   return { channelHash };
@@ -329,7 +399,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a valid claimFromChannel proof is submitted with new balances
@@ -352,8 +427,14 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     await submitClaim(deployer, zkApp, claimParams, [deployer.key]);
 
     // Then: the on-chain balanceCommitment updates to the new Poseidon commitment
-    const expectedCommitment = Poseidon.hash([newBalanceA, newBalanceB, claimParams.newSalt]);
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedCommitment.toString());
+    const expectedCommitment = Poseidon.hash([
+      newBalanceA,
+      newBalanceB,
+      claimParams.newSalt,
+    ]);
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedCommitment.toString()
+    );
 
     // And: the on-chain nonceField updates to the new nonce
     expect(zkApp.nonceField.get().toString()).toBe(newNonce.toString());
@@ -368,7 +449,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a claim is submitted where new_balance_a + new_balance_b != depositTotal
@@ -389,9 +475,9 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     );
 
     // Then: the proof fails to verify and the transaction is rejected
-    await expect(submitClaim(deployer, zkApp, claimParams, [deployer.key])).rejects.toThrow(
-      ASSERT_MESSAGES.BALANCE_CONSERVATION_VIOLATED
-    );
+    await expect(
+      submitClaim(deployer, zkApp, claimParams, [deployer.key])
+    ).rejects.toThrow(ASSERT_MESSAGES.BALANCE_CONSERVATION_VIOLATED);
   });
 
   // T-34.2-03: Claim with non-negativity violation rejected
@@ -403,7 +489,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a claim is submitted with newBalanceA > depositTotal
@@ -416,7 +507,11 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
 
     // Build params manually since the balances are intentionally invalid
     const newSalt = Field(99999);
-    const newBalanceCommitment = Poseidon.hash([exploitBalanceA, exploitBalanceB, newSalt]);
+    const newBalanceCommitment = Poseidon.hash([
+      exploitBalanceA,
+      exploitBalanceB,
+      newSalt,
+    ]);
     const message = [newBalanceCommitment, newNonce, channelHash];
     const signatureA = Signature.create(participantA.key, message);
     const signatureB = Signature.create(participantB.key, message);
@@ -454,7 +549,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // First valid claim to advance nonce to 1
@@ -485,9 +585,9 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     );
 
     // Then: the proof fails to verify and the transaction is rejected
-    await expect(submitClaim(deployer, zkApp, staleClaim, [deployer.key])).rejects.toThrow(
-      ASSERT_MESSAGES.NONCE_MUST_INCREASE
-    );
+    await expect(
+      submitClaim(deployer, zkApp, staleClaim, [deployer.key])
+    ).rejects.toThrow(ASSERT_MESSAGES.NONCE_MUST_INCREASE);
   });
 
   // T-34.2-05: Claim with invalid signature from participant A rejected
@@ -499,7 +599,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a claim is submitted with an invalid signature from participant A
@@ -507,7 +612,11 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     const newBalanceB = Field(300_000_000);
     const newNonce = Field(1);
     const newSalt = Field(99999);
-    const newBalanceCommitment = Poseidon.hash([newBalanceA, newBalanceB, newSalt]);
+    const newBalanceCommitment = Poseidon.hash([
+      newBalanceA,
+      newBalanceB,
+      newSalt,
+    ]);
     const message = [newBalanceCommitment, newNonce, channelHash];
 
     // Use a random key to create an invalid signature for participant A
@@ -546,7 +655,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a claim is submitted with an invalid signature from participant B
@@ -554,7 +668,11 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     const newBalanceB = Field(300_000_000);
     const newNonce = Field(1);
     const newSalt = Field(99999);
-    const newBalanceCommitment = Poseidon.hash([newBalanceA, newBalanceB, newSalt]);
+    const newBalanceCommitment = Poseidon.hash([
+      newBalanceA,
+      newBalanceB,
+      newSalt,
+    ]);
     const message = [newBalanceCommitment, newNonce, channelHash];
 
     const validSignatureA = Signature.create(participantA.key, message);
@@ -593,7 +711,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a valid claim is submitted
@@ -622,7 +745,11 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     // The commitment is a Poseidon hash -- not zero (was updated)
     expect(onChainCommitment).not.toEqual(Field(0));
     // The commitment matches the expected Poseidon hash of the private balances
-    const expectedCommitment = Poseidon.hash([newBalanceA, newBalanceB, claimParams.newSalt]);
+    const expectedCommitment = Poseidon.hash([
+      newBalanceA,
+      newBalanceB,
+      claimParams.newSalt,
+    ]);
     expect(onChainCommitment.toString()).toBe(expectedCommitment.toString());
     // The nonce was updated
     expect(onChainNonce.toString()).toBe(newNonce.toString());
@@ -660,7 +787,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a valid claim is submitted
@@ -679,7 +811,9 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     await submitClaim(deployer, zkApp, claimParams, [deployer.key]);
 
     // Then: channelState remains OPEN (channel is not closed by a claim)
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.OPEN.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.OPEN.toString()
+    );
   });
 
   // T-34.2-12: Commitment mismatch rejected
@@ -691,7 +825,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a claim is submitted where Poseidon(newBalanceA, newBalanceB, newSalt) != newBalanceCommitment
@@ -738,7 +877,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a claim is submitted with incorrect participant keys
@@ -747,7 +891,11 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     const newBalanceB = Field(300_000_000);
     const newNonce = Field(1);
     const newSalt = Field(99999);
-    const newBalanceCommitment = Poseidon.hash([newBalanceA, newBalanceB, newSalt]);
+    const newBalanceCommitment = Poseidon.hash([
+      newBalanceA,
+      newBalanceB,
+      newSalt,
+    ]);
 
     // Sign with the real keys but provide a fake participant public key
     const message = [newBalanceCommitment, newNonce, channelHash];
@@ -789,7 +937,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: three sequential claims with increasing nonces
@@ -838,9 +991,13 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       Field(600_000_000),
       claim3.newSalt,
     ]);
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedCommitment.toString());
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedCommitment.toString()
+    );
     expect(zkApp.nonceField.get().toString()).toBe(Field(3).toString());
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.OPEN.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.OPEN.toString()
+    );
   });
 
   // T-34.2-10: Claim on CLOSING channel is rejected (OPEN-only policy)
@@ -854,7 +1011,13 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount, salt }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+        salt,
+      }
     );
 
     // When: a claim is attempted on the CLOSING channel
@@ -871,9 +1034,9 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     );
 
     // Then: the transaction is rejected (channel must be OPEN)
-    await expect(submitClaim(deployer, zkApp, claimParams, [deployer.key])).rejects.toThrow(
-      ASSERT_MESSAGES.CHANNEL_MUST_BE_OPEN
-    );
+    await expect(
+      submitClaim(deployer, zkApp, claimParams, [deployer.key])
+    ).rejects.toThrow(ASSERT_MESSAGES.CHANNEL_MUST_BE_OPEN);
   });
 
   // T-34.2-11: Claim on SETTLED channel is rejected
@@ -886,7 +1049,13 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount, salt }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+        salt,
+      }
     );
 
     // When: a claim is attempted on the SETTLED channel
@@ -903,9 +1072,9 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     );
 
     // Then: the transaction is rejected (channel must be OPEN)
-    await expect(submitClaim(deployer, zkApp, claimParams, [deployer.key])).rejects.toThrow(
-      ASSERT_MESSAGES.CHANNEL_MUST_BE_OPEN
-    );
+    await expect(
+      submitClaim(deployer, zkApp, claimParams, [deployer.key])
+    ).rejects.toThrow(ASSERT_MESSAGES.CHANNEL_MUST_BE_OPEN);
   });
 
   // =========================================================================
@@ -921,7 +1090,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // Advance nonce to 5 via valid claim
@@ -952,9 +1126,9 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     );
 
     // Then: the proof fails to verify and the transaction is rejected
-    await expect(submitClaim(deployer, zkApp, staleClaim, [deployer.key])).rejects.toThrow(
-      ASSERT_MESSAGES.NONCE_MUST_INCREASE
-    );
+    await expect(
+      submitClaim(deployer, zkApp, staleClaim, [deployer.key])
+    ).rejects.toThrow(ASSERT_MESSAGES.NONCE_MUST_INCREASE);
   });
 
   // T-34.2-15: Claim with wrong participant B key (channelHash mismatch) is rejected
@@ -966,7 +1140,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a claim is submitted with incorrect participant B key
@@ -975,7 +1154,11 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     const newBalanceB = Field(300_000_000);
     const newNonce = Field(1);
     const newSalt = Field(99999);
-    const newBalanceCommitment = Poseidon.hash([newBalanceA, newBalanceB, newSalt]);
+    const newBalanceCommitment = Poseidon.hash([
+      newBalanceA,
+      newBalanceB,
+      newSalt,
+    ]);
 
     const message = [newBalanceCommitment, newNonce, channelHash];
     const signatureA = Signature.create(participantA.key, message);
@@ -1012,7 +1195,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a claim is submitted with incorrect channelNonce
@@ -1021,7 +1209,11 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     const newBalanceB = Field(300_000_000);
     const newNonce = Field(1);
     const newSalt = Field(99999);
-    const newBalanceCommitment = Poseidon.hash([newBalanceA, newBalanceB, newSalt]);
+    const newBalanceCommitment = Poseidon.hash([
+      newBalanceA,
+      newBalanceB,
+      newSalt,
+    ]);
 
     const message = [newBalanceCommitment, newNonce, channelHash];
     const signatureA = Signature.create(participantA.key, message);
@@ -1055,12 +1247,20 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     // Given: a freshly deployed zkApp (UNINITIALIZED state, no initializeChannel called)
     // The channelHash and other fields are zero
 
-    const fakeChannelHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
+    const fakeChannelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
     const newBalanceA = Field(700_000_000);
     const newBalanceB = Field(300_000_000);
     const newNonce = Field(1);
     const newSalt = Field(99999);
-    const newBalanceCommitment = Poseidon.hash([newBalanceA, newBalanceB, newSalt]);
+    const newBalanceCommitment = Poseidon.hash([
+      newBalanceA,
+      newBalanceB,
+      newSalt,
+    ]);
 
     const message = [newBalanceCommitment, newNonce, fakeChannelHash];
     const signatureA = Signature.create(participantA.key, message);
@@ -1098,7 +1298,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a valid claim assigns all funds to participant A, zero to participant B
@@ -1121,11 +1326,19 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     await submitClaim(deployer, zkApp, claimParams, [deployer.key]);
 
     // Then: the on-chain balanceCommitment updates correctly
-    const expectedCommitment = Poseidon.hash([newBalanceA, newBalanceB, claimParams.newSalt]);
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedCommitment.toString());
+    const expectedCommitment = Poseidon.hash([
+      newBalanceA,
+      newBalanceB,
+      claimParams.newSalt,
+    ]);
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedCommitment.toString()
+    );
     expect(zkApp.nonceField.get().toString()).toBe(newNonce.toString());
     // And: channel remains OPEN
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.OPEN.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.OPEN.toString()
+    );
   });
 
   // T-34.2-19: Claim where participant B signs with participant A's key is rejected
@@ -1137,7 +1350,12 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
       zkApp,
       participantA,
       participantB,
-      { nonce: channelNonce, timeout: settlementTimeout, tokenId, deposit: depositAmount }
+      {
+        nonce: channelNonce,
+        timeout: settlementTimeout,
+        tokenId,
+        deposit: depositAmount,
+      }
     );
 
     // When: a claim is submitted where participant A signs both signatures
@@ -1145,7 +1363,11 @@ describe('PaymentChannel zkApp -- ZK-Private Claims (Story 34.2)', () => {
     const newBalanceB = Field(300_000_000);
     const newNonce = Field(1);
     const newSalt = Field(99999);
-    const newBalanceCommitment = Poseidon.hash([newBalanceA, newBalanceB, newSalt]);
+    const newBalanceCommitment = Poseidon.hash([
+      newBalanceA,
+      newBalanceB,
+      newSalt,
+    ]);
 
     const message = [newBalanceCommitment, newNonce, channelHash];
     // Both signatures created with participant A's key

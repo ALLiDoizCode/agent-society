@@ -78,9 +78,15 @@ describe('PaymentChannel zkApp -- Security & Edge Cases (Story 34.3)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
-    const channelHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
+    const channelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
 
     // Claim 1 with nonce 1 -- succeeds
     await submitClaim(
@@ -164,7 +170,9 @@ describe('PaymentChannel zkApp -- Security & Edge Cases (Story 34.3)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
     const balanceA = depositAmount;
     const balanceB = Field(0);
@@ -175,9 +183,17 @@ describe('PaymentChannel zkApp -- Security & Edge Cases (Story 34.3)', () => {
 
     // Set slot to 100, then close
     Local.setGlobalSlot(100);
-    await closeChannel(deployer, zkApp, balanceA, balanceB, salt, Field(1), sigA, sigB, [
-      deployer.key,
-    ]);
+    await closeChannel(
+      deployer,
+      zkApp,
+      balanceA,
+      balanceB,
+      salt,
+      Field(1),
+      sigA,
+      sigB,
+      [deployer.key]
+    );
 
     // Read closedAtSlot and timeout from on-chain state
     const closedAtSlotField = zkApp.closedAtSlot.get();
@@ -215,7 +231,9 @@ describe('PaymentChannel zkApp -- Security & Edge Cases (Story 34.3)', () => {
       [deployer.key]
     );
 
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.SETTLED.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.SETTLED.toString()
+    );
   });
 
   // =========================================================================
@@ -234,9 +252,15 @@ describe('PaymentChannel zkApp -- Security & Edge Cases (Story 34.3)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
-    const channelHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
+    const channelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
 
     // Claim with all funds to participant A
     const balA = depositAmount;
@@ -257,7 +281,9 @@ describe('PaymentChannel zkApp -- Security & Edge Cases (Story 34.3)', () => {
     );
 
     const expectedCommitment = Poseidon.hash([balA, balB, salt]);
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedCommitment.toString());
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedCommitment.toString()
+    );
   });
 
   it('[P1] T-34.3-07b: claim with balanceA=0, balanceB=depositTotal succeeds', async () => {
@@ -271,9 +297,15 @@ describe('PaymentChannel zkApp -- Security & Edge Cases (Story 34.3)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
-    const channelHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
+    const channelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
 
     // Claim with all funds to participant B
     const balA = Field(0);
@@ -294,7 +326,9 @@ describe('PaymentChannel zkApp -- Security & Edge Cases (Story 34.3)', () => {
     );
 
     const expectedCommitment = Poseidon.hash([balA, balB, salt]);
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedCommitment.toString());
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedCommitment.toString()
+    );
   });
 
   // =========================================================================
@@ -316,9 +350,15 @@ describe('PaymentChannel zkApp -- Security & Edge Cases (Story 34.3)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, largeDeposit, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, largeDeposit, participantA, [
+      participantA.key,
+    ]);
 
-    const channelHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
+    const channelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
 
     // Claim splitting the large deposit -- both values within safe range
     const balA = Field(BigInt('9223372036854775807')); // ~half of large deposit
@@ -341,7 +381,9 @@ describe('PaymentChannel zkApp -- Security & Edge Cases (Story 34.3)', () => {
     );
 
     const expectedCommitment = Poseidon.hash([balA, balB, salt]);
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedCommitment.toString());
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedCommitment.toString()
+    );
   });
 
   it('[P1] T-34.3-08b: deposit exceeding MAX_SAFE_AMOUNT is rejected', async () => {
@@ -358,7 +400,9 @@ describe('PaymentChannel zkApp -- Security & Edge Cases (Story 34.3)', () => {
 
     const unsafeAmount = MAX_SAFE_AMOUNT.add(Field(1));
     await expect(
-      depositToChannel(participantA, zkApp, unsafeAmount, participantA, [participantA.key])
+      depositToChannel(participantA, zkApp, unsafeAmount, participantA, [
+        participantA.key,
+      ])
     ).rejects.toThrow(ASSERT_MESSAGES.AMOUNT_EXCEEDS_SAFE_RANGE);
   });
 });

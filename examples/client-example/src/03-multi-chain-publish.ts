@@ -32,7 +32,6 @@
 import { ToonClient } from '@toon-protocol/client';
 import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
 import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools/pure';
-import WebSocket from 'ws';
 import {
   createWalletClient,
   createPublicClient,

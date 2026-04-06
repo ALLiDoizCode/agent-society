@@ -9,9 +9,10 @@
  * @module test-helpers
  */
 
-import { Mina, PrivateKey, PublicKey, Field, AccountUpdate, Poseidon, Signature } from 'o1js';
+import type { PrivateKey, PublicKey, Field } from 'o1js';
+import { Mina, AccountUpdate, Poseidon, Signature } from 'o1js';
 
-import { PaymentChannel } from './PaymentChannel';
+import type { PaymentChannel } from './PaymentChannel';
 
 /**
  * Deploy a PaymentChannel zkApp to the local blockchain.
@@ -43,7 +44,13 @@ export async function initializeChannel(
   signers: PrivateKey[]
 ): Promise<void> {
   const tx = await Mina.transaction(sender, async () => {
-    await zkApp.initializeChannel(participantA, participantB, nonce, timeout, tokenId);
+    await zkApp.initializeChannel(
+      participantA,
+      participantB,
+      nonce,
+      timeout,
+      tokenId
+    );
   });
   await tx.prove();
   await tx.sign(signers).send();
@@ -141,7 +148,14 @@ export async function settleChannel(
   signers: PrivateKey[]
 ): Promise<void> {
   const tx = await Mina.transaction(sender, async () => {
-    await zkApp.settle(balanceA, balanceB, salt, participantA, participantB, nonce);
+    await zkApp.settle(
+      balanceA,
+      balanceB,
+      salt,
+      participantA,
+      participantB,
+      nonce
+    );
   });
   await tx.prove();
   await tx.sign(signers).send();

@@ -103,15 +103,23 @@ describe('PaymentChannel zkApp -- Proof-Enabled Tests (Story 34.3)', () => {
       [deployer.key, participantA.key, participantB.key]
     );
     const initTime = Date.now() - initStart;
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.OPEN.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.OPEN.toString()
+    );
 
     // Deposit
     const depositStart = Date.now();
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
     const depositTime = Date.now() - depositStart;
     expect(zkApp.depositTotal.get().toString()).toBe(depositAmount.toString());
 
-    const channelHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
+    const channelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
 
     // Claim
     const claimStart = Date.now();
@@ -140,9 +148,21 @@ describe('PaymentChannel zkApp -- Proof-Enabled Tests (Story 34.3)', () => {
     const sigB = Signature.create(participantB.key, closeMsg);
 
     Local.setGlobalSlot(100);
-    await closeChannel(deployer, zkApp, balA, balB, salt, Field(2), sigA, sigB, [deployer.key]);
+    await closeChannel(
+      deployer,
+      zkApp,
+      balA,
+      balB,
+      salt,
+      Field(2),
+      sigA,
+      sigB,
+      [deployer.key]
+    );
     const closeTime = Date.now() - closeStart;
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.CLOSING.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.CLOSING.toString()
+    );
 
     // Settle
     const settleStart = Date.now();
@@ -159,7 +179,9 @@ describe('PaymentChannel zkApp -- Proof-Enabled Tests (Story 34.3)', () => {
       [deployer.key]
     );
     const settleTime = Date.now() - settleStart;
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.SETTLED.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.SETTLED.toString()
+    );
 
     // Store timings for T-34.3-12
     proofTimings = {
@@ -169,7 +191,13 @@ describe('PaymentChannel zkApp -- Proof-Enabled Tests (Story 34.3)', () => {
       claim: claimTime,
       close: closeTime,
       settle: settleTime,
-      total: deployTime + initTime + depositTime + claimTime + closeTime + settleTime,
+      total:
+        deployTime +
+        initTime +
+        depositTime +
+        claimTime +
+        closeTime +
+        settleTime,
     };
   });
 
@@ -182,8 +210,9 @@ describe('PaymentChannel zkApp -- Proof-Enabled Tests (Story 34.3)', () => {
     // This test depends on T-34.3-09 having run first (same describe block, sequential).
     // If T-34.3-09 was skipped or failed, skip this test gracefully.
     if (!proofTimings) {
-      // eslint-disable-next-line no-console
-      console.warn('T-34.3-12 skipped: T-34.3-09 did not run (proofTimings not populated)');
+      console.warn(
+        'T-34.3-12 skipped: T-34.3-09 did not run (proofTimings not populated)'
+      );
       return;
     }
 
@@ -197,7 +226,7 @@ describe('PaymentChannel zkApp -- Proof-Enabled Tests (Story 34.3)', () => {
     expect(proofTimings.total).toBeGreaterThan(0);
 
     // Log timings for CI visibility
-    // eslint-disable-next-line no-console
+
     console.log('Proof generation times (ms):', proofTimings);
   });
 
@@ -228,13 +257,20 @@ describe('PaymentChannel zkApp -- Proof-Enabled Tests (Story 34.3)', () => {
     // Execute a transaction to prove the deployed VK matches -- if the VK
     // were different, the proof would fail verification on the local chain.
     const [, pA, pB] = Local.testAccounts;
-    await initializeChannel(deployer, zkApp, pA, pB, Field(1), Field(10), Field(1), [
-      deployer.key,
-      pA.key,
-      pB.key,
-    ]);
+    await initializeChannel(
+      deployer,
+      zkApp,
+      pA,
+      pB,
+      Field(1),
+      Field(10),
+      Field(1),
+      [deployer.key, pA.key, pB.key]
+    );
 
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.OPEN.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.OPEN.toString()
+    );
   });
 
   // =========================================================================
@@ -264,15 +300,25 @@ describe('PaymentChannel zkApp -- Proof-Enabled Tests (Story 34.3)', () => {
       Field(1),
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
-    const channelHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
+    const channelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
 
     // Tampered claim: wrong balances (don't sum to depositTotal)
     const tamperedBalA = Field(800_000_000);
     const tamperedBalB = Field(300_000_000); // 800M + 300M = 1.1B != 1B
     const salt = Field(55555);
-    const tamperedCommitment = Poseidon.hash([tamperedBalA, tamperedBalB, salt]);
+    const tamperedCommitment = Poseidon.hash([
+      tamperedBalA,
+      tamperedBalB,
+      salt,
+    ]);
     const message = [tamperedCommitment, Field(1), channelHash];
     const sigA = Signature.create(participantA.key, message);
     const sigB = Signature.create(participantB.key, message);
@@ -302,7 +348,11 @@ describe('PaymentChannel zkApp -- Proof-Enabled Tests (Story 34.3)', () => {
     const wrongSalt = Field(99999);
     const correctSalt = Field(88888);
     // Commitment uses wrongSalt, but we claim correctSalt -- mismatch
-    const wrongCommitment = Poseidon.hash([correctBalA, correctBalB, wrongSalt]);
+    const wrongCommitment = Poseidon.hash([
+      correctBalA,
+      correctBalB,
+      wrongSalt,
+    ]);
     const message2 = [wrongCommitment, Field(1), channelHash];
     const sigA2 = Signature.create(participantA.key, message2);
     const sigB2 = Signature.create(participantB.key, message2);

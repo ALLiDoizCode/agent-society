@@ -11,7 +11,15 @@
  * @module payment-channel.test
  */
 
-import { Mina, PrivateKey, PublicKey, Field, AccountUpdate, Poseidon, Signature } from 'o1js';
+import type { PublicKey } from 'o1js';
+import {
+  Mina,
+  PrivateKey,
+  Field,
+  AccountUpdate,
+  Poseidon,
+  Signature,
+} from 'o1js';
 
 import { PaymentChannel } from './PaymentChannel';
 import { CHANNEL_STATE, MAX_SAFE_AMOUNT } from './constants';
@@ -46,7 +54,13 @@ async function initializeChannel(
   signers: PrivateKey[]
 ): Promise<void> {
   const tx = await Mina.transaction(sender, async () => {
-    await zkApp.initializeChannel(participantA, participantB, nonce, timeout, tokenId);
+    await zkApp.initializeChannel(
+      participantA,
+      participantB,
+      nonce,
+      timeout,
+      tokenId
+    );
   });
   await tx.prove();
   await tx.sign(signers).send();
@@ -99,7 +113,14 @@ async function settleChannel(
   signers: PrivateKey[]
 ): Promise<void> {
   const tx = await Mina.transaction(sender, async () => {
-    await zkApp.settle(balanceA, balanceB, salt, participantA, participantB, nonce);
+    await zkApp.settle(
+      balanceA,
+      balanceB,
+      salt,
+      participantA,
+      participantB,
+      nonce
+    );
   });
   await tx.prove();
   await tx.sign(signers).send();
@@ -115,13 +136,24 @@ async function setupClosingChannel(
   zkApp: PaymentChannel,
   pA: Mina.TestPublicKey,
   pB: Mina.TestPublicKey,
-  params: { nonce: Field; timeout: Field; tokenId: Field; deposit: Field; salt: Field }
+  params: {
+    nonce: Field;
+    timeout: Field;
+    tokenId: Field;
+    deposit: Field;
+    salt: Field;
+  }
 ): Promise<{ balanceA: Field; balanceB: Field }> {
-  await initializeChannel(deployer, zkApp, pA, pB, params.nonce, params.timeout, params.tokenId, [
-    deployer.key,
-    pA.key,
-    pB.key,
-  ]);
+  await initializeChannel(
+    deployer,
+    zkApp,
+    pA,
+    pB,
+    params.nonce,
+    params.timeout,
+    params.tokenId,
+    [deployer.key, pA.key, pB.key]
+  );
   await depositToChannel(pA, zkApp, params.deposit, pA, [pA.key]);
 
   const balanceA = params.deposit;
@@ -131,9 +163,17 @@ async function setupClosingChannel(
   const sigB = Signature.create(pB.key, closeMsg);
 
   local.setGlobalSlot(100);
-  await closeChannel(deployer, zkApp, balanceA, balanceB, params.salt, Field(1), sigA, sigB, [
-    deployer.key,
-  ]);
+  await closeChannel(
+    deployer,
+    zkApp,
+    balanceA,
+    balanceB,
+    params.salt,
+    Field(1),
+    sigA,
+    sigB,
+    [deployer.key]
+  );
 
   return { balanceA, balanceB };
 }
@@ -148,14 +188,35 @@ async function setupSettledChannel(
   zkApp: PaymentChannel,
   pA: Mina.TestPublicKey,
   pB: Mina.TestPublicKey,
-  params: { nonce: Field; timeout: Field; tokenId: Field; deposit: Field; salt: Field }
+  params: {
+    nonce: Field;
+    timeout: Field;
+    tokenId: Field;
+    deposit: Field;
+    salt: Field;
+  }
 ): Promise<{ balanceA: Field; balanceB: Field }> {
-  const { balanceA, balanceB } = await setupClosingChannel(local, deployer, zkApp, pA, pB, params);
+  const { balanceA, balanceB } = await setupClosingChannel(
+    local,
+    deployer,
+    zkApp,
+    pA,
+    pB,
+    params
+  );
 
   local.setGlobalSlot(200); // Past challenge period (100 + 30 = 130)
-  await settleChannel(deployer, zkApp, balanceA, balanceB, params.salt, pA, pB, params.nonce, [
-    deployer.key,
-  ]);
+  await settleChannel(
+    deployer,
+    zkApp,
+    balanceA,
+    balanceB,
+    params.salt,
+    pA,
+    pB,
+    params.nonce,
+    [deployer.key]
+  );
 
   return { balanceA, balanceB };
 }
@@ -223,16 +284,32 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     );
 
     // Then: all 8 state fields are set correctly
-    const expectedChannelHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
-    const expectedBalanceCommitment = Poseidon.hash([Field(0), Field(0), Field(0)]);
+    const expectedChannelHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
+    const expectedBalanceCommitment = Poseidon.hash([
+      Field(0),
+      Field(0),
+      Field(0),
+    ]);
 
-    expect(zkApp.channelHash.get().toString()).toBe(expectedChannelHash.toString());
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedBalanceCommitment.toString());
+    expect(zkApp.channelHash.get().toString()).toBe(
+      expectedChannelHash.toString()
+    );
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedBalanceCommitment.toString()
+    );
     expect(zkApp.nonceField.get().toString()).toBe(Field(0).toString());
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.OPEN.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.OPEN.toString()
+    );
     expect(zkApp.depositTotal.get().toString()).toBe(Field(0).toString());
     expect(zkApp.closedAtSlot.get().toString()).toBe(Field(0).toString());
-    expect(zkApp.settlementTimeout.get().toString()).toBe(settlementTimeout.toString());
+    expect(zkApp.settlementTimeout.get().toString()).toBe(
+      settlementTimeout.toString()
+    );
     expect(zkApp.tokenId_.get().toString()).toBe(tokenId.toString());
   });
 
@@ -254,7 +331,11 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     );
 
     // Then: channelHash matches Poseidon(participantA.x, participantB.x, nonce)
-    const expectedHash = Poseidon.hash([participantA.x, participantB.x, channelNonce]);
+    const expectedHash = Poseidon.hash([
+      participantA.x,
+      participantB.x,
+      channelNonce,
+    ]);
 
     expect(zkApp.channelHash.get().toString()).toBe(expectedHash.toString());
   });
@@ -276,13 +357,17 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     );
 
     // When: participant A deposits
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
     // Then: depositTotal increases by deposited amount
     expect(zkApp.depositTotal.get().toString()).toBe(depositAmount.toString());
 
     // And: a second deposit accumulates
-    await depositToChannel(participantB, zkApp, depositAmount, participantB, [participantB.key]);
+    await depositToChannel(participantB, zkApp, depositAmount, participantB, [
+      participantB.key,
+    ]);
 
     const expectedTotal = depositAmount.add(depositAmount);
     expect(zkApp.depositTotal.get().toString()).toBe(expectedTotal.toString());
@@ -303,7 +388,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
     // When: both participants sign a close request with final balances
     const balanceA = depositAmount;
@@ -315,19 +402,31 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     // Set a known global slot for testing
     Local.setGlobalSlot(100);
 
-    await closeChannel(deployer, zkApp, balanceA, balanceB, salt, Field(1), sigA, sigB, [
-      deployer.key,
-    ]);
+    await closeChannel(
+      deployer,
+      zkApp,
+      balanceA,
+      balanceB,
+      salt,
+      Field(1),
+      sigA,
+      sigB,
+      [deployer.key]
+    );
 
     // Then: channelState transitions to CLOSING
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.CLOSING.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.CLOSING.toString()
+    );
 
     // And: closedAtSlot is set to the current global slot
     expect(zkApp.closedAtSlot.get().toBigInt()).toBeGreaterThanOrEqual(100n);
 
     // And: balanceCommitment is updated
     const expectedCommitment = Poseidon.hash([balanceA, balanceB, salt]);
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedCommitment.toString());
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedCommitment.toString()
+    );
   });
 
   // T-34.1-05: settle after challenge period distributes funds and transitions to SETTLED
@@ -345,7 +444,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
     const balanceA = depositAmount;
     const balanceB = Field(0);
@@ -354,9 +455,17 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     const sigB = Signature.create(participantB.key, closeMsg);
 
     Local.setGlobalSlot(100);
-    await closeChannel(deployer, zkApp, balanceA, balanceB, salt, Field(1), sigA, sigB, [
-      deployer.key,
-    ]);
+    await closeChannel(
+      deployer,
+      zkApp,
+      balanceA,
+      balanceB,
+      salt,
+      Field(1),
+      sigA,
+      sigB,
+      [deployer.key]
+    );
 
     // When: settle is called AFTER challenge period (100 + 30 = 130)
     Local.setGlobalSlot(200); // Well past deadline
@@ -374,7 +483,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     );
 
     // Then: channelState transitions to SETTLED
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.SETTLED.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.SETTLED.toString()
+    );
   });
 
   // T-34.1-06: settle before challenge period is rejected
@@ -392,7 +503,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
     const balanceA = depositAmount;
     const balanceB = Field(0);
@@ -401,9 +514,17 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     const sigB = Signature.create(participantB.key, closeMsg);
 
     Local.setGlobalSlot(100);
-    await closeChannel(deployer, zkApp, balanceA, balanceB, salt, Field(1), sigA, sigB, [
-      deployer.key,
-    ]);
+    await closeChannel(
+      deployer,
+      zkApp,
+      balanceA,
+      balanceB,
+      salt,
+      Field(1),
+      sigA,
+      sigB,
+      [deployer.key]
+    );
 
     // When: settle is called BEFORE challenge period expires (100 + 30 = 130, but slot is 110)
     Local.setGlobalSlot(110);
@@ -455,7 +576,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     );
 
     for (const fieldName of stateFieldNames) {
-      const field = (zkApp as unknown as Record<string, { get: () => Field }>)[fieldName];
+      const field = (zkApp as unknown as Record<string, { get: () => Field }>)[
+        fieldName
+      ];
       expect(field).toBeDefined();
       expect(typeof field.get).toBe('function');
     }
@@ -469,22 +592,25 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     // interface (get/set methods) that could indicate an undeclared 9th field.
     // We check own properties only (instance-level), since @state decorators
     // create State objects as instance properties on the zkApp.
-    const suspectStateFields = Object.getOwnPropertyNames(zkApp).filter((name) => {
-      if (stateFieldNames.includes(name) || name.startsWith('_')) return false;
-      try {
-        const val = (zkApp as unknown as Record<string, unknown>)[name];
-        return (
-          val !== null &&
-          typeof val === 'object' &&
-          val !== undefined &&
-          'get' in (val as Record<string, unknown>) &&
-          'set' in (val as Record<string, unknown>)
-        );
-      } catch {
-        // Some o1js properties (e.g., reducer) throw when accessed without setup
-        return false;
+    const suspectStateFields = Object.getOwnPropertyNames(zkApp).filter(
+      (name) => {
+        if (stateFieldNames.includes(name) || name.startsWith('_'))
+          return false;
+        try {
+          const val = (zkApp as unknown as Record<string, unknown>)[name];
+          return (
+            val !== null &&
+            typeof val === 'object' &&
+            val !== undefined &&
+            'get' in (val as Record<string, unknown>) &&
+            'set' in (val as Record<string, unknown>)
+          );
+        } catch {
+          // Some o1js properties (e.g., reducer) throw when accessed without setup
+          return false;
+        }
       }
-    });
+    );
     // No unexpected State-like fields beyond the known 8
     expect(suspectStateFields).toEqual([]);
   });
@@ -505,7 +631,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
     // When: close is called with valid balances and both signatures
     const balanceA = depositAmount;
@@ -514,13 +642,23 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     const sigA = Signature.create(participantA.key, closeMsg);
     const sigB = Signature.create(participantB.key, closeMsg);
 
-    await closeChannel(deployer, zkApp, balanceA, balanceB, salt, Field(1), sigA, sigB, [
-      deployer.key,
-    ]);
+    await closeChannel(
+      deployer,
+      zkApp,
+      balanceA,
+      balanceB,
+      salt,
+      Field(1),
+      sigA,
+      sigB,
+      [deployer.key]
+    );
 
     // Then: balanceCommitment is Poseidon(balanceA, balanceB, salt)
     const expectedCommitment = Poseidon.hash([balanceA, balanceB, salt]);
-    expect(zkApp.balanceCommitment.get().toString()).toBe(expectedCommitment.toString());
+    expect(zkApp.balanceCommitment.get().toString()).toBe(
+      expectedCommitment.toString()
+    );
 
     // Note: invalid-signature rejection is covered by the signature verification
     // logic in the contract and tested in a separate negative scenario.
@@ -572,12 +710,21 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
       deposit: depositAmount,
       salt,
     };
-    await setupClosingChannel(Local, deployer, zkApp, participantA, participantB, channelParams);
+    await setupClosingChannel(
+      Local,
+      deployer,
+      zkApp,
+      participantA,
+      participantB,
+      channelParams
+    );
 
     // When: deposit is attempted on CLOSING channel
     // Then: transaction is rejected
     await expect(
-      depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key])
+      depositToChannel(participantA, zkApp, depositAmount, participantA, [
+        participantA.key,
+      ])
     ).rejects.toThrow(/must be OPEN/);
   });
 
@@ -599,7 +746,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     // When: deposit with amount = 0
     // Then: transaction is rejected
     await expect(
-      depositToChannel(participantA, zkApp, Field(0), participantA, [participantA.key])
+      depositToChannel(participantA, zkApp, Field(0), participantA, [
+        participantA.key,
+      ])
     ).rejects.toThrow(/greater than zero/);
   });
 
@@ -630,9 +779,17 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
 
     // Then: transaction is rejected
     await expect(
-      closeChannel(deployer, zkApp, balanceA, balanceB, salt, Field(2), sigA2, sigB2, [
-        deployer.key,
-      ])
+      closeChannel(
+        deployer,
+        zkApp,
+        balanceA,
+        balanceB,
+        salt,
+        Field(2),
+        sigA2,
+        sigB2,
+        [deployer.key]
+      )
     ).rejects.toThrow(/must be OPEN/);
   });
 
@@ -650,7 +807,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
     // When: settle is called on OPEN channel
     // Then: transaction is rejected
@@ -684,7 +843,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
     // When: close is called with balanceA + balanceB != depositTotal
     const badBalanceA = depositAmount.add(Field(1)); // Exceeds depositTotal
@@ -695,9 +856,17 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
 
     // Then: transaction is rejected (balanceA + balanceB must equal depositTotal)
     await expect(
-      closeChannel(deployer, zkApp, badBalanceA, badBalanceB, salt, Field(1), sigA, sigB, [
-        deployer.key,
-      ])
+      closeChannel(
+        deployer,
+        zkApp,
+        badBalanceA,
+        badBalanceB,
+        salt,
+        Field(1),
+        sigA,
+        sigB,
+        [deployer.key]
+      )
     ).rejects.toThrow(/must equal depositTotal/);
   });
 
@@ -713,7 +882,14 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
       deposit: depositAmount,
       salt,
     };
-    await setupClosingChannel(Local, deployer, zkApp, participantA, participantB, channelParams);
+    await setupClosingChannel(
+      Local,
+      deployer,
+      zkApp,
+      participantA,
+      participantB,
+      channelParams
+    );
 
     // When: settle is called with WRONG balances (commitment mismatch)
     Local.setGlobalSlot(200);
@@ -751,15 +927,26 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
       deposit: depositAmount,
       salt,
     };
-    await setupSettledChannel(Local, deployer, zkApp, participantA, participantB, channelParams);
+    await setupSettledChannel(
+      Local,
+      deployer,
+      zkApp,
+      participantA,
+      participantB,
+      channelParams
+    );
 
     // Verify channel is actually SETTLED
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.SETTLED.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.SETTLED.toString()
+    );
 
     // When: deposit is attempted on SETTLED channel
     // Then: transaction is rejected (channelState must be OPEN)
     await expect(
-      depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key])
+      depositToChannel(participantA, zkApp, depositAmount, participantA, [
+        participantA.key,
+      ])
     ).rejects.toThrow(/must be OPEN/);
   });
 
@@ -784,7 +971,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     );
 
     // Verify channel is SETTLED
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.SETTLED.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.SETTLED.toString()
+    );
 
     // When: initiateClose is called on SETTLED channel
     const closeMsg = [balanceA, balanceB, salt, Field(2)];
@@ -793,9 +982,17 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
 
     // Then: transaction is rejected (channelState must be OPEN)
     await expect(
-      closeChannel(deployer, zkApp, balanceA, balanceB, salt, Field(2), sigA2, sigB2, [
-        deployer.key,
-      ])
+      closeChannel(
+        deployer,
+        zkApp,
+        balanceA,
+        balanceB,
+        salt,
+        Field(2),
+        sigA2,
+        sigB2,
+        [deployer.key]
+      )
     ).rejects.toThrow(/must be OPEN/);
   });
 
@@ -820,7 +1017,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
     );
 
     // Verify channel is SETTLED
-    expect(zkApp.channelState.get().toString()).toBe(CHANNEL_STATE.SETTLED.toString());
+    expect(zkApp.channelState.get().toString()).toBe(
+      CHANNEL_STATE.SETTLED.toString()
+    );
 
     // When: settle is called again on already SETTLED channel
     // Then: transaction is rejected (channelState must be CLOSING)
@@ -863,7 +1062,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
 
     // Then: transaction is rejected
     await expect(
-      depositToChannel(participantA, zkApp, unsafeAmount, participantA, [participantA.key])
+      depositToChannel(participantA, zkApp, unsafeAmount, participantA, [
+        participantA.key,
+      ])
     ).rejects.toThrow(/safe range/);
   });
 
@@ -881,7 +1082,9 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
       tokenId,
       [deployer.key, participantA.key, participantB.key]
     );
-    await depositToChannel(participantA, zkApp, depositAmount, participantA, [participantA.key]);
+    await depositToChannel(participantA, zkApp, depositAmount, participantA, [
+      participantA.key,
+    ]);
 
     // When: close is called with balanceA > depositTotal (exploiting modular arithmetic)
     // balanceA = depositTotal + 1, balanceB = Field.ORDER - 1 (so modular sum = depositTotal)
@@ -897,9 +1100,17 @@ describe('PaymentChannel zkApp -- Channel Lifecycle (Story 34.1)', () => {
 
     // Then: transaction is rejected (either balance conservation or individual balance check)
     await expect(
-      closeChannel(deployer, zkApp, exploitBalanceA, exploitBalanceB, salt, Field(1), sigA, sigB, [
-        deployer.key,
-      ])
+      closeChannel(
+        deployer,
+        zkApp,
+        exploitBalanceA,
+        exploitBalanceB,
+        salt,
+        Field(1),
+        sigA,
+        sigB,
+        [deployer.key]
+      )
     ).rejects.toThrow();
   });
 });
