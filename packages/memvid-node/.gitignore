@@ -1,0 +1,5 @@
+target/
+*.node
+index.js
+index.cjs
+index.d.ts

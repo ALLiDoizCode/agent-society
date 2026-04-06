@@ -226,7 +226,7 @@ development_status:
   # New packages: @toon-protocol/memvid-node (napi-rs), @toon-protocol/pet-circuit (o1js), @toon-protocol/pet-dvm
   # 14 stories across 4 sprints: Foundation, DVM Integration, Client+Economy, Advanced
   epic-11: in-progress
-  11-1-napi-rs-memvid-binding: backlog
+  11-1-napi-rs-memvid-binding: done
   11-2-pet-lifecycle-zkprogram: backlog
   11-3-pet-zkapp-smartcontract: backlog
   11-4-pet-game-engine: backlog
