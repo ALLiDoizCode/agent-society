@@ -1,6 +1,6 @@
-# Epic 14: Overmind Heartbeat — Minimal Viable Overmind
+# Epic 15: Overmind Heartbeat — Minimal Viable Overmind
 
-**Epic ID:** 14
+**Epic ID:** 15
 **Status:** DRAFT
 **Author:** Bob (Technical Scrum Master)
 **Date:** 2026-03-24

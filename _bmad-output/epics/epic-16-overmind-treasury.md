@@ -1,6 +1,6 @@
-# Epic 15: Overmind Treasury — Self-Funding Agent
+# Epic 16: Overmind Treasury — Self-Funding Agent
 
-**Epic ID:** 15
+**Epic ID:** 16
 **Status:** DRAFT
 **Author:** Bob (Technical Scrum Master)
 **Date:** 2026-03-24
@@ -18,14 +18,14 @@ Enable the overmind to earn its own keep by providing DVM services, track all in
 
 ## Dependencies
 
-- **Epic 14A "Heartbeat"** (complete wake cycle, OODA engine, Arweave persistence) — required, must be complete
+- **Epic 15A "Heartbeat"** (complete wake cycle, OODA engine, Arweave persistence) — required, must be complete
 - **Existing TOON infrastructure:** DVM lifecycle (kind:5090-5095), ILP payment channels, relay, service discovery (kind:10035 SkillDescriptor)
 
 ---
 
 ## New Packages / Infrastructure
 
-- No new packages — builds on `packages/overmind` from Epic 14A
+- No new packages — builds on `packages/overmind` from Epic 15A
 - New modules under `packages/overmind/src/treasury/` and `packages/overmind/src/dvm-provider/`
 
 ---
@@ -34,7 +34,7 @@ Enable the overmind to earn its own keep by providing DVM services, track all in
 
 | ID | Title | Dependencies | Complexity |
 |----|-------|--------------|------------|
-| 15.1 | DVM Provider Registration | Epic 14A complete | M |
+| 15.1 | DVM Provider Registration | Epic 15A complete | M |
 | 15.2 | DVM Job Execution and Payment | B.1 | L |
 | 15.3 | Treasury Accounting | B.2 | M |
 | 15.4 | Adaptive Behavior Engine | B.3 | L |
@@ -197,4 +197,4 @@ Enable the overmind to earn its own keep by providing DVM services, track all in
 - [ ] E2E test: 100 self-funded cycles complete without external subsidy
 - [ ] All code reviewed, linted, formatted, tests passing
 
-**Estimated Complexity:** L (5 stories, builds on Epic 14A infrastructure)
+**Estimated Complexity:** L (5 stories, builds on Epic 15A infrastructure)

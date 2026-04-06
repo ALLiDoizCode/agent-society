@@ -204,12 +204,14 @@ The NIP-to-TOON pipeline can convert any future NIP specification into a TOON-aw
 
 ## 7. Epic 10 Preparation Tasks
 
-> **NOTE (2026-03-29):** After this retro was written, Epic 10 was renumbered. The "Epic 10"
-> referenced below (Compute Primitive, kind:5250) is now **Epic 11**. The new **Epic 10** is
-> the **Rig E2E Integration Test Suite** (18 stories: read-side E2E via real SDK infra,
-> incremental git pushes, Playwright specs, nested nav regression, multi-client conversations).
-> Action items A1 (CI burn-in) and A2 (Playwright E2E) are directly addressed by the new Epic 10.
-> See commit `5683f55` for the renumbering.
+> **NOTE (2026-03-29):** After this retro was written, Epic 10 was renumbered twice. The original
+> "Epic 10" (Compute Primitive, kind:5250) is now **Epic 12**. The current **Epic 10** is the
+> **Rig E2E Integration Test Suite**, and **Epic 11** is **TOON Pets** (ZK-proven virtual pets
+> with Memvid memory and cross-chain ILP payment). The old Epic 11 (Compute Primitive) shifted
+> to Epic 12, and all subsequent Overmind epics shifted by +1 (Chain Bridge 12->13, Heartbeat
+> 13->14->15, Treasury 14->15->16, Sovereign 15->16->17, Biography 16->17->18, Swarms 17->18->19).
+> Action items A1 (CI burn-in) and A2 (Playwright E2E) are directly addressed by Epic 10.
+> See commit `5683f55` for the first renumbering.
 
 Epic 10 (Compute Primitive -- Provider Protocol & DX, kind:5250) has 8 stories:
 

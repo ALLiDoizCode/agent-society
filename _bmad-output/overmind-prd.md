@@ -229,7 +229,7 @@ A sovereign agent that can create and coordinate sub-agents, forming hierarchica
 
 | Dependency | Epic | Description |
 |------------|------|-------------|
-| Chain Bridge DVM (kind:5260) | Epic 11 (protocol spec) + OMP Epic A | Mina adapter is the first reference implementation |
+| Chain Bridge DVM (kind:5260) | Epic 12 (protocol spec) + OMP Epic A | Mina adapter is the first reference implementation |
 | Arweave state persistence | OMP Epic A | `@ardrive/turbo-sdk` integration with TOON wallet keys |
 | Mina zkApp (OvermindRegistry) | OMP Epic A | o1js zkApp for VRF selection + executor registry |
 | Signing policy engine | OMP Epic C | TEE-internal policy enforcement |
@@ -349,10 +349,10 @@ Epics B and C can overlap once Epic A is stable. Epic D can begin once the Mina 
 
 ### Prerequisite Epics (from TOON roadmap)
 
-The Overmind Protocol depends on the Chain Bridge primitive (Epic 11) for the Mina adapter. The relationship is:
+The Overmind Protocol depends on the Chain Bridge primitive (Epic 12) for the Mina adapter. The relationship is:
 
-- **Epic 11** defines the Chain Bridge provider protocol spec, consumer DX, and test harness.
-- **OMP Epic A.4** implements the Mina adapter as the first reference provider — simultaneously proving Epic 11's protocol and delivering OMP's core infrastructure.
+- **Epic 12** defines the Chain Bridge provider protocol spec, consumer DX, and test harness.
+- **OMP Epic A.4** implements the Mina adapter as the first reference provider — simultaneously proving Epic 12's protocol and delivering OMP's core infrastructure.
 
 Epics 8-10 (Arweave DVM, Skill Pipeline, Compute Primitive) are not hard dependencies but provide useful infrastructure. The Arweave DVM (Epic 8) in particular shares the `@ardrive/turbo-sdk` integration that OMP Epic A.2 needs.
 

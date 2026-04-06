@@ -1,6 +1,6 @@
-# Epic 17: Overmind Biography — Recursive ZK Lifecycle Proofs
+# Epic 18: Overmind Biography — Recursive ZK Lifecycle Proofs
 
-**Epic ID:** 17
+**Epic ID:** 18
 **Status:** DRAFT
 **Author:** Bob (Technical Scrum Master)
 **Date:** 2026-03-24
@@ -18,15 +18,15 @@ Compress every cycle the overmind executes into a constant-size recursive ZK pro
 
 ## Dependencies
 
-- **Epic 14A "Heartbeat"** (Mina zkApp, per-cycle execution data) — required, must be complete
-- **Mina devnet:** OvermindRegistry zkApp deployed (from Epic 14A, Story A.3)
+- **Epic 15A "Heartbeat"** (Mina zkApp, per-cycle execution data) — required, must be complete
+- **Mina devnet:** OvermindRegistry zkApp deployed (from Epic 15A, Story A.3)
 - **o1js:** `SelfProof` and `ZkProgram` APIs for recursive proof composition
 
 ---
 
 ## New Packages / Infrastructure
 
-- No new packages — builds on `packages/overmind` from Epic 14A
+- No new packages — builds on `packages/overmind` from Epic 15A
 - New modules under `packages/overmind/src/mina/biography/`
 - HTTP endpoint for public biography verification (added to overmind runtime)
 
@@ -36,7 +36,7 @@ Compress every cycle the overmind executes into a constant-size recursive ZK pro
 
 | ID | Title | Dependencies | Complexity |
 |----|-------|--------------|------------|
-| 17.1 | Per-Cycle Proof Generation | Epic 14A complete | L |
+| 17.1 | Per-Cycle Proof Generation | Epic 15A complete | L |
 | 17.2 | Recursive Proof Composition | D.1 | XL |
 | 17.3 | Verifiable Execution Count | D.2 | M |
 | 17.4 | Public Biography Endpoint | D.3 | M |
@@ -201,4 +201,4 @@ Compress every cycle the overmind executes into a constant-size recursive ZK pro
 - [ ] E2E test: 100-cycle recursive proof verified in under 1 second
 - [ ] All code reviewed, linted, formatted, tests passing
 
-**Estimated Complexity:** L (5 stories, advanced o1js but building on Epic 14A zkApp)
+**Estimated Complexity:** L (5 stories, advanced o1js but building on Epic 15A zkApp)

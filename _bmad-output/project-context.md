@@ -126,8 +126,8 @@ toon/
 │   ├── faucet/      # @toon-protocol/faucet -- Token distribution for dev testing (plain JS, dev-only)
 │   ├── examples/    # @toon-protocol/examples -- Demo applications
 │   ├── rig/         # @toon-protocol/rig -- Forge-UI: decentralized git forge web interface (Epic 8, Vite SPA on Arweave, rig pointer system added Epic 9)
-│   ├── overmind/    # Overmind Protocol spike code (Epics 14-18, spike only)
-│   └── loony/       # @toon-protocol/loony -- (planned, Epic 13: autonomous agent example application)
+│   ├── overmind/    # Overmind Protocol spike code (Epics 15-19, spike only)
+│   └── loony/       # @toon-protocol/loony -- (planned, Epic 14: autonomous agent example application)
 ├── docker/          # Container entrypoint (pnpm workspace member)
 │   ├── src/
 │   │   ├── shared.ts              # Config parsing, admin client, health check utilities
@@ -193,14 +193,15 @@ Epic 7: ILP Address Hierarchy & Protocol Econ    COMPLETE (6/6 stories, 35/35 AC
 Epic 8: The Rig -- Arweave DVM + Forge-UI        COMPLETE (8 stories: 8.0 Arweave DVM + 8.1-8.6 Forge-UI + 8.7 Arweave Deploy)
 Epic 9: NIP-to-TOON Skill Pipeline + Socialverse  COMPLETE (35/35 stories, 30+ skills, +1,036 tests)
 Epic 10: Rig E2E Integration Test Suite            PLANNED (18 stories; read-side E2E via real SDK infra, incremental git pushes, Playwright specs, nested nav regression, multi-client conversations)
-Epic 11: Compute Primitive (kind:5250)             PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
-Epic 12: Chain Bridge Primitive (kind:5260)        PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
-Epic 13: Loony — Autonomous Agent                  PLANNED (Example application proving all four primitives + composition; self-bootstrapping agent lifecycle)
-Epic 14: Overmind Heartbeat                          PLANNED (9 stories; minimal viable overmind: TEE key genesis, Arweave state, Mina VRF selection, Chain Bridge DVM Mina adapter, OODA engine; spike validated 10/10 tests)
-Epic 15: Overmind Treasury                           PLANNED (5 stories; self-funding via DVM income, live treasury queries D-OMP-010, adaptive behavior)
-Epic 16: Overmind Sovereign                          PLANNED (7 stories; TEE key sovereignty: signing policy, BIP-44 key hierarchy, Shamir K-of-N backup, sealed migration, disaster recovery)
-Epic 17: Overmind Biography                          PLANNED (5 stories; recursive ZK lifecycle proofs via Mina o1js, verifiable execution count replaces reputation, public biography endpoint)
-Epic 18: Overmind Swarm                              PLANNED (5 stories; sub-agent spawning, NIP-44 parent-child comms, DVM task delegation, swarm treasury management)
+Epic 11: TOON Pets — ZK-Proven Virtual Pet Economy PLANNED (14 stories; ZK-proven pet lifecycle on Mina, Memvid brain, ILP cross-chain payment, Pet DVM; spec: pet-zkapp-*.md)
+Epic 12: Compute Primitive (kind:5250)             PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
+Epic 13: Chain Bridge Primitive (kind:5260)        PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
+Epic 14: Loony — Autonomous Agent                  PLANNED (Example application proving all four primitives + composition; self-bootstrapping agent lifecycle)
+Epic 15: Overmind Heartbeat                          PLANNED (9 stories; minimal viable overmind: TEE key genesis, Arweave state, Mina VRF selection, Chain Bridge DVM Mina adapter, OODA engine; spike validated 10/10 tests)
+Epic 16: Overmind Treasury                           PLANNED (5 stories; self-funding via DVM income, live treasury queries D-OMP-010, adaptive behavior)
+Epic 17: Overmind Sovereign                          PLANNED (7 stories; TEE key sovereignty: signing policy, BIP-44 key hierarchy, Shamir K-of-N backup, sealed migration, disaster recovery)
+Epic 18: Overmind Biography                          PLANNED (5 stories; recursive ZK lifecycle proofs via Mina o1js, verifiable execution count replaces reputation, public biography endpoint)
+Epic 19: Overmind Swarm                              PLANNED (5 stories; sub-agent spawning, NIP-44 parent-child comms, DVM task delegation, swarm treasury management)
 ```
 
 **Epic progression:** Build SDK -> Prove it with relay -> Make protocol production-grade -> Make it verifiable -> Build DVM compute marketplace -> Advanced coordination + verifiable compute -> Hierarchical addressing & protocol economics -> Build applications on top: blob storage primitive + Forge-UI (DONE) -> Teach agents the protocol: skills pipeline + 30+ socialverse skills (DONE) -> Rig E2E integration test suite (real infra, no mocks, Playwright) -> Compute provider protocol + DX (spec, test harness, handoff docs) -> Chain bridge provider protocol + DX (spec, test harness, handoff docs) -> Loony autonomous agent (demand-side proof composing all four primitives) -> Overmind sovereign agents (Mina VRF + Arweave state + TEE identity + ILP economics).
@@ -268,10 +269,10 @@ These decisions shape Epics 3-5 and future development. Full details in `_bmad-o
 | 31117 | Job Review | Implemented (Epic 6, Story 6.4) -- NIP-33 parameterized replaceable |
 | 5094 | Arweave Blob Storage DVM (NIP-90) | Implemented (Epic 8, Story 8.0) -- storage job request (network primitive #2) |
 | 6094 | Arweave Blob Storage Result (NIP-90) | Implemented (Epic 8, Story 8.0) -- storage result with self-describing receipt |
-| 5250 | Compute DVM (NIP-90) | Planned (Epic 11) -- stateless compute job request (network primitive #3) |
-| 6250 | Compute DVM Result (NIP-90) | Planned (Epic 11) -- compute result with self-describing receipt |
-| 5260 | Chain Bridge DVM (NIP-90) | Planned (Epic 12) -- broadcast signed tx to any blockchain (network primitive #4) |
-| 6260 | Chain Bridge Result (NIP-90) | Planned (Epic 12) -- per-chain tx hash receipt |
+| 5250 | Compute DVM (NIP-90) | Planned (Epic 12) -- stateless compute job request (network primitive #3) |
+| 6250 | Compute DVM Result (NIP-90) | Planned (Epic 12) -- compute result with self-describing receipt |
+| 5260 | Chain Bridge DVM (NIP-90) | Planned (Epic 13) -- broadcast signed tx to any blockchain (network primitive #4) |
+| 6260 | Chain Bridge Result (NIP-90) | Planned (Epic 13) -- per-chain tx hash receipt |
 | 30617 | Repository Announcement (NIP-34) | Skill-documented (Epic 9, Story 9.26) -- NIP-33 parameterized replaceable, Forge-UI reads |
 | 1617 | Patch (NIP-34) | Skill-documented (Epic 9, Story 9.26) -- Forge-UI reads |
 | 1618 | Pull Request (NIP-34) | Skill-documented (Epic 9, Story 9.26) -- Forge-UI reads |
@@ -279,9 +280,9 @@ These decisions shape Epics 3-5 and future development. Full details in `_bmad-o
 | 1621 | Issue (NIP-34) | Skill-documented (Epic 9, Story 9.26) -- Forge-UI reads |
 | 1622 | Comment (NIP-34) | Skill-documented (Epic 9, Story 9.26) -- Forge-UI reads |
 | 1630-1633 | Status Events (NIP-34) | Skill-documented (Epic 9, Story 9.26) -- open/applied/closed/draft |
-| 5099 | Overmind Wake Request | Planned (Epic 14) -- overmind publishes to schedule next wake cycle |
-| 5101 | Overmind Wake Winner Announcement | Planned (Epic 14) -- Chain Bridge publishes after Mina VRF selection |
-| 5102 | Overmind Cycle Execution Record | Planned (Epic 14) -- overmind publishes cycle results, anchored to Arweave |
+| 5099 | Overmind Wake Request | Planned (Epic 15) -- overmind publishes to schedule next wake cycle |
+| 5101 | Overmind Wake Winner Announcement | Planned (Epic 15) -- Chain Bridge publishes after Mina VRF selection |
+| 5102 | Overmind Cycle Execution Record | Planned (Epic 15) -- overmind publishes cycle results, anchored to Arweave |
 | ~~23194~~ | ~~SPSP Request~~ | Removed (Story 2.7) |
 | ~~23195~~ | ~~SPSP Response~~ | Removed (Story 2.7) |
 
@@ -320,8 +321,8 @@ TOON Protocol's strategic architecture: four network primitives with unified ILP
 - **Four Network Primitives:**
   1. **Messaging** (kind:1) -- relay events, pay per byte. DONE (Epic 1).
   2. **Blob Storage** (kind:5094/6094) -- store data permanently, backend-agnostic (Arweave, Filecoin, IPFS). DONE (Epic 8).
-  3. **Compute** (kind:5250/6250) -- run code anywhere, backend-agnostic (Oyster CVM, Akash, Docker). PLANNED (Epic 11).
-  4. **Chain Bridge** (kind:5260/6260) -- broadcast signed tx to any blockchain (Ethereum, Solana, Arbitrum, Base, AO). PLANNED (Epic 12).
+  3. **Compute** (kind:5250/6250) -- run code anywhere, backend-agnostic (Oyster CVM, Akash, Docker). PLANNED (Epic 12).
+  4. **Chain Bridge** (kind:5260/6260) -- broadcast signed tx to any blockchain (Ethereum, Solana, Arbitrum, Base, AO). PLANNED (Epic 13).
 
 - **Primitive criteria:** Payment-native (ILP), Discovery-native (kind:10035), Composable (outputs feed other primitives).
 
@@ -2484,7 +2485,7 @@ Each skill follows a consistent structure produced by the NIP-to-TOON pipeline (
 - A4: Create eval scaffold/template generator -- Recurring eval authoring pattern is repetitive. Automation would improve consistency. (New from Epic 9)
 - A5: Backfill audit artifacts for 24 batch stories -- Stories 9-11 through 9-34 lack individual reports. (New from Epic 9)
 - A6: Establish load testing infrastructure -- Deferred 9 epics (from Epic 1 NFR). (Carried)
-- A7: Formal SLOs for DVM job lifecycle -- With Arweave DVM + compute primitive in Epic 11, SLOs increasingly relevant. (Carried from Epic 6, 4 epics deferred)
+- A7: Formal SLOs for DVM job lifecycle -- With Arweave DVM + compute primitive in Epic 12, SLOs increasingly relevant. (Carried from Epic 6, 5 epics deferred)
 - A8: Set up facilitator ETH monitoring -- Deferred 7 epics (from Epic 3 A8). (Carried)
 - A9: Update Docker E2E infra for Arweave DVM handler -- E2E stubs still pending Docker infra update. (Carried from Epic 8 A4, 2 epics)
 
