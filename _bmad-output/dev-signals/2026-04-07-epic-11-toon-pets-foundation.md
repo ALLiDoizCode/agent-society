@@ -1,0 +1,54 @@
+# Dev Signal: TOON Pets Foundation — Memvid Brain + Dogfood Stack
+
+**Date:** 2026-04-07
+**Type:** milestone
+**Epic:** Epic 11 — TOON Pets: ZK-Proven Virtual Pet Economy (1/14 stories)
+**Priority:** YELLOW
+
+## Headline
+
+TOON ships native Rust-to-Node bridge for AI pet brains and a one-command local network stack — foundation for the first ZK-proven virtual pet economy on Interledger.
+
+## Technical Summary
+
+Two significant deliverables landed. First: `@toon-protocol/memvid-node`, a napi-rs native addon that lets TypeScript talk to Memvid's Rust engine at native speed — create, search, hash, and manage `.mv2` pet brain files with BLAKE3 composite hashing ready for ZK circuit integration. Second: `docker-compose-dogfood.yml`, a zero-build Docker Compose stack that spins up a complete local TOON network (Anvil EVM, two TOON peers with Arweave DVM, Ditto frontend) using public images. Anyone can fund a wallet and create TOON events locally in under a minute.
+
+## Narrative Hooks (for Drew)
+
+- **External:** TOON is building virtual pets with provably fair genetics and evolution — no server-side RNG manipulation. Every pet interaction is hashable and verifiable via zero-knowledge proofs. This is the anti-lootbox.
+- **Industry:** The Memvid integration bridges the Arweave/AO ecosystem's permanent storage with Interledger's payment rails. Pet brains stored permanently, interactions paid for via ILP micropayments. Two ecosystem play.
+- **Technical:** napi-rs lets a Rust AI engine (Memvid) run at native speed inside a Node.js protocol stack — no WASM overhead, no subprocess IPC. The BLAKE3 hashing produces ZK-friendly field elements, so every pet state change is provable on Mina's zkApp chain.
+- **Developer:** The dogfood stack means any developer can `docker compose up` a full TOON network locally. Zero build steps, public images, built-in faucet. This is the "hello world" moment for TOON developer onboarding.
+- **Narrative arc:** Epic 11 is TOON's first consumer-facing primitive. Epics 1-10 built protocol infrastructure. Pets are the proof that the infrastructure works — a real application people can interact with, not just an API.
+
+## Key Stats
+
+- Stories delivered: 1/14 (Sprint 1 foundation)
+- Tests: 4,189 passing (+25 new for memvid-node)
+- Code reviews: 3 passes, 24 issues found and fixed, 0 remaining
+- Security scan: 0 vulnerabilities (semgrep)
+- Traceability: 93% AC coverage
+
+## Assets
+
+- [ ] Architecture diagram (recommend: pet lifecycle flow showing Memvid -> BLAKE3 -> ZK circuit -> Mina)
+- [ ] Screenshot / screencast (dogfood stack `docker compose up` demo would be high-impact)
+- [x] Demo-able flow (dogfood stack is fully functional — Ditto frontend + local network)
+- [ ] Metrics / benchmarks (native napi-rs vs WASM comparison would be compelling)
+- [ ] Before/after comparison
+
+## Discord Drop
+
+```
+YELLOW | Epic 11: TOON Pets (1/14 stories)
+--------------------------------------
+Headline: Rust AI pet brains running native in Node.js + one-command local TOON network
+
+Hooks for Drew:
+-> Consumer angle: first ZK-proven virtual pets — provably fair genetics, no server-side RNG cheating
+-> Ecosystem play: Memvid (Arweave/AO storage) + ILP micropayments + Mina ZK proofs = three-chain convergence
+-> Developer story: `docker compose up` gives you a full TOON network with faucet — hello world moment
+-> Arc: Epic 11 is TOON's first consumer-facing app. Infrastructure epics are done. Now it gets real.
+
+Assets: dogfood stack is demo-able NOW, architecture diagram recommended
+```

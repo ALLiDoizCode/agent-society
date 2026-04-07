@@ -122,6 +122,9 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 | Rig usage guide | `docs/rig-guide.md` |
 | Socialverse E2E orchestrator | `scripts/socialverse-e2e.ts` |
 | Mock USDC deployment script | `scripts/deploy-mock-usdc.sh` |
+| Dev Signal template (for Drew) | `_bmad-output/dev-signals/_template.md` |
+| Dev Signal archive | `_bmad-output/dev-signals/` |
+| Dev Signal command | `.claude/commands/dev-signal.md` (invoke via `/dev-signal`) |
 
 ## Browser Verification
 
