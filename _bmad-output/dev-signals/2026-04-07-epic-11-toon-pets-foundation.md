@@ -31,8 +31,8 @@ Two significant deliverables landed. First: `@toon-protocol/memvid-node`, a napi
 
 ## Assets
 
-- [ ] Architecture diagram (recommend: pet lifecycle flow showing Memvid -> BLAKE3 -> ZK circuit -> Mina)
-- [ ] Screenshot / screencast (dogfood stack `docker compose up` demo would be high-impact)
+- [x] Architecture diagram: [Three-Chain Convergence](assets/2026-04-07-epic-11-toon-pets-foundation-diagram.excalidraw.json) ([PNG](assets/2026-04-07-epic-11-toon-pets-foundation-diagram.excalidraw.png))
+- [ ] Screenshot (recommended: `docker compose -f docker-compose-dogfood.yml up` terminal output + Ditto frontend once running)
 - [x] Demo-able flow (dogfood stack is fully functional — Ditto frontend + local network)
 - [ ] Metrics / benchmarks (native napi-rs vs WASM comparison would be compelling)
 - [ ] Before/after comparison

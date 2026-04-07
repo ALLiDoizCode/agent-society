@@ -31,8 +31,8 @@
 
 ## Assets
 
-- [ ] Architecture diagram
-- [ ] Screenshot / screencast
+- [ ] Architecture diagram: `assets/YYYY-MM-DD-[slug]-diagram.excalidraw.json`
+- [ ] Screenshot: `assets/YYYY-MM-DD-[slug]-screenshot.png`
 - [ ] Demo-able flow
 - [ ] Metrics / benchmarks
 - [ ] Before/after comparison
