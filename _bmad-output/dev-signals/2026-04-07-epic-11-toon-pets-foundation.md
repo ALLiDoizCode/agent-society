@@ -29,13 +29,24 @@ Two significant deliverables landed. First: `@toon-protocol/memvid-node`, a napi
 - Security scan: 0 vulnerabilities (semgrep)
 - Traceability: 93% AC coverage
 
+## Deep Dive Resources (for Drew)
+
+These docs have the full story — competitive positioning, vision, and technical credibility:
+
+| Doc | What Drew gets |
+|-----|---------------|
+| [`toon-pet-zkapp-architecture-handoff.md`](_bmad-output/planning-artifacts/toon-pet-zkapp-architecture-handoff.md) | **Start here.** Vision, competitive analysis table (vs Tamagotchi, Axie, Blobbi), "four building blocks" framing, token economics (PET burn-per-interaction) |
+| [`pet-zkapp-game-rules-canonical.md`](_bmad-output/planning-artifacts/pet-zkapp-game-rules-canonical.md) | Complete game rules — proves this is real, not vaporware. 500 lines of production-ready circuit logic |
+| [`memvid-toon-integration-handoff.md`](_bmad-output/planning-artifacts/memvid-toon-integration-handoff.md) | The Arweave/AO connection story — why Memvid, what it enables, how it fits the permanent storage narrative |
+| [`pet-zkapp-integration-architecture.md`](_bmad-output/planning-artifacts/pet-zkapp-integration-architecture.md) | Trust model visualization — "zero trust math → verifiable content → trust operator" gradient. Good for explaining why ZK matters |
+
 ## Assets
 
-- [x] Architecture diagram: [Three-Chain Convergence](assets/2026-04-07-epic-11-toon-pets-foundation-diagram.excalidraw.json) ([PNG](assets/2026-04-07-epic-11-toon-pets-foundation-diagram.excalidraw.png))
+- [x] Architecture diagram (technical reference): [Three-Chain Convergence](assets/2026-04-07-epic-11-toon-pets-foundation-diagram.excalidraw.json) ([PNG](assets/2026-04-07-epic-11-toon-pets-foundation-diagram.excalidraw.png))
+- [x] Story diagram (for Drew): [Why TOON Pets](assets/2026-04-07-epic-11-toon-pets-story-diagram.excalidraw.json) ([PNG](assets/2026-04-07-epic-11-toon-pets-story-diagram.excalidraw.png))
 - [ ] Screenshot (recommended: `docker compose -f docker-compose-dogfood.yml up` terminal output + Ditto frontend once running)
 - [x] Demo-able flow (dogfood stack is fully functional — Ditto frontend + local network)
 - [ ] Metrics / benchmarks (native napi-rs vs WASM comparison would be compelling)
-- [ ] Before/after comparison
 
 ## Discord Drop
 
