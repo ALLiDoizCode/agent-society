@@ -7,8 +7,9 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "jest --testPathIgnorePatterns='recursive'",
-    "test:unit": "jest --testPathIgnorePatterns='recursive'",
+    "test": "jest --testPathIgnorePatterns='recursive|integration'",
+    "test:unit": "jest --testPathIgnorePatterns='recursive|integration'",
+    "test:integration": "jest --testPathPattern='integration'",
     "test:recursive": "jest --testPathPattern='recursive'",
     "test:coverage": "jest --coverage --testPathIgnorePatterns='recursive'",
     "test:watch": "jest --watch --testPathIgnorePatterns='recursive'",

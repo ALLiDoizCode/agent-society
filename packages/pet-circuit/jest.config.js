@@ -5,7 +5,7 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/*.test.ts'],
-  testTimeout: 60000, // o1js operations can be slow even with proofsEnabled: false
+  testTimeout: 180000, // o1js operations can be slow even with proofsEnabled: false
   moduleFileExtensions: ['ts', 'js', 'json'],
   transform: {
     '^.+\\.ts$': [

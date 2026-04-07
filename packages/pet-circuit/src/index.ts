@@ -18,6 +18,9 @@ export {
   CooldownTimestamps,
 } from './PetLifecycle';
 
+// SmartContract and proof class for method signatures
+export { PetZkApp, PetProof } from './PetZkApp';
+
 // Constant tables
 export {
   ActionType,

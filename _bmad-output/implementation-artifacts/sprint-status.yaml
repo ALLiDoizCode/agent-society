@@ -228,7 +228,7 @@ development_status:
   epic-11: in-progress
   11-1-napi-rs-memvid-binding: done
   11-2-pet-lifecycle-zkprogram: done
-  11-3-pet-zkapp-smartcontract: backlog
+  11-3-pet-zkapp-smartcontract: done
   11-4-pet-game-engine: backlog
   11-5-pet-dvm-handler: backlog
   11-6-peer-enablement: backlog

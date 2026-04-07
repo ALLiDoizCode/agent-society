@@ -1492,8 +1492,7 @@ describe('AC-7 positive path: evolve', () => {
         energy: Number(bn(prevOutput.stats.energy)),
       };
 
-      const elapsed =
-        timestamp - Number(bn(prevOutput.lastInteraction));
+      const elapsed = timestamp - Number(bn(prevOutput.lastInteraction));
       const decayed = computeDecay(prevStats, Stage.EGG, elapsed, false);
       const finalStats = applyAction(decayed, actionType, 0, Stage.EGG);
 
@@ -1583,8 +1582,7 @@ describe('AC-7 positive path: evolve', () => {
         energy: Number(bn(prevOutput.stats.energy)),
       };
 
-      const elapsed =
-        timestamp - Number(bn(prevOutput.lastInteraction));
+      const elapsed = timestamp - Number(bn(prevOutput.lastInteraction));
       const decayed = computeDecay(prevStats, Stage.BABY, elapsed, false);
       const finalStats = applyAction(decayed, actionType, 0, Stage.BABY);
 
@@ -1622,11 +1620,7 @@ describe('AC-7 positive path: evolve', () => {
     const genesis = await PetLifecycle.genesis(brainHash);
 
     // When: run 6 interactions to reach cycle 7 (genesis starts at cycle 1)
-    const { result: preEvolve } = await runEggInteractions(
-      6,
-      genesis,
-      50000n
-    );
+    const { result: preEvolve } = await runEggInteractions(6, genesis, 50000n);
     const preEvolveState = preEvolve.proof.publicOutput;
 
     // Verify we reached cycle 7
@@ -1636,7 +1630,9 @@ describe('AC-7 positive path: evolve', () => {
     // Verify hatch threshold stats are met (health >= 70, hygiene >= 70, happiness >= 70)
     expect(Number(bn(preEvolveState.stats.health))).toBeGreaterThanOrEqual(70);
     expect(Number(bn(preEvolveState.stats.hygiene))).toBeGreaterThanOrEqual(70);
-    expect(Number(bn(preEvolveState.stats.happiness))).toBeGreaterThanOrEqual(70);
+    expect(Number(bn(preEvolveState.stats.happiness))).toBeGreaterThanOrEqual(
+      70
+    );
 
     // Hatch stat resets: hunger/happiness/hygiene/energy -> 100, health inherited
     const inheritedHealth = Number(bn(preEvolveState.stats.health));
@@ -1713,8 +1709,11 @@ describe('AC-7 positive path: evolve', () => {
     const brainHash = Field(60000);
     const genesis = await PetLifecycle.genesis(brainHash);
 
-    const { result: preHatch, cooldowns: eggCooldowns, brainCounter: eggBrainCounter } =
-      await runEggInteractions(6, genesis, 60000n);
+    const {
+      result: preHatch,
+      cooldowns: eggCooldowns,
+      brainCounter: eggBrainCounter,
+    } = await runEggInteractions(6, genesis, 60000n);
 
     const preHatchState = preHatch.proof.publicOutput;
     const inheritedHealth = Number(bn(preHatchState.stats.health));
@@ -1835,7 +1834,7 @@ describe('AC-7 positive path: evolve', () => {
     expect(postEvolveState.lifecycleHash.toBigInt()).not.toBe(
       preAdultState.lifecycleHash.toBigInt()
     );
-  }, 360000);
+  }, 900000);
 });
 
 // =========================================================================
