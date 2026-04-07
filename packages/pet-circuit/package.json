@@ -1,0 +1,29 @@
+{
+  "name": "@toon-protocol/pet-circuit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PetLifecycle ZkProgram — ZK-proven pet game rules as o1js circuit constraints",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest --testPathIgnorePatterns='recursive'",
+    "test:unit": "jest --testPathIgnorePatterns='recursive'",
+    "test:recursive": "jest --testPathPattern='recursive'",
+    "test:coverage": "jest --coverage --testPathIgnorePatterns='recursive'",
+    "test:watch": "jest --watch --testPathIgnorePatterns='recursive'",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "o1js": "^2.2.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=22.11.0"
+  }
+}

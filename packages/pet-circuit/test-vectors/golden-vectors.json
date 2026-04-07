@@ -1,0 +1,236 @@
+[
+  {
+    "id": 1,
+    "description": "egg + warm: happiness+2 health+5",
+    "stage": 0, "actionType": 4, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 100, "happiness": 100, "health": 100, "hygiene": 100, "energy": 100 },
+    "elapsedSeconds": 7200, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 100, "happiness": 100, "health": 98, "hygiene": 84, "energy": 100 },
+    "expectedFinalStats": { "hunger": 100, "happiness": 100, "health": 100, "hygiene": 84, "energy": 100 }
+  },
+  {
+    "id": 2,
+    "description": "egg + sing: happiness+15 energy-5 (egg energy forced 100)",
+    "stage": 0, "actionType": 6, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 100, "happiness": 80, "health": 90, "hygiene": 75, "energy": 100 },
+    "elapsedSeconds": 3600, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 100, "happiness": 82, "health": 87, "hygiene": 67, "energy": 100 },
+    "expectedFinalStats": { "hunger": 100, "happiness": 97, "health": 87, "hygiene": 67, "energy": 100 }
+  },
+  {
+    "id": 3,
+    "description": "egg + check: health+2",
+    "stage": 0, "actionType": 5, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 100, "happiness": 100, "health": 100, "hygiene": 100, "energy": 100 },
+    "elapsedSeconds": 3600, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 100, "happiness": 100, "health": 99, "hygiene": 92, "energy": 100 },
+    "expectedFinalStats": { "hunger": 100, "happiness": 100, "health": 100, "hygiene": 92, "energy": 100 }
+  },
+  {
+    "id": 4,
+    "description": "egg + talk: happiness+10",
+    "stage": 0, "actionType": 7, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 100, "happiness": 85, "health": 80, "hygiene": 60, "energy": 100 },
+    "elapsedSeconds": 5400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 100, "happiness": 82, "health": 75, "hygiene": 48, "energy": 100 },
+    "expectedFinalStats": { "hunger": 100, "happiness": 92, "health": 75, "hygiene": 48, "energy": 100 }
+  },
+  {
+    "id": 5,
+    "description": "egg + clean: happiness+10 hygiene+40",
+    "stage": 0, "actionType": 2, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 100, "happiness": 90, "health": 85, "hygiene": 50, "energy": 100 },
+    "elapsedSeconds": 3600, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 100, "happiness": 88, "health": 82, "hygiene": 42, "energy": 100 },
+    "expectedFinalStats": { "hunger": 100, "happiness": 98, "health": 82, "hygiene": 82, "energy": 100 }
+  },
+  {
+    "id": 6,
+    "description": "egg + medicine: health+30 happiness-5",
+    "stage": 0, "actionType": 8, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 100, "happiness": 70, "health": 50, "hygiene": 80, "energy": 100 },
+    "elapsedSeconds": 7200, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 100, "happiness": 66, "health": 44, "hygiene": 64, "energy": 100 },
+    "expectedFinalStats": { "hunger": 100, "happiness": 61, "health": 74, "hygiene": 64, "energy": 100 }
+  },
+  {
+    "id": 7,
+    "description": "egg + play_music: happiness+15",
+    "stage": 0, "actionType": 10, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 100, "happiness": 75, "health": 95, "hygiene": 90, "energy": 100 },
+    "elapsedSeconds": 5400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 100, "happiness": 78, "health": 93, "hygiene": 78, "energy": 100 },
+    "expectedFinalStats": { "hunger": 100, "happiness": 93, "health": 93, "hygiene": 78, "energy": 100 }
+  },
+  {
+    "id": 8,
+    "description": "baby + feed: hunger+30 happiness+5",
+    "stage": 1, "actionType": 0, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 80, "happiness": 80, "health": 90, "hygiene": 80, "energy": 80 },
+    "elapsedSeconds": 5400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 69, "happiness": 74, "health": 87, "hygiene": 72, "energy": 68 },
+    "expectedFinalStats": { "hunger": 99, "happiness": 79, "health": 87, "hygiene": 72, "energy": 68 }
+  },
+  {
+    "id": 9,
+    "description": "baby + play: happiness+25 hygiene-5 energy-15",
+    "stage": 1, "actionType": 1, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 90, "happiness": 60, "health": 85, "hygiene": 90, "energy": 90 },
+    "elapsedSeconds": 7200, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 76, "happiness": 52, "health": 83, "hygiene": 80, "energy": 74 },
+    "expectedFinalStats": { "hunger": 76, "happiness": 77, "health": 83, "hygiene": 75, "energy": 59 }
+  },
+  {
+    "id": 10,
+    "description": "baby + clean: happiness+10 hygiene+40",
+    "stage": 1, "actionType": 2, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 85, "happiness": 85, "health": 80, "hygiene": 50, "energy": 85 },
+    "elapsedSeconds": 5400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 74, "happiness": 79, "health": 77, "hygiene": 42, "energy": 73 },
+    "expectedFinalStats": { "hunger": 74, "happiness": 89, "health": 77, "hygiene": 82, "energy": 73 }
+  },
+  {
+    "id": 11,
+    "description": "baby + rest: happiness+5 energy+50",
+    "stage": 1, "actionType": 3, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 90, "happiness": 90, "health": 90, "hygiene": 90, "energy": 40 },
+    "elapsedSeconds": 14400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 62, "happiness": 74, "health": 78, "hygiene": 70, "energy": 8 },
+    "expectedFinalStats": { "hunger": 62, "happiness": 79, "health": 78, "hygiene": 70, "energy": 58 }
+  },
+  {
+    "id": 12,
+    "description": "baby + talk: happiness+10",
+    "stage": 1, "actionType": 7, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 95, "happiness": 95, "health": 95, "hygiene": 95, "energy": 95 },
+    "elapsedSeconds": 5400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 84, "happiness": 89, "health": 96, "hygiene": 87, "energy": 83 },
+    "expectedFinalStats": { "hunger": 84, "happiness": 99, "health": 96, "hygiene": 87, "energy": 83 }
+  },
+  {
+    "id": 13,
+    "description": "baby + check: health+2",
+    "stage": 1, "actionType": 5, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 70, "happiness": 70, "health": 70, "hygiene": 70, "energy": 70 },
+    "elapsedSeconds": 3600, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 63, "happiness": 66, "health": 67, "hygiene": 65, "energy": 62 },
+    "expectedFinalStats": { "hunger": 63, "happiness": 66, "health": 69, "hygiene": 65, "energy": 62 }
+  },
+  {
+    "id": 14,
+    "description": "baby + medicine: health+30 happiness-5",
+    "stage": 1, "actionType": 8, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 50, "happiness": 50, "health": 40, "hygiene": 50, "energy": 50 },
+    "elapsedSeconds": 7200, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 36, "happiness": 42, "health": 31, "hygiene": 40, "energy": 34 },
+    "expectedFinalStats": { "hunger": 36, "happiness": 37, "health": 61, "hygiene": 40, "energy": 34 }
+  },
+  {
+    "id": 15,
+    "description": "baby + play_music: happiness+15",
+    "stage": 1, "actionType": 10, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 100, "happiness": 70, "health": 100, "hygiene": 100, "energy": 100 },
+    "elapsedSeconds": 5400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 89, "happiness": 64, "health": 98, "hygiene": 92, "energy": 88 },
+    "expectedFinalStats": { "hunger": 89, "happiness": 79, "health": 98, "hygiene": 92, "energy": 88 }
+  },
+  {
+    "id": 16,
+    "description": "adult + feed: hunger+30 happiness+5",
+    "stage": 2, "actionType": 0, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 70, "happiness": 70, "health": 80, "hygiene": 70, "energy": 70 },
+    "elapsedSeconds": 5400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 63, "happiness": 66, "health": 79, "hygiene": 64, "energy": 62 },
+    "expectedFinalStats": { "hunger": 93, "happiness": 71, "health": 79, "hygiene": 64, "energy": 62 }
+  },
+  {
+    "id": 17,
+    "description": "adult + play: happiness+25 hygiene-5 energy-15",
+    "stage": 2, "actionType": 1, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 90, "happiness": 50, "health": 90, "hygiene": 80, "energy": 80 },
+    "elapsedSeconds": 7200, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 81, "happiness": 45, "health": 89, "hygiene": 73, "energy": 70 },
+    "expectedFinalStats": { "hunger": 81, "happiness": 70, "health": 89, "hygiene": 68, "energy": 55 }
+  },
+  {
+    "id": 18,
+    "description": "adult + clean: happiness+10 hygiene+40",
+    "stage": 2, "actionType": 2, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 80, "happiness": 80, "health": 85, "hygiene": 40, "energy": 80 },
+    "elapsedSeconds": 5400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 73, "happiness": 76, "health": 83, "hygiene": 34, "energy": 72 },
+    "expectedFinalStats": { "hunger": 73, "happiness": 86, "health": 83, "hygiene": 74, "energy": 72 }
+  },
+  {
+    "id": 19,
+    "description": "adult + rest: happiness+5 energy+50",
+    "stage": 2, "actionType": 3, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 85, "happiness": 85, "health": 85, "hygiene": 85, "energy": 30 },
+    "elapsedSeconds": 14400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 67, "happiness": 75, "health": 78, "hygiene": 71, "energy": 10 },
+    "expectedFinalStats": { "hunger": 67, "happiness": 80, "health": 78, "hygiene": 71, "energy": 60 }
+  },
+  {
+    "id": 20,
+    "description": "adult + talk: happiness+10",
+    "stage": 2, "actionType": 7, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 90, "happiness": 90, "health": 95, "hygiene": 90, "energy": 90 },
+    "elapsedSeconds": 5400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 83, "happiness": 86, "health": 95, "hygiene": 84, "energy": 82 },
+    "expectedFinalStats": { "hunger": 83, "happiness": 96, "health": 95, "hygiene": 84, "energy": 82 }
+  },
+  {
+    "id": 21,
+    "description": "adult + check: health+2",
+    "stage": 2, "actionType": 5, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 65, "happiness": 65, "health": 65, "hygiene": 65, "energy": 65 },
+    "elapsedSeconds": 3600, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 60, "happiness": 62, "health": 64, "hygiene": 61, "energy": 60 },
+    "expectedFinalStats": { "hunger": 60, "happiness": 62, "health": 66, "hygiene": 61, "energy": 60 }
+  },
+  {
+    "id": 22,
+    "description": "adult + medicine: health+30 happiness-5",
+    "stage": 2, "actionType": 8, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 40, "happiness": 40, "health": 50, "hygiene": 40, "energy": 40 },
+    "elapsedSeconds": 10800, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 26, "happiness": 32, "health": 37, "hygiene": 29, "energy": 25 },
+    "expectedFinalStats": { "hunger": 26, "happiness": 27, "health": 67, "hygiene": 29, "energy": 25 }
+  },
+  {
+    "id": 23,
+    "description": "adult + cruzar: happiness+20 energy-10",
+    "stage": 2, "actionType": 9, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 80, "happiness": 60, "health": 80, "hygiene": 80, "energy": 80 },
+    "elapsedSeconds": 86400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 1, "happiness": 1, "health": 1, "hygiene": 1, "energy": 1 },
+    "expectedFinalStats": { "hunger": 1, "happiness": 21, "health": 1, "hygiene": 1, "energy": 1 }
+  },
+  {
+    "id": 24,
+    "description": "adult + play_music: happiness+15",
+    "stage": 2, "actionType": 10, "itemId": 0, "tokenCost": 0,
+    "inputStats": { "hunger": 85, "happiness": 85, "health": 90, "hygiene": 85, "energy": 85 },
+    "elapsedSeconds": 5400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 78, "happiness": 81, "health": 89, "hygiene": 79, "energy": 77 },
+    "expectedFinalStats": { "hunger": 78, "happiness": 96, "health": 89, "hygiene": 79, "energy": 77 }
+  },
+  {
+    "id": 25,
+    "description": "baby + feed with food_burger (itemId=2): shop item",
+    "stage": 1, "actionType": 0, "itemId": 2, "tokenCost": 25,
+    "inputStats": { "hunger": 60, "happiness": 80, "health": 90, "hygiene": 90, "energy": 80 },
+    "elapsedSeconds": 5400, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 49, "happiness": 74, "health": 87, "hygiene": 82, "energy": 68 },
+    "expectedFinalStats": { "hunger": 89, "happiness": 84, "health": 87, "hygiene": 74, "energy": 76 }
+  },
+  {
+    "id": 26,
+    "description": "adult + medicine with med_elixir (itemId=12): shop item",
+    "stage": 2, "actionType": 8, "itemId": 12, "tokenCost": 150,
+    "inputStats": { "hunger": 80, "happiness": 50, "health": 20, "hygiene": 80, "energy": 80 },
+    "elapsedSeconds": 10800, "isSleeping": false,
+    "expectedDecayedStats": { "hunger": 66, "happiness": 42, "health": 18, "hygiene": 69, "energy": 65 },
+    "expectedFinalStats": { "hunger": 66, "happiness": 62, "health": 98, "hygiene": 69, "energy": 75 }
+  }
+]
