@@ -109,7 +109,10 @@ export class PetZkApp extends SmartContract {
     const output = genesisProof.publicOutput;
 
     // Defense-in-depth: genesis proof must produce stage=0 (egg)
-    output.stage.value.assertEquals(Field(0), 'genesis proof must produce egg stage');
+    output.stage.value.assertEquals(
+      Field(0),
+      'genesis proof must produce egg stage'
+    );
 
     // Compute petId = Poseidon.hash([ownerPubkey.x, seed, blobbiId])
     const computedPetId = Poseidon.hash([ownerPubkey.x, seed, blobbiId]);
