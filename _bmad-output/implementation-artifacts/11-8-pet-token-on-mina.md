@@ -271,3 +271,4 @@ Claude Opus 4.6 (1M context)
 |------|---------|
 | 2026-04-08 | Adversarial review: fixed 10 issues -- Field-to-UInt64 conversion gap, unconditional burn semantics, stage-action compatibility in AC-4, backward compat approach, incomplete token cost table, transfer test complexity, fallback ranking, compilation order in AC-4, zero-burn test case added to AC-3 |
 | 2026-04-08 | Implementation complete: PetToken contract created, PetZkApp.applyProof modified with token burn, all existing tests updated for backward compatibility, all 129 unit tests + 6 integration tests passing, build + lint clean |
+| 2026-04-08 | NFR assessment complete: PASS (6 PASS, 2 CONCERNS, 0 FAIL, 0 blockers). See `_bmad-output/test-artifacts/nfr-assessment-11-8.md` |

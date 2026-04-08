@@ -1,13 +1,10 @@
 /**
- * PetToken Custom Token Contract Unit Tests (RED Phase -- ATDD)
+ * PetToken Custom Token Contract Unit Tests
  *
  * Tests PetToken on LocalBlockchain with proofsEnabled: false.
  * Sequential test structure: deploy -> mint -> transfer -> burn -> error cases.
  *
  * Story 11.8 -- AC-3
- *
- * TDD RED PHASE: These tests are written BEFORE implementation.
- * They will fail until PetToken.ts is created with the correct contract logic.
  *
  * @module PetToken.test
  */
@@ -21,7 +18,6 @@ import {
   Signature,
 } from 'o1js';
 
-// RED PHASE: This import will fail until PetToken.ts is created
 import { PetToken } from './PetToken';
 
 describe('PetToken Custom Token Contract (Unit Tests -- proofsEnabled: false)', () => {
@@ -193,6 +189,64 @@ describe('PetToken Custom Token Contract (Unit Tests -- proofsEnabled: false)', 
 
     // Circulation unchanged
     expect(petToken.totalAmountInCirculation.get()).toEqual(circulationBefore);
+  });
+
+  // =========================================================================
+  // AC-3: Multiple mints to same account accumulate balance and circulation
+  // =========================================================================
+
+  it('[P1] AC-3: should accumulate balance and circulation across multiple mints to same account', async () => {
+    const balanceBefore = Mina.getBalance(
+      receiverAddress,
+      petToken.deriveTokenId()
+    );
+    const circulationBefore = petToken.totalAmountInCirculation.get();
+
+    const secondMintAmount = UInt64.from(500);
+    const adminSignature = Signature.create(tokenAppKey, [
+      ...secondMintAmount.toFields(),
+      ...receiverAddress.toFields(),
+    ]);
+
+    const tx = await Mina.transaction(deployer, async () => {
+      // No fundNewAccount needed -- receiver's token account already exists
+      await petToken.mint(receiverAddress, secondMintAmount, adminSignature);
+    });
+    await tx.prove();
+    await tx.sign([deployer.key]).send();
+
+    // Verify balance accumulated (previous balance + 500)
+    const balanceAfter = Mina.getBalance(
+      receiverAddress,
+      petToken.deriveTokenId()
+    );
+    expect(balanceAfter).toEqual(balanceBefore.add(secondMintAmount));
+
+    // Verify circulation accumulated
+    expect(petToken.totalAmountInCirculation.get()).toEqual(
+      circulationBefore.add(secondMintAmount)
+    );
+  });
+
+  // =========================================================================
+  // AC-3: Burn exceeding balance should revert (underflow protection)
+  // =========================================================================
+
+  it('[P1] AC-3: should revert when burn amount exceeds account balance', async () => {
+    // receiver has some tokens but we try to burn more than they have
+    const currentBalance = Mina.getBalance(
+      receiverAddress,
+      petToken.deriveTokenId()
+    );
+    const excessiveBurn = currentBalance.add(UInt64.from(1));
+
+    await expect(async () => {
+      const tx = await Mina.transaction(deployer, async () => {
+        await petToken.burn(receiverAddress, excessiveBurn);
+      });
+      await tx.prove();
+      await tx.sign([deployer.key, receiverKey]).send();
+    }).rejects.toThrow();
   });
 
   // =========================================================================

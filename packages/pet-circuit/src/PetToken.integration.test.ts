@@ -1,5 +1,5 @@
 /**
- * PetToken + PetZkApp Integration Test (RED Phase -- ATDD)
+ * PetToken + PetZkApp Integration Test
  *
  * Tests the full lifecycle: deploy both contracts, mint PET tokens to operator,
  * interact with pet, settle proof with token burn, verify on-chain state.
@@ -7,11 +7,6 @@
  * Uses proofsEnabled: false for unit-speed iteration.
  *
  * Story 11.8 -- AC-4
- *
- * TDD RED PHASE: These tests are written BEFORE implementation.
- * They will fail until:
- * 1. PetToken.ts is created
- * 2. PetZkApp.applyProof is modified to accept petTokenAddress and burn tokens
  *
  * @module PetToken.integration.test
  */
@@ -28,7 +23,6 @@ import {
   UInt64,
 } from 'o1js';
 
-// RED PHASE: PetToken import will fail until PetToken.ts is created
 import { PetToken } from './PetToken';
 import { PetZkApp } from './PetZkApp';
 import { PetLifecycle, CooldownTimestamps } from './PetLifecycle';
@@ -248,8 +242,6 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
     );
     const circulationBefore = petToken.totalAmountInCirculation.get();
 
-    // RED PHASE: applyProof now requires petTokenAddress parameter (AC-2)
-    // This call will fail until PetZkApp.applyProof is modified to accept petTokenAddress
     const tx = await Mina.transaction(deployer, async () => {
       await zkApp.applyProof(
         interactProof,
@@ -281,47 +273,16 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
   });
 
   // =========================================================================
-  // AC-4: Base action path (tokenCost=0) -- zero-amount burn is no-op
+  // AC-4: Second non-zero burn with accumulated totalSpent (delta calculation)
   // =========================================================================
 
-  it('[P0] AC-4: should execute zero-amount burn without error for base action (tokenCost=0)', async () => {
-    // Use base CHECK action (actionType=5, itemId=0, tokenCost=0)
-    // CHECK is allowed for Egg stage
-    const action = new PetAction({
-      actionType: UInt32.from(ActionType.CHECK),
-      itemId: UInt32.from(0), // base action
-      timestamp: UInt64.from(20000),
-      tokenCost: UInt64.from(0),
-    });
+  it('[P1] AC-4: should correctly compute burn delta when on-chain totalSpent is already non-zero', async () => {
+    // After previous test, on-chain totalSpent=20 (from med_bandage burn).
+    // Use hyg_soap: actionType=2 (CLEAN), itemId=15, tokenCost=15
+    // CLEAN is allowed for Egg stage per STAGE_ALLOWED_ACTIONS.
+    // Expected burn delta: proof.totalSpent(35) - onChain.totalSpent(20) = 15.
 
-    const stats = new PetStats({
-      hunger: UInt32.from(100),
-      happiness: UInt32.from(100),
-      health: UInt32.from(100),
-      hygiene: UInt32.from(100),
-      energy: UInt32.from(100),
-    });
-
-    // Previous cooldowns: MEDICINE was used at ts=10000
-    const prevCooldownArr = Array(ACTION_COUNT).fill(0) as number[];
-    prevCooldownArr[ActionType.MEDICINE] = 10000;
-    const prevCDs = cooldownsFromArray(prevCooldownArr);
-    const newCDs = prevCDs.setByIndex(
-      UInt32.from(ActionType.CHECK),
-      UInt64.from(20000)
-    );
-
-    const interactionHash = Poseidon.hash([
-      action.actionType.value,
-      action.itemId.value,
-      action.timestamp.value,
-      action.tokenCost.value,
-    ]);
-
-    // Need a fresh proof chain -- get the previous proof from above test's result
-    // We need to chain from the previous interaction. Since tests are sequential,
-    // we need a reference. For ATDD, we reconstruct the proof chain.
-    // First, re-create the previous interact proof to chain from it.
+    // Re-create the previous interact proof to chain from it
     const prevAction = new PetAction({
       actionType: UInt32.from(ActionType.MEDICINE),
       itemId: UInt32.from(11),
@@ -360,14 +321,44 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
     );
     const prevProof = prevInteractResult.proof;
 
-    // Now chain the CHECK action
+    // Now chain a second shop item interaction: hyg_soap (CLEAN, itemId=15, cost=15)
+    const action = new PetAction({
+      actionType: UInt32.from(ActionType.CLEAN),
+      itemId: UInt32.from(15), // hyg_soap
+      timestamp: UInt64.from(20000),
+      tokenCost: UInt64.from(15),
+    });
+
+    const stats = new PetStats({
+      hunger: UInt32.from(100),
+      happiness: UInt32.from(100),
+      health: UInt32.from(100),
+      hygiene: UInt32.from(100),
+      energy: UInt32.from(100),
+    });
+
+    // Previous cooldowns: MEDICINE was used at ts=10000
+    const prevCooldownArr = Array(ACTION_COUNT).fill(0) as number[];
+    prevCooldownArr[ActionType.MEDICINE] = 10000;
+    const prevCDs = cooldownsFromArray(prevCooldownArr);
+    const newCDs = prevCDs.setByIndex(
+      UInt32.from(ActionType.CLEAN),
+      UInt64.from(20000)
+    );
+
+    const interactionHash = Poseidon.hash([
+      action.actionType.value,
+      action.itemId.value,
+      action.timestamp.value,
+      action.tokenCost.value,
+    ]);
     const ownerSig = Signature.create(ownerKey, [interactionHash]);
 
     const interactResult = await PetLifecycle.interact(
       prevProof,
       action,
       stats,
-      Field(88888),
+      Field(77777),
       prevCDs,
       newCDs,
       ownerPubkey,
@@ -381,13 +372,13 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
       proofOutput.lifecycleHash,
     ]);
 
-    // Record balances before
+    // Record balances before second burn
     const operatorBalanceBefore = Mina.getBalance(
       operatorPubkey,
       petToken.deriveTokenId()
     );
+    const circulationBefore = petToken.totalAmountInCirculation.get();
 
-    // RED PHASE: applyProof with petTokenAddress -- zero burn should be no-op
     const tx = await Mina.transaction(deployer, async () => {
       await zkApp.applyProof(
         interactProof,
@@ -399,7 +390,168 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
     await tx.prove();
     await tx.sign([deployer.key, operatorKey]).send();
 
-    // Verify operator balance unchanged (zero burn)
+    // Verify burn delta is 15 (not 35) -- the delta between proof totalSpent and on-chain totalSpent
+    const expectedBurnDelta = UInt64.from(15); // 35 - 20 = 15
+    const operatorBalanceAfter = Mina.getBalance(
+      operatorPubkey,
+      petToken.deriveTokenId()
+    );
+    expect(operatorBalanceAfter).toEqual(
+      operatorBalanceBefore.sub(expectedBurnDelta)
+    );
+
+    // Verify totalAmountInCirculation decremented by delta (not cumulative)
+    expect(petToken.totalAmountInCirculation.get()).toEqual(
+      circulationBefore.sub(expectedBurnDelta)
+    );
+
+    // Verify on-chain totalSpent is now 35 (cumulative: 20 + 15)
+    expect(zkApp.totalSpent.get()).toEqual(proofOutput.totalSpent.value);
+  });
+
+  // =========================================================================
+  // AC-4: Base action path (tokenCost=0) -- zero-amount burn is no-op
+  // =========================================================================
+
+  it('[P0] AC-4: should execute zero-amount burn without error for base action (tokenCost=0)', async () => {
+    // After the previous two applyProof calls, on-chain cycle=3 and totalSpent=35.
+    // We need a proof chain with cycle > 3. Build: genesis -> MEDICINE -> CLEAN -> CHECK
+    // (4 steps = cycle 4). The CHECK base action has tokenCost=0, so proof totalSpent
+    // stays at 35, matching on-chain -- burn delta = 0.
+
+    const defaultStats = new PetStats({
+      hunger: UInt32.from(100),
+      happiness: UInt32.from(100),
+      health: UInt32.from(100),
+      hygiene: UInt32.from(100),
+      energy: UInt32.from(100),
+    });
+
+    // Step 1: genesis -> MEDICINE (cycle=2, totalSpent=20)
+    const medAction = new PetAction({
+      actionType: UInt32.from(ActionType.MEDICINE),
+      itemId: UInt32.from(11),
+      timestamp: UInt64.from(10000),
+      tokenCost: UInt64.from(20),
+    });
+    const medHash = Poseidon.hash([
+      medAction.actionType.value,
+      medAction.itemId.value,
+      medAction.timestamp.value,
+      medAction.tokenCost.value,
+    ]);
+    const medOwnerSig = Signature.create(ownerKey, [medHash]);
+    const zeroCDs = cooldownsFromArray(Array(ACTION_COUNT).fill(0) as number[]);
+    const medNewCDs = zeroCDs.setByIndex(
+      UInt32.from(ActionType.MEDICINE),
+      UInt64.from(10000)
+    );
+
+    const medResult = await PetLifecycle.interact(
+      genesisProof,
+      medAction,
+      defaultStats,
+      Field(99999),
+      zeroCDs,
+      medNewCDs,
+      ownerPubkey,
+      medOwnerSig,
+      UInt64.from(10000)
+    );
+
+    // Step 2: MEDICINE -> CLEAN/soap (cycle=3, totalSpent=35)
+    const cleanAction = new PetAction({
+      actionType: UInt32.from(ActionType.CLEAN),
+      itemId: UInt32.from(15), // hyg_soap
+      timestamp: UInt64.from(20000),
+      tokenCost: UInt64.from(15),
+    });
+    const cleanHash = Poseidon.hash([
+      cleanAction.actionType.value,
+      cleanAction.itemId.value,
+      cleanAction.timestamp.value,
+      cleanAction.tokenCost.value,
+    ]);
+    const cleanOwnerSig = Signature.create(ownerKey, [cleanHash]);
+    const medCooldownArr = Array(ACTION_COUNT).fill(0) as number[];
+    medCooldownArr[ActionType.MEDICINE] = 10000;
+    const medCDs = cooldownsFromArray(medCooldownArr);
+    const cleanNewCDs = medCDs.setByIndex(
+      UInt32.from(ActionType.CLEAN),
+      UInt64.from(20000)
+    );
+
+    const cleanResult = await PetLifecycle.interact(
+      medResult.proof,
+      cleanAction,
+      defaultStats,
+      Field(77777),
+      medCDs,
+      cleanNewCDs,
+      ownerPubkey,
+      cleanOwnerSig,
+      UInt64.from(20000)
+    );
+
+    // Step 3: CLEAN -> CHECK base action (cycle=4, totalSpent=35 -- no cost)
+    const checkAction = new PetAction({
+      actionType: UInt32.from(ActionType.CHECK),
+      itemId: UInt32.from(0), // base action, tokenCost=0
+      timestamp: UInt64.from(30000),
+      tokenCost: UInt64.from(0),
+    });
+    const checkHash = Poseidon.hash([
+      checkAction.actionType.value,
+      checkAction.itemId.value,
+      checkAction.timestamp.value,
+      checkAction.tokenCost.value,
+    ]);
+    const checkOwnerSig = Signature.create(ownerKey, [checkHash]);
+    const cleanCooldownArr = [...medCooldownArr];
+    cleanCooldownArr[ActionType.CLEAN] = 20000;
+    const cleanCDs = cooldownsFromArray(cleanCooldownArr);
+    const checkNewCDs = cleanCDs.setByIndex(
+      UInt32.from(ActionType.CHECK),
+      UInt64.from(30000)
+    );
+
+    const checkResult = await PetLifecycle.interact(
+      cleanResult.proof,
+      checkAction,
+      defaultStats,
+      Field(88888),
+      cleanCDs,
+      checkNewCDs,
+      ownerPubkey,
+      checkOwnerSig,
+      UInt64.from(30000)
+    );
+    const interactProof = checkResult.proof;
+    const proofOutput = interactProof.publicOutput;
+
+    const operatorSig = Signature.create(operatorKey, [
+      proofOutput.lifecycleHash,
+    ]);
+
+    // Record balances before
+    const operatorBalanceBefore = Mina.getBalance(
+      operatorPubkey,
+      petToken.deriveTokenId()
+    );
+
+    // applyProof with petTokenAddress -- zero burn should be no-op
+    const tx = await Mina.transaction(deployer, async () => {
+      await zkApp.applyProof(
+        interactProof,
+        operatorPubkey,
+        operatorSig,
+        tokenAppAddress
+      );
+    });
+    await tx.prove();
+    await tx.sign([deployer.key, operatorKey]).send();
+
+    // Verify operator balance unchanged (zero burn delta)
     const operatorBalanceAfter = Mina.getBalance(
       operatorPubkey,
       petToken.deriveTokenId()
@@ -447,9 +599,7 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
     await initTx.prove();
     await initTx.sign([deployer.key]).send();
 
-    // Fund poorOperator's token account but mint zero tokens
-    // Actually, don't even fund the account -- the burn should fail
-    // because the operator has no token account at all
+    // poorOperator has no token account -- the burn should fail
 
     // Create interaction with non-zero tokenCost
     const action = new PetAction({
@@ -499,7 +649,7 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
       proofOutput.lifecycleHash,
     ]);
 
-    // RED PHASE: This should revert because poorOperator has no PET tokens
+    // poorOperator has no PET tokens -- TX should revert
     await expect(async () => {
       const tx = await Mina.transaction(deployer, async () => {
         await freshZkApp.applyProof(
