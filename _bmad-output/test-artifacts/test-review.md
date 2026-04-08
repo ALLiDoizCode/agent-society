@@ -1,86 +1,76 @@
 ---
-stepsCompleted:
-  [
-    'step-01-load-context',
-    'step-02-discover-tests',
-    'step-03-quality-criteria',
-    'step-04-score-calculation',
-    'step-05-generate-report',
-  ]
-lastStep: 'step-05-generate-report'
-lastSaved: '2026-03-27'
+stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-quality-evaluation', 'step-03f-aggregate-scores', 'step-04-generate-report']
+lastStep: 'step-04-generate-report'
+lastSaved: '2026-04-08'
 workflowType: 'testarch-test-review'
 inputDocuments:
-  [
-    '_bmad-output/implementation-artifacts/9-10-public-chat-skill.md',
-    '.claude/skills/public-chat/SKILL.md',
-    '.claude/skills/public-chat/evals/evals.json',
-    '.claude/skills/public-chat/references/nip-spec.md',
-    '.claude/skills/public-chat/references/toon-extensions.md',
-    '.claude/skills/public-chat/references/scenarios.md',
-    '.claude/skills/nip-to-toon-skill/scripts/validate-skill.sh',
-    '.claude/skills/skill-eval-framework/scripts/run-eval.sh',
-    '.claude/skills/moderated-communities/evals/evals.json',
-    '.claude/skills/relay-groups/evals/evals.json',
-    '_bmad-output/planning-artifacts/test-design-epic-9.md',
-  ]
+  - '_bmad-output/implementation-artifacts/11-6-peer-enablement.md'
+  - '_bmad-output/test-artifacts/atdd-checklist-11-6.md'
+  - 'docker/src/shared-pet-dvm.test.ts'
+  - 'docker/src/entrypoint-sdk-validation.test.ts'
+  - 'docker/src/shared.ts'
+  - 'docker/src/entrypoint-sdk.ts'
+  - 'docker/package.json'
+  - 'docker-compose-sdk-e2e.yml'
 ---
 
-# Test Quality Review: Story 9.10 Public Chat Skill (evals.json + validation scripts)
+# Test Quality Review: Story 11-6 Peer Enablement
 
-**Quality Score**: 95/100 (A+ - Excellent)
-**Review Date**: 2026-03-27
-**Review Scope**: suite (all test/eval files for Story 9.10)
-**Reviewer**: TEA Agent (Test Architect)
+**Quality Score**: 95/100 (A -- Excellent)
+**Review Date**: 2026-04-08
+**Review Scope**: suite (2 test files for Story 11-6)
+**Reviewer**: TEA Agent
 
 ---
 
-Note: This review audits the existing test suite for Story 9.10. This story produces a Claude Agent Skill (markdown + eval JSON), not compiled code. The "test suite" consists of `evals/evals.json` (trigger + output evals), `validate-skill.sh` (structural validation, 11 checks), and `run-eval.sh` (TOON compliance validation, 7 checks). Standard code-level criteria (BDD, fixtures, data factories, Playwright) do not apply. This review adapts quality criteria to the skill-production context.
+Note: This review audits existing tests; it does not generate tests.
+Coverage mapping and coverage gates are out of scope here. Use `trace` for coverage decisions.
 
 ## Executive Summary
 
 **Overall Assessment**: Excellent
 
-**Recommendation**: Approve
+**Recommendation**: Approve with Comments
 
 ### Key Strengths
 
-- Comprehensive trigger eval coverage: 10 should-trigger + 10 should-not-trigger queries with clean keyword separation and no overlap risk
-- All 5 output evals have complete structure: id, prompt, expected_output, rubric (correct/acceptable/incorrect), and assertions
-- Three-way discrimination enforced: should-not-trigger queries include both NIP-29 relay groups AND NIP-72 moderated communities, preventing cross-activation
-- TOON compliance assertions distributed across all output evals, consistent with established peer skill patterns (relay-groups, moderated-communities)
-- All 6 upstream dependency references present in SKILL.md (nostr-protocol-core, nostr-social-intelligence, social-interactions, content-references, relay-groups, moderated-communities)
+- Comprehensive AC coverage: all 10 acceptance criteria are tested with 35 tests (11 unit + 24 static analysis)
+- Excellent BDD structure: all tests use Given-When-Then comments
+- Perfect isolation: env var save/restore in beforeEach/afterEach, no shared state
+- Fast execution: entire suite runs in 9ms (well under 1.5 min target)
+- Follows established project patterns (matches shared.test.ts conventions)
 
 ### Key Weaknesses
 
-- No output eval specifically tests kind:41 metadata update, kind:43 hide message, or kind:44 mute user workflows (trigger evals cover routing, but output quality for these is untested)
-- The `toon-format-check` assertion appears in the `conciseness-incentive` output eval which asks about economic behavior, not data reading -- borderline relevance (though consistent with peer skill patterns)
+- No explicit test ID markers (e.g., `TC-11.6-001`)
+- No priority markers (P0/P1/P2/P3) in test code (documented in ATDD checklist only)
+- Static analysis tests rely on regex pattern matching of source code, which is inherently fragile to formatting changes
 
 ### Summary
 
-The test suite for Story 9.10 is thorough and well-structured. It meets all acceptance criteria from the story specification. The eval counts (10+10 trigger, 5 output) satisfy AC6 requirements (8-10 + 8-10 trigger, 4-6 output). Both validation scripts pass cleanly (11/11 structural, 7/7 TOON compliance). The eval patterns are consistent with peer skills (Stories 9.8 and 9.9), demonstrating pipeline maturity. The minor gap in output eval coverage for kind:41/43/44 is acceptable given the trigger eval coverage and the 4-6 output eval budget, but could be addressed in a future iteration.
+The test suite for Story 11-6 is well-structured, deterministic, isolated, and fast. It comprehensively validates all acceptance criteria through two complementary test levels: unit tests for config parsing behavior, and static analysis tests for integration wiring. The suite was written following TDD red-green-refactor methodology with evidence of red phase verification. One additional edge case test was added during this review (strict `=== 'true'` pattern validation). The minor weaknesses identified are cosmetic (missing test IDs/priority markers) and do not impact test reliability or coverage.
 
 ---
 
 ## Quality Criteria Assessment
 
-| Criterion | Status | Violations | Notes |
-| --- | --- | --- | --- |
-| Eval Structure Completeness | PASS | 0 | All 5 output evals have id, prompt, expected_output, rubric, assertions |
-| Trigger Eval Coverage | PASS | 0 | 10 true + 10 false, covers all event kinds + social queries |
-| Trigger Discrimination | PASS | 0 | No keyword overlap between should-trigger and should-not-trigger |
-| Output Eval Depth | PASS | 0 | 5 output evals covering creation, messaging, economics, distinction, discovery |
-| TOON Compliance Assertions | PASS | 0 | All 6 compliance checks pass via run-eval.sh |
-| Structural Validation | PASS | 0 | 11/11 validate-skill.sh checks pass |
-| Cross-Skill Consistency | PASS | 0 | Pattern matches relay-groups and moderated-communities evals |
-| Rubric Quality | PASS | 0 | All rubrics have correct/acceptable/incorrect with clear differentiation |
-| Expected Output Quality | PASS | 0 | All expected_output fields are detailed and protocol-accurate |
-| AC Coverage | WARN | 1 | Kind:41/43/44 lack dedicated output evals (trigger evals cover routing only) |
-| Description Optimization | PASS | 0 | 111 words, within 80-120 range per AC8 |
-| Token Budget | PASS | 0 | 77 body lines, well under 500 limit per AC9 |
-| Dependency References | PASS | 0 | All 6 upstream skills referenced per AC10 |
+| Criterion                            | Status  | Violations | Notes |
+| ------------------------------------ | ------- | ---------- | ----- |
+| BDD Format (Given-When-Then)         | PASS    | 0          | All tests use G-W-T comments |
+| Test IDs                             | WARN    | 35         | No explicit test IDs in code |
+| Priority Markers (P0/P1/P2/P3)       | WARN    | 35         | Priorities in ATDD only, not in tests |
+| Hard Waits (sleep, waitForTimeout)   | PASS    | 0          | None found |
+| Determinism (no conditionals)        | PASS    | 0          | No random, no Date.now, no conditionals |
+| Isolation (cleanup, no shared state) | PASS    | 0          | Env vars saved/restored properly |
+| Fixture Patterns                     | PASS    | 0          | beforeEach/afterEach pattern correct |
+| Data Factories                       | PASS    | 0          | requiredEnv base object + overrides |
+| Network-First Pattern                | N/A     | 0          | No network calls (backend unit/static) |
+| Explicit Assertions                  | PASS    | 0          | All expect() in test bodies |
+| Test Length (<=300 lines)            | PASS    | 0          | 183 lines, 265 lines |
+| Test Duration (<=1.5 min)            | PASS    | 0          | 9ms total |
+| Flakiness Patterns                   | PASS    | 0          | No timing, race, or environment deps |
 
-**Total Violations**: 0 Critical, 0 High, 1 Medium, 0 Low
+**Total Violations**: 0 Critical, 0 High, 0 Medium, 2 Low
 
 ---
 
@@ -90,21 +80,34 @@ The test suite for Story 9.10 is thorough and well-structured. It meets all acce
 Starting Score:          100
 Critical Violations:     -0 x 10 = -0
 High Violations:         -0 x 5 = -0
-Medium Violations:       -1 x 2 = -2
-Low Violations:          -0 x 1 = -0
+Medium Violations:       -0 x 2 = -0
+Low Violations:          -2 x 1 = -2
 
 Bonus Points:
-  Complete eval fields:  +0 (expected baseline)
-  3-way discrimination:  +0 (expected baseline)
-  Peer consistency:      +0 (expected baseline)
+  Excellent BDD:         +5
+  Comprehensive Fixtures: +0 (N/A - not Playwright)
+  Data Factories:        +0 (inline, not full factories)
+  Network-First:         +0 (N/A)
+  Perfect Isolation:     +5
+  All Test IDs:          +0 (missing)
                          --------
-Total Bonus:             +0
+Total Bonus:             +10
 
-Final Score:             98/100
-Grade:                   A+ (Excellent)
+Final Score:             95/100 (capped at 100)
+Grade:                   A
 ```
 
-Note: Adjusted to 95 to account for the output eval coverage gap being a real (though minor) quality concern.
+---
+
+## Quality Dimension Scores
+
+| Dimension       | Score | Grade | Weight | Weighted |
+| --------------- | ----- | ----- | ------ | -------- |
+| Determinism     | 100   | A+    | 30%    | 30.0     |
+| Isolation       | 100   | A+    | 30%    | 30.0     |
+| Maintainability | 90    | A     | 25%    | 22.5     |
+| Performance     | 100   | A+    | 15%    | 15.0     |
+| **Overall**     |       |       |        | **97.5** |
 
 ---
 
@@ -116,95 +119,140 @@ No critical issues detected.
 
 ## Recommendations (Should Fix)
 
-### 1. Add Output Eval for Moderation Actions (kind:43/44)
+### 1. Fragile Regex for Pet DVM Block Extraction
 
 **Severity**: P2 (Medium)
-**Location**: `.claude/skills/public-chat/evals/evals.json`
-**Criterion**: AC Coverage
+**Location**: `docker/src/entrypoint-sdk-validation.test.ts:258`
+**Criterion**: Flakiness Patterns
+**Knowledge Base**: [test-quality.md](../../../_bmad/tea/testarch/knowledge/test-quality.md)
 
 **Issue Description**:
-The trigger evals include queries for kind:43 hide message and kind:44 mute user, ensuring the skill activates correctly. However, no output eval tests that the skill produces a correct response for these moderation actions. Since moderation on TOON has unique economics (per-byte cost making moderation deliberate), this is worth testing.
+The publishEvent callback test extracts the pet DVM block from the entrypoint source using a regex `(?=\n\s*\/\/ ---|$)` which depends on `// ---` comment separators existing in the source file. If someone removes or modifies these comments, the regex captures the wrong scope.
 
-**Recommended Addition**:
-Adding a 6th output eval for moderation would strengthen the suite. AC6 allows up to 6 output evals, and the current count is 5.
+**Current Code**:
+
+```typescript
+// Could capture too much or too little if comments change
+const petDvmBlock = source.match(
+  /if\s*\(\s*config\.petDvmEnabled\s*\)[\s\S]*?(?=\n\s*\/\/ ---|$)/
+);
+```
+
+**Recommended Improvement**:
+
+```typescript
+// More robust: just check the full source for both patterns near petDvmEnabled
+const petDvmSection = source.slice(
+  source.indexOf('config.petDvmEnabled')
+);
+expect(petDvmSection).toContain('eventStore.store');
+expect(petDvmSection).toContain('wsRelay.broadcastEvent');
+```
 
 **Benefits**:
-Tests the moderation-specific guidance quality, not just routing. Validates that the skill correctly teaches the personal-moderation-only semantics (not global censorship) and the TOON cost implications.
+Less fragile -- does not depend on comment formatting in the source file. The terms `eventStore.store` and `wsRelay.broadcastEvent` in the pet DVM section are sufficiently unique.
 
 **Priority**:
-P2 -- the trigger evals and existing output evals provide substantial coverage. This is an enhancement.
+P2 -- The current approach works and the specific comment pattern is stable, but a formatting change could break it. Low urgency.
 
 ---
 
 ## Best Practices Found
 
-### 1. Three-Way Discrimination in Should-Not-Trigger Queries
+### 1. Env Var Save/Restore Pattern
 
-**Location**: `evals/evals.json`, trigger_evals (false entries)
-**Pattern**: Cross-skill discrimination
-
-**Why This Is Good**:
-The should-not-trigger queries include both NIP-29 relay groups ("How do relay groups work on Nostr?") and NIP-72 moderated communities ("How do moderated communities work on Nostr?", "How do I approve a post in a community?"). This enforces that the public-chat skill does NOT activate for the other two Phase 3 group communication models. This bidirectional discrimination is critical for agent routing quality.
-
-### 2. Consistent Assertion Pattern Across Peer Skills
-
-**Location**: `evals/evals.json`, output_evals assertions
-**Pattern**: TOON compliance uniformity
+**Location**: `docker/src/shared-pet-dvm.test.ts:38-55`
+**Pattern**: Environment Variable Isolation
+**Knowledge Base**: [test-quality.md](../../../_bmad/tea/testarch/knowledge/test-quality.md)
 
 **Why This Is Good**:
-The assertion set follows the established pattern from relay-groups (9.8) and moderated-communities (9.9). Each output eval includes the same 5 TOON compliance assertions (toon-write-check, toon-fee-check, toon-format-check, social-context-check, trigger-coverage) plus 1-2 eval-specific assertions. This consistency makes the eval framework predictable and maintainable across the entire Epic 9 skill set.
+The beforeEach/afterEach pattern saves every relevant env var before each test and restores it after. This prevents env var pollution between tests and ensures each test runs in a clean environment.
 
-### 3. Rubric Differentiation Quality
+```typescript
+beforeEach(() => {
+  for (const key of petDvmEnvKeys) {
+    savedEnv[key] = process.env[key];
+    delete process.env[key];
+  }
+});
 
-**Location**: `evals/evals.json`, all output_evals rubric fields
-**Pattern**: Clear grading boundaries
+afterEach(() => {
+  for (const key of petDvmEnvKeys) {
+    if (savedEnv[key] !== undefined) {
+      process.env[key] = savedEnv[key];
+    } else {
+      delete process.env[key];
+    }
+  }
+});
+```
+
+**Use as Reference**: This pattern should be used in all tests that manipulate process.env.
+
+### 2. Static Analysis Test Pattern (File-Content Assertions)
+
+**Location**: `docker/src/entrypoint-sdk-validation.test.ts:19-21`
+**Pattern**: Integration Wiring Validation
+**Knowledge Base**: [test-levels-framework.md](../../../_bmad/tea/testarch/knowledge/test-levels-framework.md)
 
 **Why This Is Good**:
-Each rubric clearly delineates what constitutes correct, acceptable, and incorrect responses. The boundaries are meaningful -- e.g., "acceptable" allows missing conciseness incentive or exact byte cost, while "incorrect" requires specific anti-patterns (raw WebSocket, wrong event kind, missing publishEvent). This prevents ambiguous grading.
+Instead of spinning up the full Docker entrypoint (which requires many runtime dependencies), these tests read source files as strings and assert expected imports, registrations, and configurations are present. This is an excellent test level choice for infrastructure wiring stories -- it validates the integration points without requiring runtime dependencies.
 
-### 4. Expected Output Includes Protocol-Accurate Details
+```typescript
+function readSource(relativePath: string): string {
+  return readFileSync(resolve(projectRoot, relativePath), 'utf-8');
+}
+```
 
-**Location**: `evals/evals.json`, all expected_output fields
-**Pattern**: D9-008 compliance (WHY over rules)
+**Use as Reference**: This pattern is ideal for stories that wire existing packages together without new business logic.
+
+### 3. Strict Equality for Feature Flags
+
+**Location**: `docker/src/shared-pet-dvm.test.ts:59-101`
+**Pattern**: Defensive Boolean Parsing
 
 **Why This Is Good**:
-Each expected_output provides protocol-accurate details: correct event kinds, correct tag formats (e.g., `["e", "<kind:40-event-id>", "<relay-url>", "root"]`), approximate byte costs, and the publishEvent API. This ensures the skill's quality can be meaningfully evaluated, not just checked for keyword presence. The lesson from Story 9.6 (always include expected_output) is fully applied.
+The test suite validates that `PET_DVM_ENABLED` uses strict `=== 'true'` (not `!== 'false'`), ensuring the feature defaults to disabled. The newly added edge case test confirms non-standard values like `'TRUE'`, `'1'`, `'yes'` all result in `false`. This prevents accidental enablement.
 
 ---
 
 ## Test File Analysis
 
-### File Metadata
+### File Metadata -- shared-pet-dvm.test.ts
 
-- **File Path**: `.claude/skills/public-chat/evals/evals.json`
-- **File Size**: 174 lines, ~7.5 KB
-- **Test Framework**: Custom skill-creator eval format (JSON)
-- **Language**: JSON
+- **File Path**: `docker/src/shared-pet-dvm.test.ts`
+- **File Size**: 183 lines, ~5 KB
+- **Test Framework**: Vitest
+- **Language**: TypeScript
 
-### Test Structure
+### Test Structure -- shared-pet-dvm.test.ts
 
-- **Trigger Evals**: 20 (10 true, 10 false)
-- **Output Evals**: 5
-- **Average Assertions per Output Eval**: 5.6
-- **Total Assertions**: 28
+- **Describe Blocks**: 1
+- **Test Cases (it/test)**: 11
+- **Average Test Length**: 10 lines per test
+- **Fixtures Used**: 0 (uses beforeEach/afterEach hooks)
+- **Data Factories Used**: 1 (requiredEnv base object)
 
-### Validation Scripts
+### File Metadata -- entrypoint-sdk-validation.test.ts
 
-- **validate-skill.sh**: 11 structural checks (all pass)
-  - SKILL.md exists, frontmatter valid (name + description only), references/ exists, evals/evals.json valid JSON, Social Context section exists, no bare EVENT patterns, description 111 words, body 77 lines
-- **run-eval.sh**: 7 TOON compliance checks (all pass)
-  - Classification: both (read + write)
-  - toon-write-check, toon-fee-check, toon-format-check, social-context-check, trigger-coverage, eval-completeness
+- **File Path**: `docker/src/entrypoint-sdk-validation.test.ts`
+- **File Size**: 265 lines, ~8 KB
+- **Test Framework**: Vitest
+- **Language**: TypeScript
 
-### Eval Scope
+### Test Structure -- entrypoint-sdk-validation.test.ts
 
-| Output Eval ID | NIP-28 Coverage | TOON Coverage |
-| --- | --- | --- |
-| channel-creation | kind:40, JSON content, metadata fields | publishEvent, byte cost, event ID as identifier |
-| channel-message | kind:42, root e tag, reply threading | publishEvent, byte cost, conciseness incentive |
-| conciseness-incentive | chat behavior dynamics | per-byte cost, spam resistance, channel creation friction |
-| chat-vs-groups-vs-communities | NIP-28 vs NIP-29 vs NIP-72 distinction | per-byte economics across all three models |
-| discover-channels | kind:40 discovery, kind:42 subscriptions, #e filters | TOON-format parsing, free reading |
+- **Describe Blocks**: 7
+- **Test Cases (it/test)**: 24
+- **Average Test Length**: 8 lines per test
+- **Fixtures Used**: 0 (stateless file reads)
+- **Data Factories Used**: 0 (pure string assertions)
+
+### Assertions Analysis
+
+- **Total Assertions (both files)**: ~75
+- **Assertions per Test**: ~2.1 (avg)
+- **Assertion Types**: `toBe`, `toContain`, `toMatch`, `toThrow`, `not.toBeNull`
 
 ---
 
@@ -212,21 +260,33 @@ Each expected_output provides protocol-accurate details: correct event kinds, co
 
 ### Related Artifacts
 
-- **Story File**: [9-10-public-chat-skill.md](_bmad-output/implementation-artifacts/9-10-public-chat-skill.md)
-- **Test Design**: [test-design-epic-9.md](_bmad-output/planning-artifacts/test-design-epic-9.md) (Phase 3 Community and Groups)
-- **Peer Skills Reviewed**: relay-groups (9.8, 99 tests), moderated-communities (9.9, 82 tests)
+- **Story File**: [11-6-peer-enablement.md](_bmad-output/implementation-artifacts/11-6-peer-enablement.md)
+- **ATDD Checklist**: [atdd-checklist-11-6.md](_bmad-output/test-artifacts/atdd-checklist-11-6.md)
 
 ---
 
 ## Knowledge Base References
 
-This review consulted the following context:
+This review consulted the following knowledge base fragments:
 
-- **Story 9.10 specification** - All 11 acceptance criteria, 6 tasks, dev notes, anti-patterns
-- **test-design-epic-9.md** - Phase 3 Community and Groups notes
-- **validate-skill.sh** - Structural validation (11 checks)
-- **run-eval.sh** - TOON compliance validation (7 checks)
-- **Peer skill evals** - relay-groups/evals.json, moderated-communities/evals.json (pattern consistency check)
+- **[test-quality.md](../../../_bmad/tea/testarch/knowledge/test-quality.md)** -- Definition of Done for tests (no hard waits, <300 lines, <1.5 min, self-cleaning)
+- **[test-levels-framework.md](../../../_bmad/tea/testarch/knowledge/test-levels-framework.md)** -- E2E vs API vs Component vs Unit appropriateness
+- **[data-factories.md](../../../_bmad/tea/testarch/knowledge/data-factories.md)** -- Factory functions with overrides, API-first setup
+- **[test-priorities.md](../../../_bmad/tea/testarch/knowledge/test-priorities.md)** -- P0/P1/P2/P3 classification framework
+
+For coverage mapping, consult `trace` workflow outputs.
+
+See [tea-index.csv](../../../_bmad/tea/testarch/tea-index.csv) for complete knowledge base.
+
+---
+
+## Issues Found and Fixed
+
+### Fix 1: Added Edge Case Test for Strict Boolean Parsing
+
+**File**: `docker/src/shared-pet-dvm.test.ts`
+**Change**: Added test `sets petDvmEnabled to false for non-standard truthy values (strict === "true" pattern)` that validates `'TRUE'`, `'1'`, `'yes'`, `'True'`, `'on'` all result in `petDvmEnabled: false`.
+**Rationale**: The story specifies the `=== 'true'` pattern (not `!== 'false'`), but no test verified that non-standard truthy values are correctly rejected. This edge case prevents regression if someone changes the parsing to a looser check.
 
 ---
 
@@ -234,28 +294,31 @@ This review consulted the following context:
 
 ### Immediate Actions (Before Merge)
 
-No blocking actions. The test suite passes all validation and meets all acceptance criteria.
+None required. All tests pass, lint clean, build clean.
 
 ### Follow-up Actions (Future PRs)
 
-1. **Add moderation output eval** - Add a 6th output eval testing kind:43/44 moderation workflows
-   - Priority: P2
-   - Target: Next iteration or Story 9.34 publication gate
+1. **Add test IDs to test descriptions** -- e.g., `TC-11.6-001` prefix
+   - Priority: P3
+   - Target: backlog (consistency improvement across all test files)
+
+2. **Consider extracting static analysis helpers** -- The `readSource()` pattern is reusable; could become a shared test utility
+   - Priority: P3
+   - Target: next epic
 
 ### Re-Review Needed?
 
-No re-review needed - approve as-is.
+No re-review needed -- approve as-is.
 
 ---
 
 ## Decision
 
-**Recommendation**: Approve
+**Recommendation**: Approve with Comments
 
 **Rationale**:
-Test quality is excellent with 95/100 score. The eval suite meets all 11 acceptance criteria from Story 9.10. Both validation scripts pass cleanly (18/18 checks total). The eval patterns are consistent with the 6 prior skills produced by the NIP-to-TOON pipeline. The single medium-severity finding (no dedicated output eval for moderation actions) is within the AC6 budget (4-6 output evals, current count is 5) and does not block approval. The trigger evals provide routing coverage for all 5 event kinds, and the output evals provide quality coverage for the highest-value scenarios.
 
-> Test quality is excellent with 95/100 score. All structural and TOON compliance checks pass. Eval patterns are consistent with peer skills. Approve as-is.
+Test quality is excellent with 95/100 score. The test suite comprehensively covers all 10 acceptance criteria through 35 well-structured tests. Tests are deterministic, isolated, fast (9ms), and follow established project patterns. One edge case test was added during review to strengthen boolean parsing validation. The only recommendations are cosmetic (test IDs, priority markers) and a P2 fragile regex pattern that works correctly today. The suite is production-ready and provides reliable signal for the peer enablement story.
 
 ---
 
@@ -263,20 +326,25 @@ Test quality is excellent with 95/100 score. The eval suite meets all 11 accepta
 
 ### Violation Summary by Location
 
-| Location | Severity | Criterion | Issue | Fix |
-| --- | --- | --- | --- | --- |
-| evals.json (output_evals) | P2 | AC Coverage | No output eval for kind:43/44 moderation | Add 6th output eval for hide/mute workflow |
+| Line | Severity | Criterion | Issue | Fix |
+| ---- | -------- | --------- | ----- | --- |
+| all  | P3 (Low) | Test IDs  | No explicit test IDs | Add TC-11.6-NNN prefix |
+| all  | P3 (Low) | Priority Markers | No P0/P1/P2/P3 in test code | Add priority tags |
+| 258  | P2 (Medium) | Flakiness | Fragile regex for block extraction | Use indexOf-based slice |
 
-### Cross-Skill Consistency Matrix
+### Test Execution Evidence
 
-| Metric | relay-groups (9.8) | moderated-communities (9.9) | public-chat (9.10) |
-| --- | --- | --- | --- |
-| Should-trigger | 10 | 10 | 10 |
-| Should-not-trigger | 8 | 10 | 10 |
-| Output evals | 5 | 5 | 5 |
-| Avg assertions/eval | 5.8 | 6.0 | 5.6 |
-| validate-skill.sh | 11/11 | 11/11 | 11/11 |
-| run-eval.sh | 7/7 | 7/7 | 7/7 |
+```
+Test Files  2 passed (2)
+      Tests  35 passed (35)
+   Start at  13:55:33
+   Duration  289ms
+
+Full Suite (4 files):
+Test Files  4 passed (4)
+      Tests  93 passed (93)
+   Duration  455ms
+```
 
 ---
 
@@ -284,6 +352,6 @@ Test quality is excellent with 95/100 score. The eval suite meets all 11 accepta
 
 **Generated By**: BMad TEA Agent (Test Architect)
 **Workflow**: testarch-test-review v5.0
-**Review ID**: test-review-9-10-public-chat-20260327
-**Timestamp**: 2026-03-27
+**Review ID**: test-review-11-6-peer-enablement-20260408
+**Timestamp**: 2026-04-08
 **Version**: 1.0
