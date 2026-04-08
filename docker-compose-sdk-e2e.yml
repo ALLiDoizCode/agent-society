@@ -241,6 +241,7 @@ services:
         condition: service_started
     restart: unless-stopped
     healthcheck:
+      # nosemgrep: trailofbits.generic.wget-unencrypted-url.wget-unencrypted-url -- container-internal health probe, TLS unnecessary
       test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3100/health']
       interval: 10s
       timeout: 5s
@@ -335,6 +336,7 @@ services:
         condition: service_started
     restart: unless-stopped
     healthcheck:
+      # nosemgrep: trailofbits.generic.wget-unencrypted-url.wget-unencrypted-url -- container-internal health probe, TLS unnecessary
       test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3100/health']
       interval: 10s
       timeout: 5s

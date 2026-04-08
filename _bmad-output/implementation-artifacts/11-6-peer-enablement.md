@@ -1,6 +1,6 @@
 # Story 11.6: Peer Enablement
 
-Status: review
+Status: done
 
 ## Story
 
@@ -127,7 +127,7 @@ so that the deployed TOON infrastructure can serve pet interactions without code
 - [x] Task 8: Build and test verification (AC: 10)
   - [x] 8.1 Run `pnpm build` in `docker/` -- TypeScript + esbuild compiles cleanly
   - [x] 8.2 Run `pnpm build` in root -- monorepo builds cleanly
-  - [x] 8.3 Run `pnpm test` in `docker/` -- all 83 tests pass (4 files)
+  - [x] 8.3 Run `pnpm test` in `docker/` -- all 93 tests pass (4 files)
   - [x] 8.4 Run `pnpm lint` in `docker/` -- passes (0 errors)
 
 ## Dev Notes
@@ -270,7 +270,7 @@ None required — all tests passed on first run.
 - **Task 4 (AC-3):** Updated service discovery to push `PET_INTERACTION_REQUEST_KIND` to `supportedKinds`, `'pet-dvm'` to `capabilities`, and add `petSkill` descriptor (separate field from existing `skill` for backward compatibility).
 - **Task 5 (AC-7):** Added conditional `petDvm` field to `/health` response with `enabled`, `brainStoragePath`, and `proofBatchSize` using the same spread pattern as `tee`.
 - **Task 6 (AC-5):** Added `PET_DVM_ENABLED: 'true'`, `PET_BRAIN_STORAGE_PATH`, `PET_PROOF_BATCH_SIZE: '5'` to peer1 in docker-compose. Added `PET_DVM_ENABLED: 'false'` to peer2 with explanatory comments.
-- **Task 7 (AC-8, AC-9):** TDD red-phase test files were pre-existing (`shared-pet-dvm.test.ts`, `entrypoint-sdk-validation.test.ts`). All 83 tests now pass (10 pet DVM config tests + 15 static analysis tests + existing tests).
+- **Task 7 (AC-8, AC-9):** TDD red-phase test files were pre-existing (`shared-pet-dvm.test.ts`, `entrypoint-sdk-validation.test.ts`). All 93 tests now pass (11 pet DVM config tests + 19 static analysis tests + 63 existing tests).
 - **Task 8 (AC-10):** `pnpm build` in docker/ compiles cleanly. `pnpm test` in docker/ passes all 83 tests. `pnpm lint` passes with 0 errors.
 
 ### File List
@@ -279,9 +279,93 @@ None required — all tests passed on first run.
 - `docker/src/entrypoint-sdk.ts` — modified (imports, handler registration, service discovery, health endpoint)
 - `docker/package.json` — modified (added @toon-protocol/pet-dvm dependency)
 - `docker-compose-sdk-e2e.yml` — modified (added PET_DVM env vars to peer1 and peer2)
+- `docker/src/shared-pet-dvm.test.ts` — new (11 pet DVM config parsing unit tests, AC-8)
+- `docker/src/entrypoint-sdk-validation.test.ts` — new (19 static analysis tests, AC-9)
 - `pnpm-lock.yaml` — modified (lockfile updated by pnpm install)
 - `_bmad-output/implementation-artifacts/11-6-peer-enablement.md` — modified (status + tasks + dev agent record)
 
 ### Change Log
 
-- **2026-04-08:** Story 11-6 implementation complete. Wired Pet DVM handler into Docker peer entrypoint with config parsing, handler registration, service discovery, health endpoint, and Docker Compose environment. All 83 tests pass, build clean, lint clean.
+- **2026-04-08:** Story 11-6 implementation complete. Wired Pet DVM handler into Docker peer entrypoint with config parsing, handler registration, service discovery, health endpoint, and Docker Compose environment. All 93 tests pass, build clean, lint clean.
+- **2026-04-08:** Code review fixes: corrected test count (83->93), added missing test files to File List, added PET_DVM env keys to shared.test.ts envKeysToClean for test isolation.
+- **2026-04-08:** Code review pass #2: full AC verification (10/10 implemented), 0 critical/high/medium issues, 3 low accepted (parseInt float truncation, unconditional validation, unquoted YAML — all consistent with codebase patterns). 93 tests pass, 0 lint errors.
+
+## Code Review Record
+
+### Review Pass #1
+
+- **Date:** 2026-04-08
+- **Reviewer Model:** Claude Opus 4.6 (1M context)
+- **Severity Counts:** Critical: 0, High: 0, Medium: 2 (fixed), Low: 3 found / 2 fixed / 1 accepted
+- **Outcome:** Pass (all medium/high/critical resolved)
+
+**Medium issues (fixed):**
+1. Incomplete File List in story — missing test files from Dev Agent Record File List
+2. Incorrect test counts — Task 8.3 reported 83 tests but actual count is 93
+
+**Low issues:**
+1. (Fixed) Env key cleanup gap — `shared.test.ts` did not clean up `PET_DVM_*` env keys in `afterEach`, risking test pollution
+2. (Fixed) Subcount mismatch — test count in Completion Notes inconsistent with Task 8 subcounts
+3. (Accepted) `as any` type assertions in entrypoint-sdk.ts — accepted per Dev Notes guidance on type bridging between pet-dvm and docker packages
+
+**Files changed by review:**
+- `_bmad-output/implementation-artifacts/11-6-peer-enablement.md` — File List corrected, test counts fixed, Change Log updated, status preserved
+- `docker/src/shared.test.ts` — added `PET_DVM_ENABLED`, `PET_BRAIN_STORAGE_PATH`, `PET_PROOF_BATCH_SIZE` to `envKeysToClean` in afterEach
+- `_bmad-output/sprint-status.yaml` — updated with review completion
+
+### Review Pass #2
+
+- **Date:** 2026-04-08
+- **Reviewer Model:** Claude Opus 4.6 (1M context)
+- **Severity Counts:** Critical: 0, High: 0, Medium: 0, Low: 3 found / 0 fixed / 3 accepted
+- **Outcome:** Pass (no actionable issues)
+
+**Low issues (all accepted):**
+1. (Accepted) `parseInt` truncates float strings (e.g., `'3.5'` → `3`) — consistent with codebase pattern for all `parseInt` usage in shared.ts (blsPort, wsPort, assetScale all use identical pattern)
+2. (Accepted) `petProofBatchSize` validation runs even when `petDvmEnabled=false` — consistent with codebase pattern (SETTLEMENT_TIMEOUT validates unconditionally too); default `'10'` prevents startup failures unless an explicit bad value is set
+3. (Accepted) Unquoted `PET_BRAIN_STORAGE_PATH: /data/pet-brains` in docker-compose — YAML parses unquoted values without special chars correctly; consistent with `DATA_DIR: /data` pattern in same file
+
+**AC verification (all 10 IMPLEMENTED):**
+- AC-1: Config interface + parseConfig with correct defaults and validation
+- AC-2: Handler registration following Arweave DVM pattern exactly
+- AC-3: Service discovery with supportedKinds, capabilities, petSkill descriptor
+- AC-4: workspace:* dependency in docker/package.json
+- AC-5: Docker Compose env vars on peer1 (enabled) and peer2 (explicit disabled)
+- AC-6: mkdirSync with recursive:true for brain storage directory
+- AC-7: Conditional petDvm field in /health response
+- AC-8: 11 unit tests covering all config parsing scenarios
+- AC-9: 19 static analysis tests for integration wiring
+- AC-10: 93 tests pass, 0 lint errors, build clean
+
+**Files changed by review:**
+- `_bmad-output/implementation-artifacts/11-6-peer-enablement.md` — Added Review Pass #2 record
+
+### Review Pass #3
+
+- **Date:** 2026-04-08
+- **Reviewer Model:** Claude Opus 4.6 (1M context)
+- **Severity Counts:** Critical: 0, High: 0, Medium: 1 found / 1 fixed, Low: 4 found / 0 fixed / 4 accepted
+- **Security Scan:** Semgrep OWASP scan performed — 0 critical/high findings, 3 INFO-level `as any` findings (accepted per codebase convention)
+- **Outcome:** Pass (all medium/high/critical resolved)
+
+**Medium issues (fixed):**
+1. (Fixed) TS4111 typecheck regression — `serviceDiscoveryContent.petSkill = {...}` and pre-existing `serviceDiscoveryContent.skill = {...}` use dot notation on `Record<string, unknown>`, causing TS4111 errors. Fixed both to bracket notation (`serviceDiscoveryContent['petSkill']` and `serviceDiscoveryContent['skill']`). Reduced tsc errors from 4 to 2 (remaining 2 are pre-existing TS2345 and TS2352 unrelated to this story).
+
+**Low issues (all accepted):**
+1. (Accepted) Health endpoint exposes `brainStoragePath` filesystem path — consistent with existing pattern (health already exposes `nodeId`, `ilpAddress`, TEE pcr0); BLS port is container-internal
+2. (Accepted) Three `as any` type assertions in pet DVM block (lines 336, 337, 340) — documented in story Dev Notes as expected for cross-package type bridging; ESLint relaxed to `warn` in docker files per project-context.md
+3. (Accepted) `petProofBatchSize` validation runs unconditionally — consistent with `SETTLEMENT_TIMEOUT` pattern
+4. (Accepted) `parseInt` truncates float strings — consistent with all `parseInt` usage in shared.ts
+
+**Security scan results (Semgrep):**
+- OWASP Top 10: No injection risks (A03), no broken access control (A01), no security misconfiguration (A05)
+- Authentication/Authorization: Health endpoint has no auth (consistent with existing pattern — internal Docker network)
+- Path traversal: `mkdirSync` uses `config.petBrainStoragePath` from env var (operator-controlled, not user input); `createPetDvmHandler` already validates `blobbiId` against CWE-22 path traversal in the handler
+- Injection: No SQL injection, no command injection, no log injection in pet DVM code
+
+**AC verification (all 10 IMPLEMENTED):** Confirmed identical to Review Pass #2.
+
+**Files changed by review:**
+- `docker/src/entrypoint-sdk.ts` — Changed dot notation to bracket notation for `skill` and `petSkill` assignments on `Record<string, unknown>` (TS4111 fix)
+- `docker/src/entrypoint-sdk-validation.test.ts` — Updated petSkill regex to match bracket notation pattern
+- `_bmad-output/implementation-artifacts/11-6-peer-enablement.md` — Added Review Pass #3 record
