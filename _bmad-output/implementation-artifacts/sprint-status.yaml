@@ -230,7 +230,7 @@ development_status:
   11-2-pet-lifecycle-zkprogram: done
   11-3-pet-zkapp-smartcontract: done
   11-4-pet-game-engine: done
-  11-5-pet-dvm-handler: backlog
+  11-5-pet-dvm-handler: done
   11-6-peer-enablement: backlog
   11-7-pet-dvm-e2e-test: backlog
   11-8-pet-token-on-mina: backlog

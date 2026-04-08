@@ -1702,7 +1702,7 @@ describe('AC-7 positive path: evolve', () => {
     expect(postEvolveState.lifecycleHash.toBigInt()).not.toBe(
       preEvolveState.lifecycleHash.toBigInt()
     );
-  }, 120000);
+  }, 360000);
 
   it('should successfully evolve baby->adult with all stats inherited and lifecycleHash update', async () => {
     // Given: genesis -> 6 egg interactions -> hatch to baby

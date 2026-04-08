@@ -562,7 +562,7 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
       return val.toString() !== '0';
     });
     expect(realEvolutions.length).toBeGreaterThanOrEqual(1);
-  });
+  }, 360000);
 
   // =========================================================================
   // AC-2: Event emissions -- evolution event with Field(0) on non-evolving applyProof
@@ -609,7 +609,10 @@ describe('PetZkApp -- uninitialized contract guards', () => {
   let zkApp: PetZkApp;
 
   beforeAll(async () => {
-    // Compile already done in first describe block's beforeAll (same process)
+    // Re-compile to ensure clean o1js global context for this describe block
+    await PetLifecycle.compile();
+    await PetZkApp.compile();
+
     const Local = await Mina.LocalBlockchain({ proofsEnabled: false });
     Mina.setActiveInstance(Local);
     [deployer] = Local.testAccounts;

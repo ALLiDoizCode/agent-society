@@ -12,7 +12,8 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
-    "@toon-protocol/pet-circuit": "workspace:*"
+    "@toon-protocol/pet-circuit": "workspace:*",
+    "@toon-protocol/memvid-node": "workspace:*"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

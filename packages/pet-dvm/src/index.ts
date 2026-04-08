@@ -2,8 +2,6 @@
  * @toon-protocol/pet-dvm
  *
  * Pet DVM handler package — game engine + memvid + prover + Mina TX for TOON pets.
- * This story (11-4) implements the PetGameEngine; future stories add DVM handler,
- * proof queue, and Mina TX broadcaster.
  *
  * @module @toon-protocol/pet-dvm
  */
@@ -15,7 +13,7 @@ export {
   createGenesisState,
 } from './engine/PetGameEngine';
 
-// Types
+// Engine Types
 export type {
   PetEngineState,
   StatValues,
@@ -26,3 +24,24 @@ export type {
   GameEngineErrorCode,
 } from './engine/types';
 export { GameEngineError } from './engine/types';
+
+// Handler
+export { createPetDvmHandler } from './handler/createPetDvmHandler';
+export { parsePetInteractionRequest } from './handler/parsePetInteractionRequest';
+export { buildPetInteractionEvent } from './handler/buildPetInteractionEvent';
+export { PetStateManager } from './handler/PetStateManager';
+export { ProofQueue } from './handler/ProofQueue';
+
+// Handler Types
+export type {
+  PetDvmConfig,
+  PetInteractionRequest,
+  ProofQueueEntry,
+  UnsignedEvent,
+  HandlerContext,
+  HandlerResponse,
+  HandlePacketAcceptResponse,
+  HandlePacketRejectResponse,
+  NostrEvent,
+} from './handler/types';
+export type { BuildPetInteractionEventParams } from './handler/buildPetInteractionEvent';
