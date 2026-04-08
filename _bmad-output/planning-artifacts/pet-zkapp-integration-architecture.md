@@ -1063,7 +1063,150 @@ describe.skipIf(SKIP_E2E)('Pet DVM E2E', () => {
 
 ---
 
-## 14. Open Integration Questions
+## 14. Pet Dungeon Crawl Extension (Party Mode 2026-04-08)
+
+### 14.1 Extended System Map
+
+The dungeon crawl adds a second DVM handler alongside the Pet DVM. Both run on the same ServiceNode.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          PROVIDER LAYER (Extended)                          │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  Pet DVM (ServiceNode) — EXISTING                                     │  │
+│  │  ┌───────────┐  ┌────────────┐  ┌──────────┐  ┌──────────────────┐  │  │
+│  │  │ Game      │  │ Memvid     │  │ o1js     │  │ Mina TX          │  │  │
+│  │  │ Engine    │  │ PetBrain   │  │ Prover   │  │ Broadcaster      │  │  │
+│  │  └───────────┘  └────────────┘  └──────────┘  └──────────────────┘  │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  Dungeon DVM (same ServiceNode) — NEW                                 │  │
+│  │  ┌───────────┐  ┌────────────┐  ┌──────────┐  ┌──────────────────┐  │  │
+│  │  │ rot.js    │  │ Encounter  │  │ Loot     │  │ Adventure Log    │  │  │
+│  │  │ Dungeon   │  │ Resolution │  │ Tables   │  │ Generator        │  │  │
+│  │  │ Generator │  │ Engine     │  │ (gacha)  │  │ (narrative)      │  │  │
+│  │  └─────┬─────┘  └─────┬──────┘  └────┬─────┘  └────────┬─────────┘  │  │
+│  │        │               │              │                  │            │  │
+│  │        └───────┬───────┘──────────────┘                  │            │  │
+│  │                ▼                                         ▼            │  │
+│  │  ┌──────────────────────┐              ┌──────────────────────────┐  │  │
+│  │  │ Pet-Dungeon Bridge   │              │ Arweave kind:5094        │  │  │
+│  │  │ (pet stats → modifs) │              │ (permanent adventure log)│  │  │
+│  │  └──────────┬───────────┘              └──────────────────────────┘  │  │
+│  │             │                                                        │  │
+│  │             ▼                                                        │  │
+│  │  ┌──────────────────────┐                                           │  │
+│  │  │ PetDvmHandler        │ ◄── stat deltas feed back as interaction  │  │
+│  │  │ (ZK-proven update)   │                                           │  │
+│  │  └──────────────────────┘                                           │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 14.2 Dungeon Enforcement Boundaries
+
+| Rule | Where Enforced | Trust Model |
+|------|---------------|-------------|
+| Dungeon layout generation | **rot.js seedable RNG** | Deterministic replay (same seed = same dungeon) |
+| Encounter resolution | **DungeonGameEngine** | Deterministic pure functions (auditable) |
+| Loot table rolls | **Seedable RNG** | Deterministic (seed committed to result) |
+| Pet stat changes from dungeon | **ZK Circuit** (via PetDvmHandler) | Zero trust — math |
+| Adventure log integrity | **Arweave + BLAKE3** | Verifiable by anyone |
+| Dungeon entry payment | **ILP + Connector** | Cryptographic (balance proofs) |
+| Dungeon provider pricing | **Market** | Competition between operators |
+
+### 14.3 Dungeon Data Flow (Idle Dungeon MVP)
+
+```
+Step 1: OWNER → TOON RELAY
+────────────────────────────
+  Owner sends ONE kind:5250 request:
+    { petStateHash, dungeonId, seed }
+  Payment: ILP PREPARE (USDC, covers dungeon entry fee)
+
+Step 2: DUNGEON DVM PROCESSES
+──────────────────────────────
+  a. rot.js generates dungeon from seed (deterministic, ~5ms)
+  b. Load pet stats from petStateHash commitment
+  c. Pet-Dungeon Bridge: map pet stats → dungeon modifiers
+     - discipline → combat effectiveness
+     - energy → exploration range (max rooms)
+     - happiness → luck (loot quality multiplier)
+     - hunger → survival threshold (death check)
+  d. Simulate room-by-room crawl:
+     - For each room: encounter check → resolve → loot roll → survive check
+     - Pet stats determine outcomes at every step
+  e. Generate narrative adventure log from encounter data
+  f. Compute stat deltas: energy spent, happiness gained/lost, etc.
+
+Step 3: DUNGEON DVM RETURNS RESULT
+───────────────────────────────────
+  ILP FULFILL with kind:6250 result:
+    {
+      roomsCleared, encountersWon, encountersFled, petDied,
+      loot: [{ id, name, rarity }],
+      statDeltas: { hunger: -20, energy: -40, happiness: +10 },
+      narrativeLog: "Blobbi entered the Kobold Caves...",
+      dungeonSeed, dungeonLayoutHash
+    }
+
+Step 4: STAT DELTAS → PET DVM (Composition)
+────────────────────────────────────────────
+  Dungeon DVM calls PetDvmHandler with stat deltas as "dungeon-effect" action.
+  PetGameEngine applies deltas. ZK circuit proves the state transition.
+  Pet stat changes from dungeon are fully ZK-proven.
+
+Step 5: ADVENTURE LOG → ARWEAVE (Async)
+─────────────────────────────────────────
+  Narrative log uploaded via kind:5094 DVM.
+  Permanent, provable adventure record.
+  Pet builds a biography of adventures over time.
+```
+
+### 14.4 Dungeon Event Kinds
+
+| Kind | Name | Publisher | Consumer | Payment? |
+|------|------|----------|----------|----------|
+| **5250** | Dungeon Run Request | Owner (ditto) | Dungeon DVM | Yes (ILP) |
+| **6250** | Dungeon Run Result | Dungeon DVM | Owner (ditto) | — |
+
+**Note:** Dungeon uses the Compute primitive kinds (5250/6250) since it IS a compute DVM. The dungeon-specific semantics are in the event tags, not the kind number.
+
+### 14.5 Dungeon SkillDescriptor (kind:10035)
+
+```json
+{
+  "name": "kobold-caves",
+  "version": "1.0",
+  "kinds": [5250],
+  "features": ["dungeon-crawl", "idle-mode", "loot-system", "pet-compatible"],
+  "pricing": { "5250": "10000" },
+  "metadata": {
+    "difficulty": "easy",
+    "theme": "kobold-cave",
+    "maxRooms": 15,
+    "lootTier": "common-uncommon",
+    "requiredPetStage": 2
+  }
+}
+```
+
+### 14.6 Key Technology Decisions
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| D11-PM-001 | Idle Dungeon (one-call) for MVP | Simplest UX, cheapest (one ILP payment), best ZK profile (one state transition) |
+| D11-PM-002 | rot.js as dungeon engine | TypeScript, seedable RNG (ZK-compatible), headless, BSD-3, 2,700+ stars, feature-complete |
+| D11-PM-003 | Separate DVM handler (not modifying PetDvmHandler) | Clean separation of concerns; dungeon is additive, not disruptive |
+| D11-PM-004 | Stat deltas feed through PetDvmHandler for ZK proof | Reuses existing circuit; no new ZK infrastructure for dungeon MVP |
+| D11-PM-005 | Adventure log on Arweave via kind:5094 | Permanent, provable pet biography; existing infrastructure |
+| D11-PM-006 | Marketplace-as-world: anyone can publish a dungeon | Proves the DVM marketplace thesis; third-party content via kind:10035 |
+
+---
+
+## 15. Open Integration Questions
 
 | # | Question | Options | Blocking? |
 |---|----------|---------|-----------|
@@ -1075,3 +1218,6 @@ describe.skipIf(SKIP_E2E)('Pet DVM E2E', () => {
 | Q6 | Legacy pet social task verification | DVM checks relay for kind:1/36767/3367 events? | Phase 2 |
 | Q7 | napi-rs distribution | npm prebuilds (node-pre-gyp) or platform-specific packages? | Phase 1 |
 | Q8 | PetLifecycle verification key caching | Cache to disk after first compile? Commit to repo? | Phase 1 |
+| Q9 | Dungeon "effect" action type in PetGameEngine | New action type `dungeon-effect` or reuse existing actions? | Phase 5 |
+| Q10 | Dungeon loot item format | On-chain (Mina) vs off-chain (Arweave) vs event-only (Nostr)? | Phase 5 |
+| Q11 | ~~Animated sprite asset pack selection~~ | **RESOLVED:** Dungeon: Ninja Adventure + 0x72 (CC0). Pets: Animated Slimes by Stealthix (CC0) + 16 Blobbi palette-swap variants generated. Pixel Mob! ($7 CC0) as upgrade path. | Phase 5 |

@@ -193,7 +193,7 @@ Epic 7: ILP Address Hierarchy & Protocol Econ    COMPLETE (6/6 stories, 35/35 AC
 Epic 8: The Rig -- Arweave DVM + Forge-UI        COMPLETE (8 stories: 8.0 Arweave DVM + 8.1-8.6 Forge-UI + 8.7 Arweave Deploy)
 Epic 9: NIP-to-TOON Skill Pipeline + Socialverse  COMPLETE (35/35 stories, 30+ skills, +1,036 tests)
 Epic 10: Rig E2E Integration Test Suite            PLANNED (18 stories; read-side E2E via real SDK infra, incremental git pushes, Playwright specs, nested nav regression, multi-client conversations)
-Epic 11: TOON Pets — ZK-Proven Virtual Pet Economy PLANNED (14 stories; ZK-proven pet lifecycle on Mina, Memvid brain, ILP cross-chain payment, Pet DVM; spec: pet-zkapp-*.md)
+Epic 11: TOON Pets — ZK-Proven Virtual Pet Economy IN-PROGRESS (18 stories across 5 sprints; ZK-proven pet lifecycle on Mina, Memvid brain, ILP cross-chain payment, Pet DVM + Pet Dungeon Crawl extension; spec: pet-zkapp-*.md, party-mode-dungeon-engine-decisions-2026-04-08.md)
 Epic 12: Compute Primitive (kind:5250)             PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
 Epic 13: Chain Bridge Primitive (kind:5260)        PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
 Epic 14: Loony — Autonomous Agent                  PLANNED (Example application proving all four primitives + composition; self-bootstrapping agent lifecycle)
@@ -340,6 +340,23 @@ TOON Protocol's strategic architecture: four network primitives with unified ILP
 
 - Full decision record: `_bmad-output/planning-artifacts/research/party-mode-network-primitives-strategy-2026-03-22.md`
 
+**Pet Dungeon Crawl — "The Living Dungeon" (Party Mode 2026-04-08 -- shapes Epic 11 Sprint 5):**
+
+Extension to TOON Pets: players raise pets and send them into procedurally-generated dungeons. Dungeons are DVM services — anyone can publish a dungeon as a kind:5250 compute provider. The marketplace discovers dungeons. ILP pays for entry. Pet stats determine dungeon outcomes. ZK proofs verify results.
+
+- **Core Architecture: "Optimistic Game Engine"** — gameplay happens immediately (~100ms), ZK proofs generated async, blockchain settlement only on dispute. Combines off-chain speed with trustless verification.
+- **rot.js (BSD-3, TypeScript, ~2,700 stars)** is the dungeon engine. Provides: procedural generation (BSP, cellular automata, maze), pathfinding (A*, Dijkstra), FOV/lighting, turn scheduling, **seedable RNG** (critical for determinism/ZK compatibility). All modules work headless (no DOM/Canvas required for DVM).
+- **Slay the Web action/state pattern** adopted: `action(state) → newState` pure functions. Maps 1:1 to ZK state transitions. Each dungeon action is deterministic and provable.
+- **Idle Dungeon MVP (D11-PM-001):** One DVM call = one dungeon run. Pet auto-crawls based on stats. Returns: rooms cleared, encounters, loot, stat changes, narrative log. Minimizes ILP cost (one payment) and ZK proof count (one state transition).
+- **Pet-Dungeon Stat Bridge (D11-PM-002):** Pet stats map to dungeon modifiers: discipline → combat effectiveness, energy → exploration range, happiness → luck/loot quality, hunger → survival threshold. Well-cared-for pets go deeper and find better loot.
+- **Dungeon DVM Handler (D11-PM-003):** Separate handler from PetDvmHandler. Same `createNode()` / `ServiceNode` pattern. Registers as distinct SkillDescriptor in kind:10035. Input: `(petStateHash, dungeonId, seed)` → Output: `(dungeonOutcome, lootItems[], statDeltas, narrativeLog)`.
+- **Dungeon-to-Pet feedback (D11-PM-004):** Dungeon stat deltas feed back through PetDvmHandler as a standard interaction. Pet stat changes from dungeons are ZK-proven through the existing PetLifecycle circuit. No new circuit needed for MVP.
+- **Adventure Log on Arweave (D11-PM-005):** Narrative dungeon log stored permanently via kind:5094. Each pet builds a provable biography of adventures. Stored forever, ZK-backed provenance.
+- **Marketplace-as-World (D11-PM-006):** Anyone can publish a dungeon as a DVM provider. Dungeon SkillDescriptors advertise: difficulty, theme, loot tables, entry price. Players discover via kind:10035. Best dungeons attract the most players. Bad dungeons go bankrupt. Natural selection for game content.
+- **Assets: Ninja Adventure (CC0) + 0x72 Dungeon Tileset II (CC0).** Ninja Adventure = base pack (100+ animated monsters, dungeon/cave/castle tilesets, items, effects, sound). 0x72 = dungeon-specific supplement (12+ monster types, dungeon walls/floors/doors). Both 16x16 top-down, fully animated (idle/walk/attack/death). Minifantasy (paid) available as premium upgrade path.
+- **New Stories (Sprint 5):** 11-15 (Dungeon Engine Core), 11-16 (Pet-Dungeon Stat Bridge), 11-17 (Dungeon DVM Handler), 11-18 (Dungeon Adventure Log)
+- Full decision record: `_bmad-output/planning-artifacts/research/party-mode-dungeon-engine-decisions-2026-04-08.md`
+
 **TOON Agent Architecture (Party Mode 2026-03-23 -- shapes Epics 10, 11, 12):**
 
 TOON Protocol proves itself through example applications. The protocol defines the four primitives, ILP routing, and marketplace discovery. Applications demonstrate what you can build on top. This is the protocol-vs-platform distinction: TOON is a protocol (permissionless, open), not a platform (locked-in, proprietary).
@@ -349,6 +366,7 @@ TOON Protocol proves itself through example applications. The protocol defines t
 | Application | Package | Proves | Built On |
 |---|---|---|---|
 | **Forge** | `packages/rig` | Decentralized git hosting | Blob Storage + Messaging |
+| **TOON Pets + Dungeon** | `packages/pet-dvm` | ZK-proven game engine + marketplace-as-world | Compute + Storage + Messaging + ZK (Mina) |
 | **Loony** | `packages/loony` (planned) | Autonomous agent lifecycle | All four primitives + Composition |
 
 - **Six-Layer Protocol Capability Model:**

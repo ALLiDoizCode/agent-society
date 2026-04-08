@@ -386,6 +386,82 @@ This story IS the E2E test. It validates the full pipeline against real infrastr
 
 **Quality gate:** Pet can be listed, purchased, and ownership transferred on-chain.
 
+### Sprint 5: Pet Dungeon Crawl (Party Mode 2026-04-08)
+
+#### Story 11-15: Dungeon Engine Core
+
+**Risks:** R-023 (rot.js headless compatibility), R-024 (RNG determinism across platforms)
+
+**Test strategy:**
+
+| Level | Tests | What |
+|-------|-------|------|
+| Unit | 6 | rot.js dungeon generation: Digger, Cellular, Rogue layouts produce valid maps |
+| Unit | 4 | Seedable RNG determinism: same seed → same dungeon (100 iterations, cross-platform) |
+| Unit | 8 | Encounter resolution: pet stats vs monster stats, combat outcomes deterministic |
+| Unit | 4 | Loot table rolls: rarity distribution, seed-based determinism |
+| Unit | 3 | Room-by-room simulation: pet traverses dungeon, encounters resolve correctly |
+| Property | 3 | Fuzz: random seeds never produce invalid dungeon layouts or out-of-bounds rooms |
+| Benchmark | 1 | Full dungeon generation + simulation completes in < 50ms |
+
+**Quality gate:** `DungeonGameEngine.run(seed, petStats)` produces identical output for identical inputs across 100 iterations.
+
+#### Story 11-16: Pet-Dungeon Stat Bridge
+
+**Risks:** R-004 (shared: stat divergence)
+
+**Test strategy:**
+
+| Level | Tests | What |
+|-------|-------|------|
+| Unit | 5 | Stat mapping: each pet stat maps to correct dungeon modifier |
+| Unit | 4 | Boundary cases: min stats (all 1) → worst modifiers; max stats (all 100) → best modifiers |
+| Unit | 3 | Stat deltas: dungeon outcome produces valid pet stat deltas within [1,100] range |
+| Cross-verify | 4 | Bridge output + PetGameEngine accepts stat deltas as valid interaction |
+
+**Quality gate:** Pet stat deltas from dungeon run pass PetGameEngine validation and stay within [1,100] bounds.
+
+#### Story 11-17: Dungeon DVM Handler
+
+**Risks:** R-007 (type mismatch), R-025 (DVM-to-DVM composition latency)
+
+**Test strategy:**
+
+| Level | Tests | What |
+|-------|-------|------|
+| Unit | 5 | Handler lifecycle: receive request → validate → run dungeon → return result |
+| Unit | 3 | Error paths: invalid pet state hash, insufficient payment, unknown dungeon_id |
+| Unit | 2 | SkillDescriptor: dungeon advertised correctly in kind:10035 |
+| Integration | 2 | Dungeon DVM → PetDvmHandler composition: stat deltas applied and ZK-proven |
+| Integration | 1 | Full flow: kind:5250 request → dungeon run → kind:6250 result with loot + stats |
+
+**Quality gate:** Dungeon DVM handler processes request, returns deterministic result, and stat deltas feed back through PetDvmHandler successfully.
+
+#### Story 11-18: Dungeon Adventure Log
+
+**Risks:** Low (builds on existing kind:5094 infrastructure)
+
+**Test strategy:**
+
+| Level | Tests | What |
+|-------|-------|------|
+| Unit | 3 | Narrative generator: encounter data → readable story text |
+| Unit | 2 | Log format: valid JSON with required fields (rooms, encounters, loot, stats) |
+| Integration | 1 | Full log uploaded to Arweave via kind:5094 DVM, retrievable by tx ID |
+| Integration | 1 | Pet biography query: fetch all adventure logs for a given blobbi_id |
+
+**Quality gate:** Adventure log uploads to Arweave and is retrievable with correct content.
+
+---
+
+## 3.6 Risk Register Additions (Sprint 5)
+
+| ID | Category | Risk | P | I | Score | Story | Mitigation |
+|----|----------|------|---|---|-------|-------|------------|
+| R-023 | INTEG | rot.js headless mode has undocumented DOM dependency | 1 | 3 | **3** | 11-15 | Spike: run rot.js Digger in Node.js without jsdom; verify no canvas/window usage |
+| R-024 | ZK | rot.js RNG produces different output across Node.js versions | 2 | 3 | **6** | 11-15 | Determinism test: same seed on Node 20 + 24, compare dungeon layout byte-for-byte |
+| R-025 | INTEG | DVM-to-DVM composition (dungeon → pet) exceeds ILP timeout | 2 | 2 | **4** | 11-17 | Dungeon returns result first (within timeout); stat feedback is async fire-and-forget |
+
 ---
 
 ## 4. Integration Test Approach for Cross-Package Dependencies
@@ -597,6 +673,16 @@ echo "[infra] PetZkApp deployed at: $PET_ZKAPP_ADDRESS"
 | G13 | Checkpoint atomicity: no partial hash under concurrent writes | Yes -- blocks checkpoint |
 | G14 | Breeding circuit compiles (feasibility) | Yes -- blocks breeding |
 | G15 | Marketplace list + buy flow on lightnet | No -- nice-to-have |
+
+### Sprint 5 Quality Gates
+
+| Gate | Test | Blocking? |
+|------|------|-----------|
+| G16 | rot.js dungeon generation deterministic (100 seeds × 2 Node versions) | Yes -- blocks all dungeon work |
+| G17 | DungeonGameEngine.run() produces identical output for identical inputs | Yes -- blocks DVM handler |
+| G18 | Pet stat deltas from dungeon accepted by PetGameEngine | Yes -- blocks composition |
+| G19 | Dungeon DVM handler processes request end-to-end | Yes -- blocks E2E |
+| G20 | Adventure log uploads to Arweave and is retrievable | No -- nice-to-have |
 
 ---
 
