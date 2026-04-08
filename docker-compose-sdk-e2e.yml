@@ -204,6 +204,11 @@ services:
       # Arweave DVM: enabled on peer1 (provider), uses free tier (<=100KB)
       ARDRIVE_ENABLED: 'true'
 
+      # Pet DVM: enabled on peer1 (pet interaction provider)
+      PET_DVM_ENABLED: 'true'
+      PET_BRAIN_STORAGE_PATH: /data/pet-brains
+      PET_PROOF_BATCH_SIZE: '5'
+
       # Multi-chain settlement (Solana + Mina)
       SOLANA_RPC_URL: http://solana-validator:8899
       SOLANA_PROGRAM_ID: '${SOLANA_PROGRAM_ID}'
@@ -294,6 +299,9 @@ services:
 
       # Arweave DVM: enabled on peer2 as fallback provider (higher price than peer1)
       ARDRIVE_ENABLED: 'true'
+
+      # Pet DVM: disabled on peer2 (peer1 is the pet interaction provider)
+      PET_DVM_ENABLED: 'false'
 
       # Multi-chain settlement (Solana + Mina)
       SOLANA_RPC_URL: http://solana-validator:8899

@@ -231,7 +231,7 @@ development_status:
   11-3-pet-zkapp-smartcontract: done
   11-4-pet-game-engine: done
   11-5-pet-dvm-handler: done
-  11-6-peer-enablement: ready-for-dev
+  11-6-peer-enablement: review
   11-7-pet-dvm-e2e-test: backlog
   11-8-pet-token-on-mina: backlog
   11-9-ditto-pet-dvm-integration: backlog

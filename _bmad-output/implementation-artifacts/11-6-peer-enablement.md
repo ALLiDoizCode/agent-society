@@ -1,6 +1,6 @@
 # Story 11.6: Peer Enablement
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -92,43 +92,43 @@ so that the deployed TOON infrastructure can serve pet interactions without code
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Add pet DVM config to shared.ts (AC: 1)
-  - [ ] 1.1 Add `petDvmEnabled`, `petBrainStoragePath`, `petProofBatchSize` to `Config` interface
-  - [ ] 1.2 Add environment variable parsing in `parseConfig()` with defaults and validation
-  - [ ] 1.3 Add `petDvmEnabled`, `petBrainStoragePath`, `petProofBatchSize` to return object
+- [x] Task 1: Add pet DVM config to shared.ts (AC: 1)
+  - [x] 1.1 Add `petDvmEnabled`, `petBrainStoragePath`, `petProofBatchSize` to `Config` interface
+  - [x] 1.2 Add environment variable parsing in `parseConfig()` with defaults and validation
+  - [x] 1.3 Add `petDvmEnabled`, `petBrainStoragePath`, `petProofBatchSize` to return object
 
-- [ ] Task 2: Add @toon-protocol/pet-dvm dependency (AC: 4)
-  - [ ] 2.1 Add `"@toon-protocol/pet-dvm": "workspace:*"` to `docker/package.json` dependencies
-  - [ ] 2.2 Run `pnpm install` to update lockfile
+- [x] Task 2: Add @toon-protocol/pet-dvm dependency (AC: 4)
+  - [x] 2.1 Add `"@toon-protocol/pet-dvm": "workspace:*"` to `docker/package.json` dependencies
+  - [x] 2.2 Run `pnpm install` to update lockfile
 
-- [ ] Task 3: Register Pet DVM handler in entrypoint-sdk.ts (AC: 2, 6)
-  - [ ] 3.1 Add imports: `createPetDvmHandler` from `@toon-protocol/pet-dvm`, `PET_INTERACTION_REQUEST_KIND` from `@toon-protocol/core`, `mkdirSync` from `node:fs`
-  - [ ] 3.2 Add guarded handler registration block after the Arweave DVM block (lines 313-323 pattern)
-  - [ ] 3.3 Add brain storage directory creation (`mkdirSync` with `recursive: true`)
-  - [ ] 3.4 Create `publishEvent` callback that stores in eventStore AND broadcasts to wsRelay
+- [x] Task 3: Register Pet DVM handler in entrypoint-sdk.ts (AC: 2, 6)
+  - [x] 3.1 Add imports: `createPetDvmHandler` from `@toon-protocol/pet-dvm`, `PET_INTERACTION_REQUEST_KIND` from `@toon-protocol/core`, `mkdirSync` from `node:fs`
+  - [x] 3.2 Add guarded handler registration block after the Arweave DVM block (lines 313-323 pattern)
+  - [x] 3.3 Add brain storage directory creation (`mkdirSync` with `recursive: true`)
+  - [x] 3.4 Create `publishEvent` callback that stores in eventStore AND broadcasts to wsRelay
 
-- [ ] Task 4: Update service discovery for Pet DVM (AC: 3)
-  - [ ] 4.1 Add `PET_INTERACTION_REQUEST_KIND` to `supportedKinds` array when pet DVM is enabled
-  - [ ] 4.2 Add `'pet-dvm'` to `capabilities` array when pet DVM is enabled
-  - [ ] 4.3 Add `petSkill` descriptor to `serviceDiscoveryContent` (separate field from existing `skill`)
+- [x] Task 4: Update service discovery for Pet DVM (AC: 3)
+  - [x] 4.1 Add `PET_INTERACTION_REQUEST_KIND` to `supportedKinds` array when pet DVM is enabled
+  - [x] 4.2 Add `'pet-dvm'` to `capabilities` array when pet DVM is enabled
+  - [x] 4.3 Add `petSkill` descriptor to `serviceDiscoveryContent` (separate field from existing `skill`)
 
-- [ ] Task 5: Add pet DVM status to health endpoint (AC: 7)
-  - [ ] 5.1 Add conditional `petDvm` field to health response JSON
+- [x] Task 5: Add pet DVM status to health endpoint (AC: 7)
+  - [x] 5.1 Add conditional `petDvm` field to health response JSON
 
-- [ ] Task 6: Update Docker Compose (AC: 5)
-  - [ ] 6.1 Add `PET_DVM_ENABLED`, `PET_BRAIN_STORAGE_PATH`, `PET_PROOF_BATCH_SIZE` to peer1 environment
-  - [ ] 6.2 Add `PET_DVM_ENABLED: 'false'` to peer2 environment
-  - [ ] 6.3 Add comment explaining pet DVM peer assignment
+- [x] Task 6: Update Docker Compose (AC: 5)
+  - [x] 6.1 Add `PET_DVM_ENABLED`, `PET_BRAIN_STORAGE_PATH`, `PET_PROOF_BATCH_SIZE` to peer1 environment
+  - [x] 6.2 Add `PET_DVM_ENABLED: 'false'` to peer2 environment
+  - [x] 6.3 Add comment explaining pet DVM peer assignment
 
-- [ ] Task 7: Tests (AC: 8, 9)
-  - [ ] 7.1 Write shared.ts pet DVM config parsing unit tests
-  - [ ] 7.2 Write static analysis tests for entrypoint integration points
+- [x] Task 7: Tests (AC: 8, 9)
+  - [x] 7.1 Write shared.ts pet DVM config parsing unit tests (pre-existing TDD red-phase, now green)
+  - [x] 7.2 Write static analysis tests for entrypoint integration points (pre-existing TDD red-phase, now green)
 
-- [ ] Task 8: Build and test verification (AC: 10)
-  - [ ] 8.1 Run `pnpm build` in `docker/` -- TypeScript + esbuild compiles cleanly
-  - [ ] 8.2 Run `pnpm build` in root -- monorepo builds cleanly
-  - [ ] 8.3 Run `pnpm test` in `docker/` -- all tests pass
-  - [ ] 8.4 Run `pnpm lint` in `docker/` -- passes
+- [x] Task 8: Build and test verification (AC: 10)
+  - [x] 8.1 Run `pnpm build` in `docker/` -- TypeScript + esbuild compiles cleanly
+  - [x] 8.2 Run `pnpm build` in root -- monorepo builds cleanly
+  - [x] 8.3 Run `pnpm test` in `docker/` -- all 83 tests pass (4 files)
+  - [x] 8.4 Run `pnpm lint` in `docker/` -- passes (0 errors)
 
 ## Dev Notes
 
@@ -256,8 +256,32 @@ The Docker image (`toon:optimized`) is built from `docker/Dockerfile.oyster` or 
 
 ### Agent Model Used
 
+Claude Opus 4.6 (1M context) — claude-opus-4-6[1m]
+
 ### Debug Log References
+
+None required — all tests passed on first run.
 
 ### Completion Notes List
 
+- **Task 1 (AC-1):** Added `petDvmEnabled`, `petBrainStoragePath`, `petProofBatchSize` to `Config` interface and `parseConfig()` in `shared.ts`. Used `=== 'true'` pattern (like x402, NOT ardriveEnabled) so Pet DVM defaults to disabled. Added positive integer validation for `petProofBatchSize` with descriptive error.
+- **Task 2 (AC-4):** Added `@toon-protocol/pet-dvm: workspace:*` to `docker/package.json` and ran `pnpm install` to update lockfile.
+- **Task 3 (AC-2, AC-6):** Registered `createPetDvmHandler` in `entrypoint-sdk.ts` following the Arweave DVM pattern exactly. Added `mkdirSync` for brain storage directory, `publishEvent` callback that stores in eventStore + broadcasts to wsRelay. Used `as any` type assertion for handler registration and publishEvent bridge (documented in story dev notes as expected).
+- **Task 4 (AC-3):** Updated service discovery to push `PET_INTERACTION_REQUEST_KIND` to `supportedKinds`, `'pet-dvm'` to `capabilities`, and add `petSkill` descriptor (separate field from existing `skill` for backward compatibility).
+- **Task 5 (AC-7):** Added conditional `petDvm` field to `/health` response with `enabled`, `brainStoragePath`, and `proofBatchSize` using the same spread pattern as `tee`.
+- **Task 6 (AC-5):** Added `PET_DVM_ENABLED: 'true'`, `PET_BRAIN_STORAGE_PATH`, `PET_PROOF_BATCH_SIZE: '5'` to peer1 in docker-compose. Added `PET_DVM_ENABLED: 'false'` to peer2 with explanatory comments.
+- **Task 7 (AC-8, AC-9):** TDD red-phase test files were pre-existing (`shared-pet-dvm.test.ts`, `entrypoint-sdk-validation.test.ts`). All 83 tests now pass (10 pet DVM config tests + 15 static analysis tests + existing tests).
+- **Task 8 (AC-10):** `pnpm build` in docker/ compiles cleanly. `pnpm test` in docker/ passes all 83 tests. `pnpm lint` passes with 0 errors.
+
 ### File List
+
+- `docker/src/shared.ts` — modified (added petDvmEnabled, petBrainStoragePath, petProofBatchSize to Config + parseConfig)
+- `docker/src/entrypoint-sdk.ts` — modified (imports, handler registration, service discovery, health endpoint)
+- `docker/package.json` — modified (added @toon-protocol/pet-dvm dependency)
+- `docker-compose-sdk-e2e.yml` — modified (added PET_DVM env vars to peer1 and peer2)
+- `pnpm-lock.yaml` — modified (lockfile updated by pnpm install)
+- `_bmad-output/implementation-artifacts/11-6-peer-enablement.md` — modified (status + tasks + dev agent record)
+
+### Change Log
+
+- **2026-04-08:** Story 11-6 implementation complete. Wired Pet DVM handler into Docker peer entrypoint with config parsing, handler registration, service discovery, health endpoint, and Docker Compose environment. All 83 tests pass, build clean, lint clean.
