@@ -28,6 +28,7 @@ import {
 } from 'o1js';
 
 import { PetZkApp } from './PetZkApp';
+import { PetToken } from './PetToken';
 import { PetLifecycle, CooldownTimestamps } from './PetLifecycle';
 import { PetStats, PetAction } from './structs';
 import { ActionType } from './constants';
@@ -40,6 +41,9 @@ describe('PetZkApp Integration @slow (proofsEnabled: true)', () => {
   let zkAppKey: PrivateKey;
   let zkAppAddress: PublicKey;
   let zkApp: PetZkApp;
+  let tokenKey: PrivateKey;
+  let tokenAddress: PublicKey;
+  let petToken: PetToken;
   let ownerKey: PrivateKey;
   let ownerPubkey: PublicKey;
   let operatorKey: PrivateKey;
@@ -50,17 +54,22 @@ describe('PetZkApp Integration @slow (proofsEnabled: true)', () => {
   const brainHash = Field(12345);
 
   beforeAll(async () => {
-    // Step 1: Compile PetLifecycle ZkProgram FIRST (produces verification key)
+    // Step 1: Compile PetToken FIRST (PetZkApp references it)
+    console.time('PetToken.compile');
+    await PetToken.compile();
+    console.timeEnd('PetToken.compile');
+
+    // Step 2: Compile PetLifecycle ZkProgram (produces verification key)
     console.time('PetLifecycle.compile');
     await PetLifecycle.compile();
     console.timeEnd('PetLifecycle.compile');
 
-    // Step 2: Compile PetZkApp SmartContract (needs PetLifecycle VK)
+    // Step 3: Compile PetZkApp SmartContract (needs PetLifecycle VK + PetToken)
     console.time('PetZkApp.compile');
     await PetZkApp.compile();
     console.timeEnd('PetZkApp.compile');
 
-    // Step 3: Set up LocalBlockchain with proofs enabled
+    // Step 4: Set up LocalBlockchain with proofs enabled
     const Local = await Mina.LocalBlockchain({ proofsEnabled: true });
     Mina.setActiveInstance(Local);
     [deployer] = Local.testAccounts;
@@ -69,6 +78,10 @@ describe('PetZkApp Integration @slow (proofsEnabled: true)', () => {
     zkAppAddress = zkAppKey.toPublicKey();
     zkApp = new PetZkApp(zkAppAddress);
 
+    tokenKey = PrivateKey.random();
+    tokenAddress = tokenKey.toPublicKey();
+    petToken = new PetToken(tokenAddress);
+
     ownerKey = PrivateKey.random();
     ownerPubkey = ownerKey.toPublicKey();
     operatorKey = PrivateKey.random();
@@ -76,6 +89,16 @@ describe('PetZkApp Integration @slow (proofsEnabled: true)', () => {
   });
 
   it('[P0] AC-8 @slow: should deploy, initialize with real genesis proof, interact, and verify on-chain state', async () => {
+    // =====================================================================
+    // Phase 0: Deploy PetToken (required by applyProof token burn)
+    // =====================================================================
+    const tokenDeployTx = await Mina.transaction(deployer, async () => {
+      AccountUpdate.fundNewAccount(deployer);
+      await petToken.deploy();
+    });
+    await tokenDeployTx.prove();
+    await tokenDeployTx.sign([deployer.key, tokenKey]).send();
+
     // =====================================================================
     // Phase 1: Deploy PetZkApp
     // =====================================================================
@@ -120,6 +143,21 @@ describe('PetZkApp Integration @slow (proofsEnabled: true)', () => {
     expect(zkApp.ownerX.get()).toEqual(ownerPubkey.x);
     expect(zkApp.operatorX.get()).toEqual(operatorPubkey.x);
     expect(zkApp.totalSpent.get()).toEqual(genesisOutput.totalSpent.value);
+
+    // =====================================================================
+    // Phase 2.5: Mint PET tokens to operator (required for applyProof burn)
+    // =====================================================================
+    const mintAmount = UInt64.from(10000);
+    const adminSig = Signature.create(tokenKey, [
+      ...mintAmount.toFields(),
+      ...operatorPubkey.toFields(),
+    ]);
+    const mintTx = await Mina.transaction(deployer, async () => {
+      AccountUpdate.fundNewAccount(deployer);
+      await petToken.mint(operatorPubkey, mintAmount, adminSig);
+    });
+    await mintTx.prove();
+    await mintTx.sign([deployer.key]).send();
 
     // =====================================================================
     // Phase 3: Generate real interact proof and apply it
@@ -192,10 +230,15 @@ describe('PetZkApp Integration @slow (proofsEnabled: true)', () => {
     ]);
 
     const applyTx = await Mina.transaction(deployer, async () => {
-      await zkApp.applyProof(interactProof, operatorPubkey, operatorSig);
+      await zkApp.applyProof(
+        interactProof,
+        operatorPubkey,
+        operatorSig,
+        tokenAddress
+      );
     });
     await applyTx.prove();
-    await applyTx.sign([deployer.key]).send();
+    await applyTx.sign([deployer.key, operatorKey]).send();
 
     // =====================================================================
     // Phase 4: Verify on-chain state matches proof output

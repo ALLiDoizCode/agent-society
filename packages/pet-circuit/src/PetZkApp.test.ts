@@ -22,6 +22,7 @@ import {
 } from 'o1js';
 
 import { PetZkApp } from './PetZkApp';
+import { PetToken } from './PetToken';
 import { PetLifecycle, CooldownTimestamps } from './PetLifecycle';
 import type { PetLifecycleProof } from './PetLifecycle';
 import { PetStats, PetAction } from './structs';
@@ -37,6 +38,11 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
   let operatorKey: PrivateKey;
   let operatorPubkey: PublicKey;
 
+  // PetToken for token burn during applyProof
+  let tokenKey: PrivateKey;
+  let tokenAddress: PublicKey;
+  let petToken: PetToken;
+
   // Test data
   const seed = Field(42);
   const blobbiId = Field(7);
@@ -47,8 +53,8 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
   let interactProof: InstanceType<typeof PetLifecycleProof>;
 
   beforeAll(async () => {
-    // o1js v2.14.0 requires compile() even with proofsEnabled: false
-    // to set up the prover/dummy proof infrastructure
+    // Compile in order: PetToken first (PetZkApp references it), then PetLifecycle, then PetZkApp
+    await PetToken.compile();
     await PetLifecycle.compile();
     await PetZkApp.compile();
 
@@ -60,11 +66,25 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
     zkAppAddress = zkAppKey.toPublicKey();
     zkApp = new PetZkApp(zkAppAddress);
 
+    tokenKey = PrivateKey.random();
+    tokenAddress = tokenKey.toPublicKey();
+    petToken = new PetToken(tokenAddress);
+
     ownerKey = PrivateKey.random();
     ownerPubkey = ownerKey.toPublicKey();
     operatorKey = PrivateKey.random();
     operatorPubkey = operatorKey.toPublicKey();
   });
+
+  // Helper: deploy PetToken
+  async function deployPetToken() {
+    const tx = await Mina.transaction(deployer, async () => {
+      AccountUpdate.fundNewAccount(deployer);
+      await petToken.deploy();
+    });
+    await tx.prove();
+    await tx.sign([deployer.key, tokenKey]).send();
+  }
 
   // Helper: deploy PetZkApp
   async function deployZkApp() {
@@ -74,6 +94,20 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
     });
     await tx.prove();
     await tx.sign([deployer.key, zkAppKey]).send();
+  }
+
+  // Helper: mint PET tokens to operator and fund their token account
+  async function mintToOperator(operatorAddr: PublicKey, amount: UInt64) {
+    const adminSig = Signature.create(tokenKey, [
+      ...amount.toFields(),
+      ...operatorAddr.toFields(),
+    ]);
+    const tx = await Mina.transaction(deployer, async () => {
+      AccountUpdate.fundNewAccount(deployer);
+      await petToken.mint(operatorAddr, amount, adminSig);
+    });
+    await tx.prove();
+    await tx.sign([deployer.key]).send();
   }
 
   // Helper: build cooldown timestamps from an array of numbers
@@ -153,6 +187,9 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
   // =========================================================================
 
   it('[P0] AC-1: should deploy PetZkApp with all 8 state fields initialized to Field(0)', async () => {
+    // Deploy PetToken first (required by applyProof's token burn)
+    await deployPetToken();
+
     await deployZkApp();
 
     expect(zkApp.petId.get()).toEqual(Field(0));
@@ -185,6 +222,9 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
     });
     await tx.prove();
     await tx.sign([deployer.key]).send();
+
+    // Mint PET tokens to operator for future applyProof calls (token burn)
+    await mintToOperator(operatorPubkey, UInt64.from(10000));
 
     const expectedPetId = Poseidon.hash([ownerPubkey.x, seed, blobbiId]);
 
@@ -271,10 +311,15 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
     ]);
 
     const tx = await Mina.transaction(deployer, async () => {
-      await zkApp.applyProof(interactProof, operatorPubkey, operatorSig);
+      await zkApp.applyProof(
+        interactProof,
+        operatorPubkey,
+        operatorSig,
+        tokenAddress
+      );
     });
     await tx.prove();
-    await tx.sign([deployer.key]).send();
+    await tx.sign([deployer.key, operatorKey]).send();
 
     // Mutable state fields should be updated
     expect(zkApp.brainHash.get()).toEqual(proofOutput.brainHash);
@@ -300,10 +345,15 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
 
     await expect(async () => {
       const tx = await Mina.transaction(deployer, async () => {
-        await zkApp.applyProof(interactProof, operatorPubkey, invalidSig);
+        await zkApp.applyProof(
+          interactProof,
+          operatorPubkey,
+          invalidSig,
+          tokenAddress
+        );
       });
       await tx.prove();
-      await tx.sign([deployer.key]).send();
+      await tx.sign([deployer.key, operatorKey]).send();
     }).rejects.toThrow();
   });
 
@@ -319,10 +369,15 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
 
     await expect(async () => {
       const tx = await Mina.transaction(deployer, async () => {
-        await zkApp.applyProof(interactProof, wrongOperatorPubkey, sig);
+        await zkApp.applyProof(
+          interactProof,
+          wrongOperatorPubkey,
+          sig,
+          tokenAddress
+        );
       });
       await tx.prove();
-      await tx.sign([deployer.key]).send();
+      await tx.sign([deployer.key, wrongOperatorKey]).send();
     }).rejects.toThrow();
   });
 
@@ -340,10 +395,15 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
 
     await expect(async () => {
       const tx = await Mina.transaction(deployer, async () => {
-        await zkApp.applyProof(genesisProof, operatorPubkey, staleSig);
+        await zkApp.applyProof(
+          genesisProof,
+          operatorPubkey,
+          staleSig,
+          tokenAddress
+        );
       });
       await tx.prove();
-      await tx.sign([deployer.key]).send();
+      await tx.sign([deployer.key, operatorKey]).send();
     }).rejects.toThrow();
   });
 
@@ -361,10 +421,15 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
 
     await expect(async () => {
       const tx = await Mina.transaction(deployer, async () => {
-        await zkApp.applyProof(interactProof, operatorPubkey, equalCycleSig);
+        await zkApp.applyProof(
+          interactProof,
+          operatorPubkey,
+          equalCycleSig,
+          tokenAddress
+        );
       });
       await tx.prove();
-      await tx.sign([deployer.key]).send();
+      await tx.sign([deployer.key, operatorKey]).send();
     }).rejects.toThrow();
   });
 
@@ -439,6 +504,9 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
   // =========================================================================
 
   it('[P0] AC-4+5: should allow new operator to settle after transfer', async () => {
+    // Mint PET tokens to the new operator's token account
+    await mintToOperator(newOperatorPubkey, UInt64.from(10000));
+
     // Build a second interact proof chaining from the first
     // Previous interactProof used CHECK(5) at ts=10000
     const prevCooldownArr = Array(ACTION_COUNT).fill(0);
@@ -463,11 +531,12 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
       await zkApp.applyProof(
         secondInteractProof,
         newOperatorPubkey,
-        newOperatorSig
+        newOperatorSig,
+        tokenAddress
       );
     });
     await tx.prove();
-    await tx.sign([deployer.key]).send();
+    await tx.sign([deployer.key, newOperatorKey]).send();
 
     expect(zkApp.brainHash.get()).toEqual(proofOutput.brainHash);
     expect(zkApp.lifecycleHash.get()).toEqual(proofOutput.lifecycleHash);
@@ -543,10 +612,15 @@ describe('PetZkApp SmartContract (Unit Tests -- proofsEnabled: false)', () => {
     ]);
 
     const tx = await Mina.transaction(deployer, async () => {
-      await zkApp.applyProof(evolveProof, newOperatorPubkey, evolveSig);
+      await zkApp.applyProof(
+        evolveProof,
+        newOperatorPubkey,
+        evolveSig,
+        tokenAddress
+      );
     });
     await tx.prove();
-    await tx.sign([deployer.key]).send();
+    await tx.sign([deployer.key, newOperatorKey]).send();
 
     // Verify stage is now 1 (baby)
     expect(zkApp.stage.get()).toEqual(Field(1));
@@ -607,15 +681,29 @@ describe('PetZkApp -- uninitialized contract guards', () => {
   let zkAppKey: PrivateKey;
   let zkAppAddress: PublicKey;
   let zkApp: PetZkApp;
+  let tokenKey: PrivateKey;
+  let tokenAddress: PublicKey;
 
   beforeAll(async () => {
     // Re-compile to ensure clean o1js global context for this describe block
+    await PetToken.compile();
     await PetLifecycle.compile();
     await PetZkApp.compile();
 
     const Local = await Mina.LocalBlockchain({ proofsEnabled: false });
     Mina.setActiveInstance(Local);
     [deployer] = Local.testAccounts;
+
+    // Deploy PetToken
+    tokenKey = PrivateKey.random();
+    tokenAddress = tokenKey.toPublicKey();
+    const petToken = new PetToken(tokenAddress);
+    const tokenTx = await Mina.transaction(deployer, async () => {
+      AccountUpdate.fundNewAccount(deployer);
+      await petToken.deploy();
+    });
+    await tokenTx.prove();
+    await tokenTx.sign([deployer.key, tokenKey]).send();
 
     zkAppKey = PrivateKey.random();
     zkAppAddress = zkAppKey.toPublicKey();
@@ -643,10 +731,15 @@ describe('PetZkApp -- uninitialized contract guards', () => {
 
     await expect(async () => {
       const tx = await Mina.transaction(deployer, async () => {
-        await zkApp.applyProof(genesisProof, operatorPubkey, operatorSig);
+        await zkApp.applyProof(
+          genesisProof,
+          operatorPubkey,
+          operatorSig,
+          tokenAddress
+        );
       });
       await tx.prove();
-      await tx.sign([deployer.key]).send();
+      await tx.sign([deployer.key, operatorKey]).send();
     }).rejects.toThrow();
   });
 

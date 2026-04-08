@@ -21,6 +21,9 @@ export {
 // SmartContract and proof class for method signatures
 export { PetZkApp, PetProof } from './PetZkApp';
 
+// PET Token contract
+export { PetToken } from './PetToken';
+
 // Constant tables
 export {
   ActionType,

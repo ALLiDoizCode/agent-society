@@ -22,12 +22,14 @@ import {
   method,
   Field,
   PublicKey,
+  UInt64,
   Poseidon,
   Signature,
   Provable,
 } from 'o1js';
 
 import { PetLifecycleProof } from './PetLifecycle';
+import { PetToken } from './PetToken';
 
 /**
  * Concrete proof class for use in @method signatures.
@@ -132,16 +134,22 @@ export class PetZkApp extends SmartContract {
   }
 
   /**
-   * Apply a recursive batch proof to update on-chain state.
+   * Apply a recursive batch proof to update on-chain state and burn PET tokens.
+   *
+   * The burn amount is the delta between the proof's totalSpent and the on-chain
+   * totalSpent. When burnAmount is UInt64.zero (base actions only), the burn
+   * still executes as a valid no-op -- o1js method calls are unconditional.
    *
    * @param proof - Recursive batch proof from PetLifecycle
    * @param operatorPubkey - Operator's full public key (x must match stored operatorX)
    * @param operatorSig - Operator signature over [lifecycleHash]
+   * @param petTokenAddress - Address of the deployed PetToken contract
    */
   @method async applyProof(
     proof: PetProof,
     operatorPubkey: PublicKey,
-    operatorSig: Signature
+    operatorSig: Signature,
+    petTokenAddress: PublicKey
   ): Promise<void> {
     // Verify the recursive proof
     proof.verify();
@@ -160,7 +168,7 @@ export class PetZkApp extends SmartContract {
     const onChainStage = this.stage.getAndRequireEquals();
     this.ownerX.getAndRequireEquals();
     const onChainOperatorX = this.operatorX.getAndRequireEquals();
-    this.totalSpent.getAndRequireEquals();
+    const onChainTotalSpent = this.totalSpent.getAndRequireEquals();
 
     // Assert operator identity: passed pubkey x matches stored operatorX
     operatorPubkey.x.assertEquals(onChainOperatorX, 'operator pubkey mismatch');
@@ -181,6 +189,17 @@ export class PetZkApp extends SmartContract {
     operatorSig
       .verify(operatorPubkey, [output.lifecycleHash])
       .assertTrue('invalid operator signature');
+
+    // Compute burn amount: delta between proof totalSpent and on-chain totalSpent.
+    // On-chain totalSpent is stored as Field; convert to UInt64 for arithmetic.
+    // This is safe because totalSpent values originate from UInt64 arithmetic.
+    const previousTotalSpent = UInt64.Unsafe.fromField(onChainTotalSpent);
+    const burnAmount = output.totalSpent.sub(previousTotalSpent);
+
+    // Burn PET tokens from operator's token account.
+    // This executes unconditionally -- when burnAmount is zero, it's a valid no-op.
+    const petToken = new PetToken(petTokenAddress);
+    await petToken.burn(operatorPubkey, burnAmount);
 
     // Update mutable state fields (petId and ownerX are immutable)
     this.brainHash.set(output.brainHash);

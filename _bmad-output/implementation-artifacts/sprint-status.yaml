@@ -233,7 +233,7 @@ development_status:
   11-5-pet-dvm-handler: done
   11-6-peer-enablement: done
   11-7-pet-dvm-e2e-test: done
-  11-8-pet-token-on-mina: ready-for-dev
+  11-8-pet-token-on-mina: review
   11-9-ditto-pet-dvm-integration: ready-for-dev
   11-10-ditto-proof-status-ui: backlog
   11-11-cross-chain-dvm-pricing: backlog

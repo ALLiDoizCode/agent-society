@@ -1,6 +1,6 @@
 # Story 11.8: PET Token on Mina
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -64,30 +64,30 @@ so that every pet interaction has an on-chain economic cost enforced by the ZK c
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create PetToken contract (AC: 1)
-  - [ ] 1.1 Create `packages/pet-circuit/src/PetToken.ts` extending `TokenContract`
-  - [ ] 1.2 Implement `init()` with token symbol `PET` and zero circulation
-  - [ ] 1.3 Implement `approveBase(forest)` with `this.checkZeroBalanceChange(forest)`
-  - [ ] 1.4 Implement `mint(receiver, amount, adminSignature)` with signature verification
-  - [ ] 1.5 Implement `burn(burner, amount)` that decrements circulation
+- [x] Task 1: Create PetToken contract (AC: 1)
+  - [x] 1.1 Create `packages/pet-circuit/src/PetToken.ts` extending `TokenContract`
+  - [x] 1.2 Implement `init()` with token symbol `PET` and zero circulation
+  - [x] 1.3 Implement `approveBase(forest)` with `this.checkZeroBalanceChange(forest)`
+  - [x] 1.4 Implement `mint(receiver, amount, adminSignature)` with signature verification
+  - [x] 1.5 Implement `burn(burner, amount)` that decrements circulation
 
-- [ ] Task 2: Integrate token burn into PetZkApp (AC: 2)
-  - [ ] 2.1 Add `petTokenAddress: PublicKey` parameter to `applyProof`
-  - [ ] 2.2 Convert on-chain `totalSpent` Field to UInt64 and compute `burnAmount` delta
-  - [ ] 2.3 Call `petToken.burn(operatorAddress, burnAmount)` unconditionally (zero-amount burn is a valid no-op)
-  - [ ] 2.4 Update existing PetZkApp tests to deploy PetToken + fund operator token accounts + pass `petTokenAddress`
+- [x] Task 2: Integrate token burn into PetZkApp (AC: 2)
+  - [x] 2.1 Add `petTokenAddress: PublicKey` parameter to `applyProof`
+  - [x] 2.2 Convert on-chain `totalSpent` Field to UInt64 and compute `burnAmount` delta
+  - [x] 2.3 Call `petToken.burn(operatorAddress, burnAmount)` unconditionally (zero-amount burn is a valid no-op)
+  - [x] 2.4 Update existing PetZkApp tests to deploy PetToken + fund operator token accounts + pass `petTokenAddress`
 
-- [ ] Task 3: Create PetToken unit tests (AC: 3)
-  - [ ] 3.1 Create `packages/pet-circuit/src/PetToken.test.ts`
-  - [ ] 3.2 Test deploy, mint, transfer (net-zero forest), burn, zero-burn no-op, unauthorized mint rejection
+- [x] Task 3: Create PetToken unit tests (AC: 3)
+  - [x] 3.1 Create `packages/pet-circuit/src/PetToken.test.ts`
+  - [x] 3.2 Test deploy, mint, transfer (net-zero forest), burn, zero-burn no-op, unauthorized mint rejection
 
-- [ ] Task 4: Create PetZkApp + PetToken integration test (AC: 4)
-  - [ ] 4.1 Create `packages/pet-circuit/src/PetToken.integration.test.ts`
-  - [ ] 4.2 Test full lifecycle: deploy both -> mint to operator -> interact -> applyProof -> verify burn
+- [x] Task 4: Create PetZkApp + PetToken integration test (AC: 4)
+  - [x] 4.1 Create `packages/pet-circuit/src/PetToken.integration.test.ts`
+  - [x] 4.2 Test full lifecycle: deploy both -> mint to operator -> interact -> applyProof -> verify burn
 
-- [ ] Task 5: Export and build verification (AC: 5)
-  - [ ] 5.1 Add `PetToken` export to `packages/pet-circuit/src/index.ts`
-  - [ ] 5.2 Run `pnpm build`, `pnpm lint`, `pnpm test` in `packages/pet-circuit/`
+- [x] Task 5: Export and build verification (AC: 5)
+  - [x] 5.1 Add `PetToken` export to `packages/pet-circuit/src/index.ts`
+  - [x] 5.2 Run `pnpm build`, `pnpm lint`, `pnpm test` in `packages/pet-circuit/`
 
 ## Dev Notes
 
@@ -240,16 +240,34 @@ o1js requires specific compilation order:
 
 ### Agent Model Used
 
-TBD (filled during development)
+Claude Opus 4.6 (1M context)
 
 ### Debug Log References
 
+- TokenContract deploy error: `Update_not_permitted_token_symbol` -- resolved by moving `tokenSymbol.set('PET')` from `init()` to `deploy()` override, since TokenContract.deploy() sets `access: proofOrSignature()` before init's account update executes
+- applyProof signature error: `Invalid signature on account_update` -- resolved by adding operator key to transaction signing (token burn creates an account update modifying operator's token balance that requires their signature)
+
 ### Completion Notes List
 
+- **Task 1**: Created `PetToken.ts` extending `TokenContract` with `deploy()` override for token symbol, `init()` for circulation state, `approveBase()` with zero-balance-change, `mint()` with admin signature verification, and `burn()` with circulation tracking
+- **Task 2**: Modified `PetZkApp.applyProof()` to accept `petTokenAddress: PublicKey`, compute burn delta via `UInt64.Unsafe.fromField()` conversion, and call `petToken.burn()` unconditionally. Used approach (a) -- direct modification, no fallback needed
+- **Task 3**: ATDD tests from prior phase pass -- 6/6 PetToken unit tests (deploy, mint, transfer, burn, zero-burn no-op, unauthorized mint rejection)
+- **Task 4**: ATDD integration tests from prior phase pass -- 6/6 tests (deploy both, mint to operator, initialize pet, shop item burn, zero-burn base action, insufficient balance revert)
+- **Task 5**: Added `PetToken` export to index.ts. Build (tsc), lint (0 errors, 53 pre-existing warnings), and all 129 unit tests pass
+
 ### File List
+
+- `packages/pet-circuit/src/PetToken.ts` -- CREATED: PET custom token contract
+- `packages/pet-circuit/src/PetZkApp.ts` -- MODIFIED: added petTokenAddress param + token burn to applyProof
+- `packages/pet-circuit/src/index.ts` -- MODIFIED: added PetToken export
+- `packages/pet-circuit/src/PetZkApp.test.ts` -- MODIFIED: deploy PetToken, fund operator token accounts, pass petTokenAddress, sign with operator key
+- `packages/pet-circuit/src/PetZkApp.integration.test.ts` -- MODIFIED: deploy PetToken, mint to operator, pass petTokenAddress, sign with operator key
+- `packages/pet-circuit/src/PetToken.test.ts` -- MODIFIED: removed unused variable (lint fix)
+- `packages/pet-circuit/src/PetToken.integration.test.ts` -- UNMODIFIED: ATDD tests from prior phase worked as-is
 
 ### Change Log
 
 | Date | Summary |
 |------|---------|
 | 2026-04-08 | Adversarial review: fixed 10 issues -- Field-to-UInt64 conversion gap, unconditional burn semantics, stage-action compatibility in AC-4, backward compat approach, incomplete token cost table, transfer test complexity, fallback ranking, compilation order in AC-4, zero-burn test case added to AC-3 |
+| 2026-04-08 | Implementation complete: PetToken contract created, PetZkApp.applyProof modified with token burn, all existing tests updated for backward compatibility, all 129 unit tests + 6 integration tests passing, build + lint clean |

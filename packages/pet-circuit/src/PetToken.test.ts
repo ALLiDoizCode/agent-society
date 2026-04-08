@@ -26,7 +26,6 @@ import { PetToken } from './PetToken';
 
 describe('PetToken Custom Token Contract (Unit Tests -- proofsEnabled: false)', () => {
   let deployer: Mina.TestPublicKey;
-  let deployerKey: ReturnType<typeof PrivateKey.random>;
   let tokenAppKey: PrivateKey;
   let tokenAppAddress: PublicKey;
   let petToken: PetToken;
@@ -116,7 +115,11 @@ describe('PetToken Custom Token Contract (Unit Tests -- proofsEnabled: false)', 
       // Fund receiver2's token account (first time receiving custom tokens)
       AccountUpdate.fundNewAccount(deployer);
       // Transfer from receiver to receiver2 using internal.send
-      await petToken.transfer(receiverAddress, receiver2Address, transferAmount);
+      await petToken.transfer(
+        receiverAddress,
+        receiver2Address,
+        transferAmount
+      );
     });
     await tx.prove();
     await tx.sign([deployer.key, receiverKey]).send();
