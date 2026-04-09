@@ -46,6 +46,17 @@ export type {
 } from './handler/types';
 export type { BuildPetInteractionEventParams } from './handler/buildPetInteractionEvent';
 
+// Checkpoint
+export { CheckpointManager } from './checkpoint/CheckpointManager';
+export { CheckpointError, CheckpointConfigError } from './checkpoint/types';
+export type {
+  CheckpointConfig,
+  CheckpointResult,
+  CheckpointEvent,
+  CheckpointErrorCode,
+  ArweaveUploadAdapter,
+} from './checkpoint/types';
+
 // Pricing
 export { calculatePetInteractionPrice } from './pricing/calculatePetInteractionPrice';
 export {

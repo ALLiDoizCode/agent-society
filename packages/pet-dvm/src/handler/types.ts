@@ -14,6 +14,7 @@ import type {
   InteractionResult,
 } from '../engine/types';
 import type { PetPricingConfig } from '../pricing/types';
+import type { CheckpointConfig } from '../checkpoint/types';
 
 // ============================================================
 // Nostr Event (minimal local type to avoid nostr-tools resolution issues)
@@ -98,10 +99,18 @@ export interface PetDvmConfig {
    * When omitted, payment validation is skipped (backward-compatible default).
    */
   pricingConfig?: PetPricingConfig;
+  /**
+   * Optional Arweave checkpoint configuration.
+   * When set, the handler checkpoints the .mv2 brain file to Arweave every
+   * checkpointThreshold interactions (fire-and-forget, non-fatal).
+   * When omitted, checkpointing is skipped (backward-compatible default).
+   */
+  checkpointConfig?: CheckpointConfig;
 }
 
 // Re-export for consumers who import from handler/types
 export type { PetPricingConfig };
+export type { CheckpointConfig };
 
 // ============================================================
 // Pet Interaction Request

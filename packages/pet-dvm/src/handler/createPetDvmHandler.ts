@@ -23,6 +23,7 @@ import { PetStateManager } from './PetStateManager';
 import { ProofQueue } from './ProofQueue';
 import { buildPetInteractionEvent } from './buildPetInteractionEvent';
 import { calculatePetInteractionPrice } from '../pricing/calculatePetInteractionPrice';
+import { CheckpointManager } from '../checkpoint/CheckpointManager';
 
 /**
  * Creates a Pet DVM handler for Kind 5900 pet interaction requests.
@@ -35,6 +36,10 @@ export function createPetDvmHandler(
 ): (ctx: HandlerContext) => Promise<HandlerResponse> {
   const stateManager = new PetStateManager();
   const proofQueue = new ProofQueue(config.proofBatchSize ?? 10);
+  // Instantiate CheckpointManager once at factory time (not per-request)
+  const checkpointManager = config.checkpointConfig
+    ? new CheckpointManager(config.checkpointConfig)
+    : undefined;
 
   return async (ctx: HandlerContext): Promise<HandlerResponse> => {
     // a. Decode event via ctx.decode()
@@ -200,6 +205,18 @@ export function createPetDvmHandler(
 
     // l. Save updated state
     stateManager.save(request.blobbiId, newState);
+
+    // l2. Fire-and-forget Arweave checkpoint if threshold reached
+    if (checkpointManager !== undefined) {
+      const shouldCheckpoint = checkpointManager.recordInteraction(
+        request.blobbiId
+      );
+      if (shouldCheckpoint) {
+        checkpointManager.checkpoint(request.blobbiId, brainHash).catch(() => {
+          // CheckpointManager already emits 'error' event — swallow here
+        });
+      }
+    }
 
     // m. Check evolution eligibility (note only, no auto-evolve in this story)
     const evolutionCheck = engine.checkEvolution();
