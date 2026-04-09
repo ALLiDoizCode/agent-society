@@ -244,7 +244,7 @@ development_status:
   # Extension: pets crawl procedurally-generated dungeons via rot.js + DVM compute
   # Dependencies: 11-4 (Game Engine), 11-5 (Pet DVM Handler pattern)
   # Core library: rot.js (BSD-3, TypeScript, seedable RNG, headless)
-  11-15-dungeon-engine-core: backlog
+  11-15-dungeon-engine-core: ready-for-dev
   11-16-pet-dungeon-stat-bridge: backlog
   11-17-dungeon-dvm-handler: backlog
   11-18-dungeon-adventure-log: backlog
