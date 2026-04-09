@@ -105,7 +105,13 @@ export interface DungeonSkillDescriptorConfig {
 const MAX_SEED_LENGTH = 512;
 
 /** Known stat field names — validated individually to prevent prototype-chain access. */
-const STAT_FIELDS = ['hunger', 'happiness', 'health', 'hygiene', 'energy'] as const;
+const STAT_FIELDS = [
+  'hunger',
+  'happiness',
+  'health',
+  'hygiene',
+  'energy',
+] as const;
 
 /**
  * Type guard for valid StatValues parsed from JSON.
@@ -133,7 +139,12 @@ function isPetStatsJson(v: unknown): v is StatValues {
 function assertResolvedStatsValid(stats: StatValues, context: string): void {
   for (const k of STAT_FIELDS) {
     const val = stats[k];
-    if (typeof val !== 'number' || !Number.isFinite(val) || val < 1 || val > 100) {
+    if (
+      typeof val !== 'number' ||
+      !Number.isFinite(val) ||
+      val < 1 ||
+      val > 100
+    ) {
       throw new Error(
         `${context}: resolved field "${k}" = ${val} is outside [1, 100] or not finite`
       );
@@ -378,7 +389,10 @@ export function buildDungeonDvmSkillDescriptor(
     name: config.dungeonId,
     version: '1.0',
     kinds: [5250],
-    features: config.features != null ? [...config.features] : [...DEFAULT_DUNGEON_FEATURES],
+    features:
+      config.features != null
+        ? [...config.features]
+        : [...DEFAULT_DUNGEON_FEATURES],
     inputSchema: {
       type: 'object',
       required: ['p-state', 'dungeon', 'seed'],

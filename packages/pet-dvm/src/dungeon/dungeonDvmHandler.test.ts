@@ -287,7 +287,9 @@ describe('createDungeonDvmHandler — lifecycle (AC-8)', () => {
       energy: 85,
     };
     const resolvePetStatsMock = jest.fn().mockResolvedValue(resolvedStats);
-    const configWithResolver = makeConfig({ resolvePetStats: resolvePetStatsMock });
+    const configWithResolver = makeConfig({
+      resolvePetStats: resolvePetStatsMock,
+    });
 
     // No pet-stats tag — mode-1 should succeed without it
     const ctx = makeCtx({
@@ -316,7 +318,9 @@ describe('createDungeonDvmHandler — lifecycle (AC-8)', () => {
     };
     // Synchronous resolver — returns StatValues directly (not a Promise)
     const syncResolver = jest.fn().mockReturnValue(syncStats);
-    const configWithSyncResolver = makeConfig({ resolvePetStats: syncResolver });
+    const configWithSyncResolver = makeConfig({
+      resolvePetStats: syncResolver,
+    });
 
     const ctx = makeCtx({
       kind5250Tags: [
@@ -352,7 +356,16 @@ describe('createDungeonDvmHandler — error paths (AC-9)', () => {
         // p-state deliberately omitted
         ['dungeon', 'kobold-caves'],
         ['seed', 'test-seed-missing-pstate'],
-        ['pet-stats', JSON.stringify({ hunger: 60, happiness: 70, health: 80, hygiene: 50, energy: 90 })],
+        [
+          'pet-stats',
+          JSON.stringify({
+            hunger: 60,
+            happiness: 70,
+            health: 80,
+            hygiene: 50,
+            energy: 90,
+          }),
+        ],
       ],
     });
     const result = await handler(ctx);
@@ -369,7 +382,16 @@ describe('createDungeonDvmHandler — error paths (AC-9)', () => {
         ['p-state', 'abc123hash'],
         // dungeon deliberately omitted
         ['seed', 'test-seed-missing-dungeon'],
-        ['pet-stats', JSON.stringify({ hunger: 60, happiness: 70, health: 80, hygiene: 50, energy: 90 })],
+        [
+          'pet-stats',
+          JSON.stringify({
+            hunger: 60,
+            happiness: 70,
+            health: 80,
+            hygiene: 50,
+            energy: 90,
+          }),
+        ],
       ],
     });
     const result = await handler(ctx);
@@ -436,7 +458,16 @@ describe('createDungeonDvmHandler — error paths (AC-9)', () => {
         ['p-state', 'abc123hash'],
         ['dungeon', 'kobold-caves'],
         ['seed', '   '], // whitespace-only — should be invalid
-        ['pet-stats', JSON.stringify({ hunger: 60, happiness: 70, health: 80, hygiene: 50, energy: 90 })],
+        [
+          'pet-stats',
+          JSON.stringify({
+            hunger: 60,
+            happiness: 70,
+            health: 80,
+            hygiene: 50,
+            energy: 90,
+          }),
+        ],
       ],
     });
 
@@ -455,7 +486,16 @@ describe('createDungeonDvmHandler — error paths (AC-9)', () => {
         ['p-state', 'abc123hash'],
         ['dungeon', 'kobold-caves'],
         ['seed', 'a'.repeat(513)], // 513 chars — exceeds MAX_SEED_LENGTH=512
-        ['pet-stats', JSON.stringify({ hunger: 60, happiness: 70, health: 80, hygiene: 50, energy: 90 })],
+        [
+          'pet-stats',
+          JSON.stringify({
+            hunger: 60,
+            happiness: 70,
+            health: 80,
+            hygiene: 50,
+            energy: 90,
+          }),
+        ],
       ],
     });
 
@@ -737,8 +777,8 @@ describe('createDungeonDvmHandler — full kind:5250 → kind:6250 flow (AC-12)'
     expect(findTag('request')).toBe('test-event-id-11-17');
     expect(findTag('status')).toBe('ok');
     expect(findTag('dungeon')).toBe('kobold-caves');
-    expect(findTag('p-state-hash')).toBe('abc123hash');  // AC-6: echoed from request
-    expect(findTag('seed')).toBe('full-flow-seed-12');   // AC-6: echoed from request
+    expect(findTag('p-state-hash')).toBe('abc123hash'); // AC-6: echoed from request
+    expect(findTag('seed')).toBe('full-flow-seed-12'); // AC-6: echoed from request
 
     // Verify response content has all required fields (AC-12)
     const decoded = JSON.parse(

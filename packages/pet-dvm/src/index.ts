@@ -97,6 +97,16 @@ export type {
   DungeonSkillDescriptorConfig,
 } from './dungeon/dungeonDvmHandler';
 
+// Dungeon Adventure Log
+export {
+  generateAdventureLog,
+  uploadAdventureLog,
+} from './dungeon/adventureLog';
+export type {
+  AdventureLogEntry,
+  DungeonAdventureLogConfig,
+} from './dungeon/adventureLog';
+
 // Pricing
 export { calculatePetInteractionPrice } from './pricing/calculatePetInteractionPrice';
 export {

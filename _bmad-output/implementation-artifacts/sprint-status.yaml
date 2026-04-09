@@ -247,7 +247,7 @@ development_status:
   11-15-dungeon-engine-core: done
   11-16-pet-dungeon-stat-bridge: done
   11-17-dungeon-dvm-handler: done
-  11-18-dungeon-adventure-log: backlog
+  11-18-dungeon-adventure-log: done
   epic-11-retrospective: optional
 
   # Epic 12: Token Swap Primitive — NIP-59 Gift-Wrapped ILP Micropayment Swaps
