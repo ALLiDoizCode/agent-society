@@ -373,7 +373,7 @@ function deriveCellularRooms(
   width: number,
   height: number
 ): Room[] {
-  const passable: Array<[number, number]> = [];
+  const passable: [number, number][] = [];
   cellular.create((x: number, y: number, contents: number) => {
     if (contents === 0) passable.push([x, y]);
   });

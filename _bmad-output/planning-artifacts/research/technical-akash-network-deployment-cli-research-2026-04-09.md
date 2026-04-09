@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3]
+stepsCompleted: [1, 2, 3, 4, 5, 6]
 inputDocuments: []
 workflowType: 'research'
 lastStep: 1
@@ -22,7 +22,9 @@ source_verification: true
 
 ## Research Overview
 
-[Research overview and methodology will be appended here]
+This technical research document provides a comprehensive analysis of Akash Network's CLI deployment system — covering the `provider-services` CLI toolchain, SDL manifest format, reverse-auction marketplace architecture, escrow payment model, and the complete deployment lifecycle from wallet creation through operational management. The research was conducted using current web sources (April 2026) with multi-source verification across official Akash documentation, GitHub repositories, Messari quarterly reports, and community resources.
+
+Key findings include: Akash's four-layer architecture (Blockchain, Application, Provider, User) with clear on-chain/off-chain separation; a mature CLI workflow with 10 discrete steps; 290+ ready-made SDL templates; 50-85% cost savings vs centralized cloud; and a rapidly evolving platform with AkashML managed inference, BME tokenomics, and confidential computing. The full executive summary and strategic recommendations are in the Research Synthesis section below.
 
 ---
 
@@ -382,4 +384,452 @@ For the Claude Agent Skill, the architectural patterns suggest these design cons
 5. **Error Recovery** — Overdraw protection means the skill should check/warn about escrow balance. Failed deployments should be closed to reclaim deposits.
 6. **Provider Selection** — Audited attributes and pricing comparison are key decision points the skill should help users navigate.
 
-<!-- Content will be appended sequentially through research workflow steps -->
+## Implementation Approaches and Technology Adoption
+
+### Deployment Workflow — Practical Step-by-Step
+
+The complete implementation workflow for deploying on Akash via CLI:
+
+**Phase 1 — Setup (One-Time)**
+1. Install `provider-services` CLI (Homebrew on macOS, binary on Linux)
+2. Create wallet: `provider-services keys add $AKASH_KEY_NAME`
+3. Fund wallet with minimum 0.5 AKT
+4. Set environment variables (AKASH_KEY_NAME, AKASH_NODE, AKASH_CHAIN_ID, gas settings)
+5. (Optional) Generate mTLS certificate for provider communication
+
+**Phase 2 — Define Deployment**
+1. Write SDL manifest (`deploy.yaml`) defining services, compute profiles, placement, pricing
+2. Validate SDL structure (version `"2.0"`, required sections, resource formats)
+
+**Phase 3 — Deploy**
+1. `provider-services tx deployment create deploy.yml --from $AKASH_KEY_NAME`
+2. Wait ~30 seconds for provider bids
+3. `provider-services query market bid list --owner $AKASH_ADDRESS` — review bids
+4. `provider-services tx market lease create --dseq <seq> --provider <addr> --from $AKASH_KEY_NAME`
+5. `provider-services send-manifest deploy.yml --dseq <seq> --provider <addr> --from $AKASH_KEY_NAME`
+
+**Phase 4 — Operate**
+- Status: `provider-services lease-status --dseq <seq> --provider <addr>`
+- Logs: `provider-services lease-logs --dseq <seq> --provider <addr>`
+- Shell: `provider-services lease-shell --dseq <seq> --provider <addr> --service <name> --tty`
+- Update: `provider-services tx deployment update deploy.yml --dseq <seq>` + re-send manifest
+- Close: `provider-services tx deployment close --dseq <seq> --from $AKASH_KEY_NAME`
+
+_Source: [CLI Common Tasks](https://akash.network/docs/developers/deployment/cli/common-tasks/), [Shell Access](https://docs.akash.network/features/deployment-shell-access)_
+
+### SDL Validation — Common Errors and Best Practices
+
+**Critical Validation Rules:**
+- Persistent storage mount paths must be **absolute** (e.g., `/data` not `data`)
+- Storage names in `profiles` stanza must match names in `services` stanza
+- Each persistent volume needs a unique mount point — no duplicates
+- `params > storage` section must contain both volume name and mount point
+- Version must be exactly `"2.0"`
+
+**SDL Best Practices:**
+- Use the [SDL Examples Library](https://akash.network/docs/developers/deployment/akash-sdl/examples-library/) as starting points
+- Test with minimal resources first, scale up after verification
+- Set realistic pricing — too low means no bids, too high wastes escrow
+- Always specify `global: true` on at least one port for external access
+
+_Source: [SDL Validation Tests](https://akash.network/docs/akash-end-to-end-testing-provider/providerrepocoverage/), [SDL README](https://github.com/akash-network/docs/blob/master/sdl/README.md)_
+
+### Template Library — 290+ Ready-Made Deployments
+
+The [Awesome Akash](https://github.com/akash-network/awesome-akash) repository provides production-ready SDL templates across 30+ categories:
+
+| Category | Count | Notable Examples |
+|----------|-------|------------------|
+| **AI - GPU** | 80+ | DeepSeek-R1, Llama-3.3-70B, ComfyUI, AUTOMATIC1111 |
+| **AI - CPU** | 26 | Ollama, Flowise, Weaviate |
+| **Databases** | 15+ | PostgreSQL, MongoDB, Redis, CockroachDB |
+| **Web Apps** | 15+ | WordPress, Ghost, Wiki.js, Nginx |
+| **Dev Tools** | 10+ | Code-Server, Jupyter, Jenkins, Gitea |
+| **Blockchain** | 10+ | Bitcoin, Ethereum, Polkadot nodes |
+| **Gaming** | 8+ | Minecraft, CS:GO, Palworld |
+| **DeFi** | 8+ | Uniswap, PancakeSwap, Curve |
+
+_Source: [Awesome Akash GitHub](https://github.com/akash-network/awesome-akash), [SDL Examples Library](https://akash.network/docs/developers/deployment/akash-sdl/examples-library/)_
+
+### Cost Optimization Strategies
+
+**Pricing Model:**
+- Reverse auction — set your max price, providers bid lower
+- Pricing in `uakt` (micro-AKT): 1 AKT = 1,000,000 uakt
+- Block-based payments from escrow deposit
+- [Usage Calculator](https://akash.network/pricing/usage-calculator/) for cost estimation
+
+**Optimization Tactics:**
+- Start with minimum resources, scale based on actual usage
+- Compare multiple provider bids — prices vary significantly
+- Use audited attributes to filter for quality providers
+- Monitor escrow balance to avoid overdraw/deployment closure
+- GPU pricing example: A100 at ~$1.10/hr (vs $3-5/hr on centralized clouds)
+
+_Cost Advantage: Akash marketplace typically 50-85% cheaper than AWS/GCP/Azure for equivalent compute_
+_Source: [Akash Pricing](https://akash.network/pricing/usage-calculator/), [Oreate AI Blog](https://www.oreateai.com/blog/akash-network-unlocking-affordable-gpu-power-for-the-ai-revolution/21aa9d1ec956c9a35e294b20106ac197)_
+
+### Risk Assessment and Limitations
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| **Data persistence** | Data lost on provider migration or lease expiry | Use persistent storage SDL; backup critical data externally |
+| **AKT price volatility** | Cost unpredictability for long-term deployments | Use stablecoin payments where supported; monitor escrow closely |
+| **Provider reliability** | Workload interruption if provider goes offline | Use audited providers; implement health checks; have redeployment plan |
+| **GPU availability** | Cutting-edge GPUs may have limited supply | Use Starcluster committed pool; be flexible on GPU model |
+| **No managed services** | No equivalent to RDS, S3, Lambda | Deploy your own databases/storage via SDL templates |
+| **Learning curve** | CLI + blockchain concepts + SDL syntax | Use templates, skill guides, Akash Console for simpler deployments |
+
+_Source: [DAIC Capital Analysis](https://daic.capital/blog/akash-network-blockchain), [StakeCito](https://www.stakecito.com/blog/understanding-akash-network-the-future-of-decentralized-cloud-computing)_
+
+## Technical Research Recommendations
+
+### Skill Design Recommendations
+
+Based on this research, the Claude Agent Skill for Akash CLI deployment should cover:
+
+1. **Setup Guide** — Installation, wallet creation, environment configuration, funding
+2. **SDL Authoring** — Template selection, resource specification, pricing strategy, validation rules
+3. **Deployment Lifecycle** — Create → bid review → lease → manifest → verify (with exact commands)
+4. **Operations** — Status checks, log viewing, shell access, updates, closure
+5. **Troubleshooting** — Common SDL errors, bid failures, escrow issues, provider problems
+6. **Cost Guidance** — Pricing estimation, bid comparison, escrow management
+7. **Advanced Features** — Persistent storage, IP leases, GPU resources, AuthZ delegation
+
+### Key CLI Commands Reference (for Skill)
+
+```bash
+# Setup
+provider-services keys add $AKASH_KEY_NAME
+provider-services tx cert generate client  # Optional mTLS
+
+# Deploy
+provider-services tx deployment create deploy.yml --from $AKASH_KEY_NAME
+provider-services query market bid list --owner $AKASH_ADDRESS
+provider-services tx market lease create --dseq <seq> --provider <addr> --from $AKASH_KEY_NAME
+provider-services send-manifest deploy.yml --dseq <seq> --provider <addr> --from $AKASH_KEY_NAME
+
+# Operate
+provider-services lease-status --dseq <seq> --provider <addr>
+provider-services lease-logs --dseq <seq> --provider <addr>
+provider-services lease-shell --dseq <seq> --provider <addr> --service <svc> --tty
+provider-services tx deployment update deploy.yml --dseq <seq> --from $AKASH_KEY_NAME
+provider-services tx deployment close --dseq <seq> --from $AKASH_KEY_NAME
+
+# Query
+provider-services query provider list
+provider-services query deployment get --dseq <seq> --owner <addr>
+provider-services query market lease list --owner <addr>
+
+# AuthZ
+provider-services tx authz grant <grantee> generic --msg-type /akash.deployment.v1beta3.MsgCreateDeployment --from <wallet>
+```
+
+### Success Metrics for Skill
+
+- User can go from zero to running deployment in a single conversation
+- SDL validation errors caught before on-chain submission
+- Cost estimation provided before deployment creation
+- Provider selection guidance based on workload type
+- Complete operational lifecycle covered (deploy, monitor, update, close)
+
+---
+
+## Research Synthesis: Deploying on Akash Network via CLI — Comprehensive Technical Analysis
+
+### Executive Summary
+
+Akash Network is the leading decentralized compute marketplace, built on Cosmos SDK with CometBFT consensus, offering a Kubernetes-based cloud platform where tenants deploy Docker containers through a reverse-auction marketplace. The `provider-services` CLI (v0.10.0) provides complete deployment lifecycle management — from wallet creation and SDL manifest authoring through bid selection, lease management, and operational monitoring. With 428% year-over-year usage growth, 70%+ GPU utilization, and 34,300 new leases in Q4 2025 alone, Akash has established itself as the dominant DePIN compute platform.
+
+For the purpose of creating a Claude Agent Skill, the CLI deployment workflow is well-structured and automatable: all configuration is environment-variable driven, the SDL format is declarative YAML (similar to Docker Compose), and the marketplace lifecycle follows a deterministic state machine (Order → Bid → Lease → Active → Closed). The 290+ SDL templates in Awesome Akash provide ready-made starting points across 30+ application categories. The platform's 2026 roadmap — including AkashML managed inference, BME tokenomics (buy-and-burn AKT → ACT stablecoin), confidential computing, and edge AI — signals continued rapid evolution that the skill should accommodate.
+
+**Key Technical Findings:**
+
+- `provider-services` CLI replaces legacy `akash` command; supports JWT (default) or mTLS authentication
+- SDL v2.0 covers services, compute profiles, placement/pricing, persistent storage, IP leases, and GPU resources
+- Three API layers (gRPC:9090, REST:1317, CometBFT RPC:26657) with gRPC as single source of truth
+- Escrow-based block payments with multi-depositor support; minimum 0.5 AKT deposit
+- AuthZ delegation enables CI/CD without private key exposure
+- Cost advantage: 50-85% cheaper than AWS/GCP/Azure; A100 GPU at ~$1.10/hr
+
+**Technical Recommendations:**
+
+1. Build the skill around the 10-step CLI lifecycle with exact command templates
+2. Include SDL authoring guidance with validation rules and template selection
+3. Cover cost estimation, bid comparison, and escrow management
+4. Address data persistence limitations and provider reliability risks
+5. Keep skill extensible for AkashML, confidential computing, and BME/ACT features
+
+### Table of Contents
+
+1. Technical Research Introduction and Methodology
+2. Akash Network Technical Landscape and Architecture
+3. CLI Implementation — Complete Deployment Workflow
+4. Technology Stack and Platform Evolution
+5. Integration and Interoperability Patterns
+6. Performance, Scalability, and Cost Analysis
+7. Security and Trust Architecture
+8. Strategic Recommendations for Skill Design
+9. Implementation Roadmap and Risk Assessment
+10. Future Technical Outlook (2026+)
+11. Research Methodology and Source Documentation
+12. Appendices and Quick Reference
+
+### 1. Technical Research Introduction and Methodology
+
+#### Technical Research Significance
+
+The cloud computing market is projected at $650 billion in 2026, and decentralized alternatives are gaining traction as enterprises face pricing power concerns, data sovereignty issues, and high-profile outages from centralized providers. Akash Network, often called the "Airbnb for cloud computing," sits at the intersection of DePIN infrastructure, AI compute demand, and blockchain settlement — making it a strategically significant platform for developers seeking cost-effective, censorship-resistant deployment.
+
+_Technical Importance: Akash is the largest decentralized compute marketplace by usage, with Kubernetes-compatible GPU markets reporting 428% YoY growth_
+_Business Impact: 50-85% cost reduction vs centralized cloud enables new categories of economically viable AI/compute workloads_
+_Source: [DePIN Scan](https://depinscan.io/news/2026-02-19/the-compute-revolution-decentralized-networks-vs-traditional-cloud-services), [WEEX Market Analysis](https://www.weex.com/questions/article/is-akash-a-good-coin-a-2026-market-analysis-17452)_
+
+#### Technical Research Methodology
+
+- **Technical Scope**: CLI toolchain, SDL specification, marketplace architecture, payment model, provider infrastructure, security, operational workflows
+- **Data Sources**: Official Akash docs (akash.network/docs), GitHub repos (akash-network/*), Messari quarterly reports (Q1-Q4 2025), community resources, npm packages
+- **Analysis Framework**: Architecture-first analysis → integration patterns → implementation workflow → risk assessment
+- **Time Period**: Current as of April 2026, with historical context from Mainnet4 through Mainnet14
+- **Technical Depth**: CLI command-level detail suitable for Claude Agent Skill authoring
+
+#### Technical Research Goals Achievement
+
+**Original Goal:** Creating a Claude Agent Skill for deploying applications on Akash Network using the CLI
+
+**Achieved Objectives:**
+- Complete CLI command reference with exact syntax for all deployment lifecycle operations
+- SDL specification fully documented with validation rules and common error patterns
+- Marketplace architecture (reverse auction, escrow, bid deposits) thoroughly analyzed
+- Provider selection, cost optimization, and risk mitigation strategies documented
+- 290+ SDL templates catalogued across 30+ categories for skill template guidance
+- Security model (JWT/mTLS, AuthZ, K8s isolation) fully mapped
+- 2026 roadmap features identified for skill extensibility planning
+
+### 2. Akash Network Technical Landscape and Architecture
+
+*Covered in detail in the "Architectural Patterns and Design" section above. Key points:*
+
+- Four-layer architecture: Blockchain → Application → Provider → User
+- Reverse auction marketplace with escrow-based block payments
+- Provider Daemon orchestrates Kubernetes clusters with bid engine, manifest handler, cluster manager
+- On-chain (deployment/bid/lease state) + off-chain (manifest delivery, logs, shell) communication model
+- Audited attributes for provider capability verification
+
+### 3. CLI Implementation — Complete Deployment Workflow
+
+*Covered in detail in the "Implementation Approaches" section above. Key points:*
+
+- Four-phase workflow: Setup → Define → Deploy → Operate
+- 10 discrete CLI commands covering the full lifecycle
+- Environment-variable driven configuration (non-interactive, CI/CD compatible)
+- SDL validation rules for catching errors before on-chain submission
+- Shell access, log streaming, and deployment updates for operational management
+
+### 4. Technology Stack and Platform Evolution
+
+*Covered in detail in the "Technology Stack Analysis" section above. Key additions:*
+
+**Recent Platform Evolution (2025-2026):**
+- **Mainnet 14**: Migrated to Cosmos SDK v0.53
+- **AkashML** (Nov 2025): Managed AI inference layer, OpenAI-compatible API, 1.7B tokens/day on OpenRouter
+- **BME Tokenomics** (March 2026): Tenant payments auto buy-and-burn AKT → mint ACT stablecoin for settlement
+- **Starcluster**: Protocol-owned compute with 7,200 NVIDIA GB200 GPUs via Nodekeepers
+
+_Source: [Akash 2026 Roadmap](https://akash.network/roadmap/2026/), [Metaverse Post on AkashML](https://mpost.io/akash-network-rolls-out-akashml-first-fully-managed-ai-inference-service-on-decentralized-gpus/)_
+
+### 5. Integration and Interoperability Patterns
+
+*Covered in detail in the "Integration Patterns Analysis" section above. Key points:*
+
+- Three API layers: gRPC (primary), REST (auto-generated), CometBFT RPC (low-level)
+- JS/TS SDK: `@akashnetwork/chain-sdk` (recommended), `akashjs` deprecated
+- AuthZ for delegated deployment permissions (5 message types)
+- WebSocket subscriptions for real-time blockchain event monitoring
+- AEP-37 LeaseRPC gRPC service for streaming status/logs/restart
+
+### 6. Performance, Scalability, and Cost Analysis
+
+**Network Performance Metrics (Q4 2025):**
+- 70%+ GPU utilization rate
+- 34,300 new leases (28% QoQ growth)
+- 1.7B tokens/day processed via AkashML
+
+**Cost Comparison:**
+
+| Resource | Akash (approx) | AWS (approx) | Savings |
+|----------|----------------|--------------|---------|
+| A100 GPU | ~$1.10/hr | ~$3-5/hr | 60-78% |
+| 2 vCPU + 4GB | ~$5-10/mo | ~$30-50/mo | 70-85% |
+| Web hosting | ~$2/mo | ~$10-20/mo | 80-90% |
+
+_Note: Akash pricing varies by provider bids and AKT market price. Use the [Usage Calculator](https://akash.network/pricing/usage-calculator/) for current estimates._
+_Source: [Akash Pricing](https://akash.network/pricing/usage-calculator/), [Oreate AI](https://www.oreateai.com/blog/akash-network-unlocking-affordable-gpu-power-for-the-ai-revolution/21aa9d1ec956c9a35e294b20106ac197)_
+
+### 7. Security and Trust Architecture
+
+*Covered in detail in the "Security Architecture Patterns" section above. Summary:*
+
+Seven-layer security model: Identity (secp256k1), Authentication (JWT/mTLS), Transport (mTLS/HTTPS), Authorization (AuthZ), Isolation (K8s namespaces), Economic (deposits/escrow), Audit (on-chain attributes).
+
+**Upcoming:** Confidential computing launching Q1 2026 — ensures application privacy even with physical machine access.
+
+_Source: [Akash on X re: Confidential Computing](https://x.com/akashnet_/status/1981807867423568119)_
+
+### 8. Strategic Recommendations for Skill Design
+
+The Claude Agent Skill should be organized into **seven functional areas**:
+
+| Area | Trigger Phrases | Key Content |
+|------|----------------|-------------|
+| **1. Setup** | "install akash", "set up wallet" | CLI install, key creation, env vars, funding |
+| **2. SDL Authoring** | "create deployment file", "write SDL" | Template selection, resource specs, pricing, validation |
+| **3. Deploy** | "deploy on akash", "create deployment" | Full 5-step deploy sequence with exact commands |
+| **4. Operate** | "check deployment", "view logs" | Status, logs, shell, updates, closure |
+| **5. Troubleshoot** | "deployment failed", "no bids" | SDL errors, bid failures, escrow, provider issues |
+| **6. Optimize** | "reduce cost", "choose provider" | Bid comparison, resource right-sizing, escrow management |
+| **7. Advanced** | "persistent storage", "GPU", "AuthZ" | Storage, IP leases, GPU SDL, delegation, CI/CD |
+
+### 9. Implementation Roadmap and Risk Assessment
+
+**Skill Implementation Phases:**
+
+| Phase | Scope | Priority |
+|-------|-------|----------|
+| **Phase 1** | Core deployment lifecycle (setup, SDL, deploy, operate) | High |
+| **Phase 2** | Troubleshooting and cost optimization guidance | High |
+| **Phase 3** | Advanced features (persistent storage, GPU, IP leases) | Medium |
+| **Phase 4** | AuthZ, CI/CD integration, team workflows | Medium |
+| **Phase 5** | AkashML inference API, BME/ACT tokenomics | Low (future) |
+
+**Risk Assessment:** See the "Risk Assessment and Limitations" table in the Implementation section above for the six identified risks and their mitigations.
+
+### 10. Future Technical Outlook (2026+)
+
+**2026 Roadmap Highlights:**
+
+| Feature | Timeline | Impact |
+|---------|----------|--------|
+| Confidential Computing | Q1 2026 | Private workloads on shared infrastructure |
+| Akash at Home (Edge AI) | March 2026 | Idle home compute for AI workloads |
+| Lease-to-Lease Networking | May 2026 | Dynamic IP + secure inter-deployment communication |
+| Reserved Instances + Preemptible | August 2026 | Cloud-style committed pricing + spot-like discounts |
+| BME Tokenomics | Live (March 2026) | AKT buy-and-burn → ACT stablecoin settlement |
+
+_Broader Trend: DePIN ecosystem now 1,170+ projects, 10.3M devices, ~$35-50B market cap. Decentralized compute is transitioning from niche to enterprise-viable._
+_Source: [Akash 2026 Roadmap](https://akash.network/roadmap/2026/), [Cryptollia DePIN Analysis](https://cryptollia.com/articles/decentralized-ai-infrastructure-race-depin-tokenomics-compute-wars-2026)_
+
+### 11. Research Methodology and Source Documentation
+
+**Primary Sources:**
+- [Akash Official Docs](https://akash.network/docs/) — CLI guides, SDL reference, architecture
+- [Akash GitHub](https://github.com/akash-network) — Source code, SDL spec, provider daemon, akash-api
+- [Akash 2026 Roadmap](https://akash.network/roadmap/2026/) — Platform evolution
+
+**Secondary Sources:**
+- [Messari Quarterly Reports](https://messari.io/project/akash-network-2) — Q1-Q4 2025 network metrics
+- [DAIC Capital](https://daic.capital/blog/akash-network-architecture) — Architecture deep dive
+- [StakeCito](https://www.stakecito.com/blog/understanding-akash-network-the-future-of-decentralized-cloud-computing) — Network analysis
+- [DePIN Scan](https://depinscan.io/) — Market context
+- [Awesome Akash](https://github.com/akash-network/awesome-akash) — SDL template library
+
+**Research Quality:**
+- All CLI commands verified against official documentation
+- Architecture claims cross-referenced across 3+ sources
+- Pricing data triangulated between Akash calculator, Messari reports, and community blogs
+- Confidence: High for CLI workflow and SDL spec; Medium for pricing (market-dependent); High for architecture
+
+### 12. Appendices — Quick Reference
+
+**Environment Variables Cheatsheet:**
+```bash
+export AKASH_KEY_NAME="mykey"
+export AKASH_NET="https://raw.githubusercontent.com/akash-network/net/main/mainnet"
+export AKASH_CHAIN_ID=$(curl -s "$AKASH_NET/chain-id.txt")
+export AKASH_NODE=$(curl -s "$AKASH_NET/rpc-nodes.txt" | head -1)
+export AKASH_GAS=auto
+export AKASH_GAS_ADJUSTMENT=1.25
+export AKASH_GAS_PRICES=0.025uakt
+export AKASH_SIGN_MODE=amino-json
+```
+
+**Minimal SDL Template:**
+```yaml
+---
+version: "2.0"
+services:
+  web:
+    image: nginx:latest
+    expose:
+      - port: 80
+        as: 80
+        to:
+          - global: true
+profiles:
+  compute:
+    web:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 512Mi
+        storage:
+          size: 1Gi
+  placement:
+    dcloud:
+      pricing:
+        web:
+          denom: uakt
+          amount: 1000
+deployment:
+  web:
+    dcloud:
+      profile: web
+      count: 1
+```
+
+**Complete CLI Workflow (Copy-Paste Ready):**
+```bash
+# 1. Create deployment
+provider-services tx deployment create deploy.yml --from $AKASH_KEY_NAME
+
+# 2. Wait for bids (~30s), then list
+provider-services query market bid list --owner $AKASH_ADDRESS --dseq $DSEQ
+
+# 3. Accept bid / create lease
+provider-services tx market lease create --dseq $DSEQ --provider $PROVIDER --from $AKASH_KEY_NAME
+
+# 4. Send manifest
+provider-services send-manifest deploy.yml --dseq $DSEQ --provider $PROVIDER --from $AKASH_KEY_NAME
+
+# 5. Verify
+provider-services lease-status --dseq $DSEQ --provider $PROVIDER --from $AKASH_KEY_NAME
+```
+
+---
+
+## Technical Research Conclusion
+
+### Summary of Key Technical Findings
+
+Akash Network provides a mature, well-documented CLI deployment system suitable for automation via a Claude Agent Skill. The `provider-services` CLI, SDL v2.0 manifest format, and reverse-auction marketplace create a deterministic, environment-variable-driven workflow that maps cleanly to guided conversational interactions. The platform's 290+ SDL templates, three-layer API, and AuthZ delegation system provide the depth needed for a comprehensive skill covering beginner through advanced use cases.
+
+### Strategic Technical Impact
+
+Building an Akash deployment skill positions TOON Protocol's skill library at the intersection of decentralized infrastructure and AI compute — two of the fastest-growing segments in Web3. With Akash's 428% YoY usage growth and the broader DePIN market reaching $35-50B, this skill addresses genuine developer demand for accessible decentralized cloud deployment.
+
+### Next Steps
+
+1. Use this research document as the knowledge base for skill authoring
+2. Follow the 7-area skill design and 5-phase implementation roadmap
+3. Start with the core deployment lifecycle (Phase 1), validate with real deployments
+4. Extend to advanced features and future platform capabilities iteratively
+
+---
+
+**Technical Research Completion Date:** 2026-04-09
+**Research Period:** Current comprehensive technical analysis (April 2026)
+**Source Verification:** All technical facts cited with current sources
+**Technical Confidence Level:** High — based on multiple authoritative technical sources
+
+_This comprehensive technical research document serves as an authoritative reference on Akash Network CLI Deployment and provides the foundation for creating a Claude Agent Skill for deploying applications on the Akash decentralized cloud._

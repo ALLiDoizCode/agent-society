@@ -1,6 +1,6 @@
-# Epic 19: Overmind Swarm — Agent Spawning + Coordination
+# Epic 20: Overmind Swarm — Agent Spawning + Coordination
 
-**Epic ID:** 19
+**Epic ID:** 20
 **Status:** DRAFT
 **Author:** Bob (Technical Scrum Master)
 **Date:** 2026-03-24
@@ -18,15 +18,15 @@ Enable a sovereign overmind to create, fund, and coordinate sub-agents, forming 
 
 ## Dependencies
 
-- **Epic 16B "Treasury"** (treasury management for sub-agent funding) — required, must be complete
-- **Epic 17C "Sovereign"** (TEE key management for sub-agent key generation) — required, must be complete
+- **Epic 17B "Treasury"** (treasury management for sub-agent funding) — required, must be complete
+- **Epic 18C "Sovereign"** (TEE key management for sub-agent key generation) — required, must be complete
 - **Existing TOON infrastructure:** DVM lifecycle, ILP payment channels, NIP-44 encryption, relay
 
 ---
 
 ## New Packages / Infrastructure
 
-- No new packages — builds on `packages/overmind` from Epic 14A
+- No new packages — builds on `packages/overmind` from Epic 16A
 - New modules under `packages/overmind/src/swarm/`
 - Multiple concurrent overmind instances required for testing (parent + children)
 
@@ -87,7 +87,7 @@ Enable a sovereign overmind to create, fund, and coordinate sub-agents, forming 
 
 **Acceptance Criteria:**
 
-1. Parent and child communicate via NIP-44 encrypted DMs using their encryption subkeys (from Epic 17C HD key hierarchy).
+1. Parent and child communicate via NIP-44 encrypted DMs using their encryption subkeys (from Epic 18C HD key hierarchy).
 2. Messages are published to the TOON relay as encrypted kind:4 (or NIP-44 kind:1059 gift-wrapped) events.
 3. The parent can send structured task instructions (JSON-encoded) to specific children.
 4. Children can send structured results and status updates back to the parent.

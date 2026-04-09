@@ -15,7 +15,7 @@
 
 **Goal:** Deliver the smallest unit of autonomous agent life: an overmind that wakes, observes, decides, acts, records, and schedules its next wake -- all verifiably, with Mina VRF executor selection and Arweave state persistence.
 
-**Dependencies:** Existing TOON infrastructure (DVM lifecycle, ILP, TEE attestation, relay, service discovery). Chain Bridge DVM protocol spec (Epic 13) is co-developed -- Mina adapter is the first reference implementation.
+**Dependencies:** Existing TOON infrastructure (DVM lifecycle, ILP, TEE attestation, relay, service discovery). Chain Bridge DVM protocol spec (Epic 14) is co-developed -- Mina adapter is the first reference implementation.
 
 **Key Deliverables:**
 - New `packages/overmind` package (OODA engine, state management, wake cycle orchestration)
@@ -272,7 +272,7 @@
 **Technical Notes:**
 
 - **Package:** `packages/chain-bridge` (new package). The abstract `ChainBridgeDvm` class lives here. The Mina adapter lives under `src/adapters/mina/`.
-- This is the first reference implementation of the Chain Bridge DVM primitive (Epic 13 / D-OMP-007). The abstract interface must be generic enough for future adapters (Bitcoin, Ethereum L2s, Solana).
+- This is the first reference implementation of the Chain Bridge DVM primitive (Epic 14 / D-OMP-007). The abstract interface must be generic enough for future adapters (Bitcoin, Ethereum L2s, Solana).
 - Postgres trigger SQL is defined in the architecture doc section 4. The adapter uses `pg` (node-postgres) with `LISTEN` for push notifications.
 - Mina daemon GraphQL subscription for `newBlock` uses WebSocket transport (graphql-ws or similar).
 - The Mina GraphQL endpoint for devnet: `https://api.minascan.io/node/devnet/v1/graphql`. Archive node Postgres requires a running archive node (local for dev, hosted for integration).

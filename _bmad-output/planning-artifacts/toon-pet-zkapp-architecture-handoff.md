@@ -59,7 +59,7 @@ TEE solves "protect secrets during computation." Pets don't have secrets that ne
 | Anti-pump / fake history | zkApp enforces token payment per interaction | No |
 | Breeding privacy (both parents' data) | ZK circuit proves correct offspring derivation without revealing parent memories | No |
 
-TEE remains appropriate for Overmind sovereign agents (Epic 17) where runtime secrecy is the requirement. Pets use the ZK-only verification path.
+TEE remains appropriate for Overmind sovereign agents (Epic 18) where runtime secrecy is the requirement. Pets use the ZK-only verification path.
 
 ---
 

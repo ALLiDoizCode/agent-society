@@ -24,15 +24,14 @@ import {
   BREEDING_STAT_MIN,
   BreedingState,
   PetLifecycle,
-  PetLifecycleProof,
   PetStats,
   PetAction,
-  PetState,
   CooldownTimestamps,
   ACTION_COUNT,
   ActionType,
   Stage,
 } from './index';
+import type { PetLifecycleProof, PetState } from './index';
 import { blake3ToField } from './utils';
 
 // ============================================================
@@ -101,7 +100,7 @@ async function buildAdultProof(
   let currentState = proof.publicOutput;
   let currentCooldowns = zeroCooldowns();
   let ts = 10000; // starting timestamp
-  const slotTime = ts;
+  const _slotTime = ts;
 
   // Helper: run one 'clean' interaction
   async function doClean(

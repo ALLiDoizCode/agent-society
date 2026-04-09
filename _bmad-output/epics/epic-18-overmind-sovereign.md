@@ -1,6 +1,6 @@
-# Epic 17: Overmind Sovereign — Unseeable Keys + Migration
+# Epic 18: Overmind Sovereign — Unseeable Keys + Migration
 
-**Epic ID:** 17
+**Epic ID:** 18
 **Status:** DRAFT
 **Author:** Bob (Technical Scrum Master)
 **Date:** 2026-03-24
@@ -18,7 +18,7 @@ Full TEE-native key management with Shamir backup, key hierarchy, signing policy
 
 ## Dependencies
 
-- **Epic 15A "Heartbeat"** (TEE key genesis ceremony provides the foundation) — required, must be complete
+- **Epic 16A "Heartbeat"** (TEE key genesis ceremony provides the foundation) — required, must be complete
 - **Existing TOON infrastructure:** TEE attestation framework (`@toon-protocol/core`), Marlin Oyster CVM deployment pipeline
 - **Oyster CVM:** Production TEE enclave environment for hardware attestation
 
@@ -26,7 +26,7 @@ Full TEE-native key management with Shamir backup, key hierarchy, signing policy
 
 ## New Packages / Infrastructure
 
-- No new packages — builds on `packages/overmind` from Epic 15A
+- No new packages — builds on `packages/overmind` from Epic 16A
 - New modules under `packages/overmind/src/identity/`, `packages/overmind/src/tee/`
 - Requires access to multiple TEE enclave instances for Shamir distribution and migration testing
 
@@ -36,7 +36,7 @@ Full TEE-native key management with Shamir backup, key hierarchy, signing policy
 
 | ID | Title | Dependencies | Complexity |
 |----|-------|--------------|------------|
-| 16.1 | Production TEE Key Generation | Epic 15A complete | L |
+| 16.1 | Production TEE Key Generation | Epic 16A complete | L |
 | 16.2 | Signing Policy Engine (TEE-Enforced) | C.1 | L |
 | 16.3 | HD Key Hierarchy | C.1 | M |
 | 16.4 | Shamir K-of-N Seed Splitting | C.3 | XL |

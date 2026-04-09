@@ -77,6 +77,16 @@ export type {
 } from './dungeon/types';
 export { DungeonEngineError } from './dungeon/types';
 
+// Dungeon Stat Bridge
+export {
+  petStatsToDungeonStats,
+  applyDungeonDeltaToStats,
+  clampStatValues,
+  dungeonDeltaToGameAction,
+  StatBridgeError,
+} from './dungeon/statBridge';
+export type { StatBridgeErrorCode } from './dungeon/statBridge';
+
 // Pricing
 export { calculatePetInteractionPrice } from './pricing/calculatePetInteractionPrice';
 export {

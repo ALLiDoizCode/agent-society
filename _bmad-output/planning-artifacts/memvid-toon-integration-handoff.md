@@ -231,7 +231,7 @@ const hash = mem.blake3Hash(); // → feed to Mina proof
 2. **DVM memory handler** — TOON SDK handler that wraps Memvid for paid RAG queries
 3. **Arweave checkpoint** — Periodic `.mv2` → kind:5094 upload after N commits
 4. **Mina proof bridge** — BLAKE3 hash → RecursiveLifecycle.step() at each checkpoint
-5. **Overmind integration** — Wire into heartbeat cycle (Epic 15)
+5. **Overmind integration** — Wire into heartbeat cycle (Epic 16)
 
 ---
 
