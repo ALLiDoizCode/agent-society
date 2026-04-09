@@ -1417,7 +1417,11 @@ Alice (Product Owner): "See you at epic planning!"
 
 Charlie (Senior Dev): "Time to knock out that prep work."
 
+Bob (Scrum Master): "One more thing — let's generate a Dev Signal for Drew so he has content to work with. Running `/dev-signal` now..."
+
 </output>
+
+<action>AUTOMATICALLY invoke the `/dev-signal` command to generate a Dev Signal artifact for Drew (strategic advisor). This produces a structured communication artifact with narrative hooks, a Discord-ready summary, and asset checklist based on the epic that was just retrospected. The signal is saved to `_bmad-output/dev-signals/`.</action>
 
 </step>
 

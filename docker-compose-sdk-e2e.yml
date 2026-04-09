@@ -1,14 +1,18 @@
-# SDK E2E Test Stack — Embedded Connector
+# SDK E2E Test Stack — Embedded Connector (Multi-Chain)
 #
 # Minimal infrastructure for testing SDK createNode() with embedded ConnectorNode.
 # Each peer is a single container (no external connector needed).
+#
+# Chains: EVM (Anvil) + Solana (test-validator) + Mina (lightnet)
+# Privacy: NIP-59 gift wrapping enabled on both peers
 #
 # Usage:
 #   ./scripts/sdk-e2e-infra.sh up     # Start infrastructure
 #   ./scripts/sdk-e2e-infra.sh down   # Stop infrastructure
 #
 # Architecture:
-#   Anvil (contracts) → Peer1 (genesis-like) → Peer2 (bootstraps from Peer1)
+#   Anvil (EVM contracts) + Solana (programs) + Mina (lightnet)
+#   → Peer1 (genesis-like) → Peer2 (bootstraps from Peer1)
 
 networks:
   toon-sdk-e2e:
@@ -43,10 +47,31 @@ services:
         cd /contracts
         forge script script/DeployLocal.s.sol:DeployLocalScript --rpc-url http://localhost:8545 --broadcast --skip-simulation || echo "Deployment failed (non-fatal)"
 
+        echo "Funding test accounts with Mock USDC..."
+        # DeployLocal.s.sol only funds Accounts #2 and #3.
+        # Fund Accounts #4-#9 so each E2E test file has its own funded account.
+        # MockERC20 at 0x5FbDB2315678afecb367f032d93F642f64180aa3
+        # transfer(address,uint256) selector = 0xa9059cbb
+        # Using Account #0 (deployer) private key to send tokens.
+        DEPLOYER_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+        TOKEN=0x5FbDB2315678afecb367f032d93F642f64180aa3
+        AMOUNT=10000000000000000000000  # 10k tokens (18 decimals)
+        for ADDR in \
+          0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 \
+          0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc \
+          0x976EA74026E726554dB657fA54763abd0C3a0aa9 \
+          0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 \
+          0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f \
+          0xa0Ee7A142d267C1f36714E4a8F75612F20a79720; do
+          cast send --rpc-url http://localhost:8545 --private-key $$DEPLOYER_KEY \
+            $$TOKEN "transfer(address,uint256)" $$ADDR $$AMOUNT 2>/dev/null \
+            && echo "Funded $$ADDR" || echo "Fund $$ADDR failed (non-fatal)"
+        done
+
         echo "Anvil ready with contracts deployed!"
         wait $$ANVIL_PID
     volumes:
-      - ../connector/packages/contracts:/contracts
+      - ./contracts/evm:/contracts
     ports:
       - '18545:8545'
     networks:
@@ -62,6 +87,71 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Solana Test Validator - Local Solana with Auto-Deployed Programs
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  solana-validator:
+    image: ghcr.io/beeman/solana-test-validator:latest
+    container_name: sdk-e2e-solana
+    entrypoint: []
+    command:
+      - sh
+      - /entrypoint.sh
+    volumes:
+      - ./infra/solana/entrypoint.sh:/entrypoint.sh:ro
+      - ./contracts/solana:/programs:ro
+    tmpfs:
+      - /tmp/test-ledger
+    ports:
+      - '19899:8899'   # RPC
+      - '19900:8900'   # WebSocket
+    networks:
+      - toon-sdk-e2e
+    security_opt:
+      - seccomp=unconfined
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'solana cluster-version --url http://localhost:8899 >/dev/null 2>&1']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Mina Lightnet - Local Mina Network with Accounts Manager
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # NOTE: Mina lightnet requires 4-8 GB RAM. Ensure Docker Desktop has
+  # sufficient memory allocated (at least 8 GB recommended).
+  mina-lightnet:
+    image: o1labs/mina-local-network:compatible-latest-lightnet
+    container_name: sdk-e2e-mina
+    environment:
+      NETWORK_TYPE: single-node
+      PROOF_LEVEL: none
+      LOG_LEVEL: Info
+      RUN_ARCHIVE_NODE: 'false'
+      SLOT_TIME: '20000'
+    ports:
+      - '19085:3101'   # GraphQL (direct to daemon, bypassing nginx proxy)
+      - '19181:8181'   # Accounts Manager
+    networks:
+      - toon-sdk-e2e
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'curl -sf -X POST -H "Content-Type: application/json" -d "{\"query\":\"{syncStatus}\"}" http://localhost:3101/graphql | grep -q SYNCED || exit 1',
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 180s
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # Peer 1 — Genesis-like node (no bootstrap peers)
@@ -89,23 +179,48 @@ services:
       SETTLEMENT_TOKEN_ADDRESS: '0x5FbDB2315678afecb367f032d93F642f64180aa3' # Mock USDC (Anvil)
 
       # Settlement info (published in kind:10032)
-      SUPPORTED_CHAINS: 'evm:base:31337'
+      # Peer1: all chains, prefers EVM
+      SUPPORTED_CHAINS: 'evm:base:31337,solana:devnet,mina:devnet'
       SETTLEMENT_ADDRESS_EVM_BASE_31337: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
       PREFERRED_TOKEN_EVM_BASE_31337: '0x5FbDB2315678afecb367f032d93F642f64180aa3' # Mock USDC (Anvil)
       TOKEN_NETWORK_EVM_BASE_31337: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c'
+      SETTLEMENT_ADDRESS_SOLANA_DEVNET: '${PEER1_SOLANA_TOKEN_ACCOUNT}'
+      PREFERRED_TOKEN_SOLANA_DEVNET: '${SOLANA_TOKEN_MINT}'
+      TOKEN_NETWORK_SOLANA_DEVNET: '${SOLANA_PROGRAM_ID}'
+      SETTLEMENT_ADDRESS_MINA_DEVNET: '${PEER1_MINA_ACCOUNT}'
+      PREFERRED_TOKEN_MINA_DEVNET: 'MINA'
+      TOKEN_NETWORK_MINA_DEVNET: '${MINA_ZKAPP_ADDRESS}'
 
       # Service ports
       BLS_PORT: '3100'
       WS_PORT: '7100'
 
-      # Pricing
-      BASE_PRICE_PER_BYTE: '10'
+      # Pricing — peer1 is cheapest DVM provider
+      BASE_PRICE_PER_BYTE: '5'
       ASSET_CODE: USD
       ASSET_SCALE: '6'
 
       # No bootstrap peers (genesis)
       # Arweave DVM: enabled on peer1 (provider), uses free tier (<=100KB)
       ARDRIVE_ENABLED: 'true'
+
+      # Pet DVM: enabled on peer1 (pet interaction provider)
+      PET_DVM_ENABLED: 'true'
+      PET_BRAIN_STORAGE_PATH: /data/pet-brains
+      PET_PROOF_BATCH_SIZE: '5'
+
+      # Multi-chain settlement (Solana + Mina)
+      SOLANA_RPC_URL: http://solana-validator:8899
+      SOLANA_PROGRAM_ID: '${SOLANA_PROGRAM_ID}'
+      SOLANA_KEY_ID: 'solana-settlement'
+      MINA_GRAPHQL_URL: http://mina-lightnet:3101/graphql
+      MINA_ACCOUNTS_MANAGER_URL: http://mina-lightnet:8181
+      MINA_ZKAPP_ADDRESS: '${MINA_ZKAPP_ADDRESS}'
+      MINA_KEY_ID: 'mina-settlement'
+
+      # NIP-59 privacy wrapping
+      NIP59_ENABLED: 'true'
+      NIP59_PEER_PUBKEYS: ${PEER1_NIP59_PEER_PUBKEYS:-}
 
       # Storage
       DATA_DIR: /data
@@ -120,8 +235,13 @@ services:
     depends_on:
       anvil:
         condition: service_healthy
+      solana-validator:
+        condition: service_healthy
+      mina-lightnet:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
+      # nosemgrep: trailofbits.generic.wget-unencrypted-url.wget-unencrypted-url -- container-internal health probe, TLS unnecessary
       test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3100/health']
       interval: 10s
       timeout: 5s
@@ -154,10 +274,17 @@ services:
       SETTLEMENT_TOKEN_ADDRESS: '0x5FbDB2315678afecb367f032d93F642f64180aa3' # Mock USDC (Anvil)
 
       # Settlement info (published in kind:10032)
-      SUPPORTED_CHAINS: 'evm:base:31337'
+      # Peer2: all chains, prefers Solana (different order for mixed-chain E2E testing)
+      SUPPORTED_CHAINS: 'solana:devnet,evm:base:31337,mina:devnet'
       SETTLEMENT_ADDRESS_EVM_BASE_31337: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC'
       PREFERRED_TOKEN_EVM_BASE_31337: '0x5FbDB2315678afecb367f032d93F642f64180aa3' # Mock USDC (Anvil)
       TOKEN_NETWORK_EVM_BASE_31337: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c'
+      SETTLEMENT_ADDRESS_SOLANA_DEVNET: '${PEER2_SOLANA_TOKEN_ACCOUNT}'
+      PREFERRED_TOKEN_SOLANA_DEVNET: '${SOLANA_TOKEN_MINT}'
+      TOKEN_NETWORK_SOLANA_DEVNET: '${SOLANA_PROGRAM_ID}'
+      SETTLEMENT_ADDRESS_MINA_DEVNET: '${PEER2_MINA_ACCOUNT}'
+      PREFERRED_TOKEN_MINA_DEVNET: 'MINA'
+      TOKEN_NETWORK_MINA_DEVNET: '${MINA_ZKAPP_ADDRESS}'
 
       # Service ports
       BLS_PORT: '3100'
@@ -171,7 +298,24 @@ services:
       # Bootstrap from Peer 1 (pubkey derived from peer1's NOSTR_SECRET_KEY)
       BOOTSTRAP_PEERS: ${PEER2_BOOTSTRAP_PEERS:-[]}
 
-      ARDRIVE_ENABLED: 'false'
+      # Arweave DVM: enabled on peer2 as fallback provider (higher price than peer1)
+      ARDRIVE_ENABLED: 'true'
+
+      # Pet DVM: disabled on peer2 (peer1 is the pet interaction provider)
+      PET_DVM_ENABLED: 'false'
+
+      # Multi-chain settlement (Solana + Mina)
+      SOLANA_RPC_URL: http://solana-validator:8899
+      SOLANA_PROGRAM_ID: '${SOLANA_PROGRAM_ID}'
+      SOLANA_KEY_ID: 'solana-settlement'
+      MINA_GRAPHQL_URL: http://mina-lightnet:3101/graphql
+      MINA_ACCOUNTS_MANAGER_URL: http://mina-lightnet:8181
+      MINA_ZKAPP_ADDRESS: '${MINA_ZKAPP_ADDRESS}'
+      MINA_KEY_ID: 'mina-settlement'
+
+      # NIP-59 privacy wrapping
+      NIP59_ENABLED: 'true'
+      NIP59_PEER_PUBKEYS: ${PEER2_NIP59_PEER_PUBKEYS:-}
 
       # Storage
       DATA_DIR: /data
@@ -186,8 +330,13 @@ services:
     depends_on:
       peer1:
         condition: service_healthy
+      solana-validator:
+        condition: service_healthy
+      mina-lightnet:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
+      # nosemgrep: trailofbits.generic.wget-unencrypted-url.wget-unencrypted-url -- container-internal health probe, TLS unnecessary
       test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3100/health']
       interval: 10s
       timeout: 5s

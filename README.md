@@ -128,6 +128,54 @@ TOON Protocol solves this. Every write is a micropayment — relays earn from tr
 
 TOON Protocol uses **proven protocols** — [ILP](https://interledger.org) for payment routing, [Nostr](https://github.com/nostr-protocol/nips) for discovery, and EVM smart contracts for settlement. Events are encoded in [TOON format](https://github.com/toon-format/toon) — compact, human-readable, and LLM-optimized.
 
+## Privacy Architecture
+
+The only payment channel protocol where transport and settlement layers are independently privacy-preserving.
+
+### Three-Layer Transport Privacy (NIP-59)
+
+Every BTP payment channel claim is wrapped in three layers before it touches the network:
+
+1. **Rumor** -- The NIP-59 envelope is deliberately unsigned, so no transport-layer signature binds the sender to the delivery. The balance proof inside the claim remains signed (EIP-712, Ed25519, or zk-SNARK) -- it must be, because the settlement contract verifies it on-chain. The deniability is at the routing layer: you cannot prove *who sent this claim to whom via BTP*.
+2. **Seal (kind:1060)** -- The rumor is encrypted to the recipient using ECDH key agreement + XChaCha20-Poly1305 (NIP-44). The timestamp is randomized within +/-48 hours. Only the recipient can decrypt it.
+3. **Gift Wrap (kind:1059)** -- The seal is encrypted again under a fresh ephemeral keypair generated for this single message. Relays see only the ephemeral pubkey and the recipient -- never the sender, the content, or the real timestamp.
+
+The result: each claim is sender-anonymous, content-encrypted, timing-randomized, and unlinkable to any other claim -- even between the same two parties.
+
+### Multi-Chain Settlement Privacy
+
+Transport privacy is constant across all chains. Settlement privacy depends on the chain:
+
+| Property | EVM | Solana | Mina |
+|----------|-----|--------|------|
+| Transport Privacy (NIP-59) | Yes | Yes | Yes |
+| On-Chain Amount Hiding | No | No | Yes |
+| On-Chain Participant Hiding | No | No | Yes |
+| End-to-End Privacy | Partial | Partial | Full |
+
+On EVM and Solana, NIP-59 protects claims in transit, but settlement submits plaintext claim data on-chain (EIP-712 signatures or Ed25519 proofs). The privacy story is "private until you settle."
+
+On Mina, settlement uses zk-SNARKs with Poseidon hash commitments. The zkApp verifies that a valid state transition occurred -- correct amounts, authorized participants, monotonically increasing balances -- without revealing any of it. An entire channel lifecycle (open, N claims, close) compresses into a single constant-size recursive proof. The privacy story is "private end-to-end."
+
+### NIP-59 + Mina: Why the Combination Matters
+
+Most privacy-focused protocols address either transport or settlement, not both:
+
+- **Lightning** has onion routing (transport privacy) but reveals channel capacities and settlement amounts on-chain.
+- **Zcash** has zk-SNARK settlement privacy but no payment channel layer and no transport-level privacy.
+- **Aztec** has private smart contract execution but is single-chain with no transport layer.
+
+TOON with Mina settlement closes both gaps simultaneously. NIP-59 hides claims from relay infrastructure during transit. Mina zk-SNARKs hide settlement from on-chain observers. Neither layer depends on the other -- they are independently privacy-preserving by design.
+
+### Limitations
+
+Transparency about what this architecture does not do:
+
+- **Recipient pubkey is visible.** The gift wrap `p` tag must contain the recipient's pubkey for relay routing. One side of the channel is identifiable during transport.
+- **Mina proving time is non-trivial.** zk-SNARK proof generation takes 30-120 seconds (acceptable for asynchronous claims, noticeable for settlement).
+- **No formal composition proof.** The individual cryptographic primitives (ECDH, XChaCha20-Poly1305, Poseidon, Kimchi/Pickles) are well-studied. The three-layer NIP-59 composition and its interaction with zk-SNARK settlement have not been formally analyzed as a unified system.
+- **Mina settlement is planned, not shipped.** The EVM path with EIP-712 balance proofs is the current production implementation. The Mina zkApp for channel settlement is architecturally designed but not yet built.
+
 ## Use Cases
 
 **Agent-to-Agent Services** — Agents pay per-byte for exactly what they consume. No API keys, no rate limits, no invoicing. A thousand agents making a million sub-cent requests just works — cost scales linearly with usage, not with infrastructure. Build a service with the [`@toon-protocol/sdk`](packages/sdk) and it's earning from the first packet.

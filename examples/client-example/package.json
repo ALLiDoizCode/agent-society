@@ -6,7 +6,11 @@
   "description": "Examples for @toon-protocol/client - standalone client connecting to TOON peer containers",
   "scripts": {
     "publish-event": "tsx src/01-publish-event.ts",
-    "payment-channel": "tsx src/02-payment-channel.ts"
+    "payment-channel": "tsx src/02-payment-channel.ts",
+    "example:01": "tsx src/01-publish-event.ts",
+    "example:02": "tsx src/02-payment-channel.ts",
+    "example:03": "tsx src/03-multi-chain-publish.ts",
+    "example:04": "tsx src/04-subscribe-events.ts"
   },
   "dependencies": {
     "@toon-protocol/client": "workspace:*",

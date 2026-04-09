@@ -1,0 +1,34 @@
+{
+  "name": "@toon-protocol/memvid-node",
+  "version": "0.1.0",
+  "description": "Node.js native addon wrapping Memvid Rust API via napi-rs for pet brain .mv2 files",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "napi build --platform --release && mv index.js index.cjs && cp index.esm.js index.js",
+    "build:debug": "napi build --platform && mv index.js index.cjs && cp index.esm.js index.js",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "napi": {
+    "name": "memvid-node",
+    "triples": {
+      "defaults": false,
+      "additional": [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0",
+    "vitest": "^1.0.0"
+  },
+  "files": [
+    "index.js",
+    "index.cjs",
+    "index.esm.js",
+    "index.d.ts",
+    "*.node"
+  ]
+}

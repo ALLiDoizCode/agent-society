@@ -1,0 +1,28 @@
+{
+  "name": "@toon-protocol/pet-dvm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pet DVM handler — game engine + memvid + prover + Mina TX for TOON pets",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:unit": "jest",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@toon-protocol/memvid-node": "workspace:*",
+    "@toon-protocol/pet-circuit": "workspace:*",
+    "rot-js": "^2.2.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=22.11.0"
+  }
+}

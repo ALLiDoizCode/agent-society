@@ -204,6 +204,15 @@ The NIP-to-TOON pipeline can convert any future NIP specification into a TOON-aw
 
 ## 7. Epic 10 Preparation Tasks
 
+> **NOTE (2026-03-29, updated 2026-04-09):** After this retro was written, Epic 10 was renumbered multiple times. The original
+> "Epic 10" (Compute Primitive, kind:5250) is now **Epic 14**. The current **Epic 10** is the
+> **Rig E2E Integration Test Suite**, **Epic 11** is **TOON Pets**, and **Epic 12** is **Token Swap Primitive**
+> (NIP-59 gift-wrapped ILP micropayment swaps, inserted 2026-04-09). All subsequent epics shifted:
+> Chain Bridge moved to Epic 13 (before Compute) to compose with Token Swap.
+> Compute 14, Loony 15, Heartbeat 16, Treasury 17, Sovereign 18, Biography 19, Swarms 20.
+> Action items A1 (CI burn-in) and A2 (Playwright E2E) are directly addressed by Epic 10.
+> See commit `5683f55` for the first renumbering.
+
 Epic 10 (Compute Primitive -- Provider Protocol & DX, kind:5250) has 8 stories:
 
 | Story | Scope |

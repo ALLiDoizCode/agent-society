@@ -13,7 +13,7 @@ SKILLS_ROOT="${1:-$PROJECT_ROOT/.claude/skills}"
 RUN_EVAL="$SCRIPT_DIR/run-eval.sh"
 
 # Skills to skip (not TOON NIP skills)
-SKIP_PATTERNS="skill-creator|playwright-cli|rfc-|skill-eval-framework"
+SKIP_PATTERNS="skill-creator|playwright-cli|rfc-|skill-eval-framework|shadcn"
 
 TOTAL=0
 PASSED_TOTAL=0

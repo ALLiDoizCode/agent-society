@@ -1,0 +1,8 @@
+# Verification key cache (generated, do not commit)
+.cache/
+
+# Build output
+dist/
+
+# Dependencies
+node_modules/

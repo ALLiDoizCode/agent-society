@@ -68,6 +68,18 @@ const FUNDING_AMOUNT = 10n * 10n ** 18n; // 10 tokens (mock USDC on Anvil uses 1
 const CHAIN_ID = 31337;
 const CHAIN_IDENTIFIER = 'evm:base:31337'; // Matches what peer1 advertises
 
+// Multi-chain: To add Solana or Mina chain providers, configure:
+//
+// Solana:
+//   supportedChains: ['evm:base:31337', 'solana:devnet'],
+//   chainRpcUrls: { 'evm:base:31337': ANVIL_RPC, 'solana:devnet': 'http://localhost:19899' },
+//
+// Mina:
+//   supportedChains: ['evm:base:31337', 'mina:devnet'],
+//   chainRpcUrls: { 'evm:base:31337': ANVIL_RPC, 'mina:devnet': 'http://localhost:19085/graphql' },
+//
+// See 03-multi-chain-publish.ts for a complete multi-chain example.
+
 const anvilChain = defineChain({
   id: CHAIN_ID,
   name: 'anvil',

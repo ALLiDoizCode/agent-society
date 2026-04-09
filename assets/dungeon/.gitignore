@@ -1,0 +1,11 @@
+# Keep README and .gitignore tracked, ignore binary assets
+# Assets are too large for git — download from itch.io links in README.md
+*.zip
+*.png
+*.gif
+*.mp3
+*.wav
+*.ogg
+0x72-base/0x72_DungeonTilesetII_v1.7/
+0x72-extended/dungeontiles-extended*/
+ninja-adventure/Ninja Adventure - Asset Pack/

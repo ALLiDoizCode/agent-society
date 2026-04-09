@@ -183,7 +183,7 @@ flowchart BT
 
         OVM["packages/overmind<br/>━━━━━━━━━━━━━━<br/>Sovereign agent<br/>OODA engine, Arweave state<br/>VRF, key management"]
 
-        CB["packages/chain-bridge<br/>━━━━━━━━━━━━━━<br/>Chain Bridge DVM framework<br/>Mina adapter (reference)"]
+        CB["packages/bridge<br/>━━━━━━━━━━━━━━<br/>Chain Bridge DVM framework<br/>Mina adapter (reference)"]
     end
 
     SDK --> Core

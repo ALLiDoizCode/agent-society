@@ -195,16 +195,16 @@ development_status:
   # Covers: repo browsing, nested navigation, branches, tags, PRs, issues, conversations
   # Dependencies: Epic 8 (Forge-UI), Epic 9 (skills)
   # 18 stories: 10.1 Infra + 10.2-10.8 Seed scripts + 10.9 Orchestrator + 10.10-10.18 Playwright specs
-  epic-10: backlog
-  10-1-test-infra-and-shared-seed-library: backlog
-  10-2-seed-initial-repo-push: backlog
-  10-3-seed-nested-directory-structure: backlog
-  10-4-seed-feature-branch: backlog
-  10-5-seed-tag: backlog
-  10-6-seed-prs-with-status: backlog
-  10-7-seed-issues-labels-conversations: backlog
-  10-8-seed-merge-pr-close-issue: backlog
-  10-9-seed-orchestrator: backlog
+  epic-10: in-progress
+  10-1-test-infra-and-shared-seed-library: done
+  10-2-seed-script-initial-repo-push: done
+  10-3-seed-nested-directory-structure: done
+  10-4-seed-feature-branch: done
+  10-5-seed-tag: done
+  10-6-seed-prs-with-status: done
+  10-7-seed-issues-labels-conversations: done
+  10-8-seed-merge-pr-close-issue: done
+  10-9-seed-orchestrator: done
   10-10-spec-repo-list-and-home: backlog
   10-11-spec-deep-navigation-regression: backlog
   10-12-spec-file-viewing: backlog
@@ -216,7 +216,65 @@ development_status:
   10-18-spec-blame-view: backlog
   epic-10-retrospective: optional
 
-  # Epic 11: Compute Primitive — Provider Protocol & DX (kind:5250)
+  # Epic 11: TOON Pets — ZK-Proven Virtual Pet Economy
+  # Decision source: Party Mode 2026-04-05/06 — Pet zkApp Architecture
+  # Nostr virtual pets (Blobbi) with ZK-proven lifecycle, portable Memvid memory, cross-chain ILP payment
+  # ZK circuit enforces game rules (23 constraints, ~3,500 rows/interaction), Poseidon+Mina-key owner signatures
+  # Three-tier trust: Full ZK (game rules) + verifiable (BLAKE3+Arweave) + DVM-attested (social tasks)
+  # Spec docs: pet-zkapp-game-rules-canonical.md, pet-zkapp-blake3-hashing-spec.md, pet-zkapp-integration-architecture.md
+  # Dependencies: Epic 8 (Arweave DVM), Epic 5 (DVM kinds), Mina lightnet (existing infra)
+  # New packages: @toon-protocol/memvid-node (napi-rs), @toon-protocol/pet-circuit (o1js), @toon-protocol/pet-dvm
+  # 14 stories across 4 sprints: Foundation, DVM Integration, Client+Economy, Advanced
+  epic-11: done
+  11-1-napi-rs-memvid-binding: done
+  11-2-pet-lifecycle-zkprogram: done
+  11-3-pet-zkapp-smartcontract: done
+  11-4-pet-game-engine: done
+  11-5-pet-dvm-handler: done
+  11-6-peer-enablement: done
+  11-7-pet-dvm-e2e-test: done
+  11-8-pet-token-on-mina: done
+  11-9-ditto-pet-dvm-integration: done
+  11-10-ditto-proof-status-ui: done
+  11-11-cross-chain-dvm-pricing: done
+  11-12-arweave-checkpoint-automation: done
+  11-13-breeding-circuit: done
+  11-14-pet-marketplace: done
+  # Sprint 5: Pet Dungeon Crawl (Party Mode 2026-04-08 — Living Dungeon research)
+  # Extension: pets crawl procedurally-generated dungeons via rot.js + DVM compute
+  # Dependencies: 11-4 (Game Engine), 11-5 (Pet DVM Handler pattern)
+  # Core library: rot.js (BSD-3, TypeScript, seedable RNG, headless)
+  11-15-dungeon-engine-core: done
+  11-16-pet-dungeon-stat-bridge: done
+  11-17-dungeon-dvm-handler: done
+  11-18-dungeon-adventure-log: done
+  epic-11-retrospective: done
+
+  # Epic 12: Token Swap Primitive — NIP-59 Gift-Wrapped ILP Micropayment Swaps
+  # Decision source: Party Mode 2026-04-09 — Token swapping via ILP packet streaming
+  # Non-custodial, privacy-preserving token swaps via existing ILP micropayment infrastructure
+  # Optional swapPairs field on IlpPeerInfo (kind:10032); NIP-59 gift-wrapped packets
+  # Signed payment channel claims in FULFILL data field; sender controls packet granularity
+  # Dependencies: Epic 1-3 (ILP + settlement), NIP-44/59 (encryption), Epic 3 (payment channels)
+  # NOTE: Inserted as Epic 12 on 2026-04-09; all subsequent epics shifted +1
+  # 6-8 stories estimated; spec: _bmad-output/epics/epic-12-token-swap-primitive.md
+  epic-12: backlog
+  epic-12-retrospective: optional
+
+  # Epic 13: Chain Bridge Primitive (kind:5260)
+  # Decision source: Party Mode 2026-03-22 — Network Primitives Strategy
+  # Broadcast signed tx to any blockchain: Ethereum, Solana, Arbitrum, Base, AO
+  # Tier 1 only: trustless broadcast (agent signs locally, provider submits + pays gas)
+  # Multi-chain in one ILP packet; per-chain tx hash receipts
+  # AO/HyperBEAM is a chain target, NOT a compute backend
+  # Composes with Epic 12 (Token Swap) for zero-token cross-chain onboarding
+  # Dependencies: Epic 8 (receipt pattern), Epic 5 (DVM kinds), Epic 3 (multi-chain config)
+  # NOTE: Renumbered from Epic 12 → 13 → 14 → 13 (2026-04-09, swapped with Compute to follow Token Swap)
+  # Stories: TBD (to be decomposed when epic starts)
+  epic-13: backlog
+  epic-13-retrospective: optional
+
+  # Epic 14: Compute Primitive — Provider Protocol & DX (kind:5250)
   # Decision source: Party Mode 2026-03-22 — Network Primitives Strategy (D8-PM-003/004/005)
   # Stateless compute-for-hire DVM; backends: Oyster CVM, Akash, Docker (all out-of-scope)
   # Two-phase model: sync submit (kind:5250) + async result (kind:5251/6250)
@@ -224,105 +282,97 @@ development_status:
   # Dependencies: Epic 8 (blob storage pattern), Epic 5 (DVM kinds), Epic 6 (TEE + reputation)
   # TOON ships: protocol spec, consumer SDK, test harness, provider handoff docs
   # TOON does NOT ship: provider implementations (Oyster, Akash, HyperBEAM teams build their own)
-  # 8 stories: 11.1-11.3 Protocol + SDK, 11.4-11.5 Consumer DX, 11.6 Test Harness, 11.7 Handoff Docs, 11.8 Publish
-  epic-11: backlog
-  11-1-compute-event-kind-definitions: backlog
-  11-2-two-phase-async-result-protocol: backlog
-  11-3-self-describing-compute-receipts: backlog
-  11-4-consumer-sdk-job-submission: backlog
-  11-5-compute-provider-skill-descriptor: backlog
-  11-6-provider-test-harness: backlog
-  11-7-provider-handoff-documents: backlog
-  11-8-publish-compute-primitive: backlog
-  epic-11-retrospective: optional
+  # 8 stories: 14.1-14.3 Protocol + SDK, 14.4-14.5 Consumer DX, 14.6 Test Harness, 14.7 Handoff Docs, 14.8 Publish
+  # NOTE: Renumbered from Epic 11 → 12 → 13 → 14 (2026-04-09, swapped with Chain Bridge)
+  epic-14: backlog
+  14-1-compute-event-kind-definitions: backlog
+  14-2-two-phase-async-result-protocol: backlog
+  14-3-self-describing-compute-receipts: backlog
+  14-4-consumer-sdk-job-submission: backlog
+  14-5-compute-provider-skill-descriptor: backlog
+  14-6-provider-test-harness: backlog
+  14-7-provider-handoff-documents: backlog
+  14-8-publish-compute-primitive: backlog
+  epic-14-retrospective: optional
 
-  # Epic 12: Chain Bridge Primitive (kind:5260)
-  # Decision source: Party Mode 2026-03-22 — Network Primitives Strategy
-  # Broadcast signed tx to any blockchain: Ethereum, Solana, Arbitrum, Base, AO
-  # Tier 1 only: trustless broadcast (agent signs locally, provider submits + pays gas)
-  # Multi-chain in one ILP packet; per-chain tx hash receipts
-  # AO/HyperBEAM is a chain target, NOT a compute backend
-  # Dependencies: Epic 8 (receipt pattern), Epic 5 (DVM kinds), Epic 3 (multi-chain config)
-  # Stories: TBD (to be decomposed when epic starts)
-  epic-12: backlog
-  epic-12-retrospective: optional
-
-  # Epic 13: Loony — Autonomous Agent Example Application
+  # Epic 15: Loony — Autonomous Agent Example Application
   # Decision source: Party Mode 2026-03-23 — Loony Agent Architecture
   # Example application proving all four primitives + composition; self-bootstrapping agent lifecycle
-  # Dependencies: Epics 11 + 12 (primitives)
-  epic-13: backlog
-  epic-13-retrospective: optional
+  # Dependencies: Epics 13 + 14 (primitives)
+  # NOTE: Renumbered from Epic 13 → 14 (2026-04-06) → 15 (2026-04-09)
+  epic-15: backlog
+  epic-15-retrospective: optional
 
   # ═══════════════════════════════════════════════════════════════
-  # OVERMIND PROTOCOL PROGRAM (Epics 14-18)
+  # OVERMIND PROTOCOL PROGRAM (Epics 16-20)
   # Decision source: Party Mode 2026-03-24 — Overmind Protocol (D-OMP-001 through D-OMP-011)
   # Spike validated: packages/overmind/spike/ (10/10 tests passing)
   # Research: technical-mina-o1js-research, technical-arweave-integration-research
   # PRD: _bmad-output/overmind-prd.md
   # Architecture: _bmad-output/overmind-architecture.md
-  # Epic files: _bmad-output/epics/epic-{14-18}-overmind-*.md
+  # Epic files: _bmad-output/epics/epic-{16-20}-overmind-*.md
+  # NOTE: Renumbered from Epics 14-18 → 15-19 (2026-04-06) → 16-20 (2026-04-09)
   # ═══════════════════════════════════════════════════════════════
 
-  # Epic 14: Overmind Heartbeat — Minimal Viable Overmind (WITH Mina)
+  # Epic 16: Overmind Heartbeat — Minimal Viable Overmind (WITH Mina)
   # First autonomous agent on TOON: TEE key genesis, Arweave state, Mina VRF selection,
   # Chain Bridge DVM (Mina adapter = first reference implementation), OODA decision engine
-  # New packages: packages/overmind, packages/chain-bridge
-  # Dependencies: Epic 12 (Chain Bridge Primitive — co-developed, Mina adapter is reference impl)
-  epic-14: backlog
-  14-1-tee-key-genesis-ceremony: backlog
-  14-2-arweave-state-persistence: backlog
-  14-3-overmind-registry-zkapp: backlog
-  14-4-chain-bridge-dvm-mina-adapter: backlog
-  14-5-vrf-executor-selection: backlog
-  14-6-wake-sleep-cycle: backlog
-  14-7-ooda-decision-engine: backlog
-  14-8-self-scheduling-wake-cycles: backlog
-  14-9-e2e-10-autonomous-cycles: backlog
-  epic-14-retrospective: optional
-
-  # Epic 15: Overmind Treasury — Self-Funding Agent
-  # Overmind earns income via DVM services, manages autonomous treasury
-  # Dependencies: Epic 14
-  epic-15: backlog
-  15-1-register-as-dvm-provider: backlog
-  15-2-accept-execute-dvm-jobs: backlog
-  15-3-treasury-accounting-live-balances: backlog
-  15-4-adaptive-behavior-engine: backlog
-  15-5-e2e-100-self-funded-cycles: backlog
-  epic-15-retrospective: optional
-
-  # Epic 16: Overmind Sovereign — Unseeable Keys + Migration
-  # Production TEE key sovereignty: signing policy, key hierarchy, Shamir backup, migration
-  # Dependencies: Epic 14
+  # New packages: packages/overmind, packages/bridge
+  # Dependencies: Epic 13 (Chain Bridge Primitive — co-developed, Mina adapter is reference impl)
   epic-16: backlog
-  16-1-production-tee-key-generation: backlog
-  16-2-signing-policy-engine: backlog
-  16-3-bip44-key-hierarchy: backlog
-  16-4-shamir-seed-splitting: backlog
-  16-5-sealed-key-migration: backlog
-  16-6-disaster-recovery: backlog
-  16-7-e2e-cross-provider-migration: backlog
+  16-1-tee-key-genesis-ceremony: backlog
+  16-2-arweave-state-persistence: backlog
+  16-3-overmind-registry-zkapp: backlog
+  16-4-chain-bridge-dvm-mina-adapter: backlog
+  16-5-vrf-executor-selection: backlog
+  16-6-wake-sleep-cycle: backlog
+  16-7-ooda-decision-engine: backlog
+  16-8-self-scheduling-wake-cycles: backlog
+  16-9-e2e-10-autonomous-cycles: backlog
   epic-16-retrospective: optional
 
-  # Epic 17: Overmind Biography — Recursive ZK Lifecycle Proofs
-  # Verifiable agent history: per-cycle proofs, recursive composition, public biography
-  # Dependencies: Epic 14
+  # Epic 17: Overmind Treasury — Self-Funding Agent
+  # Overmind earns income via DVM services, manages autonomous treasury
+  # Dependencies: Epic 16
   epic-17: backlog
-  17-1-per-cycle-zk-proof-generation: backlog
-  17-2-recursive-proof-composition: backlog
-  17-3-verifiable-execution-count: backlog
-  17-4-public-biography-endpoint: backlog
-  17-5-e2e-100-cycle-recursive-proof: backlog
+  17-1-register-as-dvm-provider: backlog
+  17-2-accept-execute-dvm-jobs: backlog
+  17-3-treasury-accounting-live-balances: backlog
+  17-4-adaptive-behavior-engine: backlog
+  17-5-e2e-100-self-funded-cycles: backlog
   epic-17-retrospective: optional
 
-  # Epic 18: Overmind Swarm — Agent Spawning + Coordination
-  # Agent reproduction: sub-agent spawning, NIP-44 comms, task delegation, swarm treasury
-  # Dependencies: Epic 15 + Epic 16
+  # Epic 18: Overmind Sovereign — Unseeable Keys + Migration
+  # Production TEE key sovereignty: signing policy, key hierarchy, Shamir backup, migration
+  # Dependencies: Epic 16
   epic-18: backlog
-  18-1-sub-agent-spawning: backlog
-  18-2-parent-child-nip44-communication: backlog
-  18-3-dvm-task-delegation: backlog
-  18-4-swarm-treasury-management: backlog
-  18-5-e2e-3-sub-agent-swarm: backlog
+  18-1-production-tee-key-generation: backlog
+  18-2-signing-policy-engine: backlog
+  18-3-bip44-key-hierarchy: backlog
+  18-4-shamir-seed-splitting: backlog
+  18-5-sealed-key-migration: backlog
+  18-6-disaster-recovery: backlog
+  18-7-e2e-cross-provider-migration: backlog
   epic-18-retrospective: optional
+
+  # Epic 19: Overmind Biography — Recursive ZK Lifecycle Proofs
+  # Verifiable agent history: per-cycle proofs, recursive composition, public biography
+  # Dependencies: Epic 16
+  epic-19: backlog
+  19-1-per-cycle-zk-proof-generation: backlog
+  19-2-recursive-proof-composition: backlog
+  19-3-verifiable-execution-count: backlog
+  19-4-public-biography-endpoint: backlog
+  19-5-e2e-100-cycle-recursive-proof: backlog
+  epic-19-retrospective: optional
+
+  # Epic 20: Overmind Swarm — Agent Spawning + Coordination
+  # Agent reproduction: sub-agent spawning, NIP-44 comms, task delegation, swarm treasury
+  # Dependencies: Epic 17 + Epic 18
+  epic-20: backlog
+  20-1-sub-agent-spawning: backlog
+  20-2-parent-child-nip44-communication: backlog
+  20-3-dvm-task-delegation: backlog
+  20-4-swarm-treasury-management: backlog
+  20-5-e2e-3-sub-agent-swarm: backlog
+  epic-20-retrospective: optional

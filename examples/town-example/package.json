@@ -15,7 +15,7 @@
     "attestation-bootstrap": "tsx src/08-attestation-bootstrap.ts"
   },
   "dependencies": {
-    "@toon-protocol/connector": "^2.0.0",
+    "@toon-protocol/connector": "^2.2.0",
     "@toon-protocol/core": "workspace:*",
     "@toon-protocol/sdk": "workspace:*",
     "@toon-protocol/town": "workspace:*",

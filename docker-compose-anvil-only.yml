@@ -1,0 +1,202 @@
+# Anvil-Only SDK E2E Stack — EVM testing only (no Solana/Mina)
+#
+# Usage:
+#   docker compose -p toon-anvil -f docker-compose-anvil-only.yml up -d
+#   docker compose -p toon-anvil -f docker-compose-anvil-only.yml down -v
+
+networks:
+  toon-anvil:
+    driver: bridge
+
+volumes:
+  peer1-data:
+  peer2-data:
+
+services:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Anvil - Local Ethereum with auto-deployed contracts
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    container_name: anvil-only
+    entrypoint: []
+    command:
+      - sh
+      - -c
+      - |
+        echo "Starting Anvil with pre-deployed contract state..."
+        anvil --host 0.0.0.0 --port 8545 --chain-id 31337 --accounts 10 --balance 10000 \
+          --load-state /contracts/anvil-state.json &
+        ANVIL_PID=$$!
+
+        echo "Waiting for Anvil to be ready..."
+        until cast client --rpc-url http://localhost:8545 2>/dev/null | grep -q 'anvil'; do
+          sleep 1
+        done
+
+        echo "Contracts loaded from state snapshot."
+        echo "Funding test accounts with Mock USDC..."
+        DEPLOYER_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+        TOKEN=0x5FbDB2315678afecb367f032d93F642f64180aa3
+        AMOUNT=10000000000000000000000  # 10k tokens (18 decimals)
+
+        # Fund standard Anvil accounts #2-#9
+        for ADDR in \
+          0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC \
+          0x90F79bf6EB2c4f870365E785982E1f101E93b906 \
+          0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 \
+          0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc \
+          0x976EA74026E726554dB657fA54763abd0C3a0aa9 \
+          0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 \
+          0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f \
+          0xa0Ee7A142d267C1f36714E4a8F75612F20a79720; do
+          cast send --rpc-url http://localhost:8545 --private-key $$DEPLOYER_KEY \
+            $$TOKEN "transfer(address,uint256)" $$ADDR $$AMOUNT 2>/dev/null \
+            && echo "Funded $$ADDR" || echo "Fund $$ADDR failed (non-fatal)"
+        done
+
+        # Fund the Ditto test wallet (derived from nsec)
+        DITTO_WALLET=0x887989a5F83D6F445ba0e91A878606103C8E767C
+        cast send --rpc-url http://localhost:8545 --private-key $$DEPLOYER_KEY \
+          $$TOKEN "transfer(address,uint256)" $$DITTO_WALLET $$AMOUNT 2>/dev/null \
+          && echo "Funded Ditto wallet $$DITTO_WALLET with Mock USDC" || echo "Fund Ditto wallet failed"
+        # Also send ETH for gas
+        cast send --rpc-url http://localhost:8545 --private-key $$DEPLOYER_KEY \
+          --value 100ether $$DITTO_WALLET 2>/dev/null \
+          && echo "Funded Ditto wallet with 100 ETH" || echo "ETH fund failed"
+
+        echo "Anvil ready with contracts deployed and funded!"
+        wait $$ANVIL_PID
+    volumes:
+      - ./contracts/evm:/contracts
+    ports:
+      - '18545:8545'
+    networks:
+      - toon-anvil
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "cast client --rpc-url http://localhost:8545 2>&1 | grep -q 'anvil' || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Peer 1 — Genesis-like node (EVM only)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  peer1:
+    image: toon:optimized
+    container_name: anvil-peer1
+    command: ['node', '/app/entrypoint-sdk.js']
+    environment:
+      NODE_ID: peer1
+      NOSTR_SECRET_KEY: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2'
+      ILP_ADDRESS: g.toon.peer1
+
+      BTP_SERVER_PORT: '3000'
+      BTP_ENDPOINT: 'ws://peer1:3000'
+
+      SETTLEMENT_RPC_URL: http://anvil:8545
+      SETTLEMENT_PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+      SETTLEMENT_REGISTRY_ADDRESS: '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512'
+      SETTLEMENT_TOKEN_ADDRESS: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+
+      SUPPORTED_CHAINS: 'evm:base:31337'
+      SETTLEMENT_ADDRESS_EVM_BASE_31337: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+      PREFERRED_TOKEN_EVM_BASE_31337: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+      TOKEN_NETWORK_EVM_BASE_31337: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c'
+
+      BLS_PORT: '3100'
+      WS_PORT: '7100'
+
+      BASE_PRICE_PER_BYTE: '10'
+      ASSET_CODE: USD
+      ASSET_SCALE: '6'
+
+      ARDRIVE_ENABLED: 'true'
+
+      NIP59_ENABLED: 'true'
+      NIP59_PEER_PUBKEYS: ${PEER1_NIP59_PEER_PUBKEYS:-}
+
+      DATA_DIR: /data
+    ports:
+      - '19000:3000'  # BTP
+      - '19100:3100'  # BLS
+      - '19700:7100'  # WS Relay
+    volumes:
+      - peer1-data:/data
+    networks:
+      - toon-anvil
+    depends_on:
+      anvil:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3100/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Peer 2 — Bootstraps from Peer 1 (EVM only)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  peer2:
+    image: toon:optimized
+    container_name: anvil-peer2
+    command: ['node', '/app/entrypoint-sdk.js']
+    environment:
+      NODE_ID: peer2
+      NOSTR_SECRET_KEY: 'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3'
+      ILP_ADDRESS: g.toon.peer2
+
+      BTP_SERVER_PORT: '3000'
+      BTP_ENDPOINT: 'ws://peer2:3000'
+
+      SETTLEMENT_RPC_URL: http://anvil:8545
+      SETTLEMENT_PRIVATE_KEY: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a'
+      SETTLEMENT_REGISTRY_ADDRESS: '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512'
+      SETTLEMENT_TOKEN_ADDRESS: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+
+      SUPPORTED_CHAINS: 'evm:base:31337'
+      SETTLEMENT_ADDRESS_EVM_BASE_31337: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC'
+      PREFERRED_TOKEN_EVM_BASE_31337: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+      TOKEN_NETWORK_EVM_BASE_31337: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c'
+
+      BLS_PORT: '3100'
+      WS_PORT: '7100'
+
+      BASE_PRICE_PER_BYTE: '10'
+      ASSET_CODE: USD
+      ASSET_SCALE: '6'
+
+      BOOTSTRAP_PEERS: ${PEER2_BOOTSTRAP_PEERS:-[]}
+
+      ARDRIVE_ENABLED: 'false'
+
+      NIP59_ENABLED: 'true'
+      NIP59_PEER_PUBKEYS: ${PEER2_NIP59_PEER_PUBKEYS:-}
+
+      DATA_DIR: /data
+    ports:
+      - '19010:3000'  # BTP
+      - '19110:3100'  # BLS
+      - '19710:7100'  # WS Relay
+    volumes:
+      - peer2-data:/data
+    networks:
+      - toon-anvil
+    depends_on:
+      peer1:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3100/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s

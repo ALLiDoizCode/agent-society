@@ -1,0 +1,245 @@
+# TOON Dogfood Stack — EVM-only, zero-build
+#
+# Self-contained local TOON network for dogfooding with Ditto.
+# All images are public — no local builds required.
+#
+# Usage:
+#   docker compose -f docker-compose-dogfood.yml up
+#   Open http://localhost:8080 in your browser
+#
+# Architecture:
+#   Anvil (EVM contracts) → Peer1 (Arweave DVM) → Peer2 → Ditto (frontend)
+#
+# See DOGFOOD.md for the full quickstart guide.
+
+networks:
+  toon-dogfood:
+    driver: bridge
+
+volumes:
+  peer1-data:
+  peer2-data:
+
+services:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Anvil — Local Ethereum with auto-deployed contracts
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    container_name: dogfood-anvil
+    entrypoint: []
+    command:
+      - sh
+      - -c
+      - |
+        echo "Starting Anvil..."
+        anvil --host 0.0.0.0 --port 8545 --chain-id 31337 --accounts 10 --balance 10000 &
+        ANVIL_PID=$$!
+
+        echo "Waiting for Anvil to be ready..."
+        until cast client --rpc-url http://localhost:8545 2>/dev/null | grep -q 'anvil'; do
+          sleep 1
+        done
+
+        echo "Deploying contracts..."
+        cd /contracts
+        forge script script/DeployLocal.s.sol:DeployLocalScript --rpc-url http://localhost:8545 --broadcast --skip-simulation || echo "Deployment failed (non-fatal)"
+
+        echo "Funding test accounts with tokens..."
+        DEPLOYER_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+        TOKEN=0x5FbDB2315678afecb367f032d93F642f64180aa3
+        AMOUNT=10000000000000000000000
+        for ADDR in \
+          0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC \
+          0x90F79bf6EB2c4f870365E785982E1f101E93b906 \
+          0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 \
+          0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc \
+          0x976EA74026E726554dB657fA54763abd0C3a0aa9 \
+          0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 \
+          0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f \
+          0xa0Ee7A142d267C1f36714E4a8F75612F20a79720; do
+          cast send --rpc-url http://localhost:8545 --private-key $$DEPLOYER_KEY \
+            $$TOKEN "transfer(address,uint256)" $$ADDR $$AMOUNT 2>/dev/null \
+            && echo "Funded $$ADDR" || echo "Fund $$ADDR failed (non-fatal)"
+        done
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  Anvil ready — contracts deployed!"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        wait $$ANVIL_PID
+    volumes:
+      - ./contracts/evm:/contracts
+    ports:
+      - '18545:8545'
+    networks:
+      - toon-dogfood
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "cast client --rpc-url http://localhost:8545 2>&1 | grep -q 'anvil' || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Peer 1 — Genesis node, Arweave DVM provider (cheapest)
+  # Anvil Account #0 for settlement
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  peer1:
+    image: ghcr.io/toon-protocol/toon:latest
+    container_name: dogfood-peer1
+    command: ['node', '/app/entrypoint-sdk.js']
+    environment:
+      # Identity
+      NODE_ID: peer1
+      NOSTR_SECRET_KEY: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2'
+      ILP_ADDRESS: g.toon.peer1
+
+      # Embedded connector
+      BTP_SERVER_PORT: '3000'
+      BTP_ENDPOINT: 'ws://peer1:3000'
+
+      # Settlement (Anvil Account #0)
+      SETTLEMENT_RPC_URL: http://anvil:8545
+      SETTLEMENT_PRIVATE_KEY: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+      SETTLEMENT_REGISTRY_ADDRESS: '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512'
+      SETTLEMENT_TOKEN_ADDRESS: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+
+      # EVM-only settlement info (published in kind:10032)
+      SUPPORTED_CHAINS: 'evm:base:31337'
+      SETTLEMENT_ADDRESS_EVM_BASE_31337: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+      PREFERRED_TOKEN_EVM_BASE_31337: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+      TOKEN_NETWORK_EVM_BASE_31337: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c'
+
+      # Service ports
+      BLS_PORT: '3100'
+      WS_PORT: '7100'
+
+      # Pricing
+      BASE_PRICE_PER_BYTE: '5'
+      ASSET_CODE: USD
+      ASSET_SCALE: '6'
+
+      # Arweave DVM enabled (free tier <=100KB)
+      ARDRIVE_ENABLED: 'true'
+
+      # NIP-59 privacy wrapping (peer2's pubkey)
+      NIP59_ENABLED: 'true'
+      NIP59_PEER_PUBKEYS: 'ba03c59663731bf678d58caf3ca6bba0c2cac2ac39e5e9b5f8e7b5577f0f4739'
+
+      # Storage
+      DATA_DIR: /data
+    ports:
+      - '19000:3000'  # BTP
+      - '19100:3100'  # BLS
+      - '19700:7100'  # WS Relay
+    volumes:
+      - peer1-data:/data
+    networks:
+      - toon-dogfood
+    depends_on:
+      anvil:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3100/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Peer 2 — Bootstraps from Peer 1, Arweave DVM fallback
+  # Anvil Account #2 for settlement
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  peer2:
+    image: ghcr.io/toon-protocol/toon:latest
+    container_name: dogfood-peer2
+    command: ['node', '/app/entrypoint-sdk.js']
+    environment:
+      # Identity
+      NODE_ID: peer2
+      NOSTR_SECRET_KEY: 'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3'
+      ILP_ADDRESS: g.toon.peer2
+
+      # Embedded connector
+      BTP_SERVER_PORT: '3000'
+      BTP_ENDPOINT: 'ws://peer2:3000'
+
+      # Settlement (Anvil Account #2)
+      SETTLEMENT_RPC_URL: http://anvil:8545
+      SETTLEMENT_PRIVATE_KEY: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a'
+      SETTLEMENT_REGISTRY_ADDRESS: '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512'
+      SETTLEMENT_TOKEN_ADDRESS: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+
+      # EVM-only settlement info
+      SUPPORTED_CHAINS: 'evm:base:31337'
+      SETTLEMENT_ADDRESS_EVM_BASE_31337: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC'
+      PREFERRED_TOKEN_EVM_BASE_31337: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+      TOKEN_NETWORK_EVM_BASE_31337: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c'
+
+      # Service ports
+      BLS_PORT: '3100'
+      WS_PORT: '7100'
+
+      # Pricing (higher — fallback provider)
+      BASE_PRICE_PER_BYTE: '10'
+      ASSET_CODE: USD
+      ASSET_SCALE: '6'
+
+      # Bootstrap from Peer 1
+      BOOTSTRAP_PEERS: '[{"pubkey":"d6bfe100d1600c0d8f769501676fc74c3809500bd131c8a549f88cf616c21f35","relayUrl":"ws://peer1:7100","btpEndpoint":"ws://peer1:3000"}]'
+
+      # Arweave DVM enabled (fallback, higher price)
+      ARDRIVE_ENABLED: 'true'
+
+      # NIP-59 privacy wrapping (peer1's pubkey)
+      NIP59_ENABLED: 'true'
+      NIP59_PEER_PUBKEYS: 'd6bfe100d1600c0d8f769501676fc74c3809500bd131c8a549f88cf616c21f35'
+
+      # Storage
+      DATA_DIR: /data
+    ports:
+      - '19010:3000'  # BTP
+      - '19110:3100'  # BLS
+      - '19710:7100'  # WS Relay
+    volumes:
+      - peer2-data:/data
+    networks:
+      - toon-dogfood
+    depends_on:
+      peer1:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3100/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Ditto — Nostr social client with TOON integration
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ditto:
+    image: ghcr.io/toon-protocol/ditto:latest
+    container_name: dogfood-ditto
+    ports:
+      - '8080:80'
+    networks:
+      - toon-dogfood
+    depends_on:
+      peer1:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost/']
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s

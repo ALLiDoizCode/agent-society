@@ -323,7 +323,7 @@ The Wake layer bridges between the TOON relay network and the Mina blockchain. T
 
 ### Chain Bridge DVM as Permissionless Crank
 
-The Chain Bridge DVM (kind:5260, Epic 11) is a generic primitive for broadcasting signed transactions to any blockchain. For the Overmind Protocol, a Mina-specific Chain Bridge adapter:
+The Chain Bridge DVM (kind:5260, Epic 13) is a generic primitive for broadcasting signed transactions to any blockchain. For the Overmind Protocol, a Mina-specific Chain Bridge adapter:
 
 1. Subscribes to kind:5099 (wake request) events on the TOON relay
 2. Reads the embedded Mina transaction (VRF selection call)

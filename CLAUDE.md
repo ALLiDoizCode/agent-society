@@ -10,8 +10,21 @@ ILP-gated Nostr relay. Pay to write, free to read.
 
 ```bash
 # Build & test
-pnpm install && pnpm build && pnpm test   # Build & test all packages
+pnpm install && pnpm build                 # Build all packages
+pnpm --filter <pkg> test                   # Test ONE package (e.g. @toon-protocol/client)
+pnpm --filter <pkg> build                  # Build ONE package (prefer over root `pnpm build`)
 pnpm lint && pnpm format                   # Lint & format
+# ⚠️ NEVER run `pnpm test` at workspace root — it spawns 17 parallel vitest
+#    processes and will exhaust RAM. Always test per-package with --filter.
+# ⚠️ NEVER run `pnpm build` at workspace root from sub-agents — it builds 17+
+#    packages and can exhaust RAM. Use `pnpm --filter <pkg> build` instead.
+#    Root-level `pnpm build` is OK from the main conversation only when needed.
+# ⚠️ pet-circuit tests (o1js/WASM) are extremely memory-heavy (~2-4 GB).
+#    SKIP `pnpm --filter @toon-protocol/pet-circuit test` from sub-agents.
+#    Only run pet-circuit tests from the main conversation with explicit user approval.
+# ⚠️ Sub-agents MUST set timeouts on all Bash commands (timeout: 60000 for
+#    builds, 120000 for tests) and NEVER run long processes in background
+#    without cleanup. Orphaned Node processes exhaust system memory.
 
 # SDK E2E infrastructure (multi-hop routing, payment channels, DVM lifecycle)
 ./scripts/sdk-e2e-infra.sh up              # Build, start Anvil + 2 Docker peers, wait for health
@@ -86,19 +99,12 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 | Topic | Location |
 | --- | --- |
 | **All coding rules, patterns, conventions** | `_bmad-output/project-context.md` |
-| Epic roadmap & status (Epics 1-9 complete, 10+ planned) | `_bmad-output/project-context.md` section "Epic Roadmap" |
-| TOON Agent Architecture (six-layer model, Loony, provider model) | `_bmad-output/project-context.md` section "TOON Agent Architecture" |
 | HyperBEAM integration strategy & R&D phases | `_bmad-output/planning-artifacts/research/toon-hyperbeam-integration-strategy.md` |
-| Known action items (Epic 9 retro) | `_bmad-output/project-context.md` section "Known Action Items" |
-| Claude Agent Skills (30+ TOON skills, Epic 9) | `.claude/skills/` |
+| Claude Agent Skills (55 skill directories) | `.claude/skills/` |
 | NIP-to-TOON Skill Pipeline | `.claude/skills/nip-to-toon-skill/SKILL.md` |
 | Skill Eval Framework | `.claude/skills/skill-eval-framework/SKILL.md` |
 | Skill structural validation tests | `tests/skills/`, `packages/core/src/skills/` |
 | Epic 9 retrospective | `_bmad-output/auto-bmad-artifacts/epic-9-retro-report.md` |
-| DVM compute marketplace architecture | `_bmad-output/project-context.md` section "DVM Compute Marketplace" |
-| Advanced DVM coordination (workflows, swarms, reputation) | `_bmad-output/project-context.md` section "Advanced DVM Coordination + TEE Integration" |
-| TEE architecture & attestation flow | `_bmad-output/project-context.md` section "TEE Integration" |
-| Chain config & env vars | `_bmad-output/project-context.md` section "Chain Configuration Rules" |
 | Oyster CVM Dockerfile & compose | `docker/Dockerfile.oyster`, `docker/docker-compose-oyster.yml` |
 | SDK E2E Docker compose | `docker-compose-sdk-e2e.yml` |
 | Nix reproducible build flake | `flake.nix` (root) |
@@ -108,13 +114,11 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 | Content publishing workflow | `_bmad-output/planning-artifacts/content/publish-workflow.md` |
 | Character spec (brand voice) | `_bmad-output/planning-artifacts/content/character-spec.md` |
 | Article drafts | `_bmad-output/planning-artifacts/content/article-N/` |
-| ILP address hierarchy & protocol economics | `_bmad-output/project-context.md` section "ILP Address Hierarchy & Protocol Economics" |
 | Prepaid protocol decisions | `_bmad-output/planning-artifacts/research/party-mode-prepaid-protocol-decisions-2026-03-20.md` |
 | Network primitives strategy (four primitives) | `_bmad-output/planning-artifacts/research/party-mode-network-primitives-strategy-2026-03-22.md` |
 | Overmind Protocol decisions (Epics 13-17) | `_bmad-output/planning-artifacts/research/party-mode-overmind-protocol-decisions-2026-03-24.md` |
 | Overmind epics & stories | `_bmad-output/overmind-epics-and-stories.md` |
 | Arweave integration research | `_bmad-output/planning-artifacts/research/technical-arweave-integration-research-2026-03-24.md` |
-| The Rig -- Arweave DVM + Forge-UI (Epic 8) | `_bmad-output/project-context.md` section "The Rig" |
 | Forge-UI source (Vite SPA) | `packages/rig/src/web/` |
 | Forge-UI Arweave deploy script | `scripts/deploy-forge-ui.mjs` |
 | Rig pointer deploy script | `scripts/deploy-rig-pointer.mjs` |
@@ -122,6 +126,9 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 | Rig usage guide | `docs/rig-guide.md` |
 | Socialverse E2E orchestrator | `scripts/socialverse-e2e.ts` |
 | Mock USDC deployment script | `scripts/deploy-mock-usdc.sh` |
+| Dev Signal template (for Drew) | `_bmad-output/dev-signals/_template.md` |
+| Dev Signal archive | `_bmad-output/dev-signals/` |
+| Dev Signal command | `.claude/commands/dev-signal.md` (invoke via `/dev-signal`) |
 
 ## Browser Verification
 
