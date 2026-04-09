@@ -1,6 +1,6 @@
 # Story 11.15: Dungeon Engine Core
 
-Status: ready-for-dev
+Status: done
 ui_impact: false
 
 ## Story
@@ -317,14 +317,34 @@ packages/pet-dvm/src/
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-sonnet-4-6
 
 ### Debug Log References
 
+None — clean implementation run.
+
 ### Completion Notes List
 
+- rot-js installed as dependency; ships its own TypeScript declarations (no @types/rot-js needed)
+- ROTMap.Rogue constructor requires 3 args (width, height, options) — empty options object `{}` used
+- ROTMap.Cellular has no getRooms(); deriveCellularRooms() samples passable cells as pseudo-rooms
+- Room.getCenter() returns `number[]` not `[number, number]` — used `as unknown as Room` for fallback stubs
+- Global RNG singleton reset via RNG.setSeed() at start of every run() call — determinism confirmed 4×100
+- All 20 ACs satisfied; 29 new tests; 244/244 total tests passing
+
 ### File List
+
+- `packages/pet-dvm/src/dungeon/types.ts` (created)
+- `packages/pet-dvm/src/dungeon/DungeonGameEngine.ts` (created)
+- `packages/pet-dvm/src/dungeon/DungeonGameEngine.test.ts` (created)
+- `packages/pet-dvm/src/index.ts` (modified — dungeon exports added)
+- `packages/pet-dvm/package.json` (modified — rot-js added)
+- `_bmad-output/test-artifacts/atdd-checklist-11-15.md` (created)
+- `_bmad-output/test-artifacts/nfr-assessment-11-15.md` (created)
+- `_bmad-output/test-artifacts/traceability/story-11-15-trace.md` (created)
+- `_bmad-output/auto-bmad-artifacts/story-11-15-report.md` (created)
 
 ### Change Log
 
 - 2026-04-09: Story 11-15 created and ready for development.
+- 2026-04-09: Story 11-15 implemented and completed by claude-sonnet-4-6.

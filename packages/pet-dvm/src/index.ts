@@ -57,6 +57,26 @@ export type {
   ArweaveUploadAdapter,
 } from './checkpoint/types';
 
+// Dungeon
+export {
+  DungeonGameEngine,
+  DEFAULT_MONSTER_TABLE,
+  DEFAULT_LOOT_TABLE,
+  hashSeed,
+} from './dungeon/DungeonGameEngine';
+export type {
+  DungeonConfig,
+  DungeonPetStats,
+  DungeonRunResult,
+  DungeonStatDelta,
+  EncounterRecord,
+  LootRecord,
+  MonsterEntry,
+  LootEntry,
+  DungeonEngineErrorCode,
+} from './dungeon/types';
+export { DungeonEngineError } from './dungeon/types';
+
 // Pricing
 export { calculatePetInteractionPrice } from './pricing/calculatePetInteractionPrice';
 export {
