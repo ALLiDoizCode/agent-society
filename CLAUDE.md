@@ -19,6 +19,12 @@ pnpm lint && pnpm format                   # Lint & format
 # ⚠️ NEVER run `pnpm build` at workspace root from sub-agents — it builds 17+
 #    packages and can exhaust RAM. Use `pnpm --filter <pkg> build` instead.
 #    Root-level `pnpm build` is OK from the main conversation only when needed.
+# ⚠️ pet-circuit tests (o1js/WASM) are extremely memory-heavy (~2-4 GB).
+#    SKIP `pnpm --filter @toon-protocol/pet-circuit test` from sub-agents.
+#    Only run pet-circuit tests from the main conversation with explicit user approval.
+# ⚠️ Sub-agents MUST set timeouts on all Bash commands (timeout: 60000 for
+#    builds, 120000 for tests) and NEVER run long processes in background
+#    without cleanup. Orphaned Node processes exhaust system memory.
 
 # SDK E2E infrastructure (multi-hop routing, payment channels, DVM lifecycle)
 ./scripts/sdk-e2e-infra.sh up              # Build, start Anvil + 2 Docker peers, wait for health
