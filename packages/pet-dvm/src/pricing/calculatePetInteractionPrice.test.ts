@@ -49,8 +49,13 @@ describe('calculatePetInteractionPrice', () => {
   });
 
   it('throws PricingError with INVALID_EXCHANGE_RATE for zero exchange rate', () => {
-    const config: PetPricingConfig = { exchangeRateUsdcPerPet: 0n, marginBps: 200 };
-    expect(() => calculatePetInteractionPrice(10, config)).toThrow(PricingError);
+    const config: PetPricingConfig = {
+      exchangeRateUsdcPerPet: 0n,
+      marginBps: 200,
+    };
+    expect(() => calculatePetInteractionPrice(10, config)).toThrow(
+      PricingError
+    );
     try {
       calculatePetInteractionPrice(10, config);
     } catch (err) {
@@ -59,8 +64,13 @@ describe('calculatePetInteractionPrice', () => {
   });
 
   it('throws PricingError with INVALID_MARGIN_BPS for negative margin', () => {
-    const config: PetPricingConfig = { exchangeRateUsdcPerPet: 1000n, marginBps: -1 };
-    expect(() => calculatePetInteractionPrice(10, config)).toThrow(PricingError);
+    const config: PetPricingConfig = {
+      exchangeRateUsdcPerPet: 1000n,
+      marginBps: -1,
+    };
+    expect(() => calculatePetInteractionPrice(10, config)).toThrow(
+      PricingError
+    );
     try {
       calculatePetInteractionPrice(10, config);
     } catch (err) {
@@ -69,7 +79,10 @@ describe('calculatePetInteractionPrice', () => {
   });
 
   it('returns exact base price when marginBps is 0', () => {
-    const config: PetPricingConfig = { exchangeRateUsdcPerPet: 1000n, marginBps: 0 };
+    const config: PetPricingConfig = {
+      exchangeRateUsdcPerPet: 1000n,
+      marginBps: 0,
+    };
     // 10 PET * 1000 USDC/PET * 1.0 = 10000
     const price = calculatePetInteractionPrice(10, config);
     expect(price).toBe(10000n);
@@ -88,7 +101,9 @@ describe('calculatePetInteractionPrice', () => {
   });
 
   it('throws PricingError with INVALID_TOKEN_COST for non-integer petTokenCost', () => {
-    expect(() => calculatePetInteractionPrice(10.5, DEFAULT_CONFIG)).toThrow(PricingError);
+    expect(() => calculatePetInteractionPrice(10.5, DEFAULT_CONFIG)).toThrow(
+      PricingError
+    );
     try {
       calculatePetInteractionPrice(10.5, DEFAULT_CONFIG);
     } catch (err) {
@@ -97,7 +112,10 @@ describe('calculatePetInteractionPrice', () => {
   });
 
   it('handles custom exchange rate', () => {
-    const config: PetPricingConfig = { exchangeRateUsdcPerPet: 500n, marginBps: 0 };
+    const config: PetPricingConfig = {
+      exchangeRateUsdcPerPet: 500n,
+      marginBps: 0,
+    };
     // 10 PET * 500 USDC/PET = 5000
     const price = calculatePetInteractionPrice(10, config);
     expect(price).toBe(5000n);

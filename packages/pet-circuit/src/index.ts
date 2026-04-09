@@ -9,7 +9,7 @@
  */
 
 // Core structs
-export { PetStats, PetAction, PetState } from './structs';
+export { PetStats, PetAction, PetState, BreedingState } from './structs';
 
 // ZkProgram and proof class
 export {
@@ -17,6 +17,13 @@ export {
   PetLifecycleProof,
   CooldownTimestamps,
 } from './PetLifecycle';
+
+// Breeding ZkProgram and proof class
+export {
+  PetBreeding,
+  PetBreedingProof,
+  BREEDING_STAT_MIN,
+} from './PetBreeding';
 
 // SmartContract and proof class for method signatures
 export { PetZkApp, PetProof } from './PetZkApp';

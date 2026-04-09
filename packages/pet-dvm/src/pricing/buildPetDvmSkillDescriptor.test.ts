@@ -70,7 +70,9 @@ describe('buildPetDvmSkillDescriptor', () => {
 
   it('inputSchema describes action as integer in [0, 10]', () => {
     const descriptor = buildPetDvmSkillDescriptor(DEFAULT_CONFIG);
-    const properties = descriptor.inputSchema['properties'] as Record<string, Record<string, unknown>> | undefined;
+    const properties = descriptor.inputSchema['properties'] as
+      | Record<string, Record<string, unknown>>
+      | undefined;
     const actionSchema = properties?.['action'];
     expect(actionSchema).toBeDefined();
     expect(actionSchema?.['type']).toBe('integer');

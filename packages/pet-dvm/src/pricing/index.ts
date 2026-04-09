@@ -18,4 +18,8 @@ export {
   buildPetDvmSkillDescriptor,
   type PetDvmServiceDiscoveryConfig,
 } from './buildPetDvmSkillDescriptor';
-export { PricingError, type PetPricingConfig, type PricingErrorCode } from './types';
+export {
+  PricingError,
+  type PetPricingConfig,
+  type PricingErrorCode,
+} from './types';

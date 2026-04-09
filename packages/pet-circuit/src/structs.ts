@@ -59,3 +59,23 @@ export class PetState extends Struct({
   lifecycleHash: Field,
   cooldownHash: Field,
 }) {}
+
+/**
+ * Output of PetBreeding.breed() — the initial state of a bred offspring.
+ *
+ * stage: always 0 (egg) — offspring always start as eggs
+ * parentAHash: lifecycleHash of parent A (provable parentage)
+ * parentBHash: lifecycleHash of parent B (provable parentage)
+ * offspringBrainHash: Poseidon(parentA.brainHash, parentB.brainHash) — deterministic seed
+ * lifecycleHash: Poseidon(parentA.lifecycleHash, parentB.lifecycleHash, offspringBrainHash, 0)
+ * cooldownHash: Poseidon of 11 zeros — all cooldowns reset at birth
+ */
+export class BreedingState extends Struct({
+  stats: PetStats,
+  stage: UInt32,
+  parentAHash: Field,
+  parentBHash: Field,
+  offspringBrainHash: Field,
+  lifecycleHash: Field,
+  cooldownHash: Field,
+}) {}

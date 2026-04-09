@@ -238,7 +238,7 @@ development_status:
   11-10-ditto-proof-status-ui: done
   11-11-cross-chain-dvm-pricing: done
   11-12-arweave-checkpoint-automation: done
-  11-13-breeding-circuit: backlog
+  11-13-breeding-circuit: done
   11-14-pet-marketplace: backlog
   # Sprint 5: Pet Dungeon Crawl (Party Mode 2026-04-08 — Living Dungeon research)
   # Extension: pets crawl procedurally-generated dungeons via rot.js + DVM compute

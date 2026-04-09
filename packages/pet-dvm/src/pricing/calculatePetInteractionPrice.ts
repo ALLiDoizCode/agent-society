@@ -27,7 +27,11 @@ export function calculatePetInteractionPrice(
   config: PetPricingConfig
 ): bigint {
   // Validate petTokenCost: must be a non-negative integer (PET tokens are whole units)
-  if (!Number.isFinite(petTokenCost) || petTokenCost < 0 || !Number.isInteger(petTokenCost)) {
+  if (
+    !Number.isFinite(petTokenCost) ||
+    petTokenCost < 0 ||
+    !Number.isInteger(petTokenCost)
+  ) {
     throw new PricingError(
       `petTokenCost must be a non-negative integer, got: ${petTokenCost}`,
       'INVALID_TOKEN_COST'

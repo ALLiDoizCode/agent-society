@@ -63,11 +63,7 @@ export const DEFAULT_MARGIN_BPS = 200;
  * @throws {PricingError} If actionType is outside the valid range [0, 10].
  */
 export function getActionPetCost(actionType: number): number {
-  if (
-    !Number.isInteger(actionType) ||
-    actionType < 0 ||
-    actionType > 10
-  ) {
+  if (!Number.isInteger(actionType) || actionType < 0 || actionType > 10) {
     throw new PricingError(
       `actionType must be an integer in [0, 10], got: ${actionType}`,
       'INVALID_ACTION_TYPE'
