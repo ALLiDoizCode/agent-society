@@ -2302,11 +2302,13 @@ Each skill follows a consistent structure produced by the NIP-to-TOON pipeline (
 **Build & Scripts:**
 
 - **Build all packages:** `pnpm build` (runs `pnpm -r run build` recursively)
-- **Test all packages:** `pnpm test` (Vitest)
+- **Test all packages:** `pnpm test` (Vitest) — use only for final validation
+- **Test a single package (preferred during development):** `pnpm --filter @toon-protocol/<pkg> test` (e.g. `pnpm --filter @toon-protocol/client test`)
 - **Test with coverage:** `pnpm test:coverage`
 - **Lint codebase:** `pnpm lint`
 - **Format code:** `pnpm format` (write), `pnpm format:check` (check only)
 - **Package-level scripts:** Each package has its own `build`, `test`, `dev` scripts
+- **Memory-safe testing:** During story development, always run scoped package tests instead of the full `pnpm test` suite to avoid excessive Node process spawning. Only run the root `pnpm test` as the final validation step.
 - **SDK integration tests:** `cd packages/sdk && pnpm test:integration`
 - **Town E2E tests:** `cd packages/town && pnpm test:e2e` (requires genesis node)
 - **Nix Docker build:** `nix build .#docker-image` (requires Nix package manager)
