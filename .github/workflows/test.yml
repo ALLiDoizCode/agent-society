@@ -69,7 +69,7 @@ jobs:
         run: pnpm format:check
 
       - name: Build all packages
-        run: pnpm -r build
+        run: pnpm -r --filter '!@toon-protocol/memvid-node' build
 
       - name: Cache build artifacts
         uses: actions/cache/save@v4
