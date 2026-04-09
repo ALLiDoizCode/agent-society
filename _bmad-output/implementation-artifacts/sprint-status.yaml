@@ -225,7 +225,7 @@ development_status:
   # Dependencies: Epic 8 (Arweave DVM), Epic 5 (DVM kinds), Mina lightnet (existing infra)
   # New packages: @toon-protocol/memvid-node (napi-rs), @toon-protocol/pet-circuit (o1js), @toon-protocol/pet-dvm
   # 14 stories across 4 sprints: Foundation, DVM Integration, Client+Economy, Advanced
-  epic-11: in-progress
+  epic-11: done
   11-1-napi-rs-memvid-binding: done
   11-2-pet-lifecycle-zkprogram: done
   11-3-pet-zkapp-smartcontract: done
@@ -248,7 +248,7 @@ development_status:
   11-16-pet-dungeon-stat-bridge: done
   11-17-dungeon-dvm-handler: done
   11-18-dungeon-adventure-log: done
-  epic-11-retrospective: optional
+  epic-11-retrospective: done
 
   # Epic 12: Token Swap Primitive — NIP-59 Gift-Wrapped ILP Micropayment Swaps
   # Decision source: Party Mode 2026-04-09 — Token swapping via ILP packet streaming

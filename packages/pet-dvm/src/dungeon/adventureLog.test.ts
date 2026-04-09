@@ -188,8 +188,16 @@ describe('generateAdventureLog — log format (AC-7)', () => {
 
     // loot array item shape: must contain exactly { itemId, itemName, rarity } per AC-1
     expect(entry.loot).toHaveLength(baseResult.lootFound.length);
-    expect(entry.loot[0]).toEqual({ itemId: 'sword', itemName: 'Iron Sword', rarity: 0.5 });
-    expect(entry.loot[1]).toEqual({ itemId: 'potion', itemName: 'Health Potion', rarity: 0.3 });
+    expect(entry.loot[0]).toEqual({
+      itemId: 'sword',
+      itemName: 'Iron Sword',
+      rarity: 0.5,
+    });
+    expect(entry.loot[1]).toEqual({
+      itemId: 'potion',
+      itemName: 'Health Potion',
+      rarity: 0.3,
+    });
 
     // Derived stats from result
     expect(entry.dungeonSeed).toBe(baseResult.seed);

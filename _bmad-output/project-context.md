@@ -1,7 +1,7 @@
 ---
 project_name: 'toon'
 user_name: 'Jonathan'
-date: '2026-03-28'
+date: '2026-04-09'
 sections_completed:
   [
     'technology_stack',
@@ -13,7 +13,7 @@ sections_completed:
     'critical_rules',
   ]
 status: 'complete'
-rule_count: 540
+rule_count: 580
 optimized_for_llm: true
 ---
 
@@ -54,6 +54,9 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **Arweave:** arweave ^1.15.5, @ardrive/turbo-sdk ^1.41.0 (blob storage DVM, Forge-UI deployment)
 - **Git:** simple-git (core nip34 module)
 - **Forge-UI Build:** vite ^5.0 (static SPA build), marked ^17.0 (markdown rendering), @playwright/test ^1.42 (E2E)
+- **ZK / Mina:** o1js ^2.2.0 (pet-circuit: PetLifecycle ZkProgram, PetZkApp SmartContract, PetToken, PetBreeding circuit)
+- **Rust / Native Addon:** napi-rs ^2.18.0 (memvid-node: Rust→Node.js native addon for .mv2 pet brain files), Cargo workspace with memvid path dep
+- **Dungeon Engine:** rot-js ^2.2.1 (procedural generation, pathfinding, FOV, seedable RNG — used by pet-dvm DungeonGameEngine)
 
 **TypeScript Compiler Options (Critical):**
 
@@ -69,8 +72,18 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - TOON format is 1.x (critical for relay compatibility)
 - @noble/curves and @scure libraries share the same secp256k1 implementation as nostr-tools' @noble/curves dependency
 - viem 2.x required for EIP-3009 settlement and EIP-712 typed data verification
+- o1js must stay at 2.x -- WASM runtime; incompatible with vitest (use Jest for pet-circuit tests)
+- Node.js >=22.11.0 required for pet-circuit and pet-dvm packages (o1js WASM requirement)
+- memvid-node requires Rust + napi-rs build toolchain at compile time; prebuilt `.node` binary committed for darwin-arm64
 
-## Project Structure (Post-Epic 9)
+**Test Runner Split (Critical):**
+
+- **vitest** -- All packages EXCEPT pet-circuit. Root `vitest.config.ts` excludes `packages/pet-circuit/**`.
+- **Jest** (^29.7.0 + ts-jest) -- ONLY `@toon-protocol/pet-circuit` and `@toon-protocol/mina-zkapp`. Required due to o1js WASM incompatibility with vitest.
+- **NEVER run pet-circuit tests with vitest** -- Will fail with WASM errors.
+- pet-dvm and mina-zkapp also use Jest (not vitest). All other packages use vitest.
+
+## Project Structure (Post-Epic 11)
 
 ```
 toon/
@@ -126,6 +139,10 @@ toon/
 │   ├── faucet/      # @toon-protocol/faucet -- Token distribution for dev testing (plain JS, dev-only)
 │   ├── examples/    # @toon-protocol/examples -- Demo applications
 │   ├── rig/         # @toon-protocol/rig -- Forge-UI: decentralized git forge web interface (Epic 8, Vite SPA on Arweave, rig pointer system added Epic 9)
+│   ├── memvid-node/ # @toon-protocol/memvid-node -- Rust/napi-rs native addon for .mv2 pet brain files (Epic 11, Story 11-1)
+│   ├── mina-zkapp/  # @toon-protocol/mina-zkapp -- Mina payment channel zkApp o1js SmartContract (Epic 11, Story 11-8)
+│   ├── pet-circuit/ # @toon-protocol/pet-circuit -- PetLifecycle ZkProgram + PetZkApp SmartContract + PetToken + PetBreeding (Epic 11, Stories 11-2/11-3/11-8/11-13)
+│   ├── pet-dvm/     # @toon-protocol/pet-dvm -- Pet DVM handler, game engine, dungeon engine, checkpoint, pricing (Epic 11, Stories 11-4/11-5/11-15-11-18)
 │   ├── overmind/    # Overmind Protocol spike code (Epics 15-19, spike only)
 │   └── loony/       # @toon-protocol/loony -- (planned, Epic 15: autonomous agent example application)
 ├── docker/          # Container entrypoint (pnpm workspace member)
@@ -166,6 +183,14 @@ toon/
     |       (+ relay + viem)
     |
 @toon-protocol/relay   <-- Town depends on relay for EventStore + NostrRelayServer
+
+@toon-protocol/memvid-node   <-- Rust/napi-rs native addon (standalone, no TOON deps -- wraps Memvid Rust API)
+    ^
+@toon-protocol/pet-circuit   <-- o1js ZK circuits (standalone -- depends only on o1js, no TOON deps)
+
+@toon-protocol/pet-dvm       <-- Pet DVM handler + game/dungeon engine (depends on memvid-node + pet-circuit + rot-js)
+    ^
+@toon-protocol/client        <-- Client SDK (depends on pet-dvm indirectly via E2E tests only)
 ```
 
 **Boundary Rules:**
@@ -179,6 +204,9 @@ toon/
 - Town x402 handler imports viem directly for EIP-3009 settlement and EIP-712 verification
 - Docker entrypoints import from `@toon-protocol/core` (attestation events, KMS identity), `@toon-protocol/sdk`, `@toon-protocol/town`, and `@toon-protocol/relay`
 - Claude Agent Skills (`.claude/skills/`) are standalone markdown + JSON artifacts -- no TypeScript imports, no build step. Skills reference `toon-protocol-context.md` for shared protocol context.
+- pet-circuit imports ONLY o1js -- never core/sdk/bls/relay. It is a standalone ZK package.
+- pet-dvm imports pet-circuit and memvid-node (workspace:* deps) -- never core/sdk/relay directly. DVM protocol integration happens at the handler boundary via injected HandlerContext types.
+- memvid-node is a Rust native addon -- no TypeScript workspace dependencies.
 
 ## Epic Roadmap
 
@@ -192,8 +220,8 @@ Epic 6: Advanced DVM Coordination + TEE          COMPLETE (4/4 stories, 21/21 AC
 Epic 7: ILP Address Hierarchy & Protocol Econ    COMPLETE (6/6 stories, 35/35 ACs)
 Epic 8: The Rig -- Arweave DVM + Forge-UI        COMPLETE (8 stories: 8.0 Arweave DVM + 8.1-8.6 Forge-UI + 8.7 Arweave Deploy)
 Epic 9: NIP-to-TOON Skill Pipeline + Socialverse  COMPLETE (35/35 stories, 30+ skills, +1,036 tests)
-Epic 10: Rig E2E Integration Test Suite            PLANNED (18 stories; read-side E2E via real SDK infra, incremental git pushes, Playwright specs, nested nav regression, multi-client conversations)
-Epic 11: TOON Pets — ZK-Proven Virtual Pet Economy IN-PROGRESS (18 stories across 5 sprints; ZK-proven pet lifecycle on Mina, Memvid brain, ILP cross-chain payment, Pet DVM + Pet Dungeon Crawl extension; spec: pet-zkapp-*.md, party-mode-dungeon-engine-decisions-2026-04-08.md)
+Epic 10: Rig E2E Integration Test Suite            IN-PROGRESS (9/18 stories done; read-side E2E via real SDK infra, incremental git pushes, Playwright specs, nested nav regression, multi-client conversations)
+Epic 11: TOON Pets — ZK-Proven Virtual Pet Economy COMPLETE (18/18 stories, 5 sprints, 96% traceability; ZK-proven pet lifecycle on Mina, Memvid brain, ILP cross-chain payment, Pet DVM + Pet Dungeon Crawl extension; 3 new packages: memvid-node, pet-circuit, pet-dvm; +1,061 tests)
 Epic 12: Token Swap Primitive                       PLANNED (6-8 stories; NIP-59 gift-wrapped ILP micropayment swaps, optional swapPairs on IlpPeerInfo, multi-asset connector handler, streamSwap() client API, signed claims in FULFILL; spec: epic-12-token-swap-primitive.md, party-mode 2026-04-09)
 Epic 13: Chain Bridge Primitive (kind:5260)        PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
 Epic 14: Compute Primitive (kind:5250)             PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
@@ -205,7 +233,7 @@ Epic 19: Overmind Biography                          PLANNED (5 stories; recursi
 Epic 20: Overmind Swarm                              PLANNED (5 stories; sub-agent spawning, NIP-44 parent-child comms, DVM task delegation, swarm treasury management)
 ```
 
-**Epic progression:** Build SDK -> Prove it with relay -> Make protocol production-grade -> Make it verifiable -> Build DVM compute marketplace -> Advanced coordination + verifiable compute -> Hierarchical addressing & protocol economics -> Build applications on top: blob storage primitive + Forge-UI (DONE) -> Teach agents the protocol: skills pipeline + 30+ socialverse skills (DONE) -> Rig E2E integration test suite (real infra, no mocks, Playwright) -> Token swap primitive (NIP-59 gift-wrapped ILP micropayment swaps, multi-asset connectors) -> Chain bridge provider protocol + DX (spec, test harness, handoff docs; composes with Token Swap for zero-token cross-chain onboarding) -> Compute provider protocol + DX (spec, test harness, handoff docs) -> Loony autonomous agent (demand-side proof composing all four primitives) -> Overmind sovereign agents (Mina VRF + Arweave state + TEE identity + ILP economics).
+**Epic progression:** Build SDK -> Prove it with relay -> Make protocol production-grade -> Make it verifiable -> Build DVM compute marketplace -> Advanced coordination + verifiable compute -> Hierarchical addressing & protocol economics -> Build applications on top: blob storage primitive + Forge-UI (DONE) -> Teach agents the protocol: skills pipeline + 30+ socialverse skills (DONE) -> Rig E2E integration test suite (real infra, no mocks, Playwright, in-progress) -> TOON Pets: ZK-proven virtual pet economy on Mina + Memvid brain + Pet Dungeon Crawl (DONE) -> Token swap primitive (NIP-59 gift-wrapped ILP micropayment swaps, multi-asset connectors) -> Chain bridge provider protocol + DX (spec, test harness, handoff docs; composes with Token Swap for zero-token cross-chain onboarding) -> Compute provider protocol + DX (spec, test harness, handoff docs) -> Loony autonomous agent (demand-side proof composing all four primitives) -> Overmind sovereign agents (Mina VRF + Arweave state + TEE identity + ILP economics).
 
 **Strategic North Star (Party Mode 2026-03-22, updated 2026-03-24):** TOON Protocol = "Stripe for decentralized services." Four network primitives — Messaging (kind:1), Blob Storage (kind:5094), Compute (kind:5250), Chain Bridge (kind:5260) — with unified ILP payment, Nostr discovery (kind:10035), self-describing receipts, and competing providers. DVM providers are resellers who earn convenience fees for abstracting backend complexity. Protocol proves itself through example applications: **Forge** (decentralized git), **Loony** (autonomous agent), and **Overmind** (sovereign agent living on the network — Mina ZK adjudication, Arweave permanent memory, TEE-born identity, self-funding economics). Provider implementations are out of scope — TOON defines the provider protocol + ships handoff docs; third-party teams build providers for their platforms (HyperBEAM, Oyster CVM, Akash, per-chain bridge operators). Full decision records: `_bmad-output/planning-artifacts/research/party-mode-network-primitives-strategy-2026-03-22.md`, `_bmad-output/planning-artifacts/research/party-mode-overmind-protocol-decisions-2026-03-24.md`
 
@@ -281,6 +309,10 @@ These decisions shape Epics 3-5 and future development. Full details in `_bmad-o
 | 1621 | Issue (NIP-34) | Skill-documented (Epic 9, Story 9.26) -- Forge-UI reads |
 | 1622 | Comment (NIP-34) | Skill-documented (Epic 9, Story 9.26) -- Forge-UI reads |
 | 1630-1633 | Status Events (NIP-34) | Skill-documented (Epic 9, Story 9.26) -- open/applied/closed/draft |
+| 5300 | Pet Interaction Request (NIP-90) | Implemented (Epic 11, Story 11-5) -- pet DVM job request (feed, play, clean, etc.) |
+| 6300 | Pet Interaction Result (NIP-90) | Implemented (Epic 11, Story 11-5) -- pet DVM result with new state hash + ZK proof status |
+| 5301 | Dungeon Run Request (NIP-90) | Implemented (Epic 11, Story 11-17) -- dungeon crawl DVM job request |
+| 6301 | Dungeon Run Result (NIP-90) | Implemented (Epic 11, Story 11-17) -- dungeon outcome with stat deltas + narrative log reference |
 | 5099 | Overmind Wake Request | Planned (Epic 16) -- overmind publishes to schedule next wake cycle |
 | 5101 | Overmind Wake Winner Announcement | Planned (Epic 16) -- Chain Bridge publishes after Mina VRF selection |
 | 5102 | Overmind Cycle Execution Record | Planned (Epic 16) -- overmind publishes cycle results, anchored to Arweave |
@@ -1753,6 +1785,208 @@ Each skill follows a consistent structure produced by the NIP-to-TOON pipeline (
 | New runtime dependencies | 0 (5th consecutive epic) |
 | Pre-existing bugs fixed | 2 (Arweave DVM base64, Vite base path) |
 
+## TOON Pets — ZK-Proven Virtual Pet Economy (Epic 11 -- Complete)
+
+Epic 11 delivered the TOON Pets application: a ZK-proven virtual pet economy on Mina Protocol, with a Memvid-based pet brain (Rust native addon), ILP cross-chain payment, a full Pet DVM handler, and a Pet Dungeon Crawl extension added mid-epic. Three entirely new packages were shipped.
+
+**Epic 11 Stories (18 total, 5 sprints):**
+| Sprint | Stories | Deliverables |
+|--------|---------|-------------|
+| Sprint 1: Foundation | 11-1, 11-2, 11-3, 11-4 | napi-rs Memvid Binding, PetLifecycle ZkProgram, PetZkApp SmartContract, Pet Game Engine |
+| Sprint 2: DVM Integration | 11-5, 11-6, 11-7 | Pet DVM Handler, Peer Enablement, Pet DVM E2E Test |
+| Sprint 3: Client + Economy | 11-8, 11-9, 11-10, 11-11 | PET Token on Mina, Ditto Pet DVM Integration, Ditto Proof Status UI, Cross-Chain DVM Pricing |
+| Sprint 4: Advanced | 11-12, 11-13, 11-14 | Arweave Checkpoint Automation, Breeding Circuit, Pet Marketplace |
+| Sprint 5: Dungeon Crawl (added 2026-04-08) | 11-15, 11-16, 11-17, 11-18 | Dungeon Engine Core, Pet-Dungeon Stat Bridge, Dungeon DVM Handler, Dungeon Adventure Log |
+
+**New Packages (Epic 11):**
+
+```
+packages/memvid-node/          # @toon-protocol/memvid-node -- Rust/napi-rs native addon
+├── src/lib.rs                  # napi-rs bindings: MemvidEncoder, MemvidReader, composite hash
+├── Cargo.toml                  # Rust package (depends on memvid at ../../../memvid)
+├── index.js / index.cjs / index.esm.js  # ESM/CJS bridge for Node.js
+├── index.d.ts                  # TypeScript declarations
+└── memvid-node.darwin-arm64.node  # Prebuilt native binary (darwin-arm64)
+
+packages/pet-circuit/          # @toon-protocol/pet-circuit -- o1js ZK circuits (Jest, not vitest)
+└── src/
+    ├── constants.ts            # Game rule constants (decay rates, action effects, shop items, evolution thresholds)
+    ├── structs.ts              # o1js Struct types (PetState, PetAction, PetBatch)
+    ├── utils.ts                # Field conversion utilities (BLAKE3→Field, u64 guards)
+    ├── PetLifecycle.ts         # PetLifecycle ZkProgram (state transition circuit)
+    ├── PetZkApp.ts             # PetZkApp SmartContract (on-chain state commitment)
+    ├── PetToken.ts             # PetToken FungibleToken (Mina standard token)
+    ├── PetBreeding.ts          # PetBreeding ZkProgram (genetics circuit)
+    └── index.ts                # Re-exports all circuits and types
+
+packages/mina-zkapp/           # @toon-protocol/mina-zkapp -- Mina payment channel SmartContract
+└── src/
+    └── PaymentChannel.ts       # PaymentChannel SmartContract (ILP payment channel on Mina)
+
+packages/pet-dvm/              # @toon-protocol/pet-dvm -- Pet DVM handlers + game/dungeon engine (Jest, not vitest)
+└── src/
+    ├── engine/
+    │   ├── PetGameEngine.ts    # PetGameEngine class (stat decay, action effects, evolution)
+    │   └── types.ts            # PetEngineState, StatValues, GameAction, InteractionResult
+    ├── handler/
+    │   ├── createPetDvmHandler.ts   # createPetDvmHandler() factory -- kind:5300 Pet interaction DVM handler
+    │   ├── parsePetInteractionRequest.ts  # Parse kind:5300 job request input
+    │   ├── buildPetInteractionEvent.ts    # Build kind:6300 job result event
+    │   ├── PetStateManager.ts        # PetStateManager -- SQLite-backed pet state persistence
+    │   ├── ProofQueue.ts             # ProofQueue -- async ZK proof generation queue (in-memory)
+    │   └── types.ts                  # PetDvmConfig, PetInteractionRequest, ProofQueueEntry
+    ├── checkpoint/
+    │   ├── CheckpointManager.ts  # CheckpointManager -- Arweave checkpoint upload (kind:5094)
+    │   └── types.ts              # CheckpointConfig, CheckpointResult, ArweaveUploadAdapter
+    ├── dungeon/
+    │   ├── DungeonGameEngine.ts  # DungeonGameEngine -- rot-js procedural dungeon (seedable RNG)
+    │   ├── dungeonDvmHandler.ts  # createDungeonDvmHandler() + buildDungeonDvmSkillDescriptor()
+    │   ├── statBridge.ts         # petStatsToDungeonStats(), applyDungeonDeltaToStats(), dungeonDeltaToGameAction()
+    │   ├── adventureLog.ts       # generateAdventureLog(), uploadAdventureLog() -- Arweave narrative log
+    │   └── types.ts              # DungeonConfig, DungeonRunResult, EncounterRecord, LootRecord
+    ├── pricing/
+    │   ├── calculatePetInteractionPrice.ts  # ILP price in USDC micro-units
+    │   ├── petActionPrices.ts    # PET_ACTION_PRICES, DEFAULT_EXCHANGE_RATE_USDC_PER_PET
+    │   ├── buildPetDvmSkillDescriptor.ts    # SkillDescriptor builder for Pet DVM
+    │   └── types.ts              # PetPricingConfig, IlpPricingOracle interface (placeholder -- static rate)
+    └── index.ts                  # Re-exports all public APIs
+```
+
+**Three-Tier Trust Model (architectural centerpiece):**
+
+```
+Tier 1: Full ZK (most trustworthy)
+  - PetLifecycle ZkProgram proves each state transition
+  - Proof submitted to PetZkApp SmartContract on Mina
+  - On-chain state hash is ground truth
+  - Used for evolution, breeding, high-value transactions
+
+Tier 2: Verifiable Content (middle tier)
+  - Pet state stored as BLAKE3-hashed JSON in Memvid .mv2 brain file
+  - Hash committed to Arweave via CheckpointManager (kind:5094)
+  - Verifiable without ZK -- content-addressed, permanent
+
+Tier 3: DVM-Attested (lowest tier, fastest)
+  - Optimistic result returned immediately (~100ms) by Pet DVM handler
+  - ZK proof generated async by ProofQueue
+  - Settlement deferred until proof verified
+  - Used for casual interactions (feed, play, clean)
+```
+
+**Optimistic Proof Pipeline (Stories 11-5/11-7):**
+
+```
+Client                    Pet DVM Handler              ProofQueue             Mina
+   │                            │                          │                    │
+   │  kind:5300 (Pet interact)  │                          │                    │
+   │  ILP PREPARE               │                          │                    │
+   │ ─────────────────────────► │                          │                    │
+   │                            │  immediate optimistic    │                    │
+   │  ILP FULFILL (optimistic)  │  result (Tier 3)         │                    │
+   │◄─────────────────────────  │                          │                    │
+   │                            │  enqueue for ZK proof    │                    │
+   │                            │ ────────────────────────►│                    │
+   │                            │                          │  compile + prove   │
+   │                            │                          │ ──────────────────►│
+   │                            │                          │  settlement tx     │
+   │                            │                          │ ──────────────────►│
+```
+
+- **ProofQueue is in-memory** -- unproven interactions lost on DVM restart (known limitation, Epic 11 retro A4)
+- **Circuit compilation is slow** -- 2-5 minutes per full proof run. Tests marked `@slow` excluded from default Jest runs.
+- **ProofQueue batches interactions** -- Multiple interactions aggregated before proof submission to amortize Mina transaction cost
+
+**Pet Game Engine (Story 11-4):**
+
+- `PetGameEngine` is pure TypeScript logic -- no o1js, no Rust deps. Same rules as the ZK circuit.
+- **Golden vectors** (`test-vectors/golden-vectors.json`, 26 vectors) are the ground truth when circuit and engine diverge. These are first-class artifacts, not just test fixtures.
+- Stats: `hunger`, `happiness`, `health`, `hygiene`, `energy` (all 0-100)
+- Stages: `EGG` → `BABY` → `ADULT` (evolution via `HATCH` and `EVOLVE` thresholds)
+- Decay rates vary by stage (see `packages/pet-circuit/src/constants.ts`). Scaled by 100 internally.
+- Actions: 11 types (FEED, PLAY, CLEAN, REST, WARM, CHECK, SING, TALK, MEDICINE, CRUZAR, PLAY_MUSIC)
+- Shop items: 18 items across 4 categories (food, toy, medicine, hygiene)
+- Cooldowns enforced per stage+action (COOLDOWN_DURATIONS lookup table)
+
+**Pet DVM Kind Assignments (Epic 11):**
+
+| Kind | Name | Description |
+|------|------|-------------|
+| 5300 | Pet Interaction Request | DVM job request for pet interaction (feed, play, etc.) |
+| 6300 | Pet Interaction Result | DVM job result with new pet state hash + ZK proof status |
+| 5301 | Dungeon Run Request | DVM job request for dungeon crawl |
+| 6301 | Dungeon Run Result | DVM job result with dungeon outcome + stat deltas |
+
+**DungeonGameEngine (Stories 11-15/11-17):**
+
+- Built on **rot-js** (`rot-js ^2.2.1`) -- BSD-3 TypeScript dungeon engine
+- **CRITICAL: `RNG.setSeed()` resets a global singleton** -- Must be called before each dungeon run. NEVER parallelize dungeon handlers via Worker threads (non-determinism risk). Tests MUST use `--runInBand`.
+- Dungeon runs are deterministic given `(petStateHash, dungeonId, seed)` -- reproducible for ZK verification
+- `DungeonGameEngine` accepts `DungeonConfig` (monster table, loot table, max rooms, max monsters) and is fully injectable for testing
+
+**Pet-Dungeon Stat Bridge (Story 11-16):**
+
+- `petStatsToDungeonStats()` maps pet stats → dungeon modifiers: discipline (happiness) → combat, energy → exploration range, happiness → luck/loot quality, hunger → survival threshold
+- `applyDungeonDeltaToStats()` applies dungeon outcome deltas back to pet stats (clamped 0-100)
+- `dungeonDeltaToGameAction()` converts a dungeon stat delta into a standard `GameAction` for ProofQueue (feeds back through existing PetLifecycle circuit -- no new ZK circuit needed for MVP)
+
+**Checkpoint Automation (Story 11-12):**
+
+- `CheckpointManager` uploads pet state snapshots to Arweave via injected `ArweaveUploadAdapter` (same adapter interface as SDK's Arweave DVM)
+- Checkpoints triggered on: evolution events, every N interactions (configurable), explicit client request
+- Arweave tx ID stored in pet state record for Tier 2 verification
+
+**Cross-Chain DVM Pricing (Story 11-11):**
+
+- `IlpPricingOracle` interface: `getRate(fromToken, toToken): Promise<bigint>` -- injectable live rate provider
+- `calculatePetInteractionPrice()` converts PET token cost to USDC micro-units via oracle rate
+- **CRITICAL: Default oracle is STATIC** -- `DEFAULT_EXCHANGE_RATE_USDC_PER_PET = 0.50` (1 MINA = 0.50 USDC). Hardcoded placeholder. Must be replaced with live feed before real-world multi-token usage.
+- `DEFAULT_MARGIN_BPS = 200` (2% provider margin on top of PET cost)
+
+**Memvid Native Addon (Story 11-1):**
+
+- `@toon-protocol/memvid-node` wraps the Memvid Rust library via napi-rs
+- **BLAKE3 composite hash** (5-segment deterministic): frames_hash + lex_hash + time_hash + temporal_hash + sketch_hash. HNSW vec index EXCLUDED (non-deterministic graph construction). 100-iteration determinism property test validates cross-platform reproducibility.
+- **ESM/CJS bridge**: `index.js` (ESM, re-exports `index.esm.js`), `index.cjs` (CJS). Both built by napi-rs build script.
+- **TOC file-read approach for `hash()`**: `Memvid.toc` is `pub(crate)` in Rust -- accessed via file read, not direct field access.
+- **Path convention**: Rust Cargo.toml dep path is 3 levels up from `packages/memvid-node/` to reach sibling `memvid/` repo at `Documents/memvid/`. Not 2 levels as might be assumed.
+- **Prebuilt binary committed**: `memvid-node.darwin-arm64.node` committed to repo for darwin-arm64. Linux x86_64 binary must be compiled from source (Rust + napi-rs toolchain required).
+- **Docker deployment NOT yet addressed** -- napi-rs binary not in Docker image. Blocked until spike story resolves prebuilt vs compile-from-source approach (Epic 11 retro A7).
+
+**o1js / ZK Circuit Rules (Stories 11-2/11-3/11-8/11-13):**
+
+- **Use Jest, not vitest** -- o1js uses WASM; vitest WASM support is incompatible. All pet-circuit tests use Jest (`jest.config.js`, `ts-jest`).
+- **Circuit compilation is slow** -- First run compiles the ZkProgram (2-5 minutes). Tests use `@slow` annotation; exclude with `--testPathIgnorePatterns='recursive'` for fast iteration.
+- **Field arithmetic** -- All circuit values are Mina `Field` (254-bit). Use `Field.from(bigint)` for conversion. Guard all u64 Rust values before JS number assignment (`n > Number.MAX_SAFE_INTEGER` check required).
+- **BLAKE3-to-Field conversion** -- Pet state hash (32-byte BLAKE3) packed into two `Field` values (16 bytes each, little-endian). Defined in `utils.ts`.
+- **PetState struct** -- o1js `Struct` with `Field` fields for all stats (0-100 range), stage enum, cycle count, timestamp, cooldowns array.
+- **PetZkApp** -- NIP-16 replaceable on Mina (single on-chain state root). `stateRoot: Field` commits to current pet state hash.
+- **Recursive proofs** -- `PetLifecycle.ts` supports recursive composition (batch multiple state transitions into one proof). `test:recursive` script runs recursive proof tests (very slow -- excluded from default `pnpm test`).
+- **PetToken** -- Mina FungibleToken standard. Minted on evolution events. Used for shop purchases and dungeon entry fees.
+- **PetBreeding** -- ZkProgram proving genetic combination. Takes two parent PetState structs, produces offspring trait hash. Constrained to prevent invalid evolution paths.
+
+**Adventure Log on Arweave (Story 11-18):**
+
+- `generateAdventureLog()` produces structured narrative from `DungeonRunResult` (rooms cleared, encounters, loot, stat deltas, narrative entries)
+- `uploadAdventureLog()` stores log permanently via `ArweaveUploadAdapter` (kind:5094 DVM pattern). Each pet accumulates a provable biography of adventures.
+- Log format: JSON with `AdventureLogEntry[]` (timestamp, petStateHash, dungeonId, outcome, narration)
+
+**Epic 11 Metrics (Final -- 18/18 stories):**
+
+| Metric | Value |
+|--------|-------|
+| Stories delivered | 18/18 (100%), 5 sprints (Sprint 5 added mid-epic 2026-04-08) |
+| Acceptance criteria | 185 total, 178/185 (96%) -- P0: 100%, P1: 98%, P2: 92%, P3: 88% |
+| Story-specific tests | ~755 net-new story tests |
+| Monorepo test count (start) | 4,099 passing (65 skipped) |
+| Monorepo test count (end) | 5,160+ passing |
+| Net test growth | +1,061 (pet-dvm: 299, client: 367, rig: 395) |
+| Code review issues | 114 found, 106 fixed, 8 accepted, 0 remaining |
+| Security scan findings (production) | 0 (6th consecutive epic) |
+| NFR assessments | 10 PASS, 5 CONCERNS (static oracle, proof queue WAL, Docker napi-rs), 0 FAIL |
+| Test regressions | 0 (10th consecutive epic) |
+| New packages shipped | 3 (memvid-node, pet-circuit, pet-dvm) |
+| New runtime dependencies | rot-js ^2.2.1, o1js ^2.2.0, napi-rs runtime |
+
 ## Critical Implementation Rules
 
 ### Language-Specific Rules (TypeScript)
@@ -2372,6 +2606,12 @@ Each skill follows a consistent structure produced by the NIP-to-TOON pipeline (
 - **NEVER fall back to random keys when KMS seed derivation fails** -- KmsIdentityError is a security-critical abort condition (Story 4.4)
 - **NEVER trust a seed relay's kind:10032 peer list without verifying kind:10033 attestation first** -- Prevents seed relay list poisoning (R-E4-004, Story 4.6)
 - **NEVER trigger payment channel closure on attestation state changes** -- Decision 12: "Trust degrades; money doesn't" (Story 4.3)
+- **NEVER run pet-circuit tests with vitest** -- o1js WASM is incompatible with vitest. Use `jest` in `packages/pet-circuit` and `packages/mina-zkapp` and `packages/pet-dvm`. All other packages use vitest.
+- **NEVER parallelize dungeon DVM handlers via Worker threads** -- `RNG.setSeed()` in rot-js resets a global singleton. Worker thread parallelism causes non-deterministic dungeon outcomes. Always run dungeon tests with `--runInBand`.
+- **NEVER trust the static exchange rate oracle for production** -- `DEFAULT_EXCHANGE_RATE_USDC_PER_PET = 0.50` in `packages/pet-dvm/src/pricing/petActionPrices.ts` is a hardcoded placeholder. Replace with live `IlpPricingOracle` before any real-world multi-token pricing.
+- **NEVER assume u64 Rust values fit in JS Number** -- napi-rs u64 return values can exceed `Number.MAX_SAFE_INTEGER`. Always guard: `if (value > Number.MAX_SAFE_INTEGER) throw new Error(...)` before assignment.
+- **NEVER use proof queue as durable storage** -- `ProofQueue` in pet-dvm is in-memory. All pending ZK proofs are lost on DVM restart. Do not build settlement flows that assume proof persistence across restarts until WAL persistence is implemented.
+- **NEVER assume pet-circuit golden vectors are optional** -- `packages/pet-circuit/test-vectors/golden-vectors.json` is the ground truth when circuit and game engine diverge. Any change to `PetGameEngine.ts` game rules MUST update golden vectors AND re-verify circuit outputs match.
 
 **Critical Edge Cases:**
 
@@ -2410,6 +2650,17 @@ Each skill follows a consistent structure produced by the NIP-to-TOON pipeline (
 - **Prefix claim atomicity is single-process only** -- `createPrefixClaimHandler` uses in-memory Set via injectable callback. Cluster mode would require distributed locking.
 - **claimPrefix() looks up pricing from discovery** -- If no explicit `prefixPrice` option, looks up `prefixPricing.basePrice` from discovered peers. Throws if not found.
 - **Prefix validation rejects reserved words** -- `toon`, `ilp`, `local`, `peer`, `test` cannot be claimed as vanity prefixes
+- **memvid-node Cargo path is 3 levels up** -- The Rust Cargo dependency on `memvid` uses path `../../../memvid` (not `../../memvid`). The actual layout is: `packages/memvid-node/` → `packages/` → `TOON-Protocol/` → `Documents/memvid/`.
+- **memvid-node ESM/CJS bridge** -- `index.js` is ESM (re-exports `index.esm.js`); `index.cjs` is CommonJS. Both must exist. The napi-rs build script renames outputs -- `mv index.js index.cjs && cp index.esm.js index.js` in the build script.
+- **o1js Field is 254-bit, not 256-bit** -- Mina Field modulus is ~2^254. BLAKE3 hashes (256-bit) must be split into two Field values (16 bytes each). Direct single-Field encoding of a 32-byte hash overflows.
+- **PetZkApp stateRoot uses two Fields** -- `stateRoot` is stored as `[Field, Field]` pair on-chain. Pack/unpack via `blake3HashToFields()` / `fieldsToBlake3Hash()` in `utils.ts`.
+- **PetLifecycle recursive proofs are slow** -- `test:recursive` takes 10-30 minutes. Default `pnpm test` for pet-circuit excludes recursive tests via `--testPathIgnorePatterns='recursive'`.
+- **rot-js RNG.setSeed() must be called before each dungeon run** -- Without it, the dungeon uses whatever RNG state was left from the previous run. Always call `RNG.setSeed(seed)` at the start of `DungeonGameEngine.run()`.
+- **DungeonGameEngine accepts stringified seed** -- `hashSeed(petStateHash + dungeonId)` produces a numeric seed for rot-js from string inputs. Use `hashSeed()` utility; do not pass raw strings to `RNG.setSeed()`.
+- **AdventureLog upload uses ArweaveUploadAdapter** -- Same interface as `packages/sdk/src/arweave/turbo-adapter.ts`. Inject adapter; do not import turbo-sdk directly from pet-dvm.
+- **CheckpointManager ArweaveUploadAdapter is injected** -- Pet-dvm does not import `@ardrive/turbo-sdk` directly. Caller injects adapter (same adapter isolation pattern as SDK Arweave DVM).
+- **Pet DVM handler re-uses SDK handler types via type-only copy** -- `packages/pet-dvm/src/handler/types.ts` re-declares minimal `HandlerContext` / `HandlerResponse` types (structural duck typing). pet-dvm does NOT depend on `@toon-protocol/sdk` at runtime.
+- **`import.meta.dirname` requires Node 21+** -- Use `fileURLToPath(import.meta.url)` + `path.dirname()` instead for Node 20 compatibility (recurred in 2 Epic 11 stories).
 
 **Security Rules:**
 
@@ -2497,42 +2748,46 @@ Each skill follows a consistent structure produced by the NIP-to-TOON pipeline (
 
 ---
 
-## Known Action Items (From Epic 9 Final Retro)
+## Known Action Items (From Epic 11 Final Retro -- 2026-04-09)
 
-**Must-Do for Epic 10 (Rig E2E):**
-- A1: **Configure CI burn-in for skill tests** -- Skill structural tests (`tests/skills/test-*-skill.sh`) not in CI pipeline. Quality could degrade silently. (New from Epic 9)
-- A2: **Execute Playwright E2E tests against live infra** -- 7+ Playwright specs never executed. E2E debt growing with socialverse test harnesses added. (Carried from Epic 8 A2, 2 epics) — **ADDRESSED BY EPIC 10**
-- A3: **Verify 4 manual ACs after first Arweave deployment** -- AC9, AC10, AC11, AC13 from Story 8-7 still pending. (Carried from Epic 8 A3, 2 epics)
+**Critical Path Before Epic 12:**
+- A1: **Proof queue WAL decision** -- ProofQueue (`packages/pet-dvm/src/handler/ProofQueue.ts`) is in-memory. Unproven interactions lost on DVM restart. Decide: accept as known debt or create backlog story before Epic 12 settlement patterns depend on it. Owner: Jonathan. (Epic 11 retro A4)
+- A2: **Exchange rate oracle upgrade path documented** -- `DEFAULT_EXCHANGE_RATE_USDC_PER_PET = 0.50` is a hardcoded placeholder in `packages/pet-dvm/src/pricing/petActionPrices.ts`. Must document upgrade path in code + epic-12 planning before any Epic 12 story uses multi-token pricing. Owner: Charlie. (Epic 11 retro A5)
+- A3: **Story template: add unpinned CI SHA check** -- Unpinned GitHub Actions SHAs (OWASP A08) surfaced in 4 Epic 11 stories. Add to story template as standard task item. Owner: Jonathan. (Epic 11 retro A1)
+
+**Must-Do / High Priority:**
+- A4: **napi-rs binary in Docker -- create spike story** -- `packages/memvid-node` native addon requires Rust toolchain at build time. Docker image does not include it. Blocks containerized deployment of pet-dvm. Create backlog spike story. Owner: Charlie. (Epic 11 retro A7)
+- A5: **Add MAX_SAFE_INTEGER guard pattern to dev knowledge** -- u64 Rust return values must be guarded before JS number assignment. Recurred in 3 Epic 11 stories. Add to story template / dev notes. Owner: Charlie. (Epic 11 retro A2)
+- A6: **Golden test vectors as required AC for ZK story pairs** -- `packages/pet-circuit/test-vectors/golden-vectors.json` pattern (26 vectors, circuit + engine ground truth) must be a P0 AC for any future story where two systems must produce identical outputs. Owner: Alice. (Epic 11 retro A3)
 
 **Should-Do:**
-- A4: Create eval scaffold/template generator -- Recurring eval authoring pattern is repetitive. Automation would improve consistency. (New from Epic 9)
-- A5: Backfill audit artifacts for 24 batch stories -- Stories 9-11 through 9-34 lack individual reports. (New from Epic 9)
-- A6: Establish load testing infrastructure -- Deferred 9 epics (from Epic 1 NFR). (Carried)
-- A7: Formal SLOs for DVM job lifecycle -- With Arweave DVM + compute primitive in Epic 14, SLOs increasingly relevant. (Carried from Epic 6, 5 epics deferred)
-- A8: Set up facilitator ETH monitoring -- Deferred 7 epics (from Epic 3 A8). (Carried)
-- A9: Update Docker E2E infra for Arweave DVM handler -- E2E stubs still pending Docker infra update. (Carried from Epic 8 A4, 2 epics)
+- A7: **o1js / Jest / vitest split config -- document in CLAUDE.md** -- pet-circuit uses Jest (not vitest) due to o1js WASM incompatibility. Add clear explanation to CLAUDE.md so new contributors understand the split. Owner: Dana. (Epic 11 retro A8)
+- A8: **rot.js global RNG singleton -- add warning comment** -- `RNG.setSeed()` in `DungeonGameEngine.ts` resets a global singleton. Worker thread parallelism will cause non-determinism. Add warning comment. Owner: Elena. (Epic 11 retro A6)
+- A9: **Execute Playwright E2E tests against live infra** -- 7+ Playwright specs never executed. E2E debt growing. (Carried from Epic 8 A2, 3 epics)
+- A10: **Verify 4 manual ACs after first Arweave deployment** -- AC9, AC10, AC11, AC13 from Story 8-7 still pending. (Carried from Epic 8 A3, 3 epics)
+- A11: Establish load testing infrastructure -- Deferred 10 epics (from Epic 1 NFR). (Carried)
+- A12: Formal SLOs for DVM job lifecycle -- Increasingly relevant with Pet DVM + dungeon DVM added. (Carried from Epic 6, 6 epics deferred)
+- A13: Set up facilitator ETH monitoring -- Deferred 8 epics (from Epic 3 A8). (Carried)
 
 **Nice-to-Have:**
-- A10: Commit flake.lock -- Carried from Epic 4 (6 epics deferred). Requires Nix.
-- A11: Publish @toon-protocol/town to npm -- Carried from Epic 2 (8 epics deferred).
-- A12: Improve blame algorithm (full Myers diff) -- Carried from Epic 8 A11.
-- A13: Weighted WoT model for reputation scoring -- Carried from Epic 6 (4 epics deferred).
-- A14: Docker E2E for workflow chain + swarm coordination -- Carried from Epic 6 (4 epics deferred).
-- A15: Add Arweave object caching to Forge-UI -- Carried from Epic 8 A13.
+- A14: Commit flake.lock -- Carried from Epic 4 (7 epics deferred). Requires Nix.
+- A15: Publish @toon-protocol/town to npm -- Carried from Epic 2 (9 epics deferred).
+- A16: Improve blame algorithm (full Myers diff) -- Carried from Epic 8 A11.
+- A17: Weighted WoT model for reputation scoring -- Carried from Epic 6 (5 epics deferred).
+- A18: Docker E2E for workflow chain + swarm coordination -- Carried from Epic 6 (5 epics deferred).
+- A19: Add Arweave object caching to Forge-UI -- Carried from Epic 8 A13.
 
-**Resolved Action Items (from Epic 8 retro, resolved at Epic 9 start):**
-- ~~A1 (critical): ESLint gap for packages/rig~~ RESOLVED -- 110 ESLint errors fixed across 22 files.
-- ~~A6: Route fees caching~~ RESOLVED -- Fingerprint-based cache with invalidation added to `resolveRouteFees()`.
-
-**Resolved Action Items (from Epic 7 retro, resolved during Epic 8):**
-- ~~A1 (partial): E2E test debt~~ PARTIALLY ADDRESSED -- Forge-UI added 6 Playwright E2E spec files + 15 integration test files. Core/SDK E2E debt remains.
+**Resolved Action Items (from Epic 9 retro, resolved at Epic 11 start):**
+- ~~A1: Configure CI burn-in for skill tests~~ RESOLVED -- vitest root config excludes pet-circuit, CI structure validated at Epic 11 start.
 
 **Resolved Action Items (from earlier epics):**
-- ~~Epic 5 A1: Standardize test counting~~ RESOLVED (root vitest.config.ts)
-- ~~Epic 5 A4: Split large test files~~ RESOLVED (dvm.test.ts split)
+- ~~Epic 8 A1 (critical): ESLint gap for packages/rig~~ RESOLVED
+- ~~Epic 8 A6: Route fees caching~~ RESOLVED
+- ~~Epic 5 A1: Standardize test counting~~ RESOLVED
+- ~~Epic 5 A4: Split large test files~~ RESOLVED
 - ~~Epic 5 A7: Harden parseJobResult() validation~~ RESOLVED
 - ~~Epic 4 A1: Set up genesis node in CI~~ RESOLVED
-- ~~Epic 4 A2: Structured logger~~ RESOLVED (`createLogger()`)
+- ~~Epic 4 A2: Structured logger~~ RESOLVED
 - ~~Epic 4 A3: Deploy FiatTokenV2_2 on Anvil~~ RESOLVED
 - ~~Epic 4 A4: Project-level semgrep~~ RESOLVED
 - ~~Epic 4 A5: Transitive dependency vulnerabilities~~ RESOLVED
@@ -2578,6 +2833,16 @@ Each skill follows a consistent structure produced by the NIP-to-TOON pipeline (
 - Factory-pattern skills (like `nip-to-toon-skill`) are first-class reusable assets -- new NIPs can be converted to skills without a full epic (Epic 9, team agreement #10)
 - Skills use SKILL.md + references/ + evals/ structure -- consistent progressive disclosure across all skill families (Epic 9)
 - Skill structural validation uses shell scripts in `tests/skills/` and TypeScript tests in `packages/core/src/skills/` (Epic 9)
+- Use Jest (not vitest) for packages that depend on o1js or napi-rs WASM -- configure `jest.config.js` with `ts-jest`, exclude from root `vitest.config.ts` (Epic 11)
+- Use golden test vectors (`test-vectors/golden-vectors.json`) as first-class artifacts when two systems must produce identical outputs (ZK circuit + game engine pair) -- make it a P0 AC, not an afterthought (Epic 11, team agreement #1)
+- Use injectable `ArweaveUploadAdapter` interface for any package that uploads to Arweave -- never import `@ardrive/turbo-sdk` directly from application packages; only `turbo-adapter.ts` in SDK imports it (Epic 11, adapter isolation pattern)
+- Use `IlpPricingOracle` interface pattern for cross-token pricing -- inject oracle, never hardcode exchange rates in handler logic (Epic 11, Story 11-11)
+- Use three-tier trust model for ZK game systems: Full ZK (proof on-chain) → Verifiable Content (hash on Arweave) → DVM-Attested (optimistic, async proof) -- tier selection depends on action value and latency requirements (Epic 11)
+- Use `--runInBand` for any test suite that uses rot-js `RNG.setSeed()` -- global singleton requires sequential test execution (Epic 11, DungeonGameEngine)
+- Guard u64 Rust napi-rs return values before JS number assignment -- `if (value > Number.MAX_SAFE_INTEGER) throw new Error(...)` is required for any napi-rs binding that returns u64 (Epic 11, recurring pattern)
+- Add unpinned CI SHA check as standard story template task -- any story creating GitHub Actions workflows must pin all action SHAs to commit hashes (OWASP A08) (Epic 11, team agreement #2)
+- Use `fileURLToPath(import.meta.url)` + `path.dirname()` for `__dirname` equivalent -- `import.meta.dirname` requires Node 21+; project targets Node >=20 (Epic 11, recurring pattern)
+- Browser-safe constraint belongs in story ACs, not tribal knowledge -- explicit AC ("no Node.js Buffer") prevents browser/server boundary bugs from reaching PR review (Epic 11, Story 11-9 lesson)
 
 **For Humans:**
 
@@ -2586,4 +2851,4 @@ Each skill follows a consistent structure produced by the NIP-to-TOON pipeline (
 - Review quarterly for outdated rules
 - Remove rules that become obvious over time
 
-Last Updated: 2026-03-24
+Last Updated: 2026-04-09

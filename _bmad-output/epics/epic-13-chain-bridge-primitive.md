@@ -4,6 +4,7 @@
 **Epic ID:** 13
 **Date:** 2026-03-22 (Network Primitives Strategy), reordered 2026-04-09
 **Decision source:** Party Mode 2026-03-22 — Network Primitives Strategy (D8-PM-003, D8-PM-006, D8-PM-008); Party Mode 2026-03-23 — Provider Protocol Model
+**Research:** `_bmad-output/planning-artifacts/research/technical-multi-chain-npm-packages-research-2026-04-09.md`
 
 ---
 
@@ -22,10 +23,10 @@ Chain Bridge (Epic 13) is positioned immediately after Token Swap (Epic 12) beca
 ## Scope — What TOON ships
 
 1. **Provider Protocol Specification** — Definitive doc for "how to build a TOON chain bridge provider": kind:5260 request format, kind:6260 result format, Tier 1 trustless broadcast semantics, multi-chain packet format, per-chain receipt tags, chain-specific pricing.
-2. **Reference DVM Implementation** — A working Chain Bridge DVM handler (`createChainBridgeDvmHandler()`) that a peer operator can register on their node to provide chain bridge services for supported chains. Uses a pluggable chain adapter pattern — each supported chain implements a `ChainAdapter` interface (broadcast tx, estimate gas, format receipt). Ships with adapters for:
-   - **EVM** (Ethereum, Arbitrum, Base) — via viem
-   - **Mina** — via o1js (critical for Token Swap claim settlement + Overmind VRF)
-   - **Solana** — via @solana/web3.js
+2. **Reference DVM Implementation** — A working Chain Bridge DVM handler (`createChainBridgeDvmHandler()`) that a peer operator can register on their node to provide chain bridge services for supported chains. Uses a pluggable chain adapter pattern modeled on the connector's `PaymentChannelProvider` + `ChainProviderRegistry` — each supported chain implements a `ChainAdapter` interface (broadcast tx, estimate gas, format receipt). Ships with adapters for:
+   - **EVM** (Ethereum, Arbitrum, Base) — via `viem` (type-safe EIP-712 signing, ~35kB tree-shakable)
+   - **Mina** — via `@toon-protocol/mina-zkapp` (Poseidon commitments + zk-SNARK proofs)
+   - **Solana** — via `@solana/kit` v3 (successor to @solana/web3.js, zero external deps)
    - **AO** — via HyperBEAM node interaction
 3. **Provider Test Harness** — Validates tx broadcast handling, per-chain receipt format, multi-chain packet parsing, SkillDescriptor chain-specific pricing. Tests the reference implementation and any third-party adapters.
 4. **Consumer SDK Refinements** — Consumer DX for chain bridge: tx submission, receipt verification, multi-chain result parsing, chain discovery by SkillDescriptor features.
@@ -38,9 +39,11 @@ Chain Bridge (Epic 13) is positioned immediately after Token Swap (Epic 12) beca
 
 - **Tier 1 only** for initial implementation: trustless broadcast. Provider cannot steal funds — only submit or not submit.
 - **Multi-chain in one packet:** `['param', 'chains', 'ethereum,arbitrum,base,mina,ao']`. Receipt has per-chain tags.
+- **CAIP-2 chain IDs** — Use the [CAIP-2 standard](https://standards.chainagnostic.org/CAIPs/caip-2) for chain identification (`eip155:1`, `eip155:8453`, `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`, `mina:devnet`). The `caip` npm package provides TypeScript utilities for parsing/formatting. Replaces ad-hoc `evm:8453` scheme from connector.
 - **AO is a blockchain target, not a compute backend.** Provider has AO wallet/HyperBEAM node, pays p4 fee, returns slot receipt.
 - **Future tiers deferred:** Tier 2 (construct + broadcast), Tier 3 (custodial execute with TEE) have significant security implications.
 - **Chain-specific pricing** in SkillDescriptor (different gas costs per chain).
+- **Provider registry pattern** — The `ChainAdapter` registry mirrors the connector's proven `ChainProviderRegistry` + `ChainProviderFactory` pattern (adapter/plugin architecture). Each chain gets an independent adapter with its own SDK dependency. This is the industry standard for multi-chain systems (validated by Dynamic.xyz, Phantom, MetaMask). Research confirmed no unified multi-chain npm SDK covers signing + contract interaction + events across all chain families.
 - **Reference DVM implementation ships with TOON** — unlike Compute (Epic 14) where providers build their own, Chain Bridge ships a working DVM handler with pluggable chain adapters. Operator spins up a peer, registers the handler, funds wallets, and serves bridge requests. Third-party teams can still build custom adapters for chains TOON doesn't ship.
 
 ---
@@ -48,6 +51,26 @@ Chain Bridge (Epic 13) is positioned immediately after Token Swap (Epic 12) beca
 ## Package Structure
 
 New package: `packages/bridge/` (`@toon-protocol/bridge`) — the bridge peer. Provides `createChainBridgeDvmHandler()` and `startBridge()` entrypoint. Built on `@toon-protocol/sdk` + `@toon-protocol/core`. A Bridge node is a standalone ILP peer that broadcasts signed transactions to supported blockchains — separate from `packages/town/` (relay peer) and `packages/mill/` (swap peer). Operators choose which peer type(s) to run. A single node can combine roles via the shared handler registry.
+
+## npm Dependencies (from research)
+
+```json
+{
+  "dependencies": {
+    "viem": "^2.x",
+    "@solana/kit": "^3.x",
+    "@noble/curves": "^1.x",
+    "@noble/hashes": "^1.x",
+    "caip": "^1.x"
+  },
+  "optionalDependencies": {
+    "@cosmjs/stargate": "^0.32.x",
+    "@cosmjs/cosmwasm-stargate": "^0.32.x"
+  }
+}
+```
+
+_Note: `@toon-protocol/mina-zkapp` is an internal workspace dependency. `@cosmjs/*` packages are optional — add when Cosmos chain support is needed. Core bundle ~106kB (min+gzip), significantly lighter than any unified multi-chain SDK._
 
 ## Dependencies
 
@@ -79,9 +102,9 @@ This flow MUST be explicitly tested as part of Chain Bridge E2E validation.
 - 13.3: Multi-Chain Packet Format + Per-Chain Receipt Tags
 
 **Phase 2: Reference DVM Implementation**
-- 13.4: ChainAdapter Interface + EVM Adapter (Ethereum/Arbitrum/Base via viem)
-- 13.5: Mina Chain Adapter (o1js — zkApp tx broadcast + slot receipts)
-- 13.6: Solana Chain Adapter (@solana/web3.js)
+- 13.4: ChainAdapter Interface + CAIP-2 Chain ID Utilities (`caip` npm) + EVM Adapter (Ethereum/Arbitrum/Base via `viem`)
+- 13.5: Mina Chain Adapter (`@toon-protocol/mina-zkapp` — zkApp tx broadcast + slot receipts)
+- 13.6: Solana Chain Adapter (`@solana/kit` v3)
 - 13.7: AO Chain Adapter (HyperBEAM node interaction)
 - 13.8: Chain Bridge DVM Handler (`createChainBridgeDvmHandler()`) — pluggable adapter registry, gas funding, pricing
 
