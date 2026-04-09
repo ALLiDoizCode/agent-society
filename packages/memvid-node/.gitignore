@@ -2,4 +2,4 @@ target/
 *.node
 index.js
 index.cjs
-index.d.ts
+# index.d.ts is intentionally tracked so CI can resolve types without a Rust build
