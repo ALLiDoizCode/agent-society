@@ -1,6 +1,6 @@
 # Story 11.9: Ditto Pet DVM Integration
 
-Status: review
+Status: done
 ui_impact: false
 
 ## Story
@@ -52,11 +52,11 @@ so that ditto can interact with TOON pets via ILP-routed DVM requests without em
    - Types: `PetDvmProvider`, `PetInteractionRequestParams`, `PetInteractionResultData`, `PetInteractionEventData`, `InteractionResultContent`, `UnsignedNostrEvent`, `StatValues`, `ProofStatus`
    - No dependency on `@toon-protocol/pet-dvm`, `@toon-protocol/pet-circuit`, `@toon-protocol/memvid-node`, or `o1js`
 
-6. **AC-6 -- Unit tests:** >= 14 unit tests (27 delivered) across 4 test files:
-   - Discovery (6): valid provider, no-skill provider, malformed content, price sorting, empty events, non-5900 kinds
-   - Event builder (7): valid request, invalid actionType, negative actionType, empty blobbiId, invalid itemId, negative tokenCost, all valid action types
-   - Result parser (8): valid base64 response, malformed base64, invalid JSON, missing stats fields, invalid brainHash, invalid stage, invalid cycle, missing cooldownTimestamps
-   - Event parser (6): optimistic event, proven event, content parsing, missing d tag, missing brain_hash tag, malformed content graceful handling
+6. **AC-6 -- Unit tests:** >= 14 unit tests (52 delivered) across 4 test files:
+   - Discovery (7): valid provider, no-skill provider, malformed content, price sorting, empty events, non-5900 kinds, default pricing when 5900 key absent
+   - Event builder (11): valid request, tag stringification, invalid actionType, negative actionType, empty blobbiId, negative itemId, negative tokenCost, non-integer actionType, NaN tokenCost, non-integer itemId, all valid action types (0-10 loop)
+   - Result parser (19): valid base64 response, non-base64 data, invalid JSON, invalid brainHash (short, non-hex, 63-char), missing stats field, non-number stat field, invalid stage (out of range, non-integer), invalid cycle (negative, non-integer), missing cooldownTimestamps, NaN/Infinity in cooldownTimestamps, empty string, missing lastInteraction, non-finite lastInteraction, uppercase hex brainHash acceptance
+   - Event parser (15): optimistic event, proven event, content parsing, missing d/action/item/cost/cycle/stage/brain_hash tags (7 missing-tag tests), malformed content, wrong stat types in content, missing cycle/stage in content, proof-only (no mina_tx) treated as optimistic
    - Regression: Kind 31124 (existing Blobbi state) rendering unaffected (no imports or changes to existing client code outside the new pet subdirectory)
 
 7. **AC-7 -- Build verification:** After all changes:
@@ -260,3 +260,62 @@ Claude Opus 4.6 (1M context)
 
 - 2026-04-08: Story 11-9 development complete. Implemented pet DVM client utilities with full test coverage. All 4 functions (filter, build, parse result, parse event) created in packages/client/src/pet/ with 27 unit tests.
 - 2026-04-08: Story review -- fixed AC-5 (subpath export vs main entry re-export mismatch), expanded AC-3/AC-4/AC-6 with precise validation and test details, clarified Buffer vs atob decode in dev notes, added NostrEventLike pattern documentation, updated completion notes with per-file test counts.
+
+## Code Review Record
+
+### Review Pass #1
+
+- **Date:** 2026-04-09
+- **Reviewer Model:** Claude Opus 4.6 (1M context)
+- **Severity Counts:** 0 critical, 0 high, 1 medium, 1 low
+- **Outcome:** Pass with fixes applied
+
+#### Issues Found
+
+1. **[Medium] `parseContent` in parsePetInteractionEvent.ts did not validate `tokenCost` field** -- Fixed. Added validation to ensure `tokenCost` is present and numeric when parsing Kind 14919 event content.
+2. **[Low] `isStatLike` in parsePetInteractionEvent.ts used `typeof === 'number'` instead of `Number.isFinite`** -- Fixed. Replaced `typeof` check with `Number.isFinite` for stricter numeric validation (rejects NaN/Infinity).
+
+#### Tests Added
+
+- 2 new tests added to `packages/client/src/pet/parsePetInteractionEvent.test.ts` covering the fixed validation paths.
+
+### Review Pass #2
+
+- **Date:** 2026-04-09
+- **Reviewer Model:** Claude Opus 4.6 (1M context)
+- **Severity Counts:** 0 critical, 0 high, 0 medium, 0 low
+- **Outcome:** Pass -- no issues found
+
+#### Notes
+
+- Verified contract alignment between client utilities and DVM handler
+- Confirmed Review Pass #1 fixes correctly applied (tokenCost validation, Number.isFinite for stat checks)
+- All types properly exported from package entry point
+- 307 tests passing across workspace
+- No files modified -- all code passed review
+
+### Review Pass #3 (FINAL -- Security Focus)
+
+- **Date:** 2026-04-09
+- **Reviewer Model:** Claude Opus 4.6 (1M context)
+- **Severity Counts:** 0 critical, 0 high, 0 medium, 2 low
+- **Outcome:** Pass with fixes applied
+
+#### Security Checks Performed
+
+- OWASP Top 10 relevance assessment (client-side utility functions)
+- Prototype pollution via JSON.parse in parsePetInteractionResult and parsePetInteractionEvent
+- Base64 decode safety (atob with malicious input -- wrapped in try/catch, safe)
+- Input validation completeness and bypass potential
+- Unsafe type coercion review (Number() fallbacks, isFinite checks)
+- ReDoS analysis on HEX_64_RE regex and test import pattern regex (both safe)
+- Information leakage in error messages (only caller-supplied values, acceptable)
+
+#### Issues Found
+
+1. **[Low] Prototype pollution via JSON.parse in parsePetInteractionResult.ts** -- `record['stats']` and `cooldownTimestamps` were returned directly from JSON.parse output, which could carry `__proto__` or `constructor` properties to downstream consumers. Fixed by constructing clean `StatValues` object with only known fields and spreading `cooldownTimestamps` into a new array.
+2. **[Low] Prototype pollution via JSON.parse in parsePetInteractionEvent.ts** -- `parseContent()` returned `parsed as InteractionResultContent` directly from JSON.parse, potentially carrying prototype-polluting properties. Fixed by constructing a clean object with only the 6 known fields, using a new `cleanStats()` helper to extract only the 5 stat fields from each stat object.
+
+#### Tests
+
+- All 307 existing tests pass after fixes (no new tests needed -- behavioral output unchanged)

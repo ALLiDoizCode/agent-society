@@ -10,8 +10,11 @@ ILP-gated Nostr relay. Pay to write, free to read.
 
 ```bash
 # Build & test
-pnpm install && pnpm build && pnpm test   # Build & test all packages
+pnpm install && pnpm build                 # Build all packages
+pnpm --filter <pkg> test                   # Test ONE package (e.g. @toon-protocol/client)
 pnpm lint && pnpm format                   # Lint & format
+# ⚠️ NEVER run `pnpm test` at workspace root — it spawns 17 parallel vitest
+#    processes and will exhaust RAM. Always test per-package with --filter.
 
 # SDK E2E infrastructure (multi-hop routing, payment channels, DVM lifecycle)
 ./scripts/sdk-e2e-infra.sh up              # Build, start Anvil + 2 Docker peers, wait for health

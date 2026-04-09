@@ -67,7 +67,7 @@ Create client-side utilities for ditto (React SPA) to discover Pet DVM providers
 
 ## AC-to-Test Mapping
 
-### AC-1: filterPetDvmProviders (6 tests)
+### AC-1: filterPetDvmProviders (7 tests)
 
 **File:** `packages/client/src/pet/filterPetDvmProviders.test.ts`
 
@@ -79,10 +79,11 @@ Create client-side utilities for ditto (React SPA) to discover Pet DVM providers
 | 4 | should handle malformed content gracefully (return empty array) | AC-1 | PASS |
 | 5 | should sort results by price ascending (cheapest first) | AC-1 | PASS |
 | 6 | should return empty array for empty input | AC-1 | PASS |
+| 7 | should default pricing to "0" when pricing key for 5900 is absent | AC-1 | PASS |
 
-**Coverage:** Complete. All 6 scenarios from AC-6 covered (valid provider, no-skill provider, non-5900 kinds, malformed content, price sorting, empty events).
+**Coverage:** Complete. All 6 scenarios from AC-6 covered plus default pricing edge case.
 
-### AC-2: buildPetInteractionRequest (8 tests)
+### AC-2: buildPetInteractionRequest (11 tests)
 
 **File:** `packages/client/src/pet/buildPetInteractionRequest.test.ts`
 
@@ -95,11 +96,14 @@ Create client-side utilities for ditto (React SPA) to discover Pet DVM providers
 | 5 | should throw ValidationError for negative actionType | AC-2 | PASS |
 | 6 | should throw ValidationError for negative itemId | AC-2 | PASS |
 | 7 | should throw ValidationError for negative tokenCost | AC-2 | PASS |
-| 8 | should accept all valid action types (0-10) | AC-2 | PASS |
+| 8 | should throw ValidationError for non-integer actionType | AC-2 | PASS |
+| 9 | should throw ValidationError for NaN tokenCost | AC-2 | PASS |
+| 10 | should throw ValidationError for non-integer itemId | AC-2 | PASS |
+| 11 | should accept all valid action types (0-10) | AC-2 | PASS |
 
-**Coverage:** Complete. All 7 scenarios from AC-6 covered (valid request, invalid actionType, negative actionType, empty blobbiId, invalid itemId, negative tokenCost, all valid action types). Test #2 (stringify) is an additional coverage bonus.
+**Coverage:** Complete. All 7 scenarios from AC-6 covered plus non-integer and NaN edge cases for stronger validation coverage.
 
-### AC-3: parsePetInteractionResult (9 tests)
+### AC-3: parsePetInteractionResult (19 tests)
 
 **File:** `packages/client/src/pet/parsePetInteractionResult.test.ts`
 
@@ -114,10 +118,20 @@ Create client-side utilities for ditto (React SPA) to discover Pet DVM providers
 | 7 | should return null when cycle is negative | AC-3 | PASS |
 | 8 | should return null when cooldownTimestamps is missing | AC-3 | PASS |
 | 9 | should return null for empty string input | AC-3 | PASS |
+| 10 | should return null when cooldownTimestamps contains NaN | AC-3 | PASS |
+| 11 | should return null when cooldownTimestamps contains Infinity | AC-3 | PASS |
+| 12 | should accept brainHash with uppercase hex (case-insensitive) | AC-3 | PASS |
+| 13 | should return null when lastInteraction is not finite | AC-3 | PASS |
+| 14 | should return null when lastInteraction is missing | AC-3 | PASS |
+| 15 | should return null when stats field is not a number | AC-3 | PASS |
+| 16 | should return null for non-64-char hex brainHash | AC-3 | PASS |
+| 17 | should return null when brainHash contains non-hex characters | AC-3 | PASS |
+| 18 | should return null when stage is not an integer | AC-3 | PASS |
+| 19 | should return null when cycle is not an integer | AC-3 | PASS |
 
-**Coverage:** Complete. All 8 scenarios from AC-6 covered (valid base64, malformed base64, invalid JSON, missing stats, invalid brainHash, invalid stage, invalid cycle, missing cooldownTimestamps). Test #9 (empty string) is an additional edge case.
+**Coverage:** Complete. All 8 scenarios from AC-6 covered plus comprehensive edge cases: case-insensitive brainHash, non-finite lastInteraction, non-numeric stats, non-integer stage/cycle, NaN/Infinity in cooldowns, non-hex brainHash characters.
 
-### AC-4: parsePetInteractionEvent (6 tests)
+### AC-4: parsePetInteractionEvent (15 tests)
 
 **File:** `packages/client/src/pet/parsePetInteractionEvent.test.ts`
 
@@ -129,8 +143,16 @@ Create client-side utilities for ditto (React SPA) to discover Pet DVM providers
 | 4 | should return null when required tag is missing (d tag) | AC-4 | PASS |
 | 5 | should return null when required tag is missing (brain_hash) | AC-4 | PASS |
 | 6 | should handle malformed content gracefully (content null) | AC-4 | PASS |
+| 7 | should return null content when stats objects have wrong types | AC-4 | PASS |
+| 8 | should return null content when cycle/stage are missing from content | AC-4 | PASS |
+| 9 | should return null when action tag is missing | AC-4 | PASS |
+| 10 | should return null when cost tag is missing | AC-4 | PASS |
+| 11 | should return null when cycle tag is missing | AC-4 | PASS |
+| 12 | should return null when stage tag is missing | AC-4 | PASS |
+| 13 | should return null when item tag is missing | AC-4 | PASS |
+| 14 | should treat proof-only (no mina_tx) as optimistic | AC-4 | PASS |
 
-**Coverage:** Complete. All 6 scenarios from AC-6 covered (optimistic event, proven event, content parsing, missing d tag, missing brain_hash, malformed content).
+**Coverage:** Complete. All 6 scenarios from AC-6 covered plus missing-tag tests for all 7 required tags, content validation edge cases, and partial proof status detection.
 
 ### AC-5: Package Exports (verified by import in tests)
 
@@ -156,25 +178,53 @@ Verified via `pnpm test` (all 152 test files pass, 4164 tests pass). Build and l
 
 | File | Tests | Status |
 |------|-------|--------|
-| filterPetDvmProviders.test.ts | 6 | All PASS |
-| buildPetInteractionRequest.test.ts | 8 | All PASS |
-| parsePetInteractionResult.test.ts | 9 | All PASS |
-| parsePetInteractionEvent.test.ts | 6 + 1 regression | All PASS |
-| **Total** | **30** | **All PASS** |
+| filterPetDvmProviders.test.ts | 7 | All PASS |
+| buildPetInteractionRequest.test.ts | 11 | All PASS |
+| parsePetInteractionResult.test.ts | 19 | All PASS |
+| parsePetInteractionEvent.test.ts | 14 + 1 regression | All PASS |
+| **Total** | **52** | **All PASS** |
 
-AC-6 requires >= 14 tests. Delivered: 30 (exceeds requirement).
+AC-6 requires >= 14 tests. Delivered: 52 (exceeds requirement).
 
 ---
 
 ## Gaps Identified and Filled
 
-During ATDD review, the following gaps were found in the original 27 tests and filled with 3 additional tests:
+### Round 1 (2026-04-08): 3 tests added (27 -> 30)
 
 1. **buildPetInteractionRequest -- all valid action types (0-10):** AC-6 specifies this test explicitly. Added a test that iterates all 11 action types (0 through 10) and verifies each produces a valid event.
+2. **parsePetInteractionResult -- missing cooldownTimestamps:** AC-6 specifies 8 tests including "missing cooldownTimestamps". Added a dedicated test for when the `cooldownTimestamps` field is absent from the payload.
+3. **R-016 regression -- forbidden imports:** AC-6 specifies a regression test. Added a structural test that scans all source files in the pet/ directory for forbidden import statements.
 
-2. **parsePetInteractionResult -- missing cooldownTimestamps:** AC-6 specifies 8 tests including "missing cooldownTimestamps". The original tests had "empty string input" as test 8 instead. Added a dedicated test for when the `cooldownTimestamps` field is absent from the payload.
+### Round 2 (2026-04-09, TEA automation expansion): 22 tests added (30 -> 52)
 
-3. **R-016 regression -- forbidden imports:** AC-6 specifies a regression test ensuring no imports from pet-dvm, pet-circuit, memvid-node, or o1js in the client pet module. Added a structural test that scans all source files in the pet/ directory for forbidden import statements.
+**parsePetInteractionResult** (+8 tests):
+- Case-insensitive brainHash acceptance (uppercase hex)
+- Non-finite lastInteraction (Infinity)
+- Missing lastInteraction field
+- Non-numeric stats field value
+- Non-64-char brainHash (63 chars)
+- Non-hex brainHash characters
+- Non-integer stage (1.5)
+- Non-integer cycle (2.5)
+
+**parsePetInteractionEvent** (+8 tests):
+- Content validation: wrong stat types returns null content
+- Content validation: missing cycle/stage returns null content
+- Missing required tags: action, cost, cycle, stage, item (5 individual tests)
+- Partial proof status: proof tag without mina_tx treated as optimistic
+
+**buildPetInteractionRequest** (+3 tests, from prior session):
+- Non-integer actionType (1.5)
+- NaN tokenCost
+- Non-integer itemId (2.7)
+
+**filterPetDvmProviders** (+1 test, from prior session):
+- Default pricing to "0" when pricing['5900'] key absent
+
+**parsePetInteractionResult** (+2 tests, from prior session):
+- NaN in cooldownTimestamps
+- Infinity in cooldownTimestamps
 
 ---
 
