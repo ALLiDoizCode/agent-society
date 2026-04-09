@@ -30,6 +30,14 @@ import {
 export class PetToken extends TokenContract {
   @state(UInt64) totalAmountInCirculation = State<UInt64>();
 
+  /**
+   * Deploy override: set token symbol during deploy rather than init().
+   *
+   * TokenContract.deploy() sets `access: proofOrSignature()` which must
+   * precede any account field mutations. Setting tokenSymbol in init()
+   * triggers `Update_not_permitted_token_symbol` because init's account
+   * update executes before deploy's permission grant takes effect.
+   */
   override async deploy(args?: DeployArgs): Promise<void> {
     await super.deploy(args);
     this.account.tokenSymbol.set('PET');
@@ -81,6 +89,12 @@ export class PetToken extends TokenContract {
    * Called by PetZkApp during proof settlement to enforce economic cost.
    *
    * When amount is UInt64.zero, this is a valid no-op burn.
+   *
+   * Authorization: No explicit signature check is needed here because
+   * `this.internal.burn()` creates an AccountUpdate that modifies the
+   * burner's token balance. The Mina protocol requires the token holder
+   * to sign any transaction containing such an AccountUpdate, providing
+   * protocol-level authorization automatically.
    *
    * @param burnerAddress - Address whose tokens are burned
    * @param amount - Number of tokens to burn

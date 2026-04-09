@@ -56,6 +56,7 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
 
   // Shared proof references for sequential tests
   let genesisProof: InstanceType<typeof PetLifecycleProof>;
+  let firstInteractProof: InstanceType<typeof PetLifecycleProof>;
 
   beforeAll(async () => {
     // Compile in order: PetToken first (PetZkApp references it), then PetLifecycle, then PetZkApp
@@ -270,6 +271,9 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
 
     // Verify totalSpent on-chain matches proof output
     expect(zkApp.totalSpent.get()).toEqual(proofOutput.totalSpent.value);
+
+    // Save for chaining in subsequent tests
+    firstInteractProof = interactProof;
   });
 
   // =========================================================================
@@ -282,46 +286,7 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
     // CLEAN is allowed for Egg stage per STAGE_ALLOWED_ACTIONS.
     // Expected burn delta: proof.totalSpent(35) - onChain.totalSpent(20) = 15.
 
-    // Re-create the previous interact proof to chain from it
-    const prevAction = new PetAction({
-      actionType: UInt32.from(ActionType.MEDICINE),
-      itemId: UInt32.from(11),
-      timestamp: UInt64.from(10000),
-      tokenCost: UInt64.from(20),
-    });
-    const prevInteractionHash = Poseidon.hash([
-      prevAction.actionType.value,
-      prevAction.itemId.value,
-      prevAction.timestamp.value,
-      prevAction.tokenCost.value,
-    ]);
-    const prevOwnerSig = Signature.create(ownerKey, [prevInteractionHash]);
-    const zeroCDs = cooldownsFromArray(Array(ACTION_COUNT).fill(0) as number[]);
-    const prevNewCDs = zeroCDs.setByIndex(
-      UInt32.from(ActionType.MEDICINE),
-      UInt64.from(10000)
-    );
-
-    const prevInteractResult = await PetLifecycle.interact(
-      genesisProof,
-      prevAction,
-      new PetStats({
-        hunger: UInt32.from(100),
-        happiness: UInt32.from(100),
-        health: UInt32.from(100),
-        hygiene: UInt32.from(100),
-        energy: UInt32.from(100),
-      }),
-      Field(99999),
-      zeroCDs,
-      prevNewCDs,
-      ownerPubkey,
-      prevOwnerSig,
-      UInt64.from(10000)
-    );
-    const prevProof = prevInteractResult.proof;
-
-    // Now chain a second shop item interaction: hyg_soap (CLEAN, itemId=15, cost=15)
+    // Chain from saved firstInteractProof (avoids redundant proof reconstruction)
     const action = new PetAction({
       actionType: UInt32.from(ActionType.CLEAN),
       itemId: UInt32.from(15), // hyg_soap
@@ -355,7 +320,7 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
     const ownerSig = Signature.create(ownerKey, [interactionHash]);
 
     const interactResult = await PetLifecycle.interact(
-      prevProof,
+      firstInteractProof,
       action,
       stats,
       Field(77777),
@@ -414,10 +379,12 @@ describe('PetToken + PetZkApp Integration (proofsEnabled: false)', () => {
   // =========================================================================
 
   it('[P0] AC-4: should execute zero-amount burn without error for base action (tokenCost=0)', async () => {
+    // Why the elaborate 4-step proof chain?
     // After the previous two applyProof calls, on-chain cycle=3 and totalSpent=35.
-    // We need a proof chain with cycle > 3. Build: genesis -> MEDICINE -> CLEAN -> CHECK
-    // (4 steps = cycle 4). The CHECK base action has tokenCost=0, so proof totalSpent
-    // stays at 35, matching on-chain -- burn delta = 0.
+    // PetZkApp.applyProof requires proof.cycle > on-chain cycle, so we must build
+    // a fresh proof chain reaching cycle=4. We reconstruct: genesis -> MEDICINE ->
+    // CLEAN -> CHECK (4 steps). The final CHECK is a base action (tokenCost=0),
+    // so proof.totalSpent stays at 35 matching on-chain -- burn delta = 0.
 
     const defaultStats = new PetStats({
       hunger: UInt32.from(100),

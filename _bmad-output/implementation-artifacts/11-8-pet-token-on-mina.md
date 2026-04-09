@@ -1,6 +1,6 @@
 # Story 11.8: PET Token on Mina
 
-Status: review
+Status: done
 
 ## Story
 
@@ -190,12 +190,9 @@ Shop items have defined token costs in `packages/pet-circuit/src/constants.ts` (
 
 Adding `petTokenAddress` parameter to `applyProof` is a **breaking change** for existing tests. All existing `PetZkApp.test.ts` and `PetZkApp.integration.test.ts` tests that call `applyProof` must be updated to pass the new parameter.
 
-**CRITICAL:** In o1js circuits, method calls (like `petToken.burn()`) execute unconditionally -- they cannot be skipped via `Provable.if`. Even when `burnAmount` is `UInt64.zero`, the burn call still creates AccountUpdates targeting the `petTokenAddress`. This means:
+**CRITICAL:** In o1js circuits, method calls (like `petToken.burn()`) execute unconditionally -- they cannot be skipped via `Provable.if`. Even when `burnAmount` is `UInt64.zero`, the burn call still creates AccountUpdates targeting the `petTokenAddress`. This means existing tests that call `applyProof` must deploy a PetToken and fund operator token accounts, even for base-action-only tests. The zero-amount burn is a valid no-op on a deployed TokenContract.
 
-- **Existing tests that do NOT deploy a PetToken** cannot simply pass `PublicKey.empty()` or a dummy address -- the unconditional burn call will attempt to interact with a non-existent contract and likely fail.
-- **Two viable approaches:** (a) All existing tests must deploy a PetToken and fund operator token accounts, even for base-action-only tests (heavier but correct); (b) Use the `applyProofWithBurn()` fallback method so that existing tests continue to call the original `applyProof` (no signature change) while new token-aware tests call `applyProofWithBurn()`.
-
-**Decision:** Start with approach (a) -- modify `applyProof` directly and update all existing tests to deploy PetToken + fund token accounts. The zero-amount burn is a valid no-op on a deployed TokenContract. If this causes unacceptable test complexity or compilation issues, fall back to approach (b) with a separate `applyProofWithBurn()` method.
+**Implementation:** Approach (a) was used -- `applyProof` was modified directly and all existing tests deploy PetToken + fund operator token accounts. No fallback method was needed.
 
 ### Admin Key Model
 
@@ -263,12 +260,13 @@ Claude Opus 4.6 (1M context)
 - `packages/pet-circuit/src/PetZkApp.test.ts` -- MODIFIED: deploy PetToken, fund operator token accounts, pass petTokenAddress, sign with operator key
 - `packages/pet-circuit/src/PetZkApp.integration.test.ts` -- MODIFIED: deploy PetToken, mint to operator, pass petTokenAddress, sign with operator key
 - `packages/pet-circuit/src/PetToken.test.ts` -- MODIFIED: removed unused variable (lint fix)
-- `packages/pet-circuit/src/PetToken.integration.test.ts` -- UNMODIFIED: ATDD tests from prior phase worked as-is
+- `packages/pet-circuit/src/PetToken.integration.test.ts` -- MODIFIED: refactored to save interact proof for chaining, added clarifying comments
 
 ### Change Log
 
 | Date | Summary |
 |------|---------|
+| 2026-04-08 | Code review (Senior Dev AI): 0 critical, 0 high, 3 medium, 3 low issues found and fixed. Added deploy() JSDoc, burn() auth documentation, refactored integration test proof chaining, added zero-burn test comment, cleaned stale story doc decision text. Status -> done |
 | 2026-04-08 | Adversarial review: fixed 10 issues -- Field-to-UInt64 conversion gap, unconditional burn semantics, stage-action compatibility in AC-4, backward compat approach, incomplete token cost table, transfer test complexity, fallback ranking, compilation order in AC-4, zero-burn test case added to AC-3 |
 | 2026-04-08 | Implementation complete: PetToken contract created, PetZkApp.applyProof modified with token burn, all existing tests updated for backward compatibility, all 129 unit tests + 6 integration tests passing, build + lint clean |
 | 2026-04-08 | NFR assessment complete: PASS (6 PASS, 2 CONCERNS, 0 FAIL, 0 blockers). See `_bmad-output/test-artifacts/nfr-assessment-11-8.md` |
