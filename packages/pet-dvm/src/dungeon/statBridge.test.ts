@@ -49,7 +49,9 @@ function makeStatValues(overrides: Partial<StatValues> = {}): StatValues {
   };
 }
 
-function makeZeroDelta(overrides: Partial<DungeonStatDelta> = {}): DungeonStatDelta {
+function makeZeroDelta(
+  overrides: Partial<DungeonStatDelta> = {}
+): DungeonStatDelta {
   return {
     hunger: 0,
     happiness: 0,
@@ -64,7 +66,9 @@ function makeZeroDelta(overrides: Partial<DungeonStatDelta> = {}): DungeonStatDe
  * Build a minimal DungeonRunResult stub for AC-9 cross-verify tests.
  * Controls `encounters` and `statDeltas` precisely to drive ActionType branches.
  */
-function makeDungeonRunResult(overrides: Partial<DungeonRunResult> = {}): DungeonRunResult {
+function makeDungeonRunResult(
+  overrides: Partial<DungeonRunResult> = {}
+): DungeonRunResult {
   return {
     seed: 'test-seed',
     dungeonType: 'digger',
@@ -350,10 +354,34 @@ describe('dungeonDeltaToGameAction — ActionType resolution (AC-9)', () => {
     // 3 wins, 1 loss → majority won
     const result = makeDungeonRunResult({
       encounters: [
-        { monsterId: 'm1', monsterName: 'Slime', petWon: true, damageDealt: 10, damageTaken: 5 },
-        { monsterId: 'm2', monsterName: 'Goblin', petWon: true, damageDealt: 15, damageTaken: 8 },
-        { monsterId: 'm3', monsterName: 'Rat', petWon: true, damageDealt: 8, damageTaken: 3 },
-        { monsterId: 'm4', monsterName: 'Orc', petWon: false, damageDealt: 5, damageTaken: 20 },
+        {
+          monsterId: 'm1',
+          monsterName: 'Slime',
+          petWon: true,
+          damageDealt: 10,
+          damageTaken: 5,
+        },
+        {
+          monsterId: 'm2',
+          monsterName: 'Goblin',
+          petWon: true,
+          damageDealt: 15,
+          damageTaken: 8,
+        },
+        {
+          monsterId: 'm3',
+          monsterName: 'Rat',
+          petWon: true,
+          damageDealt: 8,
+          damageTaken: 3,
+        },
+        {
+          monsterId: 'm4',
+          monsterName: 'Orc',
+          petWon: false,
+          damageDealt: 5,
+          damageTaken: 20,
+        },
       ],
       statDeltas: makeZeroDelta({ health: -5 }),
     });
@@ -368,9 +396,27 @@ describe('dungeonDeltaToGameAction — ActionType resolution (AC-9)', () => {
     // 1 win, 2 losses → not majority won; health delta > 0 → MEDICINE
     const result = makeDungeonRunResult({
       encounters: [
-        { monsterId: 'm1', monsterName: 'Slime', petWon: true, damageDealt: 10, damageTaken: 5 },
-        { monsterId: 'm2', monsterName: 'Goblin', petWon: false, damageDealt: 3, damageTaken: 15 },
-        { monsterId: 'm3', monsterName: 'Orc', petWon: false, damageDealt: 2, damageTaken: 18 },
+        {
+          monsterId: 'm1',
+          monsterName: 'Slime',
+          petWon: true,
+          damageDealt: 10,
+          damageTaken: 5,
+        },
+        {
+          monsterId: 'm2',
+          monsterName: 'Goblin',
+          petWon: false,
+          damageDealt: 3,
+          damageTaken: 15,
+        },
+        {
+          monsterId: 'm3',
+          monsterName: 'Orc',
+          petWon: false,
+          damageDealt: 2,
+          damageTaken: 18,
+        },
       ],
       statDeltas: makeZeroDelta({ health: 10 }), // positive health delta → MEDICINE
     });
@@ -429,10 +475,34 @@ describe('dungeonDeltaToGameAction — ActionType resolution (AC-9)', () => {
     // 2 wins, 2 losses → NOT majority won; health delta > 0 → MEDICINE (not PLAY)
     const result = makeDungeonRunResult({
       encounters: [
-        { monsterId: 'm1', monsterName: 'Slime', petWon: true, damageDealt: 10, damageTaken: 5 },
-        { monsterId: 'm2', monsterName: 'Goblin', petWon: true, damageDealt: 10, damageTaken: 5 },
-        { monsterId: 'm3', monsterName: 'Orc', petWon: false, damageDealt: 3, damageTaken: 15 },
-        { monsterId: 'm4', monsterName: 'Troll', petWon: false, damageDealt: 2, damageTaken: 18 },
+        {
+          monsterId: 'm1',
+          monsterName: 'Slime',
+          petWon: true,
+          damageDealt: 10,
+          damageTaken: 5,
+        },
+        {
+          monsterId: 'm2',
+          monsterName: 'Goblin',
+          petWon: true,
+          damageDealt: 10,
+          damageTaken: 5,
+        },
+        {
+          monsterId: 'm3',
+          monsterName: 'Orc',
+          petWon: false,
+          damageDealt: 3,
+          damageTaken: 15,
+        },
+        {
+          monsterId: 'm4',
+          monsterName: 'Troll',
+          petWon: false,
+          damageDealt: 2,
+          damageTaken: 18,
+        },
       ],
       statDeltas: makeZeroDelta({ health: 5 }), // positive health delta → MEDICINE
     });

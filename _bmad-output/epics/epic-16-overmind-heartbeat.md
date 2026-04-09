@@ -37,7 +37,7 @@ A proof-of-concept spike at `packages/overmind/spike/` validated all core ZK mec
 ## Dependencies
 
 - **Existing TOON infrastructure:** DVM lifecycle, ILP payment channels, TEE attestation framework, relay, service discovery
-- **Chain Bridge DVM protocol spec (Epic 14):** Co-developed -- Mina adapter is the first reference implementation
+- **Chain Bridge DVM protocol spec (Epic 13):** Co-developed -- Mina adapter is the first reference implementation
 - **No dependency on Epics 17-20** (this is the foundation epic)
 
 ---
@@ -45,7 +45,7 @@ A proof-of-concept spike at `packages/overmind/spike/` validated all core ZK mec
 ## New Packages / Infrastructure
 
 - **`packages/overmind`** — New package: OODA engine, state management, wake cycle orchestration, Mina zkApp, executor management
-- **`packages/chain-bridge`** — New package: Chain Bridge DVM framework + Mina adapter
+- **`packages/bridge`** — New package: Chain Bridge DVM framework + Mina adapter
 - **OvermindRegistry zkApp** — Deployed to Mina devnet (o1js)
 - **Arweave state persistence layer** — Using `@ardrive/turbo-sdk`
 - **ArLocal** — Local Arweave gateway for dev/test (port 1984)
@@ -232,8 +232,8 @@ A proof-of-concept spike at `packages/overmind/spike/` validated all core ZK mec
 
 **Technical Notes:**
 
-- **Package:** `packages/chain-bridge` (new package). The abstract `ChainBridgeDvm` class lives here. The Mina adapter lives under `src/adapters/mina/`.
-- This is the first reference implementation of the Chain Bridge DVM primitive (Epic 14 / D-OMP-007). The abstract interface must be generic enough for future adapters (Bitcoin, Ethereum L2s, Solana).
+- **Package:** `packages/bridge` (new package). The abstract `ChainBridgeDvm` class lives here. The Mina adapter lives under `src/adapters/mina/`.
+- This is the first reference implementation of the Chain Bridge DVM primitive (Epic 13 / D-OMP-007). The abstract interface must be generic enough for future adapters (Bitcoin, Ethereum L2s, Solana).
 - Postgres trigger SQL is defined in the architecture doc section 4. The adapter uses `pg` (node-postgres) with `LISTEN` for push notifications.
 - Mina daemon GraphQL subscription for `newBlock` uses WebSocket transport (graphql-ws or similar).
 - The Mina GraphQL endpoint for devnet: `https://api.minascan.io/node/devnet/v1/graphql`. Archive node Postgres requires a running archive node (local for dev, hosted for integration).
@@ -242,9 +242,9 @@ A proof-of-concept spike at `packages/overmind/spike/` validated all core ZK mec
 
 **Test Strategy:**
 
-- **Unit tests** (`packages/chain-bridge/src/adapters/mina/mina-adapter.test.ts`): Test kind:5099 parsing, Mina TX construction, kind:5101 event construction. Mock Mina GraphQL and Postgres.
-- **Unit tests** (`packages/chain-bridge/src/chain-bridge-dvm.test.ts`): Test the abstract interface contract -- verify adapters must implement all required methods.
-- **Integration test** (`packages/chain-bridge/src/__integration__/mina-bridge.test.ts`): Deploy OvermindRegistry to `Mina.LocalBlockchain()`, run full cycle: publish kind:5099 to relay, adapter submits to local Mina, winner event emitted, adapter publishes kind:5101. Requires genesis relay running.
+- **Unit tests** (`packages/bridge/src/adapters/mina/mina-adapter.test.ts`): Test kind:5099 parsing, Mina TX construction, kind:5101 event construction. Mock Mina GraphQL and Postgres.
+- **Unit tests** (`packages/bridge/src/chain-bridge-dvm.test.ts`): Test the abstract interface contract -- verify adapters must implement all required methods.
+- **Integration test** (`packages/bridge/src/__integration__/mina-bridge.test.ts`): Deploy OvermindRegistry to `Mina.LocalBlockchain()`, run full cycle: publish kind:5099 to relay, adapter submits to local Mina, winner event emitted, adapter publishes kind:5101. Requires genesis relay running.
 - **Static analysis test**: Verify the adapter uses WebSocket/LISTEN for all external subscriptions (grep for `setInterval`, `setTimeout` used as polling -- should find none in adapter code).
 
 **Definition of Done:**
@@ -509,7 +509,7 @@ This IS the test. The entire story is an E2E test.
 ## Epic Acceptance Criteria
 
 - [ ] `packages/overmind` package created with standard monorepo structure
-- [ ] `packages/chain-bridge` package created with standard monorepo structure
+- [ ] `packages/bridge` package created with standard monorepo structure
 - [ ] OvermindRegistry zkApp compiles, passes unit tests, and deploys to Mina devnet
 - [ ] Chain Bridge DVM bridges kind:5099/5101 between relay and Mina with zero polling
 - [ ] Arweave state persistence supports all four Content-Kind values with deterministic reconstruction

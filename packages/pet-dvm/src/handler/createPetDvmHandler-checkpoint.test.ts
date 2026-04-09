@@ -199,7 +199,9 @@ describe('createPetDvmHandler — checkpoint integration', () => {
 
     // Second batch: 2 more interactions → 2nd checkpoint
     for (let i = 0; i < 2; i++) {
-      const event = makeValidPetEvent({ createdAt: 1712345678 + 200000 + i * 10000 });
+      const event = makeValidPetEvent({
+        createdAt: 1712345678 + 200000 + i * 10000,
+      });
       await handler(makeHandlerContext(event));
     }
     await new Promise((resolve) => setTimeout(resolve, 50));

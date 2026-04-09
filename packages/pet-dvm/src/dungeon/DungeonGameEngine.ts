@@ -30,19 +30,45 @@ import { DungeonEngineError } from './types';
 // ============================================================
 
 export const DEFAULT_MONSTER_TABLE: MonsterEntry[] = [
-  { id: 'slime',  name: 'Slime',       minFloor: 1, basePower: 5,  baseHp: 20  },
-  { id: 'goblin', name: 'Goblin',      minFloor: 1, basePower: 8,  baseHp: 30  },
-  { id: 'orc',    name: 'Orc',         minFloor: 2, basePower: 12, baseHp: 50  },
-  { id: 'troll',  name: 'Cave Troll',  minFloor: 3, basePower: 18, baseHp: 80  },
-  { id: 'dragon', name: 'Mini Dragon', minFloor: 4, basePower: 25, baseHp: 120 },
+  { id: 'slime', name: 'Slime', minFloor: 1, basePower: 5, baseHp: 20 },
+  { id: 'goblin', name: 'Goblin', minFloor: 1, basePower: 8, baseHp: 30 },
+  { id: 'orc', name: 'Orc', minFloor: 2, basePower: 12, baseHp: 50 },
+  { id: 'troll', name: 'Cave Troll', minFloor: 3, basePower: 18, baseHp: 80 },
+  {
+    id: 'dragon',
+    name: 'Mini Dragon',
+    minFloor: 4,
+    basePower: 25,
+    baseHp: 120,
+  },
 ];
 
 export const DEFAULT_LOOT_TABLE: LootEntry[] = [
-  { id: 'health_potion', name: 'Health Potion', rarity: 0.6, statDelta: { health: 15 } },
-  { id: 'energy_drink',  name: 'Energy Drink',  rarity: 0.5, statDelta: { energy: 10 } },
-  { id: 'berry',         name: 'Sweet Berry',   rarity: 0.7, statDelta: { hunger: 8, happiness: 5 } },
-  { id: 'soap',          name: 'Travel Soap',   rarity: 0.4, statDelta: { hygiene: 12 } },
-  { id: 'trophy',        name: 'Monster Trophy',rarity: 0.2, statDelta: { happiness: 20 } },
+  {
+    id: 'health_potion',
+    name: 'Health Potion',
+    rarity: 0.6,
+    statDelta: { health: 15 },
+  },
+  {
+    id: 'energy_drink',
+    name: 'Energy Drink',
+    rarity: 0.5,
+    statDelta: { energy: 10 },
+  },
+  {
+    id: 'berry',
+    name: 'Sweet Berry',
+    rarity: 0.7,
+    statDelta: { hunger: 8, happiness: 5 },
+  },
+  { id: 'soap', name: 'Travel Soap', rarity: 0.4, statDelta: { hygiene: 12 } },
+  {
+    id: 'trophy',
+    name: 'Monster Trophy',
+    rarity: 0.2,
+    statDelta: { happiness: 20 },
+  },
 ];
 
 // ============================================================
@@ -82,7 +108,9 @@ function resolveCombat(
   petStats: DungeonPetStats,
   monster: MonsterEntry
 ): CombatResult {
-  const petPower = Math.floor(petStats.hunger * 0.5 + petStats.energy * 0.3 + 1);
+  const petPower = Math.floor(
+    petStats.hunger * 0.5 + petStats.energy * 0.3 + 1
+  );
   let petHp = petStats.health;
   let monsterHp = monster.baseHp;
   let totalDamageDealt = 0;
@@ -164,9 +192,12 @@ export class DungeonGameEngine {
 
     // Validate dimensions
     if (
-      !Number.isFinite(config.width) || config.width < 10 ||
-      !Number.isFinite(config.height) || config.height < 10 ||
-      !Number.isFinite(config.maxRooms) || config.maxRooms < 1
+      !Number.isFinite(config.width) ||
+      config.width < 10 ||
+      !Number.isFinite(config.height) ||
+      config.height < 10 ||
+      !Number.isFinite(config.maxRooms) ||
+      config.maxRooms < 1
     ) {
       throw new DungeonEngineError(
         'width and height must be >= 10, maxRooms must be >= 1',
@@ -204,7 +235,9 @@ export class DungeonGameEngine {
 
     if (dungeonType === 'digger') {
       const digger = new ROTMap.Digger(width, height);
-      digger.create(() => { /* collect passable cells — we only need rooms */ });
+      digger.create(() => {
+        /* collect passable cells — we only need rooms */
+      });
       rooms = digger.getRooms();
     } else if (dungeonType === 'cellular') {
       const cellular = new ROTMap.Cellular(width, height);
@@ -216,7 +249,9 @@ export class DungeonGameEngine {
     } else {
       // rogue
       const rogue = new ROTMap.Rogue(width, height, {});
-      rogue.create(() => { /* noop */ });
+      rogue.create(() => {
+        /* noop */
+      });
       // Rogue exposes rooms via private field; fall back to digger if unavailable
       rooms = (rogue as unknown as { getRooms?(): Room[] }).getRooms?.() ?? [];
     }
@@ -224,14 +259,21 @@ export class DungeonGameEngine {
     // Ensure at least one room
     if (rooms.length === 0) {
       // Fallback: synthesize a single room at center — cast via unknown for the stub
-      rooms = [{ getCenter: () => [Math.floor(width / 2), Math.floor(height / 2)] } as unknown as Room];
+      rooms = [
+        {
+          getCenter: () => [Math.floor(width / 2), Math.floor(height / 2)],
+        } as unknown as Room,
+      ];
     }
 
     const roomsGenerated = rooms.length;
 
     // --- 3. Determine exploration depth ---
     // Energy drives depth: Math.floor(energy / 20) clamped to [1, maxRooms]
-    const intendedDepth = Math.max(1, Math.min(maxRooms, Math.floor(petStats.energy / 20)));
+    const intendedDepth = Math.max(
+      1,
+      Math.min(maxRooms, Math.floor(petStats.energy / 20))
+    );
     const roomsToVisit = Math.min(intendedDepth, roomsGenerated);
 
     // --- 4. Simulate traversal ---
@@ -266,9 +308,10 @@ export class DungeonGameEngine {
         const eligibleMonsters = this.config.monsterTable.filter(
           (mon) => mon.minFloor <= floor
         );
-        const monsterPool = eligibleMonsters.length > 0
-          ? eligibleMonsters
-          : this.config.monsterTable;
+        const monsterPool =
+          eligibleMonsters.length > 0
+            ? eligibleMonsters
+            : this.config.monsterTable;
 
         const monsterIdx = Math.floor(RNG.getUniform() * monsterPool.length);
         const monster = monsterPool[monsterIdx];
@@ -312,11 +355,16 @@ export class DungeonGameEngine {
           });
 
           // Apply loot stat delta
-          if (item.statDelta.health !== undefined)    statDeltas.health    += item.statDelta.health;
-          if (item.statDelta.energy !== undefined)    statDeltas.energy    += item.statDelta.energy;
-          if (item.statDelta.hunger !== undefined)    statDeltas.hunger    += item.statDelta.hunger;
-          if (item.statDelta.happiness !== undefined) statDeltas.happiness += item.statDelta.happiness;
-          if (item.statDelta.hygiene !== undefined)   statDeltas.hygiene   += item.statDelta.hygiene;
+          if (item.statDelta.health !== undefined)
+            statDeltas.health += item.statDelta.health;
+          if (item.statDelta.energy !== undefined)
+            statDeltas.energy += item.statDelta.energy;
+          if (item.statDelta.hunger !== undefined)
+            statDeltas.hunger += item.statDelta.hunger;
+          if (item.statDelta.happiness !== undefined)
+            statDeltas.happiness += item.statDelta.happiness;
+          if (item.statDelta.hygiene !== undefined)
+            statDeltas.hygiene += item.statDelta.hygiene;
         }
       }
     }
@@ -378,7 +426,10 @@ function deriveCellularRooms(
     if (contents === 0) passable.push([x, y]);
   });
 
-  const center: [number, number] = [Math.floor(width / 2), Math.floor(height / 2)];
+  const center: [number, number] = [
+    Math.floor(width / 2),
+    Math.floor(height / 2),
+  ];
 
   if (passable.length === 0) {
     return [{ getCenter: () => center } as unknown as Room];
@@ -416,10 +467,14 @@ interface NarrativeParams {
 function buildNarrativeSummary(p: NarrativeParams): string {
   const parts: string[] = [];
 
-  parts.push(`Reached floor ${p.floorsReached} and explored ${p.roomsVisited} room${p.roomsVisited !== 1 ? 's' : ''}`);
+  parts.push(
+    `Reached floor ${p.floorsReached} and explored ${p.roomsVisited} room${p.roomsVisited !== 1 ? 's' : ''}`
+  );
 
   if (p.totalEncounters > 0) {
-    parts.push(`defeated ${p.wins} of ${p.totalEncounters} monster${p.totalEncounters !== 1 ? 's' : ''}`);
+    parts.push(
+      `defeated ${p.wins} of ${p.totalEncounters} monster${p.totalEncounters !== 1 ? 's' : ''}`
+    );
   }
 
   if (p.rareLoot.length > 0) {

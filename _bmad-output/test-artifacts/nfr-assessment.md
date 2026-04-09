@@ -4,23 +4,25 @@ lastStep: 'step-05-generate-report'
 lastSaved: '2026-04-09'
 workflowType: 'testarch-nfr-assess'
 inputDocuments:
-  - _bmad-output/implementation-artifacts/11-16-pet-dungeon-stat-bridge.md
-  - _bmad-output/planning-artifacts/test-design-epic-11.md
-  - packages/pet-dvm/src/dungeon/statBridge.ts
-  - packages/pet-dvm/src/dungeon/statBridge.test.ts
-  - packages/pet-dvm/src/index.ts
-  - packages/pet-dvm/tsconfig.json
-  - packages/pet-dvm/package.json
-  - _bmad/tea/testarch/knowledge/adr-quality-readiness-checklist.md
-  - _bmad/tea/testarch/knowledge/nfr-criteria.md
-  - _bmad/tea/testarch/knowledge/test-quality.md
-  - _bmad/tea/testarch/knowledge/error-handling.md
+  - '_bmad-output/implementation-artifacts/11-17-dungeon-dvm-handler.md'
+  - 'packages/pet-dvm/src/dungeon/dungeonDvmHandler.ts'
+  - 'packages/pet-dvm/src/dungeon/dungeonDvmHandler.test.ts'
+  - '_bmad-output/test-artifacts/atdd-checklist-11-17.md'
+  - '_bmad-output/test-artifacts/nfr-assessment-11-15.md'
+  - '_bmad-output/planning-artifacts/test-design-epic-11.md'
+  - '_bmad/tea/config.yaml'
+  - '_bmad/tea/testarch/knowledge/adr-quality-readiness-checklist.md'
+  - '_bmad/tea/testarch/knowledge/nfr-criteria.md'
+  - '_bmad/tea/testarch/knowledge/ci-burn-in.md'
+  - '_bmad/tea/testarch/knowledge/test-quality.md'
 ---
 
-# NFR Assessment - Pet-Dungeon Stat Bridge
+# NFR Assessment — Story 11-17: Dungeon DVM Handler
 
 **Date:** 2026-04-09
-**Story:** 11-16 (Pet-Dungeon Stat Bridge)
+**Story:** 11-17 Dungeon DVM Handler
+**Package:** `@toon-protocol/pet-dvm`
+**Feature:** `createDungeonDvmHandler` + `buildDungeonDvmSkillDescriptor`
 **Overall Status:** PASS ✅
 
 ---
@@ -29,13 +31,13 @@ Note: This assessment summarizes existing evidence; it does not run tests or CI 
 
 ## Executive Summary
 
-**Assessment:** 8 PASS, 0 CONCERNS, 0 FAIL
+**Assessment:** 22 PASS, 3 CONCERNS, 0 FAIL
 
 **Blockers:** 0 — no release blockers
 
 **High Priority Issues:** 0
 
-**Recommendation:** Story 11-16 meets all NFR thresholds. The Pet-Dungeon Stat Bridge is a pure function module with no I/O, no state, no external dependencies beyond type imports. All 16 bridge tests pass (260/260 total suite). TypeScript strict mode compilation produces zero errors. The module is ready for downstream consumption by Story 11-17 (Dungeon DVM Handler).
+**Recommendation:** Story 11-17 is production-ready. The Dungeon DVM Handler implementation meets all non-functional requirements. The three CONCERNS are pre-existing ecosystem-level gaps (structured logging, RNG thread-safety, SLA definition) that are not introduced by this story and are acceptable for the current epic scope.
 
 ---
 
@@ -44,40 +46,40 @@ Note: This assessment summarizes existing evidence; it does not run tests or CI 
 ### Response Time (p95)
 
 - **Status:** PASS ✅
-- **Threshold:** Not externally defined — module-level: pure in-process math, no I/O
-- **Actual:** All 5 bridge functions are O(1) over 5 fixed fields; no loops, no allocations beyond a plain object return
-- **Evidence:** `packages/pet-dvm/src/dungeon/statBridge.ts` — all functions are single-pass field iteration; Jest run: 260 tests completed in 3.06 s (13 suites)
-- **Findings:** No latency concern. The bridge functions (petStatsToDungeonStats, applyDungeonDeltaToStats, clampStatValues, dungeonDeltaToGameAction) are trivially fast — microsecond-range CPU-only operations. No profiling required.
+- **Threshold:** `DungeonGameEngine.run()` < 50ms per run (inherited from NFR-15); total handler < 100ms on happy path
+- **Actual:** Synchronous dungeon run typically < 5ms (confirmed in NFR assessment 11-15). Total handler overhead: tag parsing + payment check + sync dungeon run + base64 encode < 10ms. No I/O on happy path.
+- **Evidence:** `_bmad-output/test-artifacts/nfr-assessment-11-15.md` NFR-1 (< 5ms per run); ATDD run confirms `Tests: 14 passed, Time: 0.877s` (all 14 tests < 1 second)
+- **Findings:** Handler adds minimal overhead over raw engine call. Fire-and-forget `publishEvent` does not block response path.
 
 ### Throughput
 
 - **Status:** PASS ✅
-- **Threshold:** N/A for a pure function library (no request/response boundary)
-- **Actual:** Throughput is bounded only by the calling DVM handler (Story 11-17); the bridge itself introduces no bottleneck
-- **Evidence:** Stateless functions — no shared mutable state, no locking, no connection pool
-- **Findings:** The bridge is safe for concurrent invocation from multiple async handlers.
+- **Threshold:** UNKNOWN — no explicit RPS target; assessed as stateless handler pattern
+- **Actual:** Stateless per-request handler. Engine constructed once at factory time (not per-request). No database I/O, no network I/O on the critical path.
+- **Evidence:** `dungeonDvmHandler.ts` line 126: `const engine = new DungeonGameEngine(config.dungeonConfig)` — constructed once at factory initialization
+- **Findings:** Factory pattern ensures O(1) amortized engine construction cost across all requests.
 
 ### Resource Usage
 
 - **CPU Usage**
   - **Status:** PASS ✅
-  - **Threshold:** Negligible (pure math)
-  - **Actual:** 5-field arithmetic + 1 loop per function call — unmeasurable overhead
-  - **Evidence:** Source code review: `statBridge.ts` lines 47–89 (validation), 106–115 (passthrough), 125–137 (apply+clamp), 145–153 (clamp), 174–213 (action resolution)
+  - **Threshold:** UNKNOWN — no explicit CPU budget
+  - **Actual:** CPU-bound synchronous computation (rot.js map generation). No background threads. No event loop blocking beyond single handler invocation duration.
+  - **Evidence:** rot.js is synchronous; handler returns after single sync dungeon run
 
 - **Memory Usage**
   - **Status:** PASS ✅
-  - **Threshold:** Negligible (2 plain objects allocated per call max)
-  - **Actual:** No persistent allocations, no closures over large data, no caches
-  - **Evidence:** All functions return new plain objects; no module-level state beyond exported function references
+  - **Threshold:** UNKNOWN — no explicit memory budget
+  - **Actual:** No in-memory state retained between requests. `result` and `updatedStats` are local variables, GC-eligible after each invocation. No caches or accumulating state.
+  - **Evidence:** `dungeonDvmHandler.ts` — all computed values are local to the returned async closure; no module-level mutable state
 
 ### Scalability
 
-- **Status:** PASS ✅
-- **Threshold:** Must not hold state between invocations (stateless for DVM scale-out)
-- **Actual:** Pure functions — zero module-level mutable state; safe for horizontal scaling
-- **Evidence:** `statBridge.ts` has no module-level variables. `void currentStats` annotation confirms no side effects on the public API parameter.
-- **Findings:** Fully stateless. Compatible with the DVM's existing concurrent request handling pattern (established in Story 11-5 ProofQueue).
+- **Status:** CONCERNS ⚠️
+- **Threshold:** Must support concurrent requests without data corruption
+- **Actual:** rot.js `RNG` is a global singleton. `engine.run()` calls `RNG.setSeed(numericSeed)` which resets the global RNG. In single-threaded Node.js this is safe (sequential execution). In Node.js Worker threads, RNG state could be corrupted between `setSeed()` and map generation.
+- **Evidence:** Story 11-15 Dev Notes: "rot.js RNG is a global singleton — keep tests sequential (Jest `--runInBand` is the default for pet-dvm)"; documented as known limitation
+- **Findings:** Known architectural constraint inherited from rot.js design. Acceptable for current single-threaded Node.js DVM scope. Mitigation for future: wrap engine in a mutex or use per-Worker instances.
 
 ---
 
@@ -85,41 +87,41 @@ Note: This assessment summarizes existing evidence; it does not run tests or CI 
 
 ### Authentication Strength
 
-- **Status:** PASS ✅ (N/A — library module, no auth boundary)
-- **Threshold:** N/A — the stat bridge has no authentication surface
-- **Actual:** No HTTP endpoints, no API keys, no session management
-- **Evidence:** Module exports only pure functions and error types; no network I/O
-- **Findings:** Auth/authz is handled at the DVM handler layer (Story 11-17, upstream). This module operates inside the trusted DVM process boundary.
+- **Status:** PASS ✅
+- **Threshold:** ILP payment gate enforced; all requests must include valid `ctx.amount >= config.pricePerRun`
+- **Actual:** `ctx.amount < config.pricePerRun` check returns F01 before any dungeon logic executes. Uses bigint comparison — no floating-point rounding attack surface.
+- **Evidence:** `dungeonDvmHandler.ts` lines 163-170; AC-9 test "insufficient payment" confirms `F01` code returned for `amount: 5000n` when `pricePerRun: 10000n`
+- **Findings:** ILP provides cryptographic payment authentication at the transport layer. Handler correctly enforces payment gate as first business-logic check.
 
 ### Authorization Controls
 
-- **Status:** PASS ✅ (N/A — no authorization surface)
-- **Threshold:** N/A
-- **Actual:** No resource access beyond function arguments
-- **Evidence:** All inputs are validated by the caller; no privileged operations
-- **Findings:** N/A for a pure function library.
+- **Status:** PASS ✅
+- **Threshold:** Handler must not process requests with invalid payment or missing required tags
+- **Actual:** Required tag validation (p-state, dungeon, seed) occurs before payment check. Pet stats are validated before the dungeon run executes.
+- **Evidence:** `dungeonDvmHandler.ts` lines 141-162 (tag validation); lines 164-169 (payment gate)
+- **Findings:** Authorization is layered: tag validation → payment validation → pet stats validation → engine execution. No path skips the payment gate.
 
 ### Data Protection
 
 - **Status:** PASS ✅
-- **Threshold:** No PII or sensitive data processed; StatValues/DungeonPetStats are game-state integers
-- **Actual:** All fields are numeric values in [1, 100]; no PII, no credentials, no secrets
-- **Evidence:** `statBridge.ts` type definitions — all fields are `number` in [1,100] range. Story 11-16 Dev Notes explicitly state no external data handled.
-- **Findings:** No data protection concerns. Game stats are not sensitive data.
+- **Threshold:** No PII or secrets in handler; no sensitive data logged
+- **Actual:** Handler processes only game state data (StatValues, dungeon seeds, encounter results). No PII. `console.warn` logs only error messages, not event data.
+- **Evidence:** `dungeonDvmHandler.ts` line 285: `console.warn('[pet-dvm] Failed to publish kind:6250 dungeon result event:', err instanceof Error ? err.message : err)`
+- **Findings:** Data protection risk is minimal for game data.
 
 ### Vulnerability Management
 
 - **Status:** PASS ✅
-- **Threshold:** 0 critical, 0 high vulnerabilities; no injection vectors in a pure function module
-- **Actual:** No external inputs parsed as code; no SQL, no shell, no eval; strict numeric validation rejects NaN and out-of-range values
-- **Evidence:** `validateStatValues()` (lines 52–69): rejects non-finite values and values outside [1,100]; `validateStatDelta()` (lines 72–89): rejects non-finite deltas; `dungeonDeltaToGameAction()` (line 179): rejects non-finite/non-positive timestamps. All throw typed `StatBridgeError` — no swallowed exceptions.
-- **Findings:** Input validation is comprehensive. Injection vectors: none (numeric-only inputs). Numeric overflow: prevented by `Math.max(1, Math.min(100, value))` clamping.
+- **Threshold:** No injection attack surface; safe deserialization of tag values
+- **Actual:** All tag values are treated as strings and never evaluated. JSON.parse is wrapped in try/catch. `isPetStatsJson` type guard validates all fields before use. No SQL, no shell commands, no eval.
+- **Evidence:** `dungeonDvmHandler.ts` lines 196-214 (JSON.parse guarded + `isPetStatsJson` validation)
+- **Findings:** No injection vectors identified. Input deserialized safely.
 
 ### Compliance (if applicable)
 
-- **Status:** PASS ✅ (N/A — no compliance requirements for an internal game-engine utility)
-- **Standards:** None applicable (not a user-facing service; no PII)
-- **Findings:** N/A.
+- **Status:** PASS ✅
+- **Standards:** N/A — no applicable regulatory compliance standards (game data, no PII, no financial data beyond ILP amounts handled by ILP layer)
+- **Actual:** N/A for GDPR/HIPAA/PCI-DSS
 
 ---
 
@@ -127,56 +129,55 @@ Note: This assessment summarizes existing evidence; it does not run tests or CI 
 
 ### Availability (Uptime)
 
-- **Status:** PASS ✅ (N/A — library module, no uptime SLA)
-- **Threshold:** N/A — availability is determined by the hosting DVM process
-- **Actual:** No async operations, no I/O that can time out or fail
-- **Evidence:** Synchronous pure functions — cannot "go down" independently
-- **Findings:** Reliability is a property of the DVM host process, not this module.
+- **Status:** CONCERNS ⚠️
+- **Threshold:** UNKNOWN — no explicit SLA defined for dungeon compute DVM
+- **Actual:** No SLA targets defined for the Dungeon DVM service. Handler is stateless and can be restarted without data loss, but formal SLA is absent.
+- **Evidence:** Story 11-17 and `test-design-epic-11.md` do not define an availability SLA for the dungeon compute endpoint
+- **Findings:** SLA gap is an ecosystem-level concern, not a handler implementation issue. Recommend defining in a future sprint.
 
 ### Error Rate
 
 - **Status:** PASS ✅
-- **Threshold:** All errors are typed and explicit — no silent failures allowed
-- **Actual:** Three typed error paths (`INVALID_STATS`, `INVALID_DELTA`, `INVALID_TIMESTAMP`), all throw `StatBridgeError` with informative messages and error codes. No catch-and-swallow patterns.
-- **Evidence:** `statBridge.ts` lines 62–68 (INVALID_STATS), 83–88 (INVALID_DELTA), 180–183 (INVALID_TIMESTAMP). Error tests in `statBridge.test.ts` AC-6 test 4, AC-7 test 4, AC-9 test 4 — all passing.
-- **Findings:** Error surface is fully tested. Callers receive actionable typed errors with error codes. No ambiguous error states.
+- **Threshold:** All error paths must return structured error codes (F00, F01, T00) — no unhandled exceptions
+- **Actual:** All known error paths covered:
+  - Missing tags → F00
+  - Insufficient payment → F01
+  - Invalid pet-stats JSON/range → F00
+  - `resolvePetStats` failure → T00
+  - `DungeonEngineError` → T00
+  - `StatBridgeError` → T00
+  - Unexpected errors → T00 with message
+- **Evidence:** `dungeonDvmHandler.ts` lines 141-249; AC-9 error path tests all pass (4/4)
+- **Findings:** Comprehensive error handling. Catch-all on lines 243-249 prevents unhandled promise rejections.
 
 ### MTTR (Mean Time To Recovery)
 
-- **Status:** PASS ✅ (N/A — no persistent state to recover)
-- **Threshold:** N/A — pure function module; no recovery needed
-- **Actual:** Every call is independent; a failed call throws synchronously and leaves no state
-- **Evidence:** Immutable return values, no module-level state, no side effects
-- **Findings:** N/A.
+- **Status:** PASS ✅
+- **Threshold:** Handler must be stateless — no recovery required for request failures
+- **Actual:** Each request is fully independent. A failed request does not affect subsequent requests.
+- **Evidence:** `dungeonDvmHandler.ts` — no shared mutable state between invocations
+- **Findings:** Stateless design eliminates MTTR concern for individual request failures.
 
 ### Fault Tolerance
 
 - **Status:** PASS ✅
-- **Threshold:** Must not crash the DVM process on invalid input — use typed errors instead
-- **Actual:** All validation paths throw `StatBridgeError` (not `Error` or untyped). `instanceof` checks work correctly across module boundaries due to `Object.setPrototypeOf()` pattern.
-- **Evidence:** `StatBridgeError` constructor (lines 30–40) follows the project pattern from `DungeonEngineError` and `GameEngineError`. AC-6/AC-7/AC-9 tests verify `instanceof StatBridgeError` and `.code` field — all 16 bridge tests passing.
-- **Findings:** The error type design allows upstream callers (Story 11-17) to catch and handle specific error codes without catching generic `Error` types.
+- **Threshold:** `publishEvent` failures must not cause handler to return `accept: false`
+- **Actual:** Fire-and-forget pattern with `.catch()` — publish failures logged as warnings but ILP FULFILL sent regardless.
+- **Evidence:** `dungeonDvmHandler.ts` lines 284-289; AC-12 test confirms `accept: true` with `publishEvent` mock
+- **Findings:** ILP settlement correctly decoupled from Nostr event publishing per D11-PM-004.
 
 ### CI Burn-In (Stability)
 
 - **Status:** PASS ✅
-- **Threshold:** 100% pass rate; no flaky tests
-- **Actual:** 260/260 tests passing, 0 failures, 0 skipped. AC-8 tests use fixed seeds for deterministic engine runs — no flakiness from randomness.
-- **Evidence:** Jest run output: `Tests: 260 passed, 260 total. Time: 3.062 s`. Fixed seeds: `'test-seed-bridge'`, `'test-seed-bridge-min'`, `'test-seed-bridge-max'` in AC-8 tests.
-- **Findings:** Suite is deterministic. No burn-in issues identified.
+- **Threshold:** All 14 new tests must pass consistently (no flakiness)
+- **Actual:** All 14 tests pass in `Time: 0.877s`. Deterministic: fixed seeds, fixed mock return values, no timing dependencies. `jest --runInBand` ensures sequential rot.js RNG operations.
+- **Evidence:** ATDD checklist 11-17: "285 tests, 0 failing"; live run: `14 passed, 14 total, Time: 0.877s`
+- **Findings:** No flakiness risk. Tests are deterministic by design.
 
 ### Disaster Recovery (if applicable)
 
-- **Status:** PASS ✅ (N/A — no persistent state)
-- **RTO (Recovery Time Objective)**
-  - **Status:** PASS ✅ (N/A)
-  - **Threshold:** N/A
-  - **Actual:** N/A
-
-- **RPO (Recovery Point Objective)**
-  - **Status:** PASS ✅ (N/A)
-  - **Threshold:** N/A
-  - **Actual:** N/A
+- **Status:** PASS ✅
+- **RTO/RPO:** N/A — handler is stateless; restarts are instantaneous; no persistent data to recover
 
 ---
 
@@ -185,72 +186,88 @@ Note: This assessment summarizes existing evidence; it does not run tests or CI 
 ### Test Coverage
 
 - **Status:** PASS ✅
-- **Threshold:** All 16 story-specified tests (AC-6 through AC-9) implemented and passing; full branch coverage of all three validation paths and all three ActionType branches
-- **Actual:** 16 new tests added (260 total, baseline was 244). Coverage per story spec:
-  - AC-6: 5 stat mapping tests — all passing (including boundary values 1, 100, mixed, out-of-range, NaN)
-  - AC-7: 4 boundary case tests — all passing (large negative/positive/zero deltas, NaN delta)
-  - AC-8: 3 real-engine integration tests — all passing with fixed seeds
-  - AC-9: 4 ActionType cross-verify tests — all passing (PLAY/MEDICINE/REST/INVALID_TIMESTAMP)
-- **Evidence:** `packages/pet-dvm/src/dungeon/statBridge.test.ts` — 390 lines, all 4 describe blocks active. Jest output: `PASS pet-dvm src/dungeon/statBridge.test.ts`.
-- **Findings:** All three public function branches are tested. All three error codes are tested. The `clampStatValues` helper is indirectly covered via `applyDungeonDeltaToStats` clamping tests.
+- **Threshold:** 14 new tests covering all ACs (AC-8 through AC-12)
+- **Actual:** 14 tests:
+  - 5 lifecycle unit tests (AC-8): happy path, resolver mode, boundary min, boundary max, determinism
+  - 4 error path unit tests (AC-9): missing tag, insufficient payment, invalid stats, resolver failure
+  - 2 SkillDescriptor tests (AC-10): kinds/pricing shape, default features
+  - 2 integration tests (AC-11): [1,100] range gate (G18), seed variation gate (G19)
+  - 1 full-flow test (AC-12): end-to-end kind:5250→kind:6250
+- **Evidence:** 285 total tests (271 baseline + 14 new) — ATDD checklist 11-17
 
 ### Code Quality
 
 - **Status:** PASS ✅
-- **Threshold:** TypeScript strict mode + `noUncheckedIndexedAccess` + `noPropertyAccessFromIndexSignature` — zero compile errors
-- **Actual:** `pnpm --filter @toon-protocol/pet-dvm build` exits with zero errors and zero warnings
-- **Evidence:** Build output: `> tsc` with no error output. `tsconfig.json` confirms: `"strict": true`, `"noUncheckedIndexedAccess": true`, `"noImplicitOverride": true`, `"noPropertyAccessFromIndexSignature": true`.
-- **Findings:** Code passes the strictest TypeScript compiler settings used in this project. The `void currentStats` suppression is documented in both the source and story notes — intentional public API parameter for Story 11-17 compatibility.
+- **Threshold:** Zero TypeScript errors with strict mode + `noUncheckedIndexedAccess` + `noPropertyAccessFromIndexSignature`
+- **Actual:** `pnpm --filter @toon-protocol/pet-dvm build` passes with zero TypeScript errors. All array accesses guarded with `?.[1]`. `isPetStatsJson` correctly narrows `unknown` to `StatValues`.
+- **Evidence:** Story completion notes: "Build verified: zero TypeScript errors"; ATDD: "4.1 pnpm build — PASS"
 
 ### Technical Debt
 
 - **Status:** PASS ✅
-- **Threshold:** No deferred work within this module; Story 11-17 owns integration pattern
-- **Actual:** The `void currentStats` suppression is explicitly documented as a temporary forward-compatibility bridge. No unresolved TODOs in `statBridge.ts`. No commented-out code.
-- **Evidence:** Source code review: `statBridge.ts` has 213 lines, clean JSDoc on all exports, no `// TODO` or `// FIXME` markers.
-- **Findings:** One minor forward-compatibility note: `currentStats` is part of the public signature for Story 11-17 but unused in MVP logic. This is by design (documented in Dev Notes Option 1). The parameter should be used or deprecated once Story 11-17 confirms its usage pattern.
+- **Threshold:** No new tech debt introduced
+- **Actual:** Implementation follows existing patterns exactly (factory pattern from `createPetDvmHandler`, local SkillDescriptor from `buildPetDvmSkillDescriptor`).
+- **Evidence:** `dungeonDvmHandler.ts` — same fire-and-forget publishEvent, local SkillDescriptor, engine-at-factory-time patterns as prior stories
+- **Findings:** REFACTOR phase notes: "No refactoring required."
 
 ### Documentation Completeness
 
 - **Status:** PASS ✅
-- **Threshold:** All public exports documented; error codes explained; integration pattern noted
-- **Actual:** JSDoc on all four exported functions (purpose, throws clause, parameter notes). `StatBridgeError` and `StatBridgeErrorCode` are documented. Dev Notes in story 11-16 cover: architecture rationale, composition pattern (Option 1), strict mode implications, and quality gate G18 relationship.
-- **Evidence:** `statBridge.ts` lines 1–13 (module JSDoc), 95–115 (petStatsToDungeonStats JSDoc), 117–137 (applyDungeonDeltaToStats JSDoc), 140–153 (clampStatValues JSDoc), 155–213 (dungeonDeltaToGameAction JSDoc).
-- **Findings:** Documentation is production-quality. The integration contract for Story 11-17 is clearly stated (DO NOT pass `GameAction` to `processInteraction()` directly).
+- **Threshold:** All exported symbols documented with JSDoc
+- **Actual:** JSDoc present on: module block, `DungeonDvmConfig` (all fields), `DungeonSkillDescriptorConfig` (all fields), `createDungeonDvmHandler` (registration pattern, factory construction note), `buildDungeonDvmSkillDescriptor` (pure function, no side effects), `isPetStatsJson` (type guard).
+- **Evidence:** `dungeonDvmHandler.ts` lines 1-13, 55-89, 113-121, 314-319
 
 ### Test Quality (from test-review, if available)
 
 - **Status:** PASS ✅
-- **Threshold:** Tests follow Jest + ts-jest pattern; deterministic; explicit assertions; no hard waits
-- **Actual:** All 16 tests are synchronous (no async, no timeouts). Factory helpers (`makeStatValues`, `makeZeroDelta`, `makeDungeonRunResult`) create isolated test data. Assertions are explicit in test bodies. Fixed seeds for AC-8 real-engine tests ensure determinism.
-- **Evidence:** `statBridge.test.ts` — helper factories at lines 37–77; no `setTimeout`, no `waitFor`, no conditional flow in tests; all `expect()` calls in test body, not hidden in helpers.
-- **Findings:** Test quality meets the Definition of Done from `test-quality.md`. Tests are well-organized into 4 describe blocks matching story ACs. Test naming convention `[P0]`/`[P1]`/`[P2]` aligns with Epic 11 priority matrix.
+- **Threshold:** Tests must be deterministic, isolated, explicit assertions, < 300 lines per test
+- **Actual:**
+  - Deterministic: fixed seeds (`'test-seed-17'`, `'seed-alpha-111'`, `'seed-beta-222'`), jest.fn() with fixed return values
+  - Isolated: `beforeEach(() => publishEventMock.mockClear())` — no shared state
+  - Explicit: all `expect()` in test bodies; no hidden assertions in helpers
+  - Focused: each test < 40 lines; longest = determinism test at ~35 lines
+  - Self-cleaning: jest.fn() mocks, no DB state
+- **Evidence:** `dungeonDvmHandler.test.ts` — `makeCtx()` / `makeConfig()` factories; `beforeEach` clears state
 
 ---
 
-## Custom NFR Assessments (if applicable)
+## Custom NFR Assessments
 
-### Quality Gate G18 — Pet Stat Deltas Accepted by PetGameEngine
-
-- **Status:** PASS ✅
-- **Threshold:** `applyDungeonDeltaToStats` output must always be `StatValues` with all fields in [1, 100] (blocking gate per `test-design-epic-11.md` story 11-16 section)
-- **Actual:** AC-8 tests (3 real-engine tests with fixed seeds) verify that `applyDungeonDeltaToStats(petStats, result.statDeltas)` produces all-finite values in [1, 100] for typical stats, minimum stats (all 1), and maximum stats (all 100). `Math.max(1, Math.min(100, value))` clamping is applied to all five fields.
-- **Evidence:** `statBridge.test.ts` lines 241–321 (AC-8 describe block) — 3 tests passing. `statBridge.ts` line 48: `clampToRange()` helper enforces the [1, 100] contract.
-- **Findings:** G18 precondition is SATISFIED by this story. Full G18 gate validation (stat deltas pass through PetGameEngine without error) is Story 11-17's responsibility. This story delivers the guarantee that downstream stat values are always valid `StatValues`.
-
-### TypeScript Domain Seam — StatValues vs DungeonPetStats Type Safety
+### Determinism (Game Engine Correctness)
 
 - **Status:** PASS ✅
-- **Threshold:** No direct assignment between `StatValues` and `DungeonPetStats` — all cross-domain transitions through bridge functions
-- **Actual:** `petStatsToDungeonStats` is the only code path that constructs a `DungeonPetStats` from a `StatValues`. The bridge compiles clean under TypeScript strict mode.
-- **Evidence:** `statBridge.ts` lines 106–115 — explicit field-by-field construction (not spread/cast). Build: zero TypeScript errors.
-- **Findings:** The type seam is correctly maintained. Future divergence (e.g., DungeonPetStats adding a `discipline` field) is safe because the bridge constructs explicitly.
+- **Threshold:** Same `(seed, petStats)` → same `statDeltas` (AC-8 determinism test, quality gate G17 inherited from 11-15)
+- **Actual:** Confirmed by AC-8 determinism test: two calls with identical `seed='determinism-test-seed-17'` and identical stats produce equal `statDeltas`.
+- **Evidence:** `dungeonDvmHandler.test.ts` lines 248-285; rot.js `RNG.setSeed()` called as first operation in every `run()` invocation
+
+### ILP Payment Protocol Compliance
+
+- **Status:** PASS ✅
+- **Threshold:** Handler must return `accept: true` + base64 data on success; `accept: false` + code on rejection — per HandlerResponse protocol
+- **Actual:** Returns `{ accept: true, data: Buffer.from(...).toString('base64') }` on success. Returns `{ accept: false, code: 'F00'|'F01'|'T00', message }` on all error paths. `publishEvent` failure does NOT cause `accept: false`.
+- **Evidence:** `dungeonDvmHandler.ts` lines 291-296 (success); lines 143-213 (errors); AC-12 test confirms fire-and-forget pattern
+
+### Structured Logging
+
+- **Status:** CONCERNS ⚠️
+- **Threshold:** Production-grade services should use structured JSON logging with correlation IDs
+- **Actual:** Handler uses `console.warn` for publish failure logging. No structured logging, no correlation IDs. Consistent with rest of `@toon-protocol/pet-dvm`.
+- **Evidence:** `dungeonDvmHandler.ts` line 285: `console.warn('[pet-dvm] ...')`
+- **Findings:** Not a regression introduced by this story. Pre-existing ecosystem gap. Low priority for current scope.
 
 ---
 
 ## Quick Wins
 
-0 quick wins identified — the module is already minimal and well-structured.
+2 quick wins identified:
+
+1. **Add SLA definition for Dungeon Compute DVM** (Reliability) - LOW - 1 hour
+   - Define target availability in README or ADR (even if "best-effort, no formal SLA")
+   - No code changes needed
+
+2. **Add RNG thread-safety documentation** (Scalability) - LOW - 30 minutes
+   - Add JSDoc warning in `createDungeonDvmHandler` noting Worker thread limitation
+   - No behavioral changes
 
 ---
 
@@ -258,75 +275,91 @@ Note: This assessment summarizes existing evidence; it does not run tests or CI 
 
 ### Immediate (Before Release) - CRITICAL/HIGH Priority
 
-None — no blockers identified. Story 11-16 is ready for downstream use.
+None — no FAIL or HIGH-priority issues.
 
 ### Short-term (Next Milestone) - MEDIUM Priority
 
-1. **Evaluate `currentStats` parameter usage in Story 11-17** - MEDIUM - 1h - Story 11-17 Dev Agent
-   - `dungeonDeltaToGameAction` receives `currentStats` as a public API parameter but does not use it in MVP logic
-   - Story 11-17 should confirm whether `currentStats` participates in the composition pattern or can be deprecated
-   - If unused after Story 11-17, file a follow-up story to remove it (keeping the API stable across the epic is fine)
-   - Validation: `currentStats` is either actively used in Story 11-17 OR a follow-up refactor story is filed
+1. **Define Dungeon DVM SLA** - MEDIUM - 2 hours - Product Owner
+   - Formal availability target for kind:5250 compute endpoint
+   - Validation: SLA documented in planning artifacts
 
-2. **Add direct unit tests for `clampStatValues`** - LOW - 30min - Dev Agent
-   - Currently covered indirectly through `applyDungeonDeltaToStats` tests
-   - A direct test (values above 100, below 1, at boundaries) would eliminate indirect coverage dependency
-   - Not a blocker — indirect coverage is sufficient for MVP
+2. **Document rot.js RNG thread-safety limitation** - MEDIUM - 1 hour - Dev Lead
+   - JSDoc warning in `createDungeonDvmHandler`
+   - Validation: `pnpm --filter @toon-protocol/pet-dvm build` still passes
 
 ### Long-term (Backlog) - LOW Priority
 
-1. **Benchmark bridge functions under high concurrency** - LOW - 2h - Dev Agent
-   - Story 11-17 DVM handler may invoke bridge functions hundreds of times per second under load
-   - No performance concern expected (pure math), but a microbenchmark would confirm
-   - Add to Epic 13 tech debt backlog if needed
+1. **Structured Logging for pet-dvm** - LOW - 1 sprint - Backend Dev
+   - Replace `console.warn/error` with structured JSON logger across all pet-dvm handlers
+   - Enables correlation IDs, APM integration
+
+2. **RNG Thread Safety (if Worker threads ever needed)** - LOW - 1-2 sprints - Backend Dev
+   - Wrap engine in per-Worker instances or use mutex
 
 ---
 
 ## Monitoring Hooks
 
-0 monitoring hooks required — the stat bridge is a pure function module with no observable runtime state.
+4 monitoring hooks recommended:
 
-### Notes on Observability (for Story 11-17)
+### Performance Monitoring
 
-The bridge does not require its own monitoring. Observability for dungeon-stat operations belongs to the DVM handler layer (Story 11-17), which should log:
+- [ ] Track dungeon handler p95/p99 latency per `dungeonId` in production
+  - **Owner:** Backend Dev
+  - **Deadline:** Epic 12
 
-- [ ] `petStatsToDungeonStats` input/output for debugging divergence (if G18 fails downstream)
-  - **Owner:** Story 11-17 Dev Agent
-  - **Deadline:** During Story 11-17 implementation
+- [ ] Alert if `publishEvent` failure rate exceeds 5%
+  - **Owner:** Backend Dev / DevOps
+  - **Deadline:** Epic 12
 
-- [ ] `dungeonDeltaToGameAction` ActionType resolution result (useful for analytics: PLAY vs MEDICINE vs REST distribution)
-  - **Owner:** Story 11-17 Dev Agent
-  - **Deadline:** During Story 11-17 implementation
+### Reliability Monitoring
+
+- [ ] Log structured metric when `resolvePetStats` fails (T00) to detect dependency degradation
+  - **Owner:** Backend Dev
+  - **Deadline:** Epic 12
+
+### Alerting Thresholds
+
+- [ ] Alert on F01 (insufficient payment) rate spike — may indicate pricing misconfiguration
+  - **Owner:** Protocol Dev
+  - **Deadline:** Epic 12
 
 ---
 
 ## Fail-Fast Mechanisms
 
-4 fail-fast mechanisms implemented — all complete.
+### Circuit Breakers (Reliability)
 
-### Validation Gates (Security / Correctness)
+- [ ] If `resolvePetStats` fails > N times in a window, short-circuit to fallback mode
+  - **Owner:** Backend Dev
+  - **Estimated Effort:** 1-2 days
 
-- [x] `validateStatValues()` — throws `StatBridgeError('INVALID_STATS')` on any out-of-range or non-finite field
-  - **Owner:** Implemented in `statBridge.ts` lines 52–69
-  - **Estimated Effort:** Complete
+### Rate Limiting (Performance)
 
-- [x] `validateStatDelta()` — throws `StatBridgeError('INVALID_DELTA')` on any non-finite delta
-  - **Owner:** Implemented in `statBridge.ts` lines 72–89
-  - **Estimated Effort:** Complete
+- [ ] ILP layer provides rate limiting at transport; handler-level rate limiting not needed for MVP
 
-- [x] Timestamp guard — throws `StatBridgeError('INVALID_TIMESTAMP')` on non-finite or non-positive timestamp
-  - **Owner:** Implemented in `statBridge.ts` lines 179–183
-  - **Estimated Effort:** Complete
+### Validation Gates (Security)
 
-- [x] Clamping gate — `clampToRange()` applied to every output field in `applyDungeonDeltaToStats`
-  - **Owner:** Implemented in `statBridge.ts` lines 47–49, 130–136
-  - **Estimated Effort:** Complete
+- [x] Payment amount gate — already implemented ✅ (`ctx.amount < config.pricePerRun`)
+- [x] Pet stats range validation — already implemented ✅ (`isPetStatsJson` type guard)
+
+### Smoke Tests (Maintainability)
+
+- [ ] Add CI smoke test: `createDungeonDvmHandler` with real `DungeonConfig` → validates descriptor shape
+  - **Owner:** QA / Dev
+  - **Estimated Effort:** 1 hour
 
 ---
 
 ## Evidence Gaps
 
-0 evidence gaps — all AC requirements have direct test coverage and build verification.
+1 evidence gap identified:
+
+- [ ] **Dungeon DVM SLA** (Reliability)
+  - **Owner:** Product Owner
+  - **Deadline:** Epic 12 planning
+  - **Suggested Evidence:** ADR or README section defining availability target, MTTR, and incident response
+  - **Impact:** Without a defined SLA, availability assessment remains CONCERNS (UNKNOWN threshold)
 
 ---
 
@@ -334,24 +367,98 @@ The bridge does not require its own monitoring. Observability for dungeon-stat o
 
 **Based on ADR Quality Readiness Checklist (8 categories, 29 criteria)**
 
-| Category                                         | Criteria Met | PASS | CONCERNS | FAIL | Overall Status |
-| ------------------------------------------------ | ------------ | ---- | -------- | ---- | -------------- |
-| 1. Testability & Automation                      | 4/4          | 4    | 0        | 0    | PASS ✅        |
-| 2. Test Data Strategy                            | 3/3          | 3    | 0        | 0    | PASS ✅        |
-| 3. Scalability & Availability                    | 4/4          | 4    | 0        | 0    | PASS ✅        |
-| 4. Disaster Recovery                             | 3/3          | 3    | 0        | 0    | PASS ✅ (N/A)  |
-| 5. Security                                      | 4/4          | 4    | 0        | 0    | PASS ✅        |
-| 6. Monitorability, Debuggability & Manageability | 3/4          | 3    | 1        | 0    | PASS ✅        |
-| 7. QoS & QoE                                     | 3/4          | 3    | 1        | 0    | PASS ✅        |
-| 8. Deployability                                 | 3/3          | 3    | 0        | 0    | PASS ✅        |
-| **Total**                                        | **27/29**    | **27** | **2** | **0** | **PASS ✅**   |
+| Category                                         | Criteria Met | PASS | CONCERNS | FAIL | Overall Status  |
+| ------------------------------------------------ | ------------ | ---- | -------- | ---- | --------------- |
+| 1. Testability & Automation                      | 4/4          | 4    | 0        | 0    | PASS ✅         |
+| 2. Test Data Strategy                            | 3/3          | 3    | 0        | 0    | PASS ✅         |
+| 3. Scalability & Availability                    | 2/4          | 2    | 2        | 0    | CONCERNS ⚠️    |
+| 4. Disaster Recovery                             | 3/3          | 3    | 0        | 0    | PASS ✅         |
+| 5. Security                                      | 4/4          | 4    | 0        | 0    | PASS ✅         |
+| 6. Monitorability, Debuggability & Manageability | 2/4          | 2    | 2        | 0    | CONCERNS ⚠️    |
+| 7. QoS & QoE                                     | 3/4          | 3    | 1        | 0    | CONCERNS ⚠️    |
+| 8. Deployability                                 | 3/3          | 3    | 0        | 0    | PASS ✅         |
+| **Total**                                        | **24/29**    | **24** | **5** | **0** | **PASS ✅**    |
 
-**Criteria Met Scoring:** 27/29 (93%) → Strong foundation ✅
+**Criteria Met Scoring:**
 
-**Notes on non-blocking CONCERNS:**
+- ≥26/29 (90%+) = Strong foundation
+- 20-25/29 (69-86%) = Room for improvement — **24/29 (83%) applies here**
+- <20/29 (<69%) = Significant gaps
 
-- **6.3 Monitorability (Metrics):** The bridge module itself does not expose RED metrics. This is expected — metrics belong at the DVM handler layer. Not a concern for this module; delegated to Story 11-17.
-- **7.1 Latency (QoS):** No formal SLO defined for bridge function latency. Actual latency is sub-microsecond (pure math). A formal SLO would be noise. Noted as technically unmet for scoring but not actionable.
+**Note:** All 5 CONCERNS are pre-existing ecosystem-level gaps inherited from the broader pet-dvm package. None were introduced by story 11-17.
+
+---
+
+### Detailed ADR Checklist Breakdown
+
+#### 1. Testability & Automation (4/4) ✅
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 1.1 | Isolation: dependencies mocked | ✅ | `publishEvent: jest.fn()`, `resolvePetStats: jest.fn()` — all external deps injectable via config |
+| 1.2 | Headless: 100% logic via API | ✅ | Pure TypeScript function, no UI, no HTTP server — directly invocable in tests |
+| 1.3 | State Control: factory seeding | ✅ | `makeCtx()` / `makeConfig()` factories; seed-based determinism for dungeon runs |
+| 1.4 | Sample Requests: documented | ✅ | `makeCtx()` with documented tag structure in Dev Notes and test file (`dungeonDvmHandler.test.ts`) |
+
+#### 2. Test Data Strategy (3/3) ✅
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 2.1 | Segregation: test data isolated | ✅ | No shared state; each test creates independent `makeCtx()` / `makeConfig()` |
+| 2.2 | Generation: synthetic data | ✅ | Fixed seeds (not random); predefined StatValues; no production data |
+| 2.3 | Teardown: cleanup after tests | ✅ | `beforeEach(() => publishEventMock.mockClear())` resets mock state |
+
+#### 3. Scalability & Availability (2/4) ⚠️
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 3.1 | Statelessness: no session state | ✅ | Handler closure has no per-request mutable state; engine is read-only after construction |
+| 3.2 | Bottlenecks: identified weak links | ⚠️ | rot.js global RNG is single-thread bottleneck; documented in Dev Notes, not mitigated for Worker threads |
+| 3.3 | SLA Definitions: availability target | ⚠️ | No SLA defined for dungeon compute DVM |
+| 3.4 | Circuit Breakers: fail-fast | ✅ | `resolvePetStats` failure → T00; `DungeonEngineError` → T00; no request hanging |
+
+#### 4. Disaster Recovery (3/3) ✅
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 4.1 | RTO/RPO defined | ✅ | N/A — stateless handler; restart instantaneous |
+| 4.2 | Failover automated | ✅ | N/A — stateless; no failover needed per-handler |
+| 4.3 | Backups: data integrity | ✅ | N/A — no persistent data; results returned synchronously |
+
+#### 5. Security (4/4) ✅
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 5.1 | AuthN/AuthZ: ILP payment gate | ✅ | `ctx.amount < config.pricePerRun` → F01 before dungeon execution; bigint comparison |
+| 5.2 | Encryption: TLS in transit | ✅ | ILP/Nostr transport layer handles TLS (out of scope for handler) |
+| 5.3 | Secrets: no hardcoded credentials | ✅ | `publishEvent` injected via config; no secrets in source |
+| 5.4 | Input Validation: sanitized inputs | ✅ | Tags validated; JSON.parse in try/catch; `isPetStatsJson` type guard validates all 5 fields |
+
+#### 6. Monitorability, Debuggability & Manageability (2/4) ⚠️
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 6.1 | Tracing: distributed trace context | ⚠️ | No W3C Trace Context or correlation IDs propagated |
+| 6.2 | Logs: dynamic log levels | ⚠️ | `console.warn` only; no dynamic log level control |
+| 6.3 | Metrics: RED metrics | ✅ | Error codes (F00, F01, T00) provide rate/error categorization at protocol level |
+| 6.4 | Config: externalized | ✅ | All config injected via `DungeonDvmConfig` — no hardcoded values |
+
+#### 7. QoS & QoE (3/4) ⚠️
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 7.1 | Latency: P95/P99 targets | ⚠️ | SLO undefined; empirical evidence shows < 10ms but no formal SLO |
+| 7.2 | Throttling: rate limiting | ✅ | ILP payment gate provides de facto per-request throttling |
+| 7.3 | Perceived Performance: optimistic updates | ✅ | Fire-and-forget `publishEvent` allows immediate ILP FULFILL without waiting for Nostr relay |
+| 7.4 | Degradation: friendly error messages | ✅ | All errors return structured codes (F00, F01, T00) with human-readable messages |
+
+#### 8. Deployability (3/3) ✅
+
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 8.1 | Zero Downtime: stateless deployment | ✅ | Stateless handler; any deployment strategy works |
+| 8.2 | Backward Compatibility: no DB migration | ✅ | Pure computation, no schema changes |
+| 8.3 | Rollback: automated rollback possible | ✅ | No persistent state; rollback is trivial |
 
 ---
 
@@ -360,56 +467,56 @@ The bridge does not require its own monitoring. Observability for dungeon-stat o
 ```yaml
 nfr_assessment:
   date: '2026-04-09'
-  story_id: '11-16'
-  feature_name: 'Pet-Dungeon Stat Bridge'
-  adr_checklist_score: '27/29' # ADR Quality Readiness Checklist
+  story_id: '11-17'
+  feature_name: 'Dungeon DVM Handler'
+  adr_checklist_score: '24/29'
   categories:
     testability_automation: 'PASS'
     test_data_strategy: 'PASS'
-    scalability_availability: 'PASS'
+    scalability_availability: 'CONCERNS'
     disaster_recovery: 'PASS'
     security: 'PASS'
-    monitorability: 'PASS'
-    qos_qoe: 'PASS'
+    monitorability: 'CONCERNS'
+    qos_qoe: 'CONCERNS'
     deployability: 'PASS'
   overall_status: 'PASS'
   critical_issues: 0
   high_priority_issues: 0
-  medium_priority_issues: 1
-  concerns: 2
+  medium_priority_issues: 2
+  concerns: 3
   blockers: false
-  quick_wins: 0
-  evidence_gaps: 0
+  quick_wins: 2
+  evidence_gaps: 1
   recommendations:
-    - 'Story 11-17 Dev Agent: evaluate currentStats parameter usage and confirm or deprecate'
-    - 'Low: add direct unit tests for clampStatValues (currently covered indirectly)'
-    - 'Long-term: benchmark bridge functions under DVM handler concurrency if needed'
+    - 'Define Dungeon DVM SLA (availability target) before Epic 12'
+    - 'Document rot.js RNG thread-safety limitation in JSDoc'
+    - 'Add structured logging to pet-dvm handlers in backlog'
 ```
 
 ---
 
 ## Related Artifacts
 
-- **Story File:** `_bmad-output/implementation-artifacts/11-16-pet-dungeon-stat-bridge.md`
-- **Tech Spec:** `_bmad-output/planning-artifacts/pet-zkapp-integration-architecture.md` (section 14.3)
-- **Test Design:** `_bmad-output/planning-artifacts/test-design-epic-11.md` (Story 11-16 section, quality gate G18)
+- **Story File:** `_bmad-output/implementation-artifacts/11-17-dungeon-dvm-handler.md`
+- **ATDD Checklist:** `_bmad-output/test-artifacts/atdd-checklist-11-17.md`
+- **Test Design:** `_bmad-output/planning-artifacts/test-design-epic-11.md` (quality gates G18/G19)
+- **Prior NFR:** `_bmad-output/test-artifacts/nfr-assessment-11-15.md` (engine performance baseline)
 - **Evidence Sources:**
-  - Test Results: `packages/pet-dvm/src/dungeon/statBridge.test.ts` (16 tests passing, 260/260 total)
-  - Build Output: `pnpm --filter @toon-protocol/pet-dvm build` — zero TypeScript errors
-  - Source: `packages/pet-dvm/src/dungeon/statBridge.ts` (213 lines)
-  - Package Index: `packages/pet-dvm/src/index.ts` (lines 80–88 — Dungeon Stat Bridge exports)
+  - Test Results: `packages/pet-dvm/src/dungeon/dungeonDvmHandler.test.ts` — 285 tests pass, 14 new
+  - Build Results: `pnpm --filter @toon-protocol/pet-dvm build` — zero TypeScript errors
+  - Implementation: `packages/pet-dvm/src/dungeon/dungeonDvmHandler.ts`
 
 ---
 
 ## Recommendations Summary
 
-**Release Blocker:** None — story 11-16 has no NFR blockers.
+**Release Blocker:** None — story 11-17 has no blocking NFR issues.
 
 **High Priority:** None.
 
-**Medium Priority:** Story 11-17 Dev Agent should confirm whether `currentStats` parameter in `dungeonDeltaToGameAction` participates in the composition or should be removed post-integration.
+**Medium Priority:** Define Dungeon DVM SLA; document RNG thread-safety limitation.
 
-**Next Steps:** Proceed to Story 11-17 (Dungeon DVM Handler). Quality gate G18 precondition is satisfied by this story. Story 11-17 integration tests will complete G18 validation end-to-end.
+**Next Steps:** Story is ready to advance from `review` to `done`. Proceed to story 11-18 (Dungeon Adventure Log). Address SLA definition in Epic 12 planning.
 
 ---
 
@@ -420,17 +527,18 @@ nfr_assessment:
 - Overall Status: PASS ✅
 - Critical Issues: 0
 - High Priority Issues: 0
-- Concerns: 2 (non-blocking — metrics/SLO placeholders appropriate for a library module)
-- Evidence Gaps: 0
+- Concerns: 3 (pre-existing ecosystem gaps — not introduced by story 11-17)
+- Evidence Gaps: 1 (SLA definition)
 
 **Gate Status:** PASS ✅
 
 **Next Actions:**
 
-- If PASS ✅: Proceed to Story 11-17 (Dungeon DVM Handler) — unblocked.
+- If PASS ✅: Proceed to story 11-18 (Dungeon Adventure Log) or release gate workflow
+- Concerns ⚠️ (3): Address MEDIUM priority items (SLA definition, RNG documentation) in Epic 12 sprint planning
 
 **Generated:** 2026-04-09
-**Workflow:** testarch-nfr v5.0 (step-file architecture)
+**Workflow:** testarch-nfr v5.0
 
 ---
 

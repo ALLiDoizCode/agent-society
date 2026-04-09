@@ -114,6 +114,10 @@ export interface SwapPair {
 
 ---
 
+## Package Structure
+
+New package: `packages/mill/` (`@toon-protocol/mill`) — the swap peer. Provides `createSwapHandler()` and `startMill()` entrypoint. Built on `@toon-protocol/sdk` + `@toon-protocol/core`. A Mill node is a standalone ILP peer that facilitates token swaps — separate from `packages/town/` (relay peer) and `packages/bridge/` (bridge peer). Operators choose which peer type(s) to run. A single node can combine roles (Town + Mill + Bridge) via the shared handler registry.
+
 ## Dependencies
 
 - Existing ILP packet routing infrastructure (Epic 1-3)
@@ -157,6 +161,29 @@ Key stories:
 6. Rate advertisement and discovery via peer info
 7. Integration tests: end-to-end swap flow through connector
 8. Provider handoff documentation for swap connector operators
+
+---
+
+## Composition Pattern: Token Swap + Chain Bridge = Zero-Token Cross-Chain Onboarding
+
+When Epic 13 (Chain Bridge) is complete, Token Swap and Chain Bridge compose to solve the cold-start problem for cross-chain onboarding:
+
+**Problem:** Alice holds USDC on Arbitrum and wants MINA on Mina Protocol. She has zero MINA — can't even pay gas to settle a channel claim on Mina.
+
+**Solution (Token Swap + Chain Bridge):**
+
+1. **Token Swap (Epic 12):** Alice sends gift-wrapped USDC ILP packets to a swap connector. Connector returns signed MINA channel claims in each FULFILL. Alice now holds MINA claims but has no MINA in a wallet — the claims are off-chain.
+2. **Chain Bridge (Epic 13, kind:5260):** Alice sends the MINA channel settlement transaction to a Chain Bridge DVM — pays the bridge provider **in USDC via ILP**. The provider pays Mina gas, broadcasts the settlement tx. Alice receives MINA in her Mina address.
+
+**Result:** Alice goes from holding one asset on one chain to holding any asset on any chain **without ever needing native gas tokens**. Zero on-chain transactions until the final settlement. The entire cross-chain flow is private (gift-wrapped ILP packets).
+
+**Why this matters:**
+- No centralized exchange needed for cross-chain asset acquisition
+- No native gas tokens needed on the destination chain
+- MEV-immune: no mempool visibility until final settlement
+- The sender pays for everything (swap spread + bridge fee) in their original asset via ILP
+
+**Implementation note:** This composition pattern should be explicitly tested when Chain Bridge (Epic 13) stories are decomposed. The "settle swap claims via Chain Bridge" flow is a first-class use case, not an afterthought.
 
 ---
 

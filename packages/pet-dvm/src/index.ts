@@ -87,6 +87,16 @@ export {
 } from './dungeon/statBridge';
 export type { StatBridgeErrorCode } from './dungeon/statBridge';
 
+// Dungeon DVM Handler
+export {
+  createDungeonDvmHandler,
+  buildDungeonDvmSkillDescriptor,
+} from './dungeon/dungeonDvmHandler';
+export type {
+  DungeonDvmConfig,
+  DungeonSkillDescriptorConfig,
+} from './dungeon/dungeonDvmHandler';
+
 // Pricing
 export { calculatePetInteractionPrice } from './pricing/calculatePetInteractionPrice';
 export {

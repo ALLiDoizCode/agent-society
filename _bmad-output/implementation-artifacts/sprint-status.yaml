@@ -246,7 +246,7 @@ development_status:
   # Core library: rot.js (BSD-3, TypeScript, seedable RNG, headless)
   11-15-dungeon-engine-core: done
   11-16-pet-dungeon-stat-bridge: done
-  11-17-dungeon-dvm-handler: backlog
+  11-17-dungeon-dvm-handler: done
   11-18-dungeon-adventure-log: backlog
   epic-11-retrospective: optional
 
@@ -261,7 +261,20 @@ development_status:
   epic-12: backlog
   epic-12-retrospective: optional
 
-  # Epic 13: Compute Primitive — Provider Protocol & DX (kind:5250)
+  # Epic 13: Chain Bridge Primitive (kind:5260)
+  # Decision source: Party Mode 2026-03-22 — Network Primitives Strategy
+  # Broadcast signed tx to any blockchain: Ethereum, Solana, Arbitrum, Base, AO
+  # Tier 1 only: trustless broadcast (agent signs locally, provider submits + pays gas)
+  # Multi-chain in one ILP packet; per-chain tx hash receipts
+  # AO/HyperBEAM is a chain target, NOT a compute backend
+  # Composes with Epic 12 (Token Swap) for zero-token cross-chain onboarding
+  # Dependencies: Epic 8 (receipt pattern), Epic 5 (DVM kinds), Epic 3 (multi-chain config)
+  # NOTE: Renumbered from Epic 12 → 13 → 14 → 13 (2026-04-09, swapped with Compute to follow Token Swap)
+  # Stories: TBD (to be decomposed when epic starts)
+  epic-13: backlog
+  epic-13-retrospective: optional
+
+  # Epic 14: Compute Primitive — Provider Protocol & DX (kind:5250)
   # Decision source: Party Mode 2026-03-22 — Network Primitives Strategy (D8-PM-003/004/005)
   # Stateless compute-for-hire DVM; backends: Oyster CVM, Akash, Docker (all out-of-scope)
   # Two-phase model: sync submit (kind:5250) + async result (kind:5251/6250)
@@ -269,29 +282,17 @@ development_status:
   # Dependencies: Epic 8 (blob storage pattern), Epic 5 (DVM kinds), Epic 6 (TEE + reputation)
   # TOON ships: protocol spec, consumer SDK, test harness, provider handoff docs
   # TOON does NOT ship: provider implementations (Oyster, Akash, HyperBEAM teams build their own)
-  # 8 stories: 13.1-13.3 Protocol + SDK, 13.4-13.5 Consumer DX, 13.6 Test Harness, 13.7 Handoff Docs, 13.8 Publish
-  # NOTE: Renumbered from Epic 11 → 12 (2026-04-06) → 13 (2026-04-09, Token Swap inserted)
-  epic-13: backlog
-  13-1-compute-event-kind-definitions: backlog
-  13-2-two-phase-async-result-protocol: backlog
-  13-3-self-describing-compute-receipts: backlog
-  13-4-consumer-sdk-job-submission: backlog
-  13-5-compute-provider-skill-descriptor: backlog
-  13-6-provider-test-harness: backlog
-  13-7-provider-handoff-documents: backlog
-  13-8-publish-compute-primitive: backlog
-  epic-13-retrospective: optional
-
-  # Epic 14: Chain Bridge Primitive (kind:5260)
-  # Decision source: Party Mode 2026-03-22 — Network Primitives Strategy
-  # Broadcast signed tx to any blockchain: Ethereum, Solana, Arbitrum, Base, AO
-  # Tier 1 only: trustless broadcast (agent signs locally, provider submits + pays gas)
-  # Multi-chain in one ILP packet; per-chain tx hash receipts
-  # AO/HyperBEAM is a chain target, NOT a compute backend
-  # Dependencies: Epic 8 (receipt pattern), Epic 5 (DVM kinds), Epic 3 (multi-chain config)
-  # NOTE: Renumbered from Epic 12 → 13 (2026-04-06) → 14 (2026-04-09)
-  # Stories: TBD (to be decomposed when epic starts)
+  # 8 stories: 14.1-14.3 Protocol + SDK, 14.4-14.5 Consumer DX, 14.6 Test Harness, 14.7 Handoff Docs, 14.8 Publish
+  # NOTE: Renumbered from Epic 11 → 12 → 13 → 14 (2026-04-09, swapped with Chain Bridge)
   epic-14: backlog
+  14-1-compute-event-kind-definitions: backlog
+  14-2-two-phase-async-result-protocol: backlog
+  14-3-self-describing-compute-receipts: backlog
+  14-4-consumer-sdk-job-submission: backlog
+  14-5-compute-provider-skill-descriptor: backlog
+  14-6-provider-test-harness: backlog
+  14-7-provider-handoff-documents: backlog
+  14-8-publish-compute-primitive: backlog
   epic-14-retrospective: optional
 
   # Epic 15: Loony — Autonomous Agent Example Application
@@ -316,8 +317,8 @@ development_status:
   # Epic 16: Overmind Heartbeat — Minimal Viable Overmind (WITH Mina)
   # First autonomous agent on TOON: TEE key genesis, Arweave state, Mina VRF selection,
   # Chain Bridge DVM (Mina adapter = first reference implementation), OODA decision engine
-  # New packages: packages/overmind, packages/chain-bridge
-  # Dependencies: Epic 14 (Chain Bridge Primitive — co-developed, Mina adapter is reference impl)
+  # New packages: packages/overmind, packages/bridge
+  # Dependencies: Epic 13 (Chain Bridge Primitive — co-developed, Mina adapter is reference impl)
   epic-16: backlog
   16-1-tee-key-genesis-ceremony: backlog
   16-2-arweave-state-persistence: backlog

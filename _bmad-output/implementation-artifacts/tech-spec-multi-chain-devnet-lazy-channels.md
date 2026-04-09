@@ -41,7 +41,7 @@ Vendor all chain contracts into this repo so a single `git clone` provides every
 - Enhanced bootstrap banner in `sdk-e2e-infra.sh` with endpoints and getting-started instructions
 
 **Out of Scope:**
-- Chain Bridge DVM implementation (Epic 14)
+- Chain Bridge DVM implementation (Epic 13)
 - Production chain deployment (Arbitrum One, Solana mainnet, Mina mainnet)
 - CLI/REPL tooling for interactive dogfooding
 - Data persistence across container restarts

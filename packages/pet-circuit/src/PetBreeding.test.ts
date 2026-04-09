@@ -351,8 +351,9 @@ describe('AC-3/AC-4: Parent stage requirements', () => {
     const brainHash0 = blake3ToField(
       'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
     );
-    let proof = (await PetLifecycle.genesis(brainHash0))
-      .proof as InstanceType<typeof PetLifecycleProof>;
+    let proof = (await PetLifecycle.genesis(brainHash0)).proof as InstanceType<
+      typeof PetLifecycleProof
+    >;
     let currentCooldowns = zeroCooldowns();
     let ts = 20000;
     let brainCounter = 0xdd00n;
@@ -403,7 +404,9 @@ describe('AC-3/AC-4: Parent stage requirements', () => {
       UInt32.from(Stage.BABY),
       hatchStats
     );
-    const babyProof = hatchResult.proof as InstanceType<typeof PetLifecycleProof>;
+    const babyProof = hatchResult.proof as InstanceType<
+      typeof PetLifecycleProof
+    >;
 
     const offspringStats = uniformStats(80);
     await expect(
@@ -599,9 +602,7 @@ describe('AC-10/AC-11: Offspring hash fields', () => {
     const expectedCooldownHash = Poseidon.hash(
       Array(ACTION_COUNT).fill(Field(0))
     );
-    expect(state.cooldownHash.toBigInt()).toBe(
-      expectedCooldownHash.toBigInt()
-    );
+    expect(state.cooldownHash.toBigInt()).toBe(expectedCooldownHash.toBigInt());
   });
 });
 

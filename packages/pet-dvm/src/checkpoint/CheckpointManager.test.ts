@@ -11,7 +11,11 @@ import path from 'node:path';
 import os from 'node:os';
 import { CheckpointManager } from './CheckpointManager';
 import { CheckpointConfigError } from './types';
-import type { ArweaveUploadAdapter, CheckpointEvent, CheckpointError } from './types';
+import type {
+  ArweaveUploadAdapter,
+  CheckpointEvent,
+  CheckpointError,
+} from './types';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -167,16 +171,18 @@ describe('CheckpointManager', () => {
       expect(checkpointEvents[0]?.brainHash).toBe(brainHash);
 
       expect(mockAdapter.upload).toHaveBeenCalledTimes(1);
-      const [uploadedBuffer] = (
-        mockAdapter.upload as jest.Mock
-      ).mock.calls[0] as [Buffer, Record<string, string>];
+      const [uploadedBuffer] = (mockAdapter.upload as jest.Mock).mock
+        .calls[0] as [Buffer, Record<string, string>];
       expect(uploadedBuffer).toEqual(brainContent);
     });
 
     it('includes mandatory tags Pet-Brain-Id and Brain-Hash in upload call', async () => {
       const blobbiId = 'pet-tagged';
       const brainHash = 'hashvalue';
-      await writeFile(path.join(tmpDir, `${blobbiId}.mv2`), Buffer.from('data'));
+      await writeFile(
+        path.join(tmpDir, `${blobbiId}.mv2`),
+        Buffer.from('data')
+      );
 
       const mockAdapter = makeMockAdapter({ txId: 'tx-tags' });
       const manager = new CheckpointManager({
@@ -201,7 +207,10 @@ describe('CheckpointManager', () => {
     it('mandatory tags override caller-supplied arweaveTags', async () => {
       const blobbiId = 'pet-override';
       const brainHash = 'hashoverride';
-      await writeFile(path.join(tmpDir, `${blobbiId}.mv2`), Buffer.from('data'));
+      await writeFile(
+        path.join(tmpDir, `${blobbiId}.mv2`),
+        Buffer.from('data')
+      );
 
       const mockAdapter = makeMockAdapter({ txId: 'tx-override' });
       const manager = new CheckpointManager({

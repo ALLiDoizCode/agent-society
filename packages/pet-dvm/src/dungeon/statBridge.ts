@@ -13,7 +13,11 @@
  */
 
 import type { StatValues, GameAction } from '../engine/types';
-import type { DungeonPetStats, DungeonStatDelta, DungeonRunResult } from './types';
+import type {
+  DungeonPetStats,
+  DungeonStatDelta,
+  DungeonRunResult,
+} from './types';
 import { ActionType } from '@toon-protocol/pet-circuit';
 
 // ============================================================

@@ -125,9 +125,7 @@ export const PetBreeding = ZkProgram({
         ]);
 
         // === Offspring cooldownHash: all zeros (same as genesis) ===
-        const cooldownHash = Poseidon.hash(
-          Array(ACTION_COUNT).fill(Field(0))
-        );
+        const cooldownHash = Poseidon.hash(Array(ACTION_COUNT).fill(Field(0)));
 
         return {
           publicOutput: new BreedingState({

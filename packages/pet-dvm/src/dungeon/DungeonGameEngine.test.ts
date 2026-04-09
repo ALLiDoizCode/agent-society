@@ -25,7 +25,9 @@ import type { DungeonConfig, DungeonPetStats, DungeonRunResult } from './types';
 // Test Helpers / Factories
 // ============================================================
 
-function makeDefaultConfig(overrides: Partial<DungeonConfig> = {}): DungeonConfig {
+function makeDefaultConfig(
+  overrides: Partial<DungeonConfig> = {}
+): DungeonConfig {
   return {
     width: 40,
     height: 30,
@@ -37,16 +39,43 @@ function makeDefaultConfig(overrides: Partial<DungeonConfig> = {}): DungeonConfi
   };
 }
 
-function makeHighStatPet(overrides: Partial<DungeonPetStats> = {}): DungeonPetStats {
-  return { hunger: 80, happiness: 80, health: 80, hygiene: 80, energy: 80, ...overrides };
+function makeHighStatPet(
+  overrides: Partial<DungeonPetStats> = {}
+): DungeonPetStats {
+  return {
+    hunger: 80,
+    happiness: 80,
+    health: 80,
+    hygiene: 80,
+    energy: 80,
+    ...overrides,
+  };
 }
 
-function makeLowEnergyPet(overrides: Partial<DungeonPetStats> = {}): DungeonPetStats {
-  return { hunger: 50, happiness: 50, health: 50, hygiene: 50, energy: 5, ...overrides };
+function makeLowEnergyPet(
+  overrides: Partial<DungeonPetStats> = {}
+): DungeonPetStats {
+  return {
+    hunger: 50,
+    happiness: 50,
+    health: 50,
+    hygiene: 50,
+    energy: 5,
+    ...overrides,
+  };
 }
 
-function makeDefaultPet(overrides: Partial<DungeonPetStats> = {}): DungeonPetStats {
-  return { hunger: 60, happiness: 60, health: 60, hygiene: 60, energy: 60, ...overrides };
+function makeDefaultPet(
+  overrides: Partial<DungeonPetStats> = {}
+): DungeonPetStats {
+  return {
+    hunger: 60,
+    happiness: 60,
+    health: 60,
+    hygiene: 60,
+    energy: 60,
+    ...overrides,
+  };
 }
 
 // Deep equality check for DungeonRunResult
@@ -132,25 +161,33 @@ describe('DungeonGameEngine — Dungeon Generation (AC-12)', () => {
   const pet = makeDefaultPet();
 
   it('Digger dungeon produces roomsGenerated >= 1', () => {
-    const engine = new DungeonGameEngine(makeDefaultConfig({ dungeonType: 'digger' }));
+    const engine = new DungeonGameEngine(
+      makeDefaultConfig({ dungeonType: 'digger' })
+    );
     const result = engine.run('gen-test-digger', pet);
     expect(result.roomsGenerated).toBeGreaterThanOrEqual(1);
   });
 
   it('Cellular dungeon produces roomsGenerated >= 1', () => {
-    const engine = new DungeonGameEngine(makeDefaultConfig({ dungeonType: 'cellular' }));
+    const engine = new DungeonGameEngine(
+      makeDefaultConfig({ dungeonType: 'cellular' })
+    );
     const result = engine.run('gen-test-cellular', pet);
     expect(result.roomsGenerated).toBeGreaterThanOrEqual(1);
   });
 
   it('Rogue dungeon produces roomsGenerated >= 1', () => {
-    const engine = new DungeonGameEngine(makeDefaultConfig({ dungeonType: 'rogue' }));
+    const engine = new DungeonGameEngine(
+      makeDefaultConfig({ dungeonType: 'rogue' })
+    );
     const result = engine.run('gen-test-rogue', pet);
     expect(result.roomsGenerated).toBeGreaterThanOrEqual(1);
   });
 
   it('Digger dungeon result includes seed and dungeonType echoed back', () => {
-    const engine = new DungeonGameEngine(makeDefaultConfig({ dungeonType: 'digger' }));
+    const engine = new DungeonGameEngine(
+      makeDefaultConfig({ dungeonType: 'digger' })
+    );
     const result = engine.run('echo-test', pet);
     expect(result.seed).toBe('echo-test');
     expect(result.dungeonType).toBe('digger');
@@ -164,11 +201,15 @@ describe('DungeonGameEngine — Dungeon Generation (AC-12)', () => {
 
   it('Invalid dungeonType throws DungeonEngineError with code INVALID_CONFIG', () => {
     expect(() => {
-      new DungeonGameEngine(makeDefaultConfig({ dungeonType: 'maze' as 'digger' }));
+      new DungeonGameEngine(
+        makeDefaultConfig({ dungeonType: 'maze' as 'digger' })
+      );
     }).toThrow(DungeonEngineError);
 
     try {
-      new DungeonGameEngine(makeDefaultConfig({ dungeonType: 'maze' as 'digger' }));
+      new DungeonGameEngine(
+        makeDefaultConfig({ dungeonType: 'maze' as 'digger' })
+      );
     } catch (e) {
       expect(e).toBeInstanceOf(DungeonEngineError);
       expect((e as DungeonEngineError).code).toBe('INVALID_CONFIG');
@@ -192,7 +233,10 @@ describe('DungeonGameEngine — Encounter Resolution (AC-13)', () => {
 
   it('pet with low energy (energy=5) visits only 1 room due to reduced depth', () => {
     const engine = new DungeonGameEngine(makeDefaultConfig({ maxRooms: 8 }));
-    const result = engine.run('low-energy-test', makeLowEnergyPet({ energy: 5 }));
+    const result = engine.run(
+      'low-energy-test',
+      makeLowEnergyPet({ energy: 5 })
+    );
     // Math.floor(5 / 20) = 0, clamped to 1
     expect(result.roomsVisited).toBeLessThanOrEqual(1);
   });
@@ -212,8 +256,14 @@ describe('DungeonGameEngine — Encounter Resolution (AC-13)', () => {
     for (let i = 0; i < 20; i++) {
       const engine = new DungeonGameEngine(makeDefaultConfig());
       // Use low health pet to ensure monsters deal meaningful damage
-      const result = engine.run(`damage-test-${i}`, makeDefaultPet({ health: 30, energy: 80 }));
-      const totalDamageTaken = result.encounters.reduce((s, e) => s + e.damageTaken, 0);
+      const result = engine.run(
+        `damage-test-${i}`,
+        makeDefaultPet({ health: 30, energy: 80 })
+      );
+      const totalDamageTaken = result.encounters.reduce(
+        (s, e) => s + e.damageTaken,
+        0
+      );
       if (totalDamageTaken > 0) {
         expect(result.statDeltas.health).toBeLessThan(0);
         foundDamage = true;
@@ -369,7 +419,9 @@ describe('DungeonGameEngine — Benchmark (AC-16)', () => {
 
     if (elapsed >= 50) {
       // Warn but do not fail in CI
-      console.warn(`[BENCHMARK WARNING] DungeonGameEngine.run() took ${elapsed}ms (threshold: 50ms)`);
+      console.warn(
+        `[BENCHMARK WARNING] DungeonGameEngine.run() took ${elapsed}ms (threshold: 50ms)`
+      );
     }
     // Always passes — just warns
     expect(elapsed).toBeGreaterThanOrEqual(0);

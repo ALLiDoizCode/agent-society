@@ -246,21 +246,21 @@ FR-NIP34-3: Epic 8, Stories 8.7-8.10 - Read-only code browsing web UI (split acr
 FR-NIP34-4: Epic 8, Story 8.6 - PR lifecycle via NIP-34 status events
 FR-NIP34-5: Epic 8, Story 8.11 - Issues/PRs from Nostr events on relay
 FR-NIP34-6: Epic 8, Story 8.12 - Publish @toon-protocol/rig package
-FR-COMPUTE-1: Epic 13 - Compute DVM event kind protocol spec (kind:5250/6250)
-FR-COMPUTE-2: Epic 13 - Two-phase compute model protocol spec (submit + async result)
+FR-BRIDGE-1: Epic 13 - Chain Bridge DVM event kind protocol spec (kind:5260/6260)
+FR-BRIDGE-2: Epic 13 - Tier 1 trustless broadcast protocol spec
+FR-BRIDGE-3: Epic 13 - Multi-chain broadcast packet format spec
+FR-BRIDGE-4: Epic 13 - Self-describing per-chain receipt spec
+FR-BRIDGE-5: Epic 13 - Chain-specific pricing in SkillDescriptor spec
+FR-BRIDGE-6: Epic 13 - AO/HyperBEAM as chain target (not compute backend)
+FR-BRIDGE-7: Epic 13 - Provider handoff docs (Ethereum/EVM, Solana, AO)
+FR-COMPUTE-1: Epic 14 - Compute DVM event kind protocol spec (kind:5250/6250)
+FR-COMPUTE-2: Epic 14 - Two-phase compute model protocol spec (submit + async result)
 FR-COMPUTE-3: REMOVED - ComputeAdapter interface (provider implementations out of scope)
-FR-COMPUTE-4: Epic 13 - Convenience fee pricing documentation in protocol spec
-FR-COMPUTE-5: Epic 13 - Self-describing compute receipt spec
+FR-COMPUTE-4: Epic 14 - Convenience fee pricing documentation in protocol spec
+FR-COMPUTE-5: Epic 14 - Self-describing compute receipt spec
 FR-COMPUTE-6: DEFERRED - JobTracker async state management (may be added to consumer SDK if DX demands)
-FR-COMPUTE-7: Epic 13 - Provider test harness for compliance validation
-FR-COMPUTE-8: Epic 13 - Provider handoff docs (HyperBEAM, Oyster CVM, Akash)
-FR-BRIDGE-1: Epic 14 - Chain Bridge DVM event kind protocol spec (kind:5260/6260)
-FR-BRIDGE-2: Epic 14 - Tier 1 trustless broadcast protocol spec
-FR-BRIDGE-3: Epic 14 - Multi-chain broadcast packet format spec
-FR-BRIDGE-4: Epic 14 - Self-describing per-chain receipt spec
-FR-BRIDGE-5: Epic 14 - Chain-specific pricing in SkillDescriptor spec
-FR-BRIDGE-6: Epic 14 - AO/HyperBEAM as chain target (not compute backend)
-FR-BRIDGE-7: Epic 14 - Provider handoff docs (Ethereum/EVM, Solana, AO)
+FR-COMPUTE-7: Epic 14 - Provider test harness for compliance validation
+FR-COMPUTE-8: Epic 14 - Provider handoff docs (HyperBEAM, Oyster CVM, Akash)
 FR-LOONY-1: Epic 15 - Autonomous agent demonstrating all six architecture layers
 FR-LOONY-2: Epic 15 - Decoupled LLM inference via marketplace discovery
 FR-LOONY-3: Epic 15 - Revenue generation as composite service DVM provider
@@ -335,7 +335,53 @@ Fully decentralized git: repos exist on the protocol, not on any server. Git obj
 **Decision source:** Party Mode 2026-03-22 — Arweave DVM + Agent Skills
 **Validates:** Epics 1 (SDK), 2 (relay), 3 (USDC/x402), 4 (TEE), 5 (DVM), 6 (Advanced DVM), 7 (ILP Addressing)
 
-### Epic 13: Compute Primitive — Provider Protocol & DX (kind:5250)
+### Epic 13: Chain Bridge Primitive — Provider Protocol & DX (kind:5260)
+
+Define the chain bridge provider protocol, refine the consumer DX, and ship provider handoff documents. **Provider implementations are out of scope** — per-chain bridge operators build their own providers. Same model as Epic 14: TOON defines the marketplace, providers integrate.
+
+**Scope — What TOON ships:**
+1. **Provider Protocol Specification** — Definitive doc for "how to build a TOON chain bridge provider": kind:5260 request format, kind:6260 result format, Tier 1 trustless broadcast semantics, multi-chain packet format, per-chain receipt tags, chain-specific pricing.
+2. **Provider Test Harness** — Extend the Epic 14 test harness for kind:5260: validates tx broadcast handling, per-chain receipt format, multi-chain packet parsing, SkillDescriptor chain-specific pricing.
+3. **Consumer SDK Refinements** — Ensure consumer DX for chain bridge: tx submission, receipt verification, multi-chain result parsing, chain discovery by SkillDescriptor features.
+4. **Provider Handoff Documents** — One per target blockchain:
+   - `provider-handoff-ethereum.md` — EVM tx broadcast, gas estimation, receipt format
+   - `provider-handoff-solana.md` — Solana tx broadcast, slot receipts
+   - `provider-handoff-ao.md` — AO message broadcast via HyperBEAM node, p4 fee model, slot receipt
+5. **DVM Event Kind Definitions** — Finalize kind:5260/6260 schemas.
+
+**Scope — What TOON does NOT ship:**
+- No per-chain provider implementations — bridge operators own their chain integrations
+- No EVM node operation, no Solana validator, no AO/HyperBEAM node operation
+
+**FRs covered:** FR-BRIDGE-1, FR-BRIDGE-2, FR-BRIDGE-3, FR-BRIDGE-4, FR-BRIDGE-5, FR-BRIDGE-6 (reframed as protocol spec, not implementation), FR-BRIDGE-7
+**Stories (8 stories):**
+
+**Phase 1: Protocol Foundation (12.1–12.3)**
+- **12.1 Chain Bridge Event Kind Definitions** — Define kind:5260 (Chain Tx Broadcast Request) and kind:6260 (Chain Tx Broadcast Result) event schemas in `@toon-protocol/core`. Builder/parser functions following the exact pattern of `arweave-storage.ts` (kind:5094) and compute event kinds (kind:5250). Tags: `['param', 'chains', 'ethereum,arbitrum,base,ao']` (comma-separated target chains), `['param', 'tx', base64(signedTx)]` (fully-signed transaction payload), `['param', 'chain-id', chainId]` (primary chain identifier), `['bid', amount, 'usdc']`. Parser validates kind range 5260, extracts chain targets and tx payload. Test helpers and roundtrip tests. Export constants: `CHAIN_BRIDGE_REQUEST_KIND = 5260`, `CHAIN_BRIDGE_RESULT_KIND = 6260`.
+- **12.2 Tier 1 Trustless Broadcast Protocol** — Define Tier 1 broadcast semantics as a protocol specification document. Tier 1: provider receives a fully-signed transaction and broadcasts it to the target chain(s). Provider cannot steal funds — only submit or not submit. Define error taxonomy: `tx-rejected` (chain rejected tx), `tx-already-submitted` (idempotency — return existing receipt), `gas-estimation-failed` (EVM-specific), `chain-unavailable` (RPC down), `invalid-tx-format` (malformed payload). Define idempotency requirements: same tx hash → return cached receipt, no double-broadcast. Define timeout semantics: provider must respond within ILP packet timeout with at least `status: 'pending'` if chain confirmation is slow. Future tiers explicitly deferred with rationale: Tier 2 (construct + broadcast) requires provider to hold user keys temporarily, Tier 3 (custodial execute with TEE) requires TEE key management — both have significant security implications documented but not implemented.
+- **12.3 Self-Describing Per-Chain Receipts** — Define the multi-chain receipt tag format for kind:6260 results, following D8-PM-002 (same pattern as blob storage and compute receipts). Per-chain receipt tag groups: `['chain', chainName]` (chain identifier), `['tx-hash', hash]` (chain-native tx hash), `['block', blockNum]` (block/slot number), `['status', 'confirmed' | 'pending' | 'failed']` (per-chain status), `['gas-used', gasUsed]` (EVM-specific), `['slot', slot]` (Solana/AO-specific), `['fee-paid', amount]` (actual chain fee paid by provider). Multi-chain response: multiple chain-prefixed tag groups in one kind:6260 event, ordered by chain name. Receipt parser: `parseChainBridgeReceipt(data: string): ChainBridgeReceipt | null`. `ChainBridgeReceipt` type: `{ chains: Record<string, ChainReceipt> }` where `ChainReceipt` has chain-specific fields. Validation: receipt is chain-agnostic at the protocol level — consumers parse per-chain details only if needed. Unit tests for receipt roundtrip, missing tags, unknown chain names (forward-compatible), partial success (some chains confirmed, some failed).
+
+**Phase 2: Consumer DX (12.4–12.5)**
+- **12.4 Consumer SDK Tx Submission** — Add chain bridge consumer helpers to `@toon-protocol/sdk`. `submitChainBroadcast(client, { chains, signedTx, providerPubkey?, amount }): Promise<{ jobId: string, perChainStatus: Record<string, string> }>` — wraps kind:5260 event building + `publishEvent()` with amount override. For multi-chain requests, single ILP payment covers all chains (provider prices accordingly). `pollBroadcastResult(client, jobId, { timeoutMs?, intervalMs? }): Promise<ChainBridgeReceipt>` — polls for kind:6260 result filtered by jobId. `parseBroadcastResult(event): ChainBridgeReceipt | null` — convenience parser. Example code in JSDoc showing full lifecycle: discover bridge provider via kind:10035 with chain filter → submit signed tx targeting multiple chains → poll for per-chain receipts → verify each chain's confirmation status.
+- **12.5 Chain Bridge SkillDescriptor** — Define SkillDescriptor requirements for chain bridge providers. `kinds: [5260]`, pricing must be chain-specific to reflect different gas costs: `{ '5260:ethereum': '<price>', '5260:arbitrum': '<price>', '5260:ao': '<price>' }`. `features` array must include supported chains: `['bridge', 'ethereum', 'arbitrum', 'base']` or `['bridge', 'ao', 'solana']`. `inputSchema` must describe: supported chains, max tx size, supported tx formats per chain, confirmation guarantees. `buildChainBridgeSkillDescriptor()` helper that validates all required chain bridge fields including per-chain pricing. Discovery helper: `discoverChainBridgeProviders(client, { chains?, maxPrice?, features? }): Promise<SkillDescriptor[]>` — queries kind:10035 events, filters by supported chains and pricing. Unit tests for descriptor building, discovery filtering by chain, multi-chain pricing validation.
+
+**Phase 3: Validation & Handoff (12.6–12.8)**
+- **12.6 Provider Test Harness Extension** — Extend Epic 10's `@toon-protocol/provider-test` for kind:5260 validation. CLI: `npx @toon-protocol/provider-test --kind 5260 --endpoint <ilp-address> --relay <relay-url>`. Test suite validates: (1) kind:5260 tx broadcast accepted with valid payment, (2) kind:6260 result has self-describing per-chain receipt tags, (3) SkillDescriptor published to relay with correct chain bridge fields and per-chain pricing, (4) multi-chain packet handling (multiple chains in one request), (5) pricing validation rejects underpayment, (6) error handling for rejected/invalid transactions, (7) idempotency — same tx resubmitted returns cached receipt. Reference mock provider (dev-only, NOT production): simple Node.js service that accepts kind:5260, simulates broadcast to mock chain RPC, returns synthetic receipts. For test harness validation only.
+- **12.7 Provider Handoff Documents** — Write three provider handoff documents (markdown, in `docs/provider-handoffs/`): (1) `provider-handoff-ethereum.md` — EVM tx broadcast provider covering Ethereum, Arbitrum, Base, and other EVM chains. RPC integration (`eth_sendRawTransaction`), gas estimation (`eth_estimateGas`), receipt polling (`eth_getTransactionReceipt`), multi-chain EVM support (same code, different RPC endpoints), receipt format mapping to kind:6260 tags, chain-specific pricing based on gas costs, example SkillDescriptor with multi-chain EVM features. (2) `provider-handoff-solana.md` — Solana tx broadcast provider. `sendTransaction` RPC, slot-based receipts, priority fee handling (`computeUnitPrice`), receipt format mapping (`slot` tag instead of `block`), Solana-specific error codes, example SkillDescriptor. (3) `provider-handoff-ao.md` — AO message broadcast via HyperBEAM node. AO message format (not EVM tx), p4 fee model (provider pays AO compute fee, passes through as convenience fee), HyperBEAM HTTP API for message submission, slot receipt from AO scheduler, example SkillDescriptor with `ao` feature. Explicitly clarifies: AO is a blockchain target for chain bridge, NOT a compute backend — compute on AO is handled by HyperBEAM compute providers via kind:5250.
+- **12.8 Publish Chain Bridge Primitive** — Publish updated packages: `@toon-protocol/core` (kind:5260/6260 builders/parsers, chain bridge receipt types), `@toon-protocol/sdk` (consumer helpers, SkillDescriptor chain bridge extensions), `@toon-protocol/provider-test` (chain bridge test suite). Version bump following semver (minor version for new feature). Update `_bmad-output/project-context.md` with Epic 13 completion status, chain bridge primitive architecture section, and provider handoff doc locations. Verify all exports, run full test suite, validate E2E with reference mock provider.
+
+**Dependencies:** Epic 8 (self-describing receipt pattern), Epic 5 (DVM event kinds), Epic 3 (multi-chain config), Epic 14 (shared test harness infrastructure)
+**Decision source:** Party Mode 2026-03-22 — Network Primitives Strategy (D8-PM-003, D8-PM-006, D8-PM-008); Party Mode 2026-03-23 — Provider Protocol Model
+
+**Key Design Decisions:**
+- Tier 1 only for initial implementation: trustless broadcast. Provider cannot steal funds — only submit or not submit.
+- Multi-chain in one packet: `['param', 'chains', 'ethereum,arbitrum,base,ao']`. Receipt has per-chain tags.
+- AO is a blockchain target, not a compute backend. Provider has AO wallet/HyperBEAM node, pays p4 fee, returns slot receipt.
+- Future tiers deferred: Tier 2 (construct + broadcast), Tier 3 (custodial execute with TEE) have significant security implications.
+- Chain-specific pricing in SkillDescriptor (different gas costs per chain).
+- **Provider implementations are out of scope** — same model as compute primitive.
+
+### Epic 14: Compute Primitive — Provider Protocol & DX (kind:5250)
 
 Define the compute provider protocol, refine the consumer DX, and ship provider handoff documents. **Provider implementations are out of scope** — third-party teams (HyperBEAM, Oyster CVM, Akash) build their own providers using TOON's protocol spec and test harness. TOON ships the marketplace definition; providers integrate.
 
@@ -369,7 +415,7 @@ Define the compute provider protocol, refine the consumer DX, and ship provider 
 
 **Phase 3: Validation & Handoff (10.6-10.8)**
 - **10.6 Provider Test Harness** — Create `@toon-protocol/provider-test` package (or add to existing test infrastructure). CLI: `npx @toon-protocol/provider-test --kind 5250 --endpoint <ilp-address> --relay <relay-url>`. Test suite validates: (1) kind:5250 job submission accepted with valid payment, (2) kind:5251 status query returns valid status, (3) kind:6250 result has self-describing receipt tags, (4) SkillDescriptor published to relay with correct compute fields, (5) pricing validation rejects underpayment, (6) timeout handling (maxComputeMs exceeded → error feedback), (7) invalid WASM ref → graceful error. Reference Docker provider (dev-only, NOT production): simple Node.js container that accepts kind:5250, runs WASM via `@aspect-build/rules_js` or similar, returns result. This is for test harness validation only — not a production provider.
-- **10.7 Provider Handoff Documents** — Write three provider handoff documents (markdown, in `docs/provider-handoffs/`): (1) `provider-handoff-oyster-cvm.md` — Docker-based compute provider running in Marlin Oyster CVM TEE. Covers: Dockerfile pattern, attestation integration (kind:10033 tags in receipt), Nitro enclave constraints (tmpfs, memory limits), esbuild bundling guidance, USDC payment flow on Arbitrum, example SkillDescriptor with `tee` feature. References TOON's own Oyster deployment experience. (2) `provider-handoff-akash.md` — GPU compute provider on Akash Network. Covers: SDL template for TOON compute provider, reverse auction deployment, AKT/USDC payment, `@akashnetwork/chain-sdk` integration, GPU-specific SkillDescriptor with `gpu` feature, cost optimization via spot bidding. References technical research (`technical-crypto-container-deployment-research-2026-03-24.md`). (3) `provider-handoff-hyperbeam.md` — `~toon-client@1.0` Erlang device on HyperBEAM/AO. Covers: device architecture, AO message format, p4 fee model, HyperBEAM HTTP API integration, WASM execution via AO compute units. References `toon-hyperbeam-integration-strategy.md`. Note: AO is a Chain Bridge target (kind:5260 in Epic 14), NOT a compute backend — this handoff covers only the HyperBEAM native compute device pattern.
+- **10.7 Provider Handoff Documents** — Write three provider handoff documents (markdown, in `docs/provider-handoffs/`): (1) `provider-handoff-oyster-cvm.md` — Docker-based compute provider running in Marlin Oyster CVM TEE. Covers: Dockerfile pattern, attestation integration (kind:10033 tags in receipt), Nitro enclave constraints (tmpfs, memory limits), esbuild bundling guidance, USDC payment flow on Arbitrum, example SkillDescriptor with `tee` feature. References TOON's own Oyster deployment experience. (2) `provider-handoff-akash.md` — GPU compute provider on Akash Network. Covers: SDL template for TOON compute provider, reverse auction deployment, AKT/USDC payment, `@akashnetwork/chain-sdk` integration, GPU-specific SkillDescriptor with `gpu` feature, cost optimization via spot bidding. References technical research (`technical-crypto-container-deployment-research-2026-03-24.md`). (3) `provider-handoff-hyperbeam.md` — `~toon-client@1.0` Erlang device on HyperBEAM/AO. Covers: device architecture, AO message format, p4 fee model, HyperBEAM HTTP API integration, WASM execution via AO compute units. References `toon-hyperbeam-integration-strategy.md`. Note: AO is a Chain Bridge target (kind:5260 in Epic 13), NOT a compute backend — this handoff covers only the HyperBEAM native compute device pattern.
 - **10.8 Publish Compute Primitive** — Publish updated packages: `@toon-protocol/core` (kind:5250/6250/5251 builders/parsers), `@toon-protocol/sdk` (consumer helpers, SkillDescriptor compute extensions), `@toon-protocol/provider-test` (test harness CLI). Version bump following semver (minor version for new feature). Update `_bmad-output/project-context.md` with Epic 10 completion status, compute primitive architecture section, and provider handoff doc locations. Verify all exports, run full test suite, validate E2E with reference Docker provider.
 
 **Dependencies:** Epic 8 (blob storage primitive pattern, self-describing receipts), Epic 5 (DVM event kinds), Epic 6 (TEE-attested results, reputation)
@@ -379,56 +425,10 @@ Define the compute provider protocol, refine the consumer DX, and ship provider 
 - Two-phase model: Phase 1 submit (synchronous, fits ILP timeout) returns jobId. Phase 2 result (async poll via kind:5251 or provider publishes kind:6250).
 - Convenience fee pricing: providers are resellers, `kindPricing` covers backend + margin, no metering infrastructure.
 - Self-describing receipts: `backend`, `job-id`, `gateway`, `compute-ms`, `attestation` tags.
-- AO/HyperBEAM is NOT a compute backend — it is a blockchain (see Epic 14).
+- AO/HyperBEAM is NOT a compute backend — it is a blockchain (see Epic 13).
 - **Provider implementations are out of scope** — TOON defines the protocol, providers integrate. Handoff docs are the key deliverable for third-party adoption.
 - **Provider test harness is the force multiplier** — Validates provider compliance without requiring TOON team involvement.
 - **Decoupled inference model** — LLM providers (Oyster CVM running Llama, Akash running Mixtral, HyperBEAM running WASM models) are just kind:5250 DVM providers. Agent reasoning is a service consumed via the marketplace, not embedded.
-
-### Epic 14: Chain Bridge Primitive — Provider Protocol & DX (kind:5260)
-
-Define the chain bridge provider protocol, refine the consumer DX, and ship provider handoff documents. **Provider implementations are out of scope** — per-chain bridge operators build their own providers. Same model as Epic 13: TOON defines the marketplace, providers integrate.
-
-**Scope — What TOON ships:**
-1. **Provider Protocol Specification** — Definitive doc for "how to build a TOON chain bridge provider": kind:5260 request format, kind:6260 result format, Tier 1 trustless broadcast semantics, multi-chain packet format, per-chain receipt tags, chain-specific pricing.
-2. **Provider Test Harness** — Extend the Epic 13 test harness for kind:5260: validates tx broadcast handling, per-chain receipt format, multi-chain packet parsing, SkillDescriptor chain-specific pricing.
-3. **Consumer SDK Refinements** — Ensure consumer DX for chain bridge: tx submission, receipt verification, multi-chain result parsing, chain discovery by SkillDescriptor features.
-4. **Provider Handoff Documents** — One per target blockchain:
-   - `provider-handoff-ethereum.md` — EVM tx broadcast, gas estimation, receipt format
-   - `provider-handoff-solana.md` — Solana tx broadcast, slot receipts
-   - `provider-handoff-ao.md` — AO message broadcast via HyperBEAM node, p4 fee model, slot receipt
-5. **DVM Event Kind Definitions** — Finalize kind:5260/6260 schemas.
-
-**Scope — What TOON does NOT ship:**
-- No per-chain provider implementations — bridge operators own their chain integrations
-- No EVM node operation, no Solana validator, no AO/HyperBEAM node operation
-
-**FRs covered:** FR-BRIDGE-1, FR-BRIDGE-2, FR-BRIDGE-3, FR-BRIDGE-4, FR-BRIDGE-5, FR-BRIDGE-6 (reframed as protocol spec, not implementation), FR-BRIDGE-7
-**Stories (8 stories):**
-
-**Phase 1: Protocol Foundation (12.1–12.3)**
-- **12.1 Chain Bridge Event Kind Definitions** — Define kind:5260 (Chain Tx Broadcast Request) and kind:6260 (Chain Tx Broadcast Result) event schemas in `@toon-protocol/core`. Builder/parser functions following the exact pattern of `arweave-storage.ts` (kind:5094) and compute event kinds (kind:5250). Tags: `['param', 'chains', 'ethereum,arbitrum,base,ao']` (comma-separated target chains), `['param', 'tx', base64(signedTx)]` (fully-signed transaction payload), `['param', 'chain-id', chainId]` (primary chain identifier), `['bid', amount, 'usdc']`. Parser validates kind range 5260, extracts chain targets and tx payload. Test helpers and roundtrip tests. Export constants: `CHAIN_BRIDGE_REQUEST_KIND = 5260`, `CHAIN_BRIDGE_RESULT_KIND = 6260`.
-- **12.2 Tier 1 Trustless Broadcast Protocol** — Define Tier 1 broadcast semantics as a protocol specification document. Tier 1: provider receives a fully-signed transaction and broadcasts it to the target chain(s). Provider cannot steal funds — only submit or not submit. Define error taxonomy: `tx-rejected` (chain rejected tx), `tx-already-submitted` (idempotency — return existing receipt), `gas-estimation-failed` (EVM-specific), `chain-unavailable` (RPC down), `invalid-tx-format` (malformed payload). Define idempotency requirements: same tx hash → return cached receipt, no double-broadcast. Define timeout semantics: provider must respond within ILP packet timeout with at least `status: 'pending'` if chain confirmation is slow. Future tiers explicitly deferred with rationale: Tier 2 (construct + broadcast) requires provider to hold user keys temporarily, Tier 3 (custodial execute with TEE) requires TEE key management — both have significant security implications documented but not implemented.
-- **12.3 Self-Describing Per-Chain Receipts** — Define the multi-chain receipt tag format for kind:6260 results, following D8-PM-002 (same pattern as blob storage and compute receipts). Per-chain receipt tag groups: `['chain', chainName]` (chain identifier), `['tx-hash', hash]` (chain-native tx hash), `['block', blockNum]` (block/slot number), `['status', 'confirmed' | 'pending' | 'failed']` (per-chain status), `['gas-used', gasUsed]` (EVM-specific), `['slot', slot]` (Solana/AO-specific), `['fee-paid', amount]` (actual chain fee paid by provider). Multi-chain response: multiple chain-prefixed tag groups in one kind:6260 event, ordered by chain name. Receipt parser: `parseChainBridgeReceipt(data: string): ChainBridgeReceipt | null`. `ChainBridgeReceipt` type: `{ chains: Record<string, ChainReceipt> }` where `ChainReceipt` has chain-specific fields. Validation: receipt is chain-agnostic at the protocol level — consumers parse per-chain details only if needed. Unit tests for receipt roundtrip, missing tags, unknown chain names (forward-compatible), partial success (some chains confirmed, some failed).
-
-**Phase 2: Consumer DX (12.4–12.5)**
-- **12.4 Consumer SDK Tx Submission** — Add chain bridge consumer helpers to `@toon-protocol/sdk`. `submitChainBroadcast(client, { chains, signedTx, providerPubkey?, amount }): Promise<{ jobId: string, perChainStatus: Record<string, string> }>` — wraps kind:5260 event building + `publishEvent()` with amount override. For multi-chain requests, single ILP payment covers all chains (provider prices accordingly). `pollBroadcastResult(client, jobId, { timeoutMs?, intervalMs? }): Promise<ChainBridgeReceipt>` — polls for kind:6260 result filtered by jobId. `parseBroadcastResult(event): ChainBridgeReceipt | null` — convenience parser. Example code in JSDoc showing full lifecycle: discover bridge provider via kind:10035 with chain filter → submit signed tx targeting multiple chains → poll for per-chain receipts → verify each chain's confirmation status.
-- **12.5 Chain Bridge SkillDescriptor** — Define SkillDescriptor requirements for chain bridge providers. `kinds: [5260]`, pricing must be chain-specific to reflect different gas costs: `{ '5260:ethereum': '<price>', '5260:arbitrum': '<price>', '5260:ao': '<price>' }`. `features` array must include supported chains: `['bridge', 'ethereum', 'arbitrum', 'base']` or `['bridge', 'ao', 'solana']`. `inputSchema` must describe: supported chains, max tx size, supported tx formats per chain, confirmation guarantees. `buildChainBridgeSkillDescriptor()` helper that validates all required chain bridge fields including per-chain pricing. Discovery helper: `discoverChainBridgeProviders(client, { chains?, maxPrice?, features? }): Promise<SkillDescriptor[]>` — queries kind:10035 events, filters by supported chains and pricing. Unit tests for descriptor building, discovery filtering by chain, multi-chain pricing validation.
-
-**Phase 3: Validation & Handoff (12.6–12.8)**
-- **12.6 Provider Test Harness Extension** — Extend Epic 10's `@toon-protocol/provider-test` for kind:5260 validation. CLI: `npx @toon-protocol/provider-test --kind 5260 --endpoint <ilp-address> --relay <relay-url>`. Test suite validates: (1) kind:5260 tx broadcast accepted with valid payment, (2) kind:6260 result has self-describing per-chain receipt tags, (3) SkillDescriptor published to relay with correct chain bridge fields and per-chain pricing, (4) multi-chain packet handling (multiple chains in one request), (5) pricing validation rejects underpayment, (6) error handling for rejected/invalid transactions, (7) idempotency — same tx resubmitted returns cached receipt. Reference mock provider (dev-only, NOT production): simple Node.js service that accepts kind:5260, simulates broadcast to mock chain RPC, returns synthetic receipts. For test harness validation only.
-- **12.7 Provider Handoff Documents** — Write three provider handoff documents (markdown, in `docs/provider-handoffs/`): (1) `provider-handoff-ethereum.md` — EVM tx broadcast provider covering Ethereum, Arbitrum, Base, and other EVM chains. RPC integration (`eth_sendRawTransaction`), gas estimation (`eth_estimateGas`), receipt polling (`eth_getTransactionReceipt`), multi-chain EVM support (same code, different RPC endpoints), receipt format mapping to kind:6260 tags, chain-specific pricing based on gas costs, example SkillDescriptor with multi-chain EVM features. (2) `provider-handoff-solana.md` — Solana tx broadcast provider. `sendTransaction` RPC, slot-based receipts, priority fee handling (`computeUnitPrice`), receipt format mapping (`slot` tag instead of `block`), Solana-specific error codes, example SkillDescriptor. (3) `provider-handoff-ao.md` — AO message broadcast via HyperBEAM node. AO message format (not EVM tx), p4 fee model (provider pays AO compute fee, passes through as convenience fee), HyperBEAM HTTP API for message submission, slot receipt from AO scheduler, example SkillDescriptor with `ao` feature. Explicitly clarifies: AO is a blockchain target for chain bridge, NOT a compute backend — compute on AO is handled by HyperBEAM compute providers via kind:5250.
-- **12.8 Publish Chain Bridge Primitive** — Publish updated packages: `@toon-protocol/core` (kind:5260/6260 builders/parsers, chain bridge receipt types), `@toon-protocol/sdk` (consumer helpers, SkillDescriptor chain bridge extensions), `@toon-protocol/provider-test` (chain bridge test suite). Version bump following semver (minor version for new feature). Update `_bmad-output/project-context.md` with Epic 14 completion status, chain bridge primitive architecture section, and provider handoff doc locations. Verify all exports, run full test suite, validate E2E with reference mock provider.
-
-**Dependencies:** Epic 8 (self-describing receipt pattern), Epic 5 (DVM event kinds), Epic 3 (multi-chain config), Epic 13 (shared test harness infrastructure)
-**Decision source:** Party Mode 2026-03-22 — Network Primitives Strategy (D8-PM-003, D8-PM-006, D8-PM-008); Party Mode 2026-03-23 — Provider Protocol Model
-
-**Key Design Decisions:**
-- Tier 1 only for initial implementation: trustless broadcast. Provider cannot steal funds — only submit or not submit.
-- Multi-chain in one packet: `['param', 'chains', 'ethereum,arbitrum,base,ao']`. Receipt has per-chain tags.
-- AO is a blockchain target, not a compute backend. Provider has AO wallet/HyperBEAM node, pays p4 fee, returns slot receipt.
-- Future tiers deferred: Tier 2 (construct + broadcast), Tier 3 (custodial execute with TEE) have significant security implications.
-- Chain-specific pricing in SkillDescriptor (different gas costs per chain).
-- **Provider implementations are out of scope** — same model as compute primitive.
 
 ### Epic 15: Loony — Autonomous Agent Application
 
@@ -469,7 +469,7 @@ Loony is an example application that proves TOON Protocol can support a self-boo
 - **14.7 Runtime Capability Extension** — Loony discovers new kind:10035 SkillDescriptors at runtime that didn't exist when Loony was deployed. `CapabilityExtender` class: monitors ServiceRegistry (14.2) for new SkillDescriptors, feeds new descriptors to ReasoningEngine (14.3) with prompt: "A new service is available on the network. Here is its SkillDescriptor (TOON format). What can this service do? How could it be composed with existing services to create value?" LLM reads the descriptor (TOON format is LLM-readable by design), understands the new service API, and suggests compositions. `proposeComposition(newService: SkillDescriptor, existingServices: SkillDescriptor[]): Promise<CompositionProposal[]>` — LLM generates proposed workflows combining new and existing services. If a composition is deemed profitable (estimated margin > 0), Loony auto-registers it as a new composite service via CompositeServiceManager (14.6) and publishes a new SkillDescriptor. The marketplace IS the extension mechanism — no code changes needed to integrate new capabilities. Acceptance: A new SkillDescriptor is published to the relay after Loony starts; Loony discovers it, uses LLM reasoning to understand it, proposes a novel composition incorporating the new service, registers the composition as a new service, and can execute it when requested.
 - **14.8 Self-Sustaining Economics & E2E Validation** — End-to-end validation that Loony operates as a self-sustaining autonomous agent. `LoonyEconomics` tracker: `{ totalEarned, totalSpent, currentBalance, profitableServices: { name, totalRevenue, totalCost, margin }[], unprofitableServices: { name, reason }[] }`. Budget governor integration with OODA loop: Loony won't take actions that would reduce balance below configurable reserve threshold. Economic reporting: Loony periodically publishes its economics summary as a Nostr event (transparent operation). Self-pruning: if a composite service is consistently unprofitable (margin < 0 over N executions), Loony de-registers it and stops offering it. Full E2E integration test scenario: (1) Loony bootstraps from seed phrase on test network, (2) discovers primitive providers (blob, compute, chain bridge), (3) reasons about service opportunities via LLM, (4) registers as composite service provider, (5) receives and fulfills job requests, (6) discovers a new service published mid-test, (7) extends capabilities by composing with new service, (8) maintains positive or stable balance over N OODA cycles. Performance assertions: balance trending positive, at least one composite service registered, at least one capability extension performed. Acceptance: Loony runs autonomously for N cycles demonstrating the complete agent lifecycle (bootstrap → perceive → reason → act → earn → extend) with positive or stable economics.
 
-**Dependencies:** Epic 8 (blob storage primitive), Epic 9 (agent skills for protocol understanding), Epic 13 (compute provider protocol — at least one third-party provider must exist), Epic 14 (chain bridge provider protocol — at least one third-party provider must exist)
+**Dependencies:** Epic 8 (blob storage primitive), Epic 9 (agent skills for protocol understanding), Epic 14 (compute provider protocol — at least one third-party provider must exist), Epic 13 (chain bridge provider protocol — at least one third-party provider must exist)
 **Decision source:** Party Mode 2026-03-23 — Architecture + Loony + Provider Model; Party Mode 2026-03-24 — Story Decomposition
 
 **Key Design Decisions:**
@@ -2723,70 +2723,70 @@ The Overmind Protocol enables autonomous sovereign agents ("overminds") that liv
 
 **New Nostr event kinds:** 5099 (Wake Request), 5101 (Wake Winner Announcement), 5102 (Cycle Execution Record)
 
-**New packages:** `packages/overmind`, `packages/chain-bridge`
+**New packages:** `packages/overmind`, `packages/bridge`
 
-### Epic 15: Overmind Heartbeat (9 stories)
+### Epic 16: Overmind Heartbeat (9 stories)
 
-Minimal viable overmind: TEE key genesis, Arweave state persistence, Mina VRF executor selection, Chain Bridge DVM with Mina adapter (first reference implementation), OODA decision engine, self-scheduling. Dependencies: Epic 14 (Chain Bridge Primitive — co-developed).
-
-| Story | Title | Dependencies | Size |
-|-------|-------|-------------|------|
-| 15.1 | TEE Key Genesis Ceremony | None | M |
-| 15.2 | Arweave State Persistence (ArDrive Turbo) | 15.1 | L |
-| 15.3 | OvermindRegistry zkApp on Mina (o1js) | None | XL |
-| 15.4 | Chain Bridge DVM — Mina Adapter | None | XL |
-| 15.5 | VRF-Based Executor Selection | 15.3, 15.4 | L |
-| 15.6 | Wake/Sleep Cycle Orchestration | 15.1, 15.2, 15.5 | L |
-| 15.7 | OODA Decision Engine | 15.6 | L |
-| 15.8 | Self-Scheduling Wake Cycles | 15.7 | M |
-| 15.9 | E2E: 10 Autonomous Cycles via Mina VRF | All above | L |
-
-### Epic 16: Overmind Treasury (5 stories)
-
-Self-funding economics: DVM service income, live treasury queries (D-OMP-010), adaptive behavior. Dependencies: Epic 15.
+Minimal viable overmind: TEE key genesis, Arweave state persistence, Mina VRF executor selection, Chain Bridge DVM with Mina adapter (first reference implementation), OODA decision engine, self-scheduling. Dependencies: Epic 13 (Chain Bridge Primitive — co-developed).
 
 | Story | Title | Dependencies | Size |
 |-------|-------|-------------|------|
-| 16.1 | Register as DVM Provider (kind:31990) | 15 | M |
-| 16.2 | Accept/Execute DVM Jobs for Payment | 16.1 | L |
-| 16.3 | Treasury Accounting with Live Balances | 16.2 | M |
-| 16.4 | Adaptive Behavior Engine | 16.3 | M |
-| 16.5 | E2E: 100 Self-Funded Cycles | All above | L |
+| 16.1 | TEE Key Genesis Ceremony | None | M |
+| 16.2 | Arweave State Persistence (ArDrive Turbo) | 16.1 | L |
+| 16.3 | OvermindRegistry zkApp on Mina (o1js) | None | XL |
+| 16.4 | Chain Bridge DVM — Mina Adapter | None | XL |
+| 16.5 | VRF-Based Executor Selection | 16.3, 16.4 | L |
+| 16.6 | Wake/Sleep Cycle Orchestration | 16.1, 16.2, 16.5 | L |
+| 16.7 | OODA Decision Engine | 16.6 | L |
+| 16.8 | Self-Scheduling Wake Cycles | 16.7 | M |
+| 16.9 | E2E: 10 Autonomous Cycles via Mina VRF | All above | L |
 
-### Epic 17: Overmind Sovereign (7 stories)
+### Epic 17: Overmind Treasury (5 stories)
 
-TEE key sovereignty: signing policy, key hierarchy, Shamir backup, sealed migration, disaster recovery. Dependencies: Epic 15.
-
-| Story | Title | Dependencies | Size |
-|-------|-------|-------------|------|
-| 17.1 | Production TEE Key Generation | 15.1 | M |
-| 17.2 | Signing Policy Engine | 17.1 | L |
-| 17.3 | BIP-44 HD Key Hierarchy | 17.1 | M |
-| 17.4 | Shamir K-of-N Seed Splitting (N=5, K=3) | 17.1 | L |
-| 17.5 | Sealed Key Migration (Enclave-to-Enclave) | 17.4 | XL |
-| 17.6 | Disaster Recovery Protocol | 17.4 | L |
-| 17.7 | E2E: Cross-Provider Key Migration | All above | L |
-
-### Epic 18: Overmind Biography (5 stories)
-
-Recursive ZK lifecycle proofs: per-cycle proofs, recursive composition, verifiable execution count (replaces reputation), public biography. Dependencies: Epic 15.
+Self-funding economics: DVM service income, live treasury queries (D-OMP-010), adaptive behavior. Dependencies: Epic 16.
 
 | Story | Title | Dependencies | Size |
 |-------|-------|-------------|------|
-| 18.1 | Per-Cycle ZK Proof Generation | 15.3 | L |
-| 18.2 | Recursive Proof Composition (SelfProof) | 18.1 | XL |
-| 18.3 | Verifiable Execution Count on Mina | 18.2 | M |
-| 18.4 | Public Biography HTTP Endpoint | 18.3 | M |
-| 18.5 | E2E: 100-Cycle Recursive Proof Verification | All above | L |
+| 17.1 | Register as DVM Provider (kind:31990) | 16 | M |
+| 17.2 | Accept/Execute DVM Jobs for Payment | 17.1 | L |
+| 17.3 | Treasury Accounting with Live Balances | 17.2 | M |
+| 17.4 | Adaptive Behavior Engine | 17.3 | M |
+| 17.5 | E2E: 100 Self-Funded Cycles | All above | L |
 
-### Epic 19: Overmind Swarm (5 stories)
+### Epic 18: Overmind Sovereign (7 stories)
 
-Agent reproduction: sub-agent spawning, NIP-44 encrypted parent-child comms, DVM task delegation, swarm treasury management. Dependencies: Epic 16 + Epic 17.
+TEE key sovereignty: signing policy, key hierarchy, Shamir backup, sealed migration, disaster recovery. Dependencies: Epic 16.
 
 | Story | Title | Dependencies | Size |
 |-------|-------|-------------|------|
-| 19.1 | Sub-Agent Spawning | 16, 17 | L |
-| 19.2 | Parent-Child NIP-44 Communication | 19.1 | M |
-| 19.3 | DVM Task Delegation | 19.2 | M |
-| 19.4 | Swarm Treasury Management | 19.3 | L |
-| 19.5 | E2E: 3-Sub-Agent Swarm | All above | L |
+| 18.1 | Production TEE Key Generation | 16.1 | M |
+| 18.2 | Signing Policy Engine | 18.1 | L |
+| 18.3 | BIP-44 HD Key Hierarchy | 18.1 | M |
+| 18.4 | Shamir K-of-N Seed Splitting (N=5, K=3) | 18.1 | L |
+| 18.5 | Sealed Key Migration (Enclave-to-Enclave) | 18.4 | XL |
+| 18.6 | Disaster Recovery Protocol | 18.4 | L |
+| 18.7 | E2E: Cross-Provider Key Migration | All above | L |
+
+### Epic 19: Overmind Biography (5 stories)
+
+Recursive ZK lifecycle proofs: per-cycle proofs, recursive composition, verifiable execution count (replaces reputation), public biography. Dependencies: Epic 16.
+
+| Story | Title | Dependencies | Size |
+|-------|-------|-------------|------|
+| 19.1 | Per-Cycle ZK Proof Generation | 16.3 | L |
+| 19.2 | Recursive Proof Composition (SelfProof) | 19.1 | XL |
+| 19.3 | Verifiable Execution Count on Mina | 19.2 | M |
+| 19.4 | Public Biography HTTP Endpoint | 19.3 | M |
+| 19.5 | E2E: 100-Cycle Recursive Proof Verification | All above | L |
+
+### Epic 20: Overmind Swarm (5 stories)
+
+Agent reproduction: sub-agent spawning, NIP-44 encrypted parent-child comms, DVM task delegation, swarm treasury management. Dependencies: Epic 17 + Epic 18.
+
+| Story | Title | Dependencies | Size |
+|-------|-------|-------------|------|
+| 20.1 | Sub-Agent Spawning | 17, 18 | L |
+| 20.2 | Parent-Child NIP-44 Communication | 20.1 | M |
+| 20.3 | DVM Task Delegation | 20.2 | M |
+| 20.4 | Swarm Treasury Management | 20.3 | L |
+| 20.5 | E2E: 3-Sub-Agent Swarm | All above | L |
