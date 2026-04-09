@@ -22,6 +22,7 @@ import { parsePetInteractionRequest } from './parsePetInteractionRequest';
 import { PetStateManager } from './PetStateManager';
 import { ProofQueue } from './ProofQueue';
 import { buildPetInteractionEvent } from './buildPetInteractionEvent';
+import { calculatePetInteractionPrice } from '../pricing/calculatePetInteractionPrice';
 
 /**
  * Creates a Pet DVM handler for Kind 5900 pet interaction requests.
@@ -47,6 +48,21 @@ export function createPetDvmHandler(
         code: 'F00',
         message: 'Malformed pet interaction request: missing or invalid tags',
       };
+    }
+
+    // b2. Validate ILP payment covers required PET token cost (when pricingConfig is set)
+    if (config.pricingConfig !== undefined) {
+      const requiredAmount = calculatePetInteractionPrice(
+        request.tokenCost,
+        config.pricingConfig
+      );
+      if (ctx.amount < requiredAmount) {
+        return {
+          accept: false,
+          code: 'F01',
+          message: `Insufficient ILP payment: required ${requiredAmount}, received ${ctx.amount}`,
+        };
+      }
     }
 
     // c. Load pet state via PetStateManager.getOrCreate(blobbiId)

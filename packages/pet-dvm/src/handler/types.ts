@@ -13,6 +13,7 @@ import type {
   GameAction,
   InteractionResult,
 } from '../engine/types';
+import type { PetPricingConfig } from '../pricing/types';
 
 // ============================================================
 // Nostr Event (minimal local type to avoid nostr-tools resolution issues)
@@ -90,7 +91,17 @@ export interface PetDvmConfig {
   proofBatchSize?: number;
   /** Callback to publish optimistic Nostr events to relay */
   publishEvent: (event: UnsignedEvent) => Promise<void>;
+  /**
+   * Optional cross-chain pricing configuration.
+   * When set, the handler validates that ctx.amount covers the required
+   * ILP price for the interaction (calculated from request.tokenCost).
+   * When omitted, payment validation is skipped (backward-compatible default).
+   */
+  pricingConfig?: PetPricingConfig;
 }
+
+// Re-export for consumers who import from handler/types
+export type { PetPricingConfig };
 
 // ============================================================
 // Pet Interaction Request

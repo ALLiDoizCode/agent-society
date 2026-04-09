@@ -45,3 +45,21 @@ export type {
   NostrEvent,
 } from './handler/types';
 export type { BuildPetInteractionEventParams } from './handler/buildPetInteractionEvent';
+
+// Pricing
+export { calculatePetInteractionPrice } from './pricing/calculatePetInteractionPrice';
+export {
+  PET_ACTION_PRICES,
+  DEFAULT_EXCHANGE_RATE_USDC_PER_PET,
+  DEFAULT_MARGIN_BPS,
+  getActionPetCost,
+} from './pricing/petActionPrices';
+export {
+  buildPetDvmSkillDescriptor,
+  type PetDvmServiceDiscoveryConfig,
+} from './pricing/buildPetDvmSkillDescriptor';
+export {
+  PricingError,
+  type PetPricingConfig,
+  type PricingErrorCode,
+} from './pricing/types';
