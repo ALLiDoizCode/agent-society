@@ -17,4 +17,7 @@ module.exports = {
   },
   // o1js is ESM-native; allow transformation (needed because pet-circuit re-exports from o1js)
   transformIgnorePatterns: ['node_modules/(?!o1js/)'],
+  moduleNameMapper: {
+    '^@toon-protocol/memvid-node$': '<rootDir>/src/__mocks__/memvid-node.ts',
+  },
 };
