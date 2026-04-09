@@ -115,8 +115,11 @@ jobs:
             packages/*/node_modules
           key: build-${{ github.sha }}
 
-      - name: Run unit tests
+      - name: Run unit tests (vitest)
         run: pnpm test -- --run --reporter=verbose
+
+      - name: Run unit tests (pet-dvm Jest)
+        run: pnpm test:jest
 
       - name: Run skill structural tests
         # Non-blocking burn-in: 3 of 10 skill tests have pre-existing failures
