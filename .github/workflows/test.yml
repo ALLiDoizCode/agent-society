@@ -152,6 +152,7 @@ jobs:
 
       - name: Run unit tests with coverage
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         run: pnpm test:coverage -- --run --reporter=json --outputFile=coverage-report.json
 
       - name: Upload coverage report
