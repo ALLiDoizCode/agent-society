@@ -259,6 +259,7 @@ development_status:
   # NOTE: Inserted as Epic 12 on 2026-04-09; all subsequent epics shifted +1
   # 6-8 stories estimated; spec: _bmad-output/epics/epic-12-token-swap-primitive.md
   epic-12: in-progress
+  12-1-swappair-type-and-kind-10032-serialization: done
   epic-12-retrospective: optional
 
   # Epic 13: Chain Bridge Primitive (kind:5260)
