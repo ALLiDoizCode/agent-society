@@ -43,6 +43,16 @@ export const PET_ACTION_PRICES: Record<number, number> = {
 /**
  * Default static ILP exchange rate: 1000 USDC micro-units per PET token.
  * Equals 0.001 USDC per PET token. Static placeholder — oracle integration deferred (R-015).
+ *
+ * TODO(epic-12): Replace this static rate with a live exchange rate oracle.
+ * Upgrade path:
+ *   1. Define an `ExchangeRateOracle` interface with `getRate(base, quote): Promise<bigint>`.
+ *   2. Implement a live feed adapter (e.g., CoinGecko, Chainlink, or Pyth).
+ *   3. Inject the oracle into `calculatePetInteractionPrice()` via `PetPricingConfig`.
+ *   4. Add circuit-breaker / staleness check: reject rates older than N seconds.
+ *   5. Keep this constant as the fallback default when oracle is unreachable.
+ * See: Epic 11 retro action item "Exchange rate oracle upgrade path documented"
+ *      and NFR assessments flagging static rate as a CONCERN.
  */
 export const DEFAULT_EXCHANGE_RATE_USDC_PER_PET = 1000n;
 
