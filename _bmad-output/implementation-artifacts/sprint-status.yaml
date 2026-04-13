@@ -260,6 +260,7 @@ development_status:
   # 6-8 stories estimated; spec: _bmad-output/epics/epic-12-token-swap-primitive.md
   epic-12: in-progress
   12-1-swappair-type-and-kind-10032-serialization: done
+  12-2-nip59-gift-wrap-integration-for-ilp-packets: done
   epic-12-retrospective: optional
 
   # Epic 13: Chain Bridge Primitive (kind:5260)
