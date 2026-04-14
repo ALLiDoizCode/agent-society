@@ -262,6 +262,7 @@ development_status:
   12-1-swappair-type-and-kind-10032-serialization: done
   12-2-nip59-gift-wrap-integration-for-ilp-packets: done
   12-3-mill-swap-handler: done
+  12-4-mill-inventory-and-wallet-management: done
   epic-12-retrospective: optional
 
   # Epic 13: Chain Bridge Primitive (kind:5260)
