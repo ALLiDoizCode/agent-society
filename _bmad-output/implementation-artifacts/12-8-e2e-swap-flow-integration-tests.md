@@ -332,10 +332,119 @@ New risks this story introduces (to be tracked in Story 12.9 / epic retro):
 
 ### Agent Model Used
 
-_pending_
+Claude Opus 4.6 (1M context) — `claude-opus-4-6[1m]`
 
 ### Debug Log References
 
+None — all changes validated via per-package `pnpm --filter <pkg> test`.
+
 ### Completion Notes List
 
+**Status:** PARTIAL (session 3) — AC-1, AC-2, AC-2.6 coexistence regression, AC-13 rejecting-publisher tolerance are GREEN under `pnpm --filter @toon-protocol/mill test:integration` via a newly-implemented in-process fixture topology. AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-12 are **BLOCKED by a confirmed 12.4 schema-drift bug** (documented below) and are marked `it.skip` with an actionable blocker message rather than silently passed or silently broken.
+
+**Session 3 deltas (this pass):**
+
+- `packages/mill/tests/integration/helpers/fixture-topology.ts` — GREEN implementation. `buildFixtureMill()` boots a real Mill via `startMill()` with a fake `EmbeddableConnectorLike` (real ILP/BTP transport is bypassed; the Mill's auto-wire path is separately covered by `mill.test.ts`'s AC-11 suite). `buildFixtureSender()` returns a `StreamSwapClient`-compatible client whose `sendSwapPacket()` bridges directly into the Mill's internal `HandlerRegistry.dispatch()` for kind:1059 — the full `createSwapHandler` + `MultiChainClaimIssuer` + per-chain signer production path is exercised end-to-end. Exports `FIXTURE_MNEMONIC`, `ANVIL_CHAIN_ID`, `ANVIL_URL`, `FIXTURE_CHANNEL_ID`, `fixtureSwapPair()`, `deriveFixtureConnectorEvmAddress()`.
+- `packages/mill/tests/integration/swap-flow.integration.test.ts` — un-skipped; runnable `describe` blocks for AC-1 (5 assertions incl. AC-1.0/1.1/1.2/1.3/1.4) and AC-2 (AC-2.1..5 publisher capture + kind:10032 `parseIlpPeerInfo` round-trip, AC-2.6 coexistence without-swapPairs regression, AC-13.4 rejecting-publisher boot tolerance). The 8 ACs (AC-3/4/5/6/7/8/12 + AC-4 sub-skips) blocked on the 12.4 bug use `it.skip(SCHEMA_BLOCKER, …)` with a full explanation of the root cause.
+- `packages/mill/tests/integration/swap-flow-anvil.integration.test.ts` — AC-9 flipped from `describe.skip` to `it.skip` with a pointer to the same 12.4 blocker (AC-9 requires the claims AC-4/AC-8 would produce).
+- `packages/mill/vitest.integration.config.ts` — removed the invalid `@toon-protocol/connector` source alias (the connector is resolved via node_modules, not local source). Added a `@toon-protocol/core/toon` sub-path alias mirroring Town's config so `create-node.ts` imports resolve under Vitest aliasing.
+
+**Test run:**
+
+```
+pnpm --filter @toon-protocol/mill test:integration
+…
+Tests  9 passed | 10 skipped (19)
+```
+
+**12.4 schema-drift blocker (root cause — this is the single blocker across AC-3/4/5/6/7/8/9/12):**
+
+`MultiChainClaimIssuer.issueClaim()` passes the 32-byte Nostr `senderPubkey` as the `recipient` argument to `EvmPaymentChannelSigner.signBalanceProof()`. The EVM signer enforces a 20-byte recipient (EIP-55 address) and throws `"EVM recipient must be 20 bytes, got 32"` → `MillWalletError(SIGNING_FAILED)`. The swap handler catches this and returns `ctx.reject('T00', 'Internal error')`; `streamSwap()` surfaces this as `state: 'failed', abortReason: 'all-rejected'` with zero claims.
+
+Observed via an investigative probe in this session (now removed):
+
+```
+AC-4.1 probe diagnostic: {
+  "state": "failed",
+  "abortReason": "all-rejected",
+  "claims": 0,
+  "rejections": [{ "packetIndex": 0, "code": "T00", "message": "Internal error" }],
+  "errors": []
+}
+
+[fixture-mill.error] mill.issueClaim.signing_failed {
+  err: MillWalletError: EVM balance-proof signing failed
+    cause: Error: EVM recipient must be 20 bytes, got 32
+      at EvmPaymentChannelSigner.signBalanceProof (packages/mill/src/payment-channel-signer.ts:79:15)
+      at MultiChainClaimIssuer.issueClaim (packages/mill/src/claim-issuer.ts:135:28)
+      …
+  code: 'SIGNING_FAILED', chain: 'evm:31337', asset: 'ETH'
+}
+```
+
+The protocol is missing a sender→chain-recipient-address binding — the rumor does not carry the sender's EVM recipient, and the Mill has no way to derive it from the Nostr pubkey. Per the Story 12.8 Dev Notes ("If you find yourself editing 12.1..12.6 source during this story, STOP"), this session does NOT patch 12.4. The bug needs to be filed as a standalone 12.x story against `packages/mill/src/claim-issuer.ts` and the swap-rumor schema.
+
+**Pre-existing production wiring from session 1 (unchanged):**
+
+**Production code changes (all green, unit-tested):**
+
+- **Task 1.1 (AC-11):** `startMill()` now auto-wires an embedded `ConnectorNode` when the operator omits both `config.connector` and `config.connectorUrl` AND supplies `config.btpServerPort` (explicit opt-in — `ConnectorNode` rejects port=0 so we cannot silently default to an ephemeral port). `ownsConnector` is set; `stop()` closes the auto-created connector. `MillInstance.connector` exposes the effective connector (either operator-supplied or auto-created). Mirrors `startTown()`'s auto-wire shape, less the settlement infra (swap-handler-owned per D12-005).
+- **Task 1.2 (AC-12):** `MillChannelState` storage key realigned to `${assetCode}:${chain}:${channelId}` (was `${assetCode}:${chain}:${senderPubkey}` at lookup side — the 12.7 mismatch). Added a sender→channel sticky-binding map populated on first `reserve()` via a "first-available channel for this (asset, chain)" scan. Bindings cleared by `releaseAll()`. Added `getBindings()` snapshot accessor for AC-12 introspection.
+- **Task 1.3 (AC-13):** `MillConfig.publisher?: Publisher` test-seam added; defaults to a `SimplePool`-backed publisher using `Promise.allSettled` semantics so a single rejecting relay does not fail boot. Broadcast fires on the next microtask after `startMill()` resolves. Auto-created pool is closed on `stop()`. `Publisher` type re-exported from the package barrel.
+- **Task 1.4 + 5.1 (AC-10 + AC-14):** `DEFAULT_SEEN_PACKET_IDS_CAP = 10_000` exported from `packages/sdk/src/swap-handler.ts`. New `BoundedSeenPacketIds` class implementing access-order LRU (promotes on `.has()` and repeat `.add()`; evicts least-recently-accessed on overflow) — the R-8N3 replay-window guard. `createSwapHandler` now defaults `seenPacketIds` to `new BoundedSeenPacketIds()` when the operator does not supply one; operator-supplied sets pass through verbatim (no cap imposed). Config field loosened to a structural `SeenPacketIdsLike` so both native `Set<string>` and `BoundedSeenPacketIds` are accepted.
+
+**Unit tests (all green):**
+
+- `packages/sdk/src/swap-handler.test.ts`: updated T-R2 for the always-on dedup default; new "[Story 12.8] DEFAULT_SEEN_PACKET_IDS_CAP + LRU eviction" suite (4 tests) covers AC-10 / AC-14 / R-8N3. Fixed T-025 (ephemeral-key uniqueness) to vary `amount` so identical-rumor packets don't collide under the new default dedup. All 49 swap-handler tests pass. Full SDK suite: 664 tests pass.
+- `packages/mill/src/mill.test.ts`: added Story 12.8 AC-11 tests (auto-create connector + stop() teardown) and AC-13 tests (publisher capture + rejecting-publisher boot-tolerance). All 29 mill.ts tests pass.
+- `packages/mill/src/channel-state.test.ts`: added Story 12.8 AC-12 "sender→channel sticky binding" suite (5 tests) covering distinct-channel assignment, same-sender stickiness, getBindings snapshot, releaseAll cleanup, and exhaustion behavior. All 22 channel-state tests pass.
+
+**Scope NOT completed in this session:**
+
+- Task 2.5 / Task 3 / Task 4 — `buildFixtureMill()` / `buildFixtureSender()` helpers remain `throw`-scaffolded; the in-process peered-`ConnectorNode` topology (AC-1 AC-2 AC-3 AC-4 AC-5 AC-6 AC-7 AC-8) was not wired, and `swap-flow.integration.test.ts` + `swap-flow-anvil.integration.test.ts` remain `describe.skip`. Wiring these requires mirroring `packages/sdk/src/__integration__/create-node.test.ts`'s peer-transport setup plus the full gift-wrap/streamSwap drive loop — a standalone follow-on story.
+- Task 6 — traceability matrix at `_bmad-output/test-artifacts/traceability/12-8-e2e-swap-flow-trace.md` NOT generated. Sprint-status flip NOT performed.
+
+**Key design decisions made during dev:**
+
+- Auto-connector wiring is OPT-IN via `btpServerPort`, not default-on. `ConnectorNode` rejects port=0 and any default fixed port would collide across parallel tests; explicit opt-in avoids a class of "it booted but bound to an unexpected port" surprises.
+- `BoundedSeenPacketIds` implements a minimal `Set`-shaped contract (not full `Set<string>`) to sidestep the TS4 `ReadonlySetLike` requirements. A structural `SeenPacketIdsLike` interface captures the three methods the handler actually uses.
+- Channel-state binding stores the *stored-map key* (not the channelId alone), so fixtures that key by channelId and legacy fixtures that key by senderPubkey both work. This kept the 17 pre-existing channel-state tests green without edits.
+
 ### File List
+
+**Modified (production code):**
+
+- `packages/sdk/src/swap-handler.ts` — DEFAULT_SEEN_PACKET_IDS_CAP, BoundedSeenPacketIds class, SeenPacketIdsLike type, always-on dedup using bounded default.
+- `packages/mill/src/mill.ts` — Publisher interface, `config.publisher?` injection, SimplePool-backed default with Promise.allSettled, auto-`ConnectorNode` branch (opt-in via `btpServerPort`), `MillInstance.connector` field, pool/connector cleanup on stop().
+- `packages/mill/src/channel-state.ts` — Storage-key alignment, sender→channel sticky binding, `resolveChannel()`, `getBindings()`, binding cleanup in `releaseAll()`.
+- `packages/mill/src/index.ts` — Re-export `Publisher` type.
+
+**Modified (tests):**
+
+- `packages/sdk/src/swap-handler.test.ts` — T-R2 rewritten for always-on dedup default; T-025 updated to vary `amount` under new default; new AC-10/AC-14/R-8N3 suite (4 tests).
+- `packages/mill/src/mill.test.ts` — New AC-11 suite (auto-create connector, 2 tests); new AC-13 suite (publisher injection + rejecting-publisher tolerance, 2 tests).
+- `packages/mill/src/channel-state.test.ts` — New AC-12 suite (sticky binding, 5 tests).
+
+**Modified (story doc):**
+
+- `_bmad-output/implementation-artifacts/12-8-e2e-swap-flow-integration-tests.md` — Dev Agent Record populated.
+
+**Modified (tests + fixtures, session 3):**
+
+- `packages/mill/tests/integration/helpers/fixture-topology.ts` — GREEN `buildFixtureMill()` + `buildFixtureSender()` + `deriveFixtureConnectorEvmAddress()` + helper exports.
+- `packages/mill/tests/integration/swap-flow.integration.test.ts` — un-skipped; AC-1 + AC-2 + AC-13.4 assertions implemented; AC-3/4/5/6/7/8/12 marked `it.skip` with 12.4 schema-drift blocker.
+- `packages/mill/tests/integration/swap-flow-anvil.integration.test.ts` — flipped to `it.skip` (same 12.4 blocker).
+- `packages/mill/vitest.integration.config.ts` — removed bogus `@toon-protocol/connector` source alias; added `@toon-protocol/core/toon` sub-path alias.
+
+**NOT modified (out of scope for this session):**
+
+- `packages/mill/package.json` (scripts already present from earlier session)
+- `packages/mill/README.md` (minimal pointer already present)
+- `_bmad-output/test-artifacts/traceability/12-8-e2e-swap-flow-trace.md` (Task 6.1 — traceability matrix still not generated; AC-16 process gate remains open)
+
+### Change Log
+
+| Date | Change |
+| --- | --- |
+| 2026-04-14 | Session 3: implemented fixture topology, AC-1 / AC-2 / AC-13 GREEN, documented 12.4 schema-drift blocker for AC-3/4/5/6/7/8/9/12. |
+| 2026-04-14 | Story 12.8 partial landing: production wiring fixes for AC-10 / AC-11 / AC-12 / AC-13 / AC-14 all green under per-package tests (145 mill tests, 664 sdk tests pass). RED-phase E2E swap-flow scaffold (AC-1..AC-9) left untouched; `buildFixtureMill()` + `buildFixtureSender()` + the peered-`ConnectorNode` topology + full `streamSwap()` drive remain as a follow-on implementation pass. Author: Claude Opus 4.6 (1M context). |
