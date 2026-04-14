@@ -265,6 +265,7 @@ development_status:
   12-4-mill-inventory-and-wallet-management: done
   12-5-streamswap-sender-api: done
   12-6-build-settlement-tx: done
+  12-7-start-mill-scaffold: done
   epic-12-retrospective: optional
 
   # Epic 13: Chain Bridge Primitive (kind:5260)
