@@ -81,8 +81,8 @@ cmd_up() {
   log_info "Starting SDK E2E infrastructure..."
 
   # Build the Docker image
-  log_info "Building toon:optimized image..."
-  docker build -f "$REPO_ROOT/docker/Dockerfile.oyster" -t toon:optimized "$REPO_ROOT"
+  log_info "Building toon:sdk-e2e image..."
+  docker build -f "$REPO_ROOT/docker/Dockerfile.sdk-e2e" -t toon:sdk-e2e "$REPO_ROOT"
   log_success "Docker image built"
 
   # Derive pubkeys for bootstrap and NIP-59 config

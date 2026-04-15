@@ -106,6 +106,7 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 | Skill structural validation tests | `tests/skills/`, `packages/core/src/skills/` |
 | Epic 9 retrospective | `_bmad-output/auto-bmad-artifacts/epic-9-retro-report.md` |
 | Oyster CVM Dockerfile & compose | `docker/Dockerfile.oyster`, `docker/docker-compose-oyster.yml` |
+| SDK E2E peer Dockerfile | `docker/Dockerfile.sdk-e2e` (built as `toon:sdk-e2e` by `scripts/sdk-e2e-infra.sh`) |
 | SDK E2E Docker compose | `docker-compose-sdk-e2e.yml` |
 | Nix reproducible build flake | `flake.nix` (root) |
 | Attestation server source | `docker/src/attestation-server.ts` |

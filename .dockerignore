@@ -6,3 +6,14 @@ dist/
 packages/examples/
 docs/
 .github/
+
+# Rust build artifacts (memvid-node napi addon) — can reach 500MB+ on dev
+# machines. The Linux .node is built inside the image (follow-up story) or
+# marked external by esbuild in Dockerfile.sdk-e2e; no host artifacts needed.
+packages/memvid-node/target/
+packages/*/target/
+**/Cargo.lock
+
+# Prebuilt native addons (.node) are platform-specific. Dev machines have
+# darwin-arm64 artifacts that are useless in a Linux container.
+*.node

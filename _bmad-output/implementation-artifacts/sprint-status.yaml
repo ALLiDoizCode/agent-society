@@ -269,7 +269,7 @@ development_status:
   12-8-e2e-swap-flow-integration-tests: done
   12-9-sender-chain-recipient-threading: done
   12-10-e2e-swap-flow-docker-multi-chain: blocked
-  12-11-dockerfile-sdk-e2e-split: ready-for-dev
+  12-11-dockerfile-sdk-e2e-split: blocked
   epic-12-retrospective: optional
 
   # Epic 13: Chain Bridge Primitive (kind:5260)

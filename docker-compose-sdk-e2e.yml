@@ -158,7 +158,7 @@ services:
   # Anvil Account #0 for settlement
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   peer1:
-    image: toon:optimized
+    image: toon:sdk-e2e
     container_name: sdk-e2e-peer1
     command: ['node', '/app/entrypoint-sdk.js']
     environment:
@@ -253,7 +253,7 @@ services:
   # Anvil Account #2 for settlement
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   peer2:
-    image: toon:optimized
+    image: toon:sdk-e2e
     container_name: sdk-e2e-peer2
     command: ['node', '/app/entrypoint-sdk.js']
     environment:
