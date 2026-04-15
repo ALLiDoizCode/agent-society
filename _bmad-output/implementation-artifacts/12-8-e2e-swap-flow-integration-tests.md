@@ -1,6 +1,6 @@
 # Story 12.8: End-to-End Swap Flow Integration Tests — Real Mill Node Receiving Gift-Wrapped ILP Packets, Issuing Signed Claims, and Sender Settlement
 
-Status: ready-for-dev
+Status: done
 ui_impact: false
 epic: 12
 story_id: 12-8
@@ -231,45 +231,45 @@ New risks this story introduces (to be tracked in Story 12.9 / epic retro):
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Production wiring fixes (AC-11, AC-12, AC-13, AC-14)**
-  - [ ] 1.1 Implement auto-`ConnectorNode` branch in `startMill()` when `config.connector` and `config.connectorUrl` are both undefined (mirror `startTown()` auto-wire). Set `ownsConnector=true`; wire `connector.stop()` into `MillInstance.stop()`.
-  - [ ] 1.2 Fix per-sender channel lookup in `packages/mill/src/channel-state.ts`: align provision-time and lookup-time keys; add sticky-map binding for first-use pubkey→channelId. Document the choice inline.
-  - [ ] 1.3 Add `MillConfig.publisher?` hook; default to a `SimplePool`-backed implementation that publishes the kind:10032 event after 100ms boot-debounce. Log publish failures at `warn`; do not fail boot on publisher rejection.
-  - [ ] 1.4 Export `DEFAULT_SEEN_PACKET_IDS_CAP = 10_000` from `packages/sdk/src/swap-handler.ts`; default `seenPacketIds` to a bounded LRU-ish Set; preserve override semantics for operator-supplied sets.
-  - [ ] 1.5 Lint, typecheck, existing-unit-tests must pass after each sub-task before moving on.
+- [x] **Task 1: Production wiring fixes (AC-11, AC-12, AC-13, AC-14)**
+  - [x] 1.1 Implement auto-`ConnectorNode` branch in `startMill()` when `config.connector` and `config.connectorUrl` are both undefined (mirror `startTown()` auto-wire). Set `ownsConnector=true`; wire `connector.stop()` into `MillInstance.stop()`.
+  - [x] 1.2 Fix per-sender channel lookup in `packages/mill/src/channel-state.ts`: align provision-time and lookup-time keys; add sticky-map binding for first-use pubkey→channelId. Document the choice inline.
+  - [x] 1.3 Add `MillConfig.publisher?` hook; default to a `SimplePool`-backed implementation that publishes the kind:10032 event after 100ms boot-debounce. Log publish failures at `warn`; do not fail boot on publisher rejection.
+  - [x] 1.4 Export `DEFAULT_SEEN_PACKET_IDS_CAP = 10_000` from `packages/sdk/src/swap-handler.ts`; default `seenPacketIds` to a bounded LRU-ish Set; preserve override semantics for operator-supplied sets.
+  - [x] 1.5 Lint, typecheck, existing-unit-tests must pass after each sub-task before moving on.
 
-- [ ] **Task 2: Test infrastructure (AC-15)**
-  - [ ] 2.1 Create `packages/mill/vitest.integration.config.ts` mirroring Town's e2e config (30s timeout, `forks` pool, include glob `tests/integration/**/*.integration.test.ts`).
-  - [ ] 2.2 Update `packages/mill/vitest.config.ts` to exclude `tests/**` from default test run.
-  - [ ] 2.3 Add `test:integration` + `test:integration:anvil` scripts to `packages/mill/package.json`.
-  - [ ] 2.4 Add minimal `packages/mill/README.md` (one-line pointer to integration tests; NOT operator docs).
-  - [ ] 2.5 Create `packages/mill/tests/integration/helpers/fixture-topology.ts` with the fixture mnemonic, `buildFixtureMill()`, and `buildFixtureSender()` factory functions. Keep helpers small and readable.
+- [x] **Task 2: Test infrastructure (AC-15)**
+  - [x] 2.1 Create `packages/mill/vitest.integration.config.ts` mirroring Town's e2e config (30s timeout, `forks` pool, include glob `tests/integration/**/*.integration.test.ts`).
+  - [x] 2.2 Update `packages/mill/vitest.config.ts` to exclude `tests/**` from default test run.
+  - [x] 2.3 Add `test:integration` + `test:integration:anvil` scripts to `packages/mill/package.json`.
+  - [x] 2.4 Add minimal `packages/mill/README.md` (one-line pointer to integration tests; NOT operator docs).
+  - [x] 2.5 Create `packages/mill/tests/integration/helpers/fixture-topology.ts` with the fixture mnemonic, `buildFixtureMill()`, and `buildFixtureSender()` factory functions. Keep helpers small and readable.
 
-- [ ] **Task 3: Core swap-flow integration test (AC-1 through AC-8)**
-  - [ ] 3.1 Create `packages/mill/tests/integration/swap-flow.integration.test.ts` with `beforeAll` + `afterAll` bootstrap.
-  - [ ] 3.2 AC-1: fixture topology assertions (account-1 vs account-2 disjoint, `/health` responds).
-  - [ ] 3.3 AC-2: mock publisher injection + kind:10032 round-trip + coexistence regression.
-  - [ ] 3.4 AC-3: malformed kind:1059 packet → REJECT assertion (black-box handler registration).
-  - [ ] 3.5 AC-4.1 single-packet swap; AC-4.2 10-packet swap; AC-4.3 rate-drift swap.
-  - [ ] 3.6 AC-5: replay rejection.
-  - [ ] 3.7 AC-6: intermediary privacy properties (gift-wrap visible; content opaque; distinct ephemeral keys per FULFILL; sender-only decryption).
-  - [ ] 3.8 AC-7: two-sender swap (distinct pubkeys).
-  - [ ] 3.9 AC-8: `streamSwap()` → `buildSettlementTx()` schema round-trip (no transformation) + typecheck gate.
+- [x] **Task 3: Core swap-flow integration test (AC-1 through AC-8)**
+  - [x] 3.1 Create `packages/mill/tests/integration/swap-flow.integration.test.ts` with `beforeAll` + `afterAll` bootstrap.
+  - [x] 3.2 AC-1: fixture topology assertions (account-1 vs account-2 disjoint, `/health` responds).
+  - [x] 3.3 AC-2: mock publisher injection + kind:10032 round-trip + coexistence regression.
+  - [x] 3.4 AC-3: malformed kind:1059 packet → REJECT assertion (black-box handler registration).
+  - [x] 3.5 AC-4.1 single-packet swap; AC-4.2 10-packet swap; AC-4.3 rate-drift swap.
+  - [x] 3.6 AC-5: replay rejection.
+  - [x] 3.7 AC-6: intermediary privacy properties (gift-wrap visible; content opaque; distinct ephemeral keys per FULFILL; sender-only decryption).
+  - [x] 3.8 AC-7: two-sender swap (distinct pubkeys).
+  - [x] 3.9 AC-8: `streamSwap()` → `buildSettlementTx()` schema round-trip (no transformation) + typecheck gate.
 
-- [ ] **Task 4: Anvil-backed settlement validation test (AC-9)**
-  - [ ] 4.1 Create `packages/mill/tests/integration/swap-flow-anvil.integration.test.ts`.
-  - [ ] 4.2 Implement reachability probe (500ms timeout) → `test.skip` gate.
-  - [ ] 4.3 Use `viem` to validate `buildSettlementTx()` bytes via `eth_call` or `eth_estimateGas`.
-  - [ ] 4.4 Document in test-file header: "opt-in; requires `./scripts/sdk-e2e-infra.sh up`".
+- [x] **Task 4: Anvil-backed settlement validation test (AC-9)**
+  - [x] 4.1 Create `packages/mill/tests/integration/swap-flow-anvil.integration.test.ts`.
+  - [x] 4.2 Implement reachability probe (500ms timeout) → `test.skip` gate.
+  - [x] 4.3 Use `viem` to validate `buildSettlementTx()` bytes via `eth_call` or `eth_estimateGas`.
+  - [x] 4.4 Document in test-file header: "opt-in; requires `./scripts/sdk-e2e-infra.sh up`".
 
-- [ ] **Task 5: Unit hardening tests (AC-10, AC-14)**
-  - [ ] 5.1 Extend `packages/sdk/src/swap-handler.test.ts` with `DEFAULT_SEEN_PACKET_IDS_CAP` cap + LRU eviction tests.
-  - [ ] 5.2 Verify eviction order (oldest first).
+- [x] **Task 5: Unit hardening tests (AC-10, AC-14)**
+  - [x] 5.1 Extend `packages/sdk/src/swap-handler.test.ts` with `DEFAULT_SEEN_PACKET_IDS_CAP` cap + LRU eviction tests.
+  - [x] 5.2 Verify eviction order (oldest first).
 
-- [ ] **Task 6: Artifact + status updates (AC-16, AC-17)**
-  - [ ] 6.1 Run traceability: generate `_bmad-output/test-artifacts/traceability/12-8-e2e-swap-flow-trace.md`. 16/16 ACs → test files/it-blocks.
-  - [ ] 6.2 Update Dev Agent Record (File List, Completion Notes).
-  - [ ] 6.3 Sprint-status flip `12-8-e2e-swap-flow-integration-tests: review` on PR-ready, `done` post-merge.
+- [x] **Task 6: Artifact + status updates (AC-16, AC-17)**
+  - [x] 6.1 Run traceability: generate `_bmad-output/test-artifacts/traceability/12-8-e2e-swap-flow-trace.md`. 16/16 ACs → test files/it-blocks.
+  - [x] 6.2 Update Dev Agent Record (File List, Completion Notes).
+  - [x] 6.3 Sprint-status flip `12-8-e2e-swap-flow-integration-tests: review` on PR-ready, `done` post-merge.
 
 ## Dev Notes
 
@@ -340,7 +340,102 @@ None — all changes validated via per-package `pnpm --filter <pkg> test`.
 
 ### Completion Notes List
 
-**Status:** PARTIAL (session 3) — AC-1, AC-2, AC-2.6 coexistence regression, AC-13 rejecting-publisher tolerance are GREEN under `pnpm --filter @toon-protocol/mill test:integration` via a newly-implemented in-process fixture topology. AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-12 are **BLOCKED by a confirmed 12.4 schema-drift bug** (documented below) and are marked `it.skip` with an actionable blocker message rather than silently passed or silently broken.
+**Status (review pass, 2026-04-14):** DONE — post-review 18/18 integration tests green (AC-sanity filler removed during review), 1 opt-in skip (AC-9 Anvil). Story 12.8 closed.
+
+**Review-pass deltas (2026-04-14, code-review fixes):**
+
+- **H1 (AC-3 / AC-5 hardcoded error codes):** Exported
+  `SWAP_HANDLER_REJECT_CODES` and `SWAP_HANDLER_REJECT_MESSAGES` constants
+  from `packages/sdk/src/swap-handler.ts`; AC-3 and AC-5 assertions now
+  reference the symbolic constants (story AC-3 explicitly forbids
+  hardcoded code strings). Updated `packages/sdk/src/index.ts` public
+  exports + `packages/sdk/src/index.test.ts` runtime-exports snapshot.
+- **H2 (AC-4.3 BigInt → Number downcast):** Rewrote AC-4.3 rate-drift
+  assertion to use pure BigInt arithmetic (`targetAmount / (sourceAmount
+  * 10n ** 8n)` yields the 4-decimal-integer rate form); complies with
+  the story Dev Notes Standard Guard prohibiting `Number` downcast of
+  claim amounts.
+- **M1 (AC-6.1/6.2 missing AC-6.1 assertion):** Added explicit
+  `decodeEventFromToon(captured.toonData)` → `kind === 1059` check so
+  AC-6.1 is now asserted independently from AC-6.2.
+- **M2 (AC-9 `eth_call` with RLP tx as `data`):** Replaced the
+  semantically-invalid `eth_call` probe with (a) a structural
+  RLP-envelope shape check (`unsignedTxBytes[0] >= 0xc0`, mirroring the
+  sdk's evm.ts invariant) and (b) a chain-id match against the live
+  Anvil `eth_chainId` + the bundle's `chain` field. `eth_sendRawTransaction`
+  is called out as the true "accept as tx" gate and documented as out of
+  AC-9 scope (no deployed channel contract).
+- **M3 (traceability matrix AC-6 row):** Split the combined `AC-6.1/6.2`
+  row into two rows so each sub-AC names its distinct `it()` assertion.
+- **L1/L2/L3 (dead code cleanup):** Removed unused exports
+  `FIXTURE_CHANNEL_ID` and `signEvent()` from `fixture-topology.ts`;
+  removed the `AC-sanity` filler describe block from
+  `swap-flow.integration.test.ts`.
+
+Post-fix test evidence:
+
+```
+pnpm --filter @toon-protocol/mill test:integration
+ ✓ tests/integration/swap-flow-anvil.integration.test.ts  (1 test | 1 skipped)
+ ✓ tests/integration/swap-flow.integration.test.ts  (18 tests)
+ Test Files  2 passed (2)
+      Tests  18 passed | 1 skipped (19)
+
+pnpm --filter @toon-protocol/sdk test
+ Test Files  33 passed (33)
+      Tests  679 passed (679)
+
+pnpm --filter @toon-protocol/mill test
+ Test Files  11 passed (11)
+      Tests  155 passed | 1 skipped (156)
+```
+
+---
+
+**Status (session 4, 2026-04-14):** REVIEW — all functional ACs (AC-1..AC-15) green under `pnpm --filter @toon-protocol/mill test:integration` (19/19 passing, 1 skipped = AC-9 runtime-skip when Anvil unreachable). The session-3 12.4 schema-drift blocker was resolved by Story 12.9 (sender→chain-recipient threading via `StreamSwapParams.chainRecipient` → rumor `chain-recipient` tag → `IssueClaimParams.chainRecipient` → `signBalanceProof({ recipient })`). AC-16 traceability matrix generated at `_bmad-output/test-artifacts/traceability/12-8-e2e-swap-flow-trace.md`; AC-17 sprint-status flipped from `blocked` to `review`.
+
+**Session 4 deltas:**
+
+- `packages/mill/tests/integration/swap-flow.integration.test.ts` — replaced the 8 `it.skip(SCHEMA_BLOCKER, …)` placeholders with real assertions:
+  - AC-3: malformed kind:1059 → F01 "Invalid gift wrap" (black-box handler registration + gift-wrap enforcement).
+  - AC-4.1: single-packet swap completes, `targetAmount === 400_000_000_000_000n` (1 USDC × 0.0004 rate × 1e12 scale factor), settlement-context fields (channelId, nonce, cumulativeAmount, recipient=chainRecipient, millSignerAddress) all present.
+  - AC-4.2: 10-packet swap — monotonic BigInt nonces, single Mill signer, 10 distinct ephemeral pubkeys.
+  - AC-4.3: rate-drift via `rateProvider` cycling `['0.0004','0.0003','0.0005']` — observed rates set contains all three.
+  - AC-5: replay — captured PREPARE re-sent yields F04 "Duplicate packet" (seenPacketIds bounded-default dedup wired).
+  - AC-6.1/6.2: unwrap with a non-Mill key throws (intermediary opacity).
+  - AC-6.3: 10-packet swap → 10 distinct Mill-side ephemeralPubkeys.
+  - AC-6.4: FULFILL claim nip44-decrypt with non-sender key throws (sender-only readability).
+  - AC-7: two senders (distinct seeds → distinct Nostr pubkeys + distinct EVM chainRecipients) both receive claims signed by the same Mill signer; distinct channelIds; AC-12 sticky binding regression confirms second packet from senderA reuses the same channelId.
+  - AC-8: `streamSwap()` result.claims piped DIRECTLY into `buildSettlementTx()` with no transformation, no casts — 10 claims merged into a single EVM bundle with recipient and millSignerAddress echoed.
+  - AC-13.4: rejecting-publisher boot tolerance (unchanged from session 3, retained).
+- `packages/mill/tests/integration/swap-flow-anvil.integration.test.ts` — AC-9 flipped from `it.skip` to a runtime-gated test that drives a real 10-packet swap + buildSettlementTx, then probes Anvil via `eth_chainId` + `eth_call` to assert the unsigned tx bytes are not RLP-malformed / chain-id-invalid. If Anvil is unreachable within 500ms, `ctx.skip()` runtime-skips (no FAIL).
+- `_bmad-output/test-artifacts/traceability/12-8-e2e-swap-flow-trace.md` — new traceability matrix, 15/15 functional ACs covered.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — `12-8-e2e-swap-flow-integration-tests: blocked → review`.
+
+**Test run evidence (session 4):**
+
+```
+pnpm --filter @toon-protocol/mill test:integration
+ ✓ tests/integration/swap-flow-anvil.integration.test.ts  (1 test | 1 skipped)
+ ✓ tests/integration/swap-flow.integration.test.ts  (19 tests)
+ Test Files  2 passed (2)
+      Tests  19 passed | 1 skipped (20)
+
+pnpm --filter @toon-protocol/mill test
+ Test Files  11 passed (11)
+      Tests  155 passed | 1 skipped (156)
+```
+
+**Key decisions in session 4:**
+
+- AC-8's signers/recipients maps are derived from `mill.millKeys.evm!.address` and the fixture `FIXTURE_EVM_RECIPIENT` — no test-only shim adapter between streamSwap and buildSettlementTx, enforcing the "no transformation" invariant at the TypeScript layer.
+- AC-9 well-formedness assertion is probe-based (eth_chainId match + eth_call tolerance for execution-revert but not RLP-parse errors). A real on-chain broadcast is out of scope (no deployed channel contract in the fixture); the assertion matches the story's "tx well-formedness vs. a live EVM JSON-RPC" scope.
+- Second-sender AC-7 test uses a distinct `chainRecipient` (`0x22...`) rather than reusing `0x11...` — this exercises the Story 12.9 recipient equality check at the FULFILL boundary for both senders independently.
+- The previous session-3 Completion Notes (below) are retained verbatim for historical continuity.
+
+---
+
+**Status (session 3, retained for history):** PARTIAL — AC-1, AC-2, AC-2.6 coexistence regression, AC-13 rejecting-publisher tolerance were GREEN. AC-3, AC-4, AC-5, AC-6, AC-7, AC-8, AC-9, AC-12 were BLOCKED by a confirmed 12.4 schema-drift bug (since resolved by Story 12.9 — see session-4 notes above) and were marked `it.skip` with an actionable blocker message rather than silently passed or silently broken.
 
 **Session 3 deltas (this pass):**
 
@@ -436,15 +531,29 @@ The protocol is missing a sender→chain-recipient-address binding — the rumor
 - `packages/mill/tests/integration/swap-flow-anvil.integration.test.ts` — flipped to `it.skip` (same 12.4 blocker).
 - `packages/mill/vitest.integration.config.ts` — removed bogus `@toon-protocol/connector` source alias; added `@toon-protocol/core/toon` sub-path alias.
 
-**NOT modified (out of scope for this session):**
+**Modified (tests + artifacts, session 4):**
 
-- `packages/mill/package.json` (scripts already present from earlier session)
-- `packages/mill/README.md` (minimal pointer already present)
-- `_bmad-output/test-artifacts/traceability/12-8-e2e-swap-flow-trace.md` (Task 6.1 — traceability matrix still not generated; AC-16 process gate remains open)
+- `packages/mill/tests/integration/swap-flow.integration.test.ts` — un-skipped AC-3/4.1/4.2/4.3/5/6.1-6.4/7/8/12 with real assertions against the chainRecipient-threaded pipeline. 19 tests passing, 0 skipped.
+- `packages/mill/tests/integration/swap-flow-anvil.integration.test.ts` — AC-9 wired as runtime-gated (ctx.skip when Anvil unreachable; real streamSwap → buildSettlementTx → eth_call probe when up).
+- `_bmad-output/test-artifacts/traceability/12-8-e2e-swap-flow-trace.md` — NEW traceability matrix (15/15 functional ACs → automated tests; process ACs noted).
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — `12-8-e2e-swap-flow-integration-tests: blocked → review`.
+
+**Modified (review pass, 2026-04-14):**
+
+- `packages/sdk/src/swap-handler.ts` — Added `SWAP_HANDLER_REJECT_CODES` + `SWAP_HANDLER_REJECT_MESSAGES` exported constants (no runtime behavior change; tests now reference symbols per AC-3).
+- `packages/sdk/src/index.ts` — Re-export the two new reject-code constants.
+- `packages/sdk/src/index.test.ts` — Added the two constants to the runtime-exports snapshot set.
+- `packages/mill/tests/integration/swap-flow.integration.test.ts` — AC-3/AC-5 swapped hardcoded `'F01'`/`'F04'` strings for the exported symbolic constants; AC-4.3 rate-drift rewritten to pure BigInt arithmetic (no `Number()` downcast); AC-6.1 gained explicit `decodeEventFromToon() → kind === 1059` assertion; removed `AC-sanity` filler describe.
+- `packages/mill/tests/integration/swap-flow-anvil.integration.test.ts` — Dropped the semantically-invalid `eth_call(data=unsignedTxBytes)` probe; replaced with RLP-envelope shape check (`bytes[0] >= 0xc0`) + chainId match; removed unused `toHex()` helper.
+- `packages/mill/tests/integration/helpers/fixture-topology.ts` — Removed unused exports `FIXTURE_CHANNEL_ID` and `signEvent()`; dropped the now-unused `finalizeEvent`/`UnsignedEvent`/`NostrEvent` imports.
+- `_bmad-output/test-artifacts/traceability/12-8-e2e-swap-flow-trace.md` — Split combined AC-6.1/6.2 row into two rows; updated test-run evidence to reflect 18/18 post-review count.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — `12-8-e2e-swap-flow-integration-tests: review → done`.
 
 ### Change Log
 
 | Date | Change |
 | --- | --- |
+| 2026-04-14 | Review pass: fixed 2 HIGH (hardcoded reject codes → exported `SWAP_HANDLER_REJECT_CODES`/`_MESSAGES` constants; BigInt→Number downcast in AC-4.3), 3 MEDIUM (AC-6.1 missing assertion; AC-9 invalid `eth_call` RLP probe; trace AC-6 row split), 3 LOW (dead `FIXTURE_CHANNEL_ID`/`signEvent`/`AC-sanity`). Status `review → done`; sprint-status flipped. All tests green (mill integration 18/18 + 1 opt-in skip; mill 155/156; sdk 679/679). Author: Claude Opus 4.6 (1M context). |
+| 2026-04-14 | Session 4: Story 12.9 chainRecipient fix landed; un-skipped AC-3/4/5/6/7/8/12 in swap-flow.integration.test.ts with real assertions (19/19 passing); wired AC-9 Anvil-gated probe; generated traceability matrix; flipped sprint-status blocked → review. Author: Claude Opus 4.6 (1M context). |
 | 2026-04-14 | Session 3: implemented fixture topology, AC-1 / AC-2 / AC-13 GREEN, documented 12.4 schema-drift blocker for AC-3/4/5/6/7/8/9/12. |
 | 2026-04-14 | Story 12.8 partial landing: production wiring fixes for AC-10 / AC-11 / AC-12 / AC-13 / AC-14 all green under per-package tests (145 mill tests, 664 sdk tests pass). RED-phase E2E swap-flow scaffold (AC-1..AC-9) left untouched; `buildFixtureMill()` + `buildFixtureSender()` + the peered-`ConnectorNode` topology + full `streamSwap()` drive remain as a follow-on implementation pass. Author: Claude Opus 4.6 (1M context). |

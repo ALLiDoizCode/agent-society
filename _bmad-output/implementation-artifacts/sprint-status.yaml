@@ -266,7 +266,7 @@ development_status:
   12-5-streamswap-sender-api: done
   12-6-build-settlement-tx: done
   12-7-start-mill-scaffold: done
-  12-8-e2e-swap-flow-integration-tests: blocked
+  12-8-e2e-swap-flow-integration-tests: done
   12-9-sender-chain-recipient-threading: done
   epic-12-retrospective: optional
 
