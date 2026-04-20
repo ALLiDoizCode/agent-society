@@ -154,6 +154,20 @@ services:
       start_period: 180s
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # SOCKS5 Proxy — Ator transport verification
+  # Used by E2E tests to validate SOCKS5 transport passthrough.
+  # Lightweight Go SOCKS5 proxy with no authentication (test only).
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  socks5-proxy:
+    image: serjs/go-socks5-proxy:latest
+    container_name: sdk-e2e-socks5
+    ports:
+      - '19050:1080'
+    networks:
+      - toon-sdk-e2e
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # Peer 1 — Genesis-like node (no bootstrap peers)
   # Anvil Account #0 for settlement
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
