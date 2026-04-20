@@ -152,3 +152,7 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 ## Browser Verification
 
 Use the `playwright-cli` skill (invoke via `/playwright-cli`) for browser-related tasks: verifying UI changes, debugging console/network issues, and automating E2E flows. Prefer snapshots over screenshots when interacting with elements.
+
+## UI Work
+
+Use the shadcn CLI (`npx shadcn@latest`) for adding, updating, and managing UI components. See https://ui.shadcn.com/docs/cli. Prefer `shadcn add <component>` over hand-rolling primitives, and use the `shadcn` skill for registry lookups, component composition, and styling guidance.

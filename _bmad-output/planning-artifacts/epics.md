@@ -2790,3 +2790,43 @@ Agent reproduction: sub-agent spawning, NIP-44 encrypted parent-child comms, DVM
 | 20.3 | DVM Task Delegation | 20.2 | M |
 | 20.4 | Swarm Treasury Management | 20.3 | L |
 | 20.5 | E2E: 3-Sub-Agent Swarm | All above | L |
+
+---
+
+## Townhouse — Node Provider Dashboard & Orchestrator
+
+### Epic 21: Townhouse (17 stories)
+
+Docker-containerized Town/Mill/DVM nodes behind a shared standalone connector (`ghcr.io/toon-protocol/connector`), managed by a host-native orchestrator with Vite + React dashboard. ATOR privacy transport via public SOCKS5 proxies. Equal priority across all three node types. Decision source: Party Mode 2026-04-20. Dependencies: Epic 1-3 (ILP), Epic 5 (DVM), Epic 12 (swaps + ATOR).
+
+**Phase 1: Orchestrator Core**
+
+| Story | Title | Dependencies | Size |
+|-------|-------|-------------|------|
+| 21.1 | Package Scaffold + CLI Entrypoint | — | M |
+| 21.2 | Docker Orchestration Engine (dockerode) | 21.1 | L |
+| 21.3 | Standalone Connector Integration | 21.2 | L |
+| 21.4 | HD Wallet Management + Per-Node Key Derivation | 21.1 | M |
+| 21.5 | Town Node Dockerfile | 21.3 | M |
+| 21.6 | Mill Node Dockerfile | 21.3 | M |
+| 21.7 | DVM Node Dockerfile | 21.3 | M |
+
+**Phase 2: API + Dashboard**
+
+| Story | Title | Dependencies | Size |
+|-------|-------|-------------|------|
+| 21.8 | Fastify REST + WebSocket Metrics API | 21.3 | L |
+| 21.9 | Dashboard SPA — Home View | 21.8 | L |
+| 21.10 | Dashboard — Town Management View | 21.9 | M |
+| 21.11 | Dashboard — Mill Management View | 21.9 | L |
+| 21.12 | Dashboard — DVM Management View | 21.9 | M |
+| 21.13 | Dashboard — Wallet & Keys View | 21.4, 21.9 | M |
+
+**Phase 3: First-Run + Polish**
+
+| Story | Title | Dependencies | Size |
+|-------|-------|-------------|------|
+| 21.14 | First-Run Setup Wizard | 21.9, 21.4 | L |
+| 21.15 | ATOR Privacy Transport + Connectivity Status | 21.3, 21.9 | M |
+| 21.16 | E2E Integration Tests | All above | L |
+| 21.17 | Publish Package | All above | S |
