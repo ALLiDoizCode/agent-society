@@ -154,11 +154,25 @@ services:
       start_period: 180s
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # SOCKS5 Proxy — Ator transport verification
+  # Used by E2E tests to validate SOCKS5 transport passthrough.
+  # Lightweight Go SOCKS5 proxy with no authentication (test only).
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  socks5-proxy:
+    image: serjs/go-socks5-proxy:latest
+    container_name: sdk-e2e-socks5
+    ports:
+      - '19050:1080'
+    networks:
+      - toon-sdk-e2e
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # Peer 1 — Genesis-like node (no bootstrap peers)
   # Anvil Account #0 for settlement
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   peer1:
-    image: toon:optimized
+    image: toon:sdk-e2e
     container_name: sdk-e2e-peer1
     command: ['node', '/app/entrypoint-sdk.js']
     environment:
@@ -222,6 +236,11 @@ services:
       NIP59_ENABLED: 'true'
       NIP59_PEER_PUBKEYS: ${PEER1_NIP59_PEER_PUBKEYS:-}
 
+      # Mill swap handler (Story 12.10 — enables swap handling on Docker peers)
+      MILL_ENABLED: 'true'
+      # Deterministic BIP-39 mnemonic for peer1 Mill key derivation (test-only)
+      MILL_MNEMONIC: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+
       # Storage
       DATA_DIR: /data
     ports:
@@ -253,7 +272,7 @@ services:
   # Anvil Account #2 for settlement
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   peer2:
-    image: toon:optimized
+    image: toon:sdk-e2e
     container_name: sdk-e2e-peer2
     command: ['node', '/app/entrypoint-sdk.js']
     environment:
@@ -316,6 +335,11 @@ services:
       # NIP-59 privacy wrapping
       NIP59_ENABLED: 'true'
       NIP59_PEER_PUBKEYS: ${PEER2_NIP59_PEER_PUBKEYS:-}
+
+      # Mill swap handler (Story 12.10 — enables swap handling on Docker peers)
+      MILL_ENABLED: 'true'
+      # Deterministic BIP-39 mnemonic for peer2 Mill key derivation (test-only, different account index)
+      MILL_MNEMONIC: 'zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong'
 
       # Storage
       DATA_DIR: /data

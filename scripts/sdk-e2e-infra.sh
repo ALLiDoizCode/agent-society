@@ -81,8 +81,20 @@ cmd_up() {
   log_info "Starting SDK E2E infrastructure..."
 
   # Build the Docker image
-  log_info "Building toon:optimized image..."
-  docker build -f "$REPO_ROOT/docker/Dockerfile.oyster" -t toon:optimized "$REPO_ROOT"
+  # Requires the `memvid` sibling repo (for memvid-core Rust crate via
+  # path dep in packages/memvid-node/Cargo.toml). Override with MEMVID_DIR
+  # env var if it lives elsewhere.
+  local memvid_dir="${MEMVID_DIR:-$REPO_ROOT/../memvid}"
+  if [ ! -d "$memvid_dir" ]; then
+    log_error "memvid sibling repo not found at $memvid_dir (set MEMVID_DIR env var to override)"
+    return 1
+  fi
+  log_info "Building toon:sdk-e2e image (memvid context: $memvid_dir)..."
+  DOCKER_BUILDKIT=1 docker build \
+    --build-context "memvid=$memvid_dir" \
+    -f "$REPO_ROOT/docker/Dockerfile.sdk-e2e" \
+    -t toon:sdk-e2e \
+    "$REPO_ROOT"
   log_success "Docker image built"
 
   # Derive pubkeys for bootstrap and NIP-59 config

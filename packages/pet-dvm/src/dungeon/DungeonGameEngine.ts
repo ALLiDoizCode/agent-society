@@ -225,6 +225,15 @@ export class DungeonGameEngine {
     const startMs = Date.now();
 
     // --- 1. Seed the global RNG (MUST be first rot.js call) ---
+    // WARNING: RNG.setSeed() resets a GLOBAL SINGLETON shared across the entire
+    // Node.js process. rot.js does not support instance-scoped RNG. Consequences:
+    //   - NEVER call run() concurrently (e.g., via Promise.all or Worker threads).
+    //     Concurrent calls will corrupt each other's RNG state, producing
+    //     non-deterministic results and violating the P0 determinism gate (G17).
+    //   - Tests MUST run sequentially (Jest --runInBand) to avoid cross-test
+    //     RNG interference.
+    //   - If future work requires parallel dungeon runs, rot.js must be forked
+    //     to support instance-scoped RNG, or runs must be serialized via a queue.
     const numericSeed = hashSeed(seed);
     RNG.setSeed(numericSeed);
 

@@ -258,8 +258,19 @@ development_status:
   # Dependencies: Epic 1-3 (ILP + settlement), NIP-44/59 (encryption), Epic 3 (payment channels)
   # NOTE: Inserted as Epic 12 on 2026-04-09; all subsequent epics shifted +1
   # 6-8 stories estimated; spec: _bmad-output/epics/epic-12-token-swap-primitive.md
-  epic-12: backlog
-  epic-12-retrospective: optional
+  epic-12: done
+  12-1-swappair-type-and-kind-10032-serialization: done
+  12-2-nip59-gift-wrap-integration-for-ilp-packets: done
+  12-3-mill-swap-handler: done
+  12-4-mill-inventory-and-wallet-management: done
+  12-5-streamswap-sender-api: done
+  12-6-build-settlement-tx: done
+  12-7-start-mill-scaffold: done
+  12-8-e2e-swap-flow-integration-tests: done
+  12-9-sender-chain-recipient-threading: done
+  12-10-e2e-swap-flow-docker-multi-chain: done
+  12-11-dockerfile-sdk-e2e-split: done
+  epic-12-retrospective: done
 
   # Epic 13: Chain Bridge Primitive (kind:5260)
   # Decision source: Party Mode 2026-03-22 — Network Primitives Strategy
@@ -376,3 +387,35 @@ development_status:
   20-4-swarm-treasury-management: backlog
   20-5-e2e-3-sub-agent-swarm: backlog
   epic-20-retrospective: optional
+
+  # ═══════════════════════════════════════════════════════════════
+  # TOWNHOUSE — Node Provider Dashboard & Orchestrator
+  # Decision source: Party Mode 2026-04-20 — Townhouse Node Management
+  # Docker-containerized Town/Mill/DVM behind shared standalone connector
+  # Host-native orchestrator + Vite dashboard, ATOR privacy via public proxies
+  # Connector image: ghcr.io/toon-protocol/connector (pre-built, no custom Dockerfile)
+  # Dependencies: Epic 1-3 (ILP), Epic 5 (DVM), Epic 12 (swaps + ATOR transport)
+  # Epic file: _bmad-output/epics/epic-21-townhouse.md
+  # ═══════════════════════════════════════════════════════════════
+
+  # Epic 21: Townhouse — Node Provider Dashboard & Orchestrator
+  # 17 stories across 3 phases: Orchestrator Core, API + Dashboard, First-Run + Polish
+  epic-21: backlog
+  21-1-package-scaffold-and-cli-entrypoint: backlog
+  21-2-docker-orchestration-engine: backlog
+  21-3-standalone-connector-integration: backlog
+  21-4-hd-wallet-management-and-key-derivation: backlog
+  21-5-town-node-dockerfile: backlog
+  21-6-mill-node-dockerfile: backlog
+  21-7-dvm-node-dockerfile: backlog
+  21-8-fastify-rest-websocket-metrics-api: backlog
+  21-9-dashboard-spa-home-view: backlog
+  21-10-dashboard-town-management-view: backlog
+  21-11-dashboard-mill-management-view: backlog
+  21-12-dashboard-dvm-management-view: backlog
+  21-13-dashboard-wallet-and-keys-view: backlog
+  21-14-first-run-setup-wizard: backlog
+  21-15-ator-privacy-transport-and-connectivity-status: backlog
+  21-16-e2e-integration-tests: backlog
+  21-17-publish-package: backlog
+  epic-21-retrospective: optional
