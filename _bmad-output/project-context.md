@@ -1,7 +1,7 @@
 ---
 project_name: 'toon'
 user_name: 'Jonathan'
-date: '2026-04-09'
+date: '2026-04-20'
 sections_completed:
   [
     'technology_stack',
@@ -50,7 +50,9 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **WebSockets:** ws ^8.0
 - **Web Framework:** hono ^4.0 (BLS HTTP API, Town HTTP API, Attestation Server)
 - **Ethereum:** viem ^2.47 (client package, x402 settlement, EIP-3009, EIP-712)
-- **ILP Connector:** @toon-protocol/connector ^1.7.0 (optional peer dependency)
+- **ILP Connector:** @toon-protocol/connector ^2.3.0 (optional peer dependency; upgraded from ^1.7.0 in Epic 12)
+- **HD Key Derivation (Multi-Chain):** ed25519-hd-key ^1.3.0 (Solana/Ed25519 BIP-44 derivation, Mill package)
+- **Mina Signing:** mina-signer >=3.0.0 (optional peer dependency, Mill package — Mina balance-proof signing)
 - **Arweave:** arweave ^1.15.5, @ardrive/turbo-sdk ^1.41.0 (blob storage DVM, Forge-UI deployment)
 - **Git:** simple-git (core nip34 module)
 - **Forge-UI Build:** vite ^5.0 (static SPA build), marked ^17.0 (markdown rendering), @playwright/test ^1.42 (E2E)
@@ -83,7 +85,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **NEVER run pet-circuit tests with vitest** -- Will fail with WASM errors.
 - pet-dvm and mina-zkapp also use Jest (not vitest). All other packages use vitest.
 
-## Project Structure (Post-Epic 11)
+## Project Structure (Post-Epic 12)
 
 ```
 toon/
@@ -129,8 +131,9 @@ toon/
 │       └── rfc-*/                      # 18 ILP RFC reference skills (pre-existing)
 ├── packages/
 │   ├── town/        # @toon-protocol/town -- SDK-based relay with x402, service discovery, health, TEE health, DVM skill config (Epics 2+3+4+5)
-│   ├── sdk/         # @toon-protocol/sdk -- SDK for building ILP-gated Nostr services + DVM lifecycle + workflow/swarm coordination + prefix claims + Arweave DVM (Epics 1+5+6+7+8)
-│   ├── core/        # @toon-protocol/core -- Protocol logic, TOON codec, chain config, x402, TEE attestation, KMS identity, Nix builds, DVM event kinds, workflow/swarm/reputation events, ILP address hierarchy, fee calculation, NIP-34 types/handler, Arweave blob storage events (Epics 1+3+4+5+6+7+8)
+│   ├── mill/        # @toon-protocol/mill -- Multi-chain token swap peer (Mill), entrypoint: startMill(), BIP-44 HD key derivation, multi-chain claim issuers (EVM/Solana/Mina), inventory/channel state management (Epic 12)
+│   ├── sdk/         # @toon-protocol/sdk -- SDK for building ILP-gated Nostr services + DVM lifecycle + workflow/swarm coordination + prefix claims + Arweave DVM + gift-wrap + swap handler + stream-swap + settlement (Epics 1+5+6+7+8+12)
+│   ├── core/        # @toon-protocol/core -- Protocol logic, TOON codec, chain config, x402, TEE attestation, KMS identity, Nix builds, DVM event kinds, workflow/swarm/reputation events, ILP address hierarchy, fee calculation, NIP-34 types/handler, Arweave blob storage events, SwapPair type, chain-id validation, swap-pair-validation (Epics 1+3+4+5+6+7+8+12)
 │   │   └── src/skills/              # Structural validation tests for skills (Epic 9)
 │   ├── bls/         # @toon-protocol/bls -- Business Logic Server (payment validation, event storage)
 │   ├── relay/       # @toon-protocol/relay -- Nostr relay + TOON encoding
@@ -152,6 +155,7 @@ toon/
 │   │   ├── entrypoint-town.ts     # Town-based Docker entrypoint (Approach B)
 │   │   └── attestation-server.ts  # TEE attestation HTTP server + kind:10033 publisher (Story 4.1/4.2)
 │   ├── Dockerfile.oyster          # Extended multi-stage build for Oyster CVM (Story 4.1)
+│   ├── Dockerfile.sdk-e2e         # Lightweight SDK E2E peer image, split from Dockerfile.oyster (Story 12-11)
 │   ├── Dockerfile.nix             # Nix expression for deterministic Docker image (Story 4.5)
 │   ├── docker-compose-oyster.yml  # Oyster CVM deployment manifest (Story 4.1)
 │   └── supervisord.conf           # Multi-process orchestration (toon + attestation)
@@ -174,11 +178,11 @@ toon/
 **Package Dependency Graph:**
 
 ```
-@toon-protocol/core          <-- foundation (TOON codec, types, bootstrap, discovery, chain config, x402, TEE attestation, KMS identity, Nix builds, DVM event kinds, workflow/swarm/reputation events, ILP address hierarchy, fee calculation, prefix claim events, NIP-34 types/handler, Arweave blob storage events)
-    ^          ^
-@toon-protocol/bls    @toon-protocol/sdk    <-- siblings, both depend on core (SDK adds workflow orchestrator, swarm coordinator, prefix claim handler, Arweave DVM handler + chunked upload)
-    ^                 ^
-    |           +-----+-------+
+@toon-protocol/core          <-- foundation (TOON codec, types, bootstrap, discovery, chain config, x402, TEE attestation, KMS identity, Nix builds, DVM event kinds, workflow/swarm/reputation events, ILP address hierarchy, fee calculation, prefix claim events, NIP-34 types/handler, Arweave blob storage events, SwapPair type, chain-id validation)
+    ^          ^          ^
+@toon-protocol/bls    @toon-protocol/sdk    @toon-protocol/mill   <-- SDK adds gift-wrap, swap-handler, stream-swap, settlement; Mill depends on core + SDK
+    ^                 ^                       ^
+    |           +-----+-------+               |
     |     @toon-protocol/town     @toon-protocol/rig    <-- (Town: Epics 2+3+4+5 DONE, Rig: Epic 8 DONE -- static SPA, depends only on @toon-format/toon)
     |       (+ relay + viem)
     |
@@ -196,9 +200,10 @@ toon/
 **Boundary Rules:**
 
 - SDK imports core only -- never relay or bls directly
+- Mill imports core and SDK -- never relay or bls directly. Mill is a leaf node (no package imports from mill).
 - Town imports SDK, core, relay, and viem -- the relay reference implementation with x402 support
 - Rig depends only on @toon-format/toon (browser SPA, no Node.js deps) -- never core/sdk/bls directly
-- No package imports from town or rig (they are leaf nodes)
+- No package imports from town, rig, or mill (they are leaf nodes)
 - Connector accessed only through `EmbeddableConnectorLike` structural type
 - Town handlers import from `@toon-protocol/sdk` (Handler, HandlerContext, HandlerResponse types) and `@toon-protocol/core` (event builders, bootstrap, chain config)
 - Town x402 handler imports viem directly for EIP-3009 settlement and EIP-712 verification
@@ -222,7 +227,7 @@ Epic 8: The Rig -- Arweave DVM + Forge-UI        COMPLETE (8 stories: 8.0 Arweav
 Epic 9: NIP-to-TOON Skill Pipeline + Socialverse  COMPLETE (35/35 stories, 30+ skills, +1,036 tests)
 Epic 10: Rig E2E Integration Test Suite            IN-PROGRESS (9/18 stories done; read-side E2E via real SDK infra, incremental git pushes, Playwright specs, nested nav regression, multi-client conversations)
 Epic 11: TOON Pets — ZK-Proven Virtual Pet Economy COMPLETE (18/18 stories, 5 sprints, 96% traceability; ZK-proven pet lifecycle on Mina, Memvid brain, ILP cross-chain payment, Pet DVM + Pet Dungeon Crawl extension; 3 new packages: memvid-node, pet-circuit, pet-dvm; +1,061 tests)
-Epic 12: Token Swap Primitive                       PLANNED (6-8 stories; NIP-59 gift-wrapped ILP micropayment swaps, optional swapPairs on IlpPeerInfo, multi-asset connector handler, streamSwap() client API, signed claims in FULFILL; spec: epic-12-token-swap-primitive.md, party-mode 2026-04-09)
+Epic 12: Token Swap Primitive                       COMPLETE (11/11 stories, 1 new package: @toon-protocol/mill; NIP-59 gift-wrapped ILP micropayment swaps, SwapPair on IlpPeerInfo, Mill swap handler, streamSwap() sender API, buildSettlementTx(), multi-chain claim issuers, Docker E2E multi-chain validation; +892 tests)
 Epic 13: Chain Bridge Primitive (kind:5260)        PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
 Epic 14: Compute Primitive (kind:5250)             PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
 Epic 15: Loony — Autonomous Agent                  PLANNED (Example application proving all four primitives + composition; self-bootstrapping agent lifecycle)
@@ -233,7 +238,7 @@ Epic 19: Overmind Biography                          PLANNED (5 stories; recursi
 Epic 20: Overmind Swarm                              PLANNED (5 stories; sub-agent spawning, NIP-44 parent-child comms, DVM task delegation, swarm treasury management)
 ```
 
-**Epic progression:** Build SDK -> Prove it with relay -> Make protocol production-grade -> Make it verifiable -> Build DVM compute marketplace -> Advanced coordination + verifiable compute -> Hierarchical addressing & protocol economics -> Build applications on top: blob storage primitive + Forge-UI (DONE) -> Teach agents the protocol: skills pipeline + 30+ socialverse skills (DONE) -> Rig E2E integration test suite (real infra, no mocks, Playwright, in-progress) -> TOON Pets: ZK-proven virtual pet economy on Mina + Memvid brain + Pet Dungeon Crawl (DONE) -> Token swap primitive (NIP-59 gift-wrapped ILP micropayment swaps, multi-asset connectors) -> Chain bridge provider protocol + DX (spec, test harness, handoff docs; composes with Token Swap for zero-token cross-chain onboarding) -> Compute provider protocol + DX (spec, test harness, handoff docs) -> Loony autonomous agent (demand-side proof composing all four primitives) -> Overmind sovereign agents (Mina VRF + Arweave state + TEE identity + ILP economics).
+**Epic progression:** Build SDK -> Prove it with relay -> Make protocol production-grade -> Make it verifiable -> Build DVM compute marketplace -> Advanced coordination + verifiable compute -> Hierarchical addressing & protocol economics -> Build applications on top: blob storage primitive + Forge-UI (DONE) -> Teach agents the protocol: skills pipeline + 30+ socialverse skills (DONE) -> Rig E2E integration test suite (real infra, no mocks, Playwright, in-progress) -> TOON Pets: ZK-proven virtual pet economy on Mina + Memvid brain + Pet Dungeon Crawl (DONE) -> Token swap primitive: NIP-59 gift-wrapped ILP micropayment swaps, Mill peer with multi-chain claim issuers, streamSwap() sender API, buildSettlementTx() (DONE) -> Chain bridge provider protocol + DX (spec, test harness, handoff docs; composes with Token Swap for zero-token cross-chain onboarding) -> Compute provider protocol + DX (spec, test harness, handoff docs) -> Loony autonomous agent (demand-side proof composing all four primitives) -> Overmind sovereign agents (Mina VRF + Arweave state + TEE identity + ILP economics).
 
 **Strategic North Star (Party Mode 2026-03-22, updated 2026-03-24):** TOON Protocol = "Stripe for decentralized services." Four network primitives — Messaging (kind:1), Blob Storage (kind:5094), Compute (kind:5250), Chain Bridge (kind:5260) — with unified ILP payment, Nostr discovery (kind:10035), self-describing receipts, and competing providers. DVM providers are resellers who earn convenience fees for abstracting backend complexity. Protocol proves itself through example applications: **Forge** (decentralized git), **Loony** (autonomous agent), and **Overmind** (sovereign agent living on the network — Mina ZK adjudication, Arweave permanent memory, TEE-born identity, self-funding economics). Provider implementations are out of scope — TOON defines the provider protocol + ships handoff docs; third-party teams build providers for their platforms (HyperBEAM, Oyster CVM, Akash, per-chain bridge operators). Full decision records: `_bmad-output/planning-artifacts/research/party-mode-network-primitives-strategy-2026-03-22.md`, `_bmad-output/planning-artifacts/research/party-mode-overmind-protocol-decisions-2026-03-24.md`
 
@@ -465,9 +470,9 @@ A skill factory that converts any Nostr NIP into a TOON-aware Claude Agent Skill
 - "DVM" (Data Vending Machine) -- NIP-90 compute marketplace protocol
 - "Skill descriptor" -- Structured metadata in kind:10035 events advertising DVM capabilities
 
-## @toon-protocol/core (Post-Epic 9)
+## @toon-protocol/core (Post-Epic 12)
 
-Core now includes chain configuration, x402 support, seed relay discovery, service discovery, TEE attestation events, attestation verification, KMS identity derivation, Nix reproducible build infrastructure, NIP-90 DVM event builders/parsers, workflow chain events, agent swarm events, TEE-attested result verification, reputation scoring (reviews, WoT, composite scores), ILP address hierarchy (derivation, assignment, registry, BTP prefix exchange), route-aware fee calculation, prefix claim/grant events, Arweave blob storage DVM events (kind:5094/6094), and NIP-34 Git collaboration types/handler/constants.
+Core now includes chain configuration, x402 support, seed relay discovery, service discovery, TEE attestation events, attestation verification, KMS identity derivation, Nix reproducible build infrastructure, NIP-90 DVM event builders/parsers, workflow chain events, agent swarm events, TEE-attested result verification, reputation scoring (reviews, WoT, composite scores), ILP address hierarchy (derivation, assignment, registry, BTP prefix exchange), route-aware fee calculation, prefix claim/grant events, Arweave blob storage DVM events (kind:5094/6094), NIP-34 Git collaboration types/handler/constants, `SwapPair` type on `IlpPeerInfo`, `swap-pair-validation.ts` (shared builder/parser validation), and `chain/chain-id.ts` (chain identifier format validation).
 
 **New Core Modules (Epic 8):**
 
@@ -824,11 +829,11 @@ SERVICE_DISCOVERY_KIND = 10035
 SEED_RELAY_LIST_KIND = 10036
 ```
 
-## @toon-protocol/sdk (Epics 1+5+6+7+8+9 -- Complete)
+## @toon-protocol/sdk (Epics 1+5+6+7+8+9+12 -- Complete)
 
-The SDK is the main deliverable of Epic 1, extended in Epic 5 with DVM compute marketplace capabilities, in Epic 6 with stateful orchestration components (workflow chains, agent swarms), in Epic 7 with route-aware fee calculation, prepaid protocol model, and prefix claim handler, in Epic 8 with the Arweave blob storage DVM handler and client-side upload helpers, and in Epic 9 with Arweave DVM base64 encoding bug fixes and route fee caching. It provides a developer-facing abstraction for building ILP-gated Nostr services with the TOON protocol.
+The SDK is the main deliverable of Epic 1, extended in Epic 5 with DVM compute marketplace capabilities, in Epic 6 with stateful orchestration components (workflow chains, agent swarms), in Epic 7 with route-aware fee calculation, prepaid protocol model, and prefix claim handler, in Epic 8 with the Arweave blob storage DVM handler and client-side upload helpers, in Epic 9 with Arweave DVM base64 encoding bug fixes and route fee caching, and in Epic 12 with NIP-59 gift-wrap primitives (`gift-wrap.ts`), the Mill swap handler factory (`swap-handler.ts`), the sender-side `streamSwap()` API (`stream-swap.ts`), and the `settlement/` directory for on-chain claim settlement (`buildSettlementTx()`). It provides a developer-facing abstraction for building ILP-gated Nostr services with the TOON protocol.
 
-**SDK Source Files (Post-Epic 9):**
+**SDK Source Files (Post-Epic 12):**
 
 ```
 packages/sdk/src/
@@ -1987,6 +1992,128 @@ Client                    Pet DVM Handler              ProofQueue             Mi
 | New packages shipped | 3 (memvid-node, pet-circuit, pet-dvm) |
 | New runtime dependencies | rot-js ^2.2.1, o1js ^2.2.0, napi-rs runtime |
 
+## Token Swap Primitive (Epic 12 -- Complete)
+
+Epic 12 delivered the Token Swap Primitive: non-custodial, privacy-preserving token swaps built entirely on the existing ILP micropayment infrastructure. A new package (`@toon-protocol/mill`) implements swap-capable peers (Mills) that advertise token pairs via kind:10032, receive NIP-59 gift-wrapped ILP packets carrying source-asset value, and return NIP-44 encrypted signed payment-channel claims in the target asset via the ILP FULFILL data field.
+
+**Epic 12 Stories (11 total, originally 9 planned + 2 added mid-sprint):**
+
+| Story | Deliverable |
+|-------|-------------|
+| 12-1 | `SwapPair` type on `IlpPeerInfo`, kind:10032 serialization/parsing, `swap-pair-validation.ts`, `chain-id.ts` |
+| 12-2 | NIP-59 gift-wrap primitives for ILP packets (`gift-wrap.ts`), NIP-44 FULFILL encryption |
+| 12-3 | Mill swap handler (`swap-handler.ts`, `createSwapHandler()` factory), kind:1059 handler |
+| 12-4 | Multi-chain wallet/inventory (`packages/mill/`: `wallet.ts`, `inventory.ts`, `channel-state.ts`, `claim-issuer.ts`, `payment-channel-signer.ts`) |
+| 12-5 | Sender-side `streamSwap()` API (`stream-swap.ts`), pause/resume/stop, rate monitoring |
+| 12-6 | `buildSettlementTx()` + `settlement/` directory (6 files: index, types, hashes, evm, solana, mina) |
+| 12-7 | `packages/mill/` package scaffold, `startMill()` entrypoint, `toon-mill` CLI binary |
+| 12-8 | Integration tests (in-process fixture + real handler composition) |
+| 12-9 | Chain-recipient schema fix (defect discovered during 12-8 integration) |
+| 12-10 | Docker E2E multi-chain swap validation (real BTP transport, NIP-59, EVM/Solana/Mina settlement) |
+| 12-11 | `Dockerfile.sdk-e2e` split from `Dockerfile.oyster` for lighter E2E builds |
+
+**New Package (Epic 12):**
+
+```
+packages/mill/                 # @toon-protocol/mill -- Multi-chain token swap peer
+└── src/
+    ├── index.ts                # Public API barrel (re-exports startMill, createSwapHandler, wallet, inventory, etc.)
+    ├── mill.ts                 # startMill() entrypoint -- wires identity, keys, signers, handler, connector, BLS server, kind:10032 publish
+    ├── cli.ts                  # toon-mill CLI binary
+    ├── wallet.ts               # deriveMillKeys() -- BIP-44 HD derivation (account index 2) for EVM/Solana/Mina
+    ├── inventory.ts            # MillInventory -- per-asset/per-chain balance tracking
+    ├── channel-state.ts        # MillChannelState -- payment channel reservation/release
+    ├── claim-issuer.ts         # MultiChainClaimIssuer -- issues signed balance-proof claims per chain family
+    ├── payment-channel-signer.ts  # EvmPaymentChannelSigner, SolanaPaymentChannelSigner, MinaPaymentChannelSigner
+    └── errors.ts               # MillInventoryError, MillWalletError, MillStartError
+```
+
+**New SDK Modules (Epic 12):**
+
+```
+packages/sdk/src/
+├── gift-wrap.ts              # NIP-59 gift-wrap for ILP packets: wrapSwapPacketToToon(), unwrapSwapPacketFromToon(), encryptFulfillClaim(), decryptFulfillClaim()
+├── swap-handler.ts           # createSwapHandler() factory -- kind:1059 handler, rate application, claim issuance delegation
+├── stream-swap.ts            # streamSwap() sender API -- chunked swap with pause/resume/stop, rate monitoring, AccumulatedClaim[]
+└── settlement/               # On-chain settlement tx construction (Story 12.6)
+    ├── index.ts               # Re-exports buildSettlementTx, verifyAccumulatedClaim, hashes, types
+    ├── types.ts               # SettlementBundle, BuildSettlementTxParams, BuildSettlementTxResult, MillSignerConfig
+    ├── build-settlement-tx.ts # buildSettlementTx() -- groups claims by (chain, channelId), verifies signatures, builds unsigned txs
+    ├── hashes.ts              # balanceProofHashEvm(), balanceProofHashSolana(), bigintToBytes32BE()
+    ├── evm.ts                 # fillEvmSettlementTxGas() -- EVM-specific gas estimation
+    ├── solana.ts              # Solana settlement tx construction (stub)
+    └── mina.ts                # Mina settlement tx construction (stub)
+```
+
+**New Core Modules (Epic 12):**
+
+```
+packages/core/src/
+├── events/swap-pair-validation.ts  # Shared SwapPair validation (builder + parser use same rules)
+└── chain/chain-id.ts               # validateChainId() -- {blockchain}:{network}[:{chainId}] format validation
+```
+
+**New Client Method (Epic 12):**
+
+- `ToonClient.sendSwapPacket()` -- sends a single gift-wrapped ILP swap packet to a Mill
+
+**Key Design Decisions (Epic 12):**
+
+- **D12-001: Swaps are not a new protocol operation.** A swap is just sending ILP packets to a Mill peer. Standard ILP routing delivers packets. The connector's routing logic is untouched -- asset conversion is handler-level business logic.
+- **D12-003: NIP-59 gift-wrapped swap packets.** All swap packets MUST be NIP-59 gift-wrapped. Each packet uses a fresh ephemeral key. Intermediaries see opaque TOON binary only.
+- **D12-005: Signed claims in FULFILL, not on-chain transfers.** No on-chain transactions during swap. Sender accumulates claims and settles in a single transaction when ready.
+- **D12-008: FULFILL claims are NIP-44 encrypted with ephemeral keys.** Fresh ephemeral keypair per FULFILL on both sender side (gift wrap) and Mill side (FULFILL encryption). Neither direction produces a cryptographic link between sender and Mill.
+- **D12-010: Mill handler has its own wallet, separate from embedded connector.** Connector handles inbound USDC settlement. Mill handler manages outbound target-asset claims independently.
+- **D12-011: Mill derives keys from BIP-39 mnemonic using BIP-44 HD derivation.** Account index 2 separates Mill keys from connector keys (account 1). Derivation paths: EVM `m/44'/60'/2'/0/index`, Mina `m/44'/12586'/2'/0/index`, Solana `m/44'/501'/2'/0/index`.
+
+**Swap Flow:**
+
+```
+Sender                     ILP Network              Mill
+  │                            │                      │
+  │  1. Discover Mill via kind:10032 (swapPairs)       │
+  │  2. Build inner rumor (swap metadata, unsigned)    │
+  │  3. NIP-59 gift wrap (ephemeral key → Mill pubkey) │
+  │  4. encodeEventToToon() → TOON binary              │
+  │  5. buildIlpPrepare() → ILP PREPARE                │
+  │ ──────────────────────────►│                       │
+  │       (opaque TOON binary) │──────────────────────►│
+  │                            │  6. Unwrap gift wrap  │
+  │                            │  7. Apply rate        │
+  │                            │  8. Issue signed claim│
+  │                            │  9. NIP-44 encrypt    │
+  │                            │◄──────────────────────│
+  │◄──────────────────────────  │  ILP FULFILL (claim) │
+  │  10. Decrypt claim                                 │
+  │  11. Accumulate claims (repeat 2-10 per packet)    │
+  │  12. buildSettlementTx() → on-chain settlement     │
+```
+
+**Connector Upgrade (Epic 12):**
+
+- `@toon-protocol/connector` upgraded from ^1.7.0 to ^2.3.0
+- Required: `tokenAddress` and `privateKey` in EVM chainProvider configs, `evmAddress` in registerPeer calls
+- Connector v2.0.0 removed fulfillment/condition -- `ctx.accept()` returns `{ accept: true }` with optional `data` and `metadata`
+
+**Docker Infrastructure (Epic 12):**
+
+- `docker/Dockerfile.sdk-e2e` (Story 12-11) -- lightweight SDK E2E peer image containing only ConnectorNode + BLS + relay. Split from `Dockerfile.oyster` (which includes supervisord, attestation-server, TEE dependencies). Used by `scripts/sdk-e2e-infra.sh` and `docker-compose-sdk-e2e.yml`.
+
+**Epic 12 Metrics (Final -- 11/11 stories):**
+
+| Metric | Value |
+|--------|-------|
+| Stories delivered | 11/11 (100%), 9 planned + 2 added mid-sprint (12-9 defect, 12-11 infra) |
+| Monorepo test count (start) | 4,110 |
+| Monorepo test count (end) | 5,002 |
+| Net test growth | +892 |
+| Code review issues | 132 found, 128 fixed (97%), 4 deferred, 0 remaining |
+| Security scan findings (production) | 0 (7th consecutive epic) |
+| NFR assessments | 5 PASS, 4 CONCERNS (ClaimIssuer coupling, multi-chain wallet complexity, fixture gap, Docker E2E not in CI) |
+| Test regressions | 0 (11th consecutive epic) |
+| New packages shipped | 1 (mill) |
+| New runtime dependencies | ed25519-hd-key ^1.3.0, mina-signer >=3.0.0 (optional peer) |
+
 ## Critical Implementation Rules
 
 ### Language-Specific Rules (TypeScript)
@@ -2315,6 +2442,48 @@ Client                    Pet DVM Handler              ProofQueue             Mi
 - **TOON compliance assertions** validate that skills reference correct event kinds, fee calculations, and API patterns.
 - **Skill tests are NOT in CI** (Epic 9 retro A1) -- currently run locally only.
 
+### Mill-Specific Rules (Epic 12)
+
+**startMill() Entrypoint:**
+
+- **Exactly one of `mnemonic` or `secretKey` required** -- but Mill key derivation (BIP-32) requires a mnemonic. Passing only `secretKey` throws `MillStartError('MILL_REQUIRES_MNEMONIC')`.
+- **Passphrase is rejected** -- `fromMnemonic()` (SDK) does not accept a BIP-39 passphrase, so `config.passphrase` is rejected to prevent split derivation seeds.
+- **swapPairs MUST be non-empty** -- A Mill without swap pairs has no purpose.
+- **chains MUST cover every distinct `pair.to.chain` family** -- Validates that `config.chains` includes `'evm'`, `'solana'`, or `'mina'` for each referenced chain in swap pairs.
+- **channels and inventory MUST exist for each target chain** -- Enforced at boot via `validateConfig()`.
+- **Connector ownership: three modes** -- (1) `config.connector` supplied: caller owns, Mill does not close. (2) `config.connectorUrl` supplied: deferred, warned. (3) Neither: auto-create embedded `ConnectorNode` (requires `btpServerPort`).
+- **kind:10032 publish is fire-and-forget** -- Relay failures logged at warn, never fail boot. Uses `Promise.allSettled` semantics.
+- **BTP server port defaults to 3400** -- Distinct from Town's 3000 default so Mill and Town can run side-by-side.
+
+**Multi-Chain Key Derivation (BIP-44):**
+
+- **Account index 2** separates Mill keys from connector keys (account 1) per D12-011.
+- **EVM:** `m/44'/60'/2'/0/0` (coin type 60) -- secp256k1, EIP-55 address.
+- **Solana:** `m/44'/501'/2'/0/0` (coin type 501) -- Ed25519 via `ed25519-hd-key`.
+- **Mina:** `m/44'/12586'/2'/0/0` (coin type 12586) -- requires `mina-signer` optional peer dep.
+- **One signer instance per chain family** -- Re-used across all `evm:*`, `solana:*`, `mina:*` chains. Chain-id is baked into `BalanceProofParams` at signing time, not into the signer.
+
+**Swap Handler (createSwapHandler):**
+
+- **Registered on kind:1059** (NIP-59 gift-wrap) -- the handler unwraps the gift wrap, extracts the swap rumor, matches the requested pair, applies rate, delegates claim issuance.
+- **ClaimIssuer interface** -- `issueClaim(params): Promise<IssuedClaim>`. The Mill's `MultiChainClaimIssuer` implements this with per-chain signers. Tests can inject a mock.
+- **Rate provider hook** -- `rateProvider?: (pair: SwapPair) => Promise<string>` allows live rate injection. Default: uses `pair.rate` from the SwapPair definition.
+- **Replay protection** -- `seenPacketIds: Set<string>` tracks processed packet IDs. Unbounded by default -- operators SHOULD supply a bounded/LRU-backed Set.
+
+**SwapPair Validation (Core):**
+
+- **Chain ID format:** `{blockchain}:{network}` or `{blockchain}:{network}:{chainId}` -- minimum 2, maximum 3 colon-separated segments. All segments must be non-empty.
+- **Rate format:** Non-negative decimal string, no leading zeros (except `0`), no exponent notation, no trailing dot. Rate `"0"` is valid (means "not currently quoting").
+- **Same validation in builder and parser** -- `swap-pair-validation.ts` enforces identical rules in both `buildIlpPeerInfoEvent()` and `parseIlpPeerInfo()`.
+
+**Settlement (buildSettlementTx):**
+
+- **Groups claims by (chain, channelId)** -- one `SettlementBundle` per group.
+- **Signature verification enabled by default** -- verifies each claim's balance-proof signature against `signers[chain].address`.
+- **Superseded claims** -- within a group, only the highest-nonce claim survives. Others optionally returned in `result.superseded[]`.
+- **SettlementBundle and AccumulatedClaim are stable types** -- Epic 13 Chain Bridge DVM depends on these shapes. Do not break without migration.
+- **EVM selector and Solana discriminator are TODO** -- settlement builders produce structurally valid but incomplete unsigned tx bytes. Must be resolved before production on-chain settlement.
+
 ### Chain Configuration Rules (Epic 3)
 
 **resolveChainConfig() (Story 3.2):**
@@ -2612,6 +2781,12 @@ Client                    Pet DVM Handler              ProofQueue             Mi
 - **NEVER assume u64 Rust values fit in JS Number** -- napi-rs u64 return values can exceed `Number.MAX_SAFE_INTEGER`. Always guard: `if (value > Number.MAX_SAFE_INTEGER) throw new Error(...)` before assignment.
 - **NEVER use proof queue as durable storage** -- `ProofQueue` in pet-dvm is in-memory. All pending ZK proofs are lost on DVM restart. Do not build settlement flows that assume proof persistence across restarts until WAL persistence is implemented.
 - **NEVER assume pet-circuit golden vectors are optional** -- `packages/pet-circuit/test-vectors/golden-vectors.json` is the ground truth when circuit and game engine diverge. Any change to `PetGameEngine.ts` game rules MUST update golden vectors AND re-verify circuit outputs match.
+- **NEVER send swap packets without NIP-59 gift wrapping** -- All swap packets MUST be gift-wrapped (D12-003). Sending unwrapped swap metadata leaks sender identity and swap intent to intermediary peers.
+- **NEVER pass a Nostr pubkey as a chain recipient address** -- The chain-recipient (20-byte EVM, 32-byte Solana Ed25519, Base58 Mina) is distinct from the 32-byte Nostr secp256k1 pubkey. The swap rumor carries chain-specific recipient addresses in dedicated tags (Story 12-9 fix).
+- **NEVER break `AccumulatedClaim` or `SettlementBundle` types without migration** -- Epic 13 Chain Bridge DVM depends on these stable shapes from `packages/sdk/src/settlement/types.ts`.
+- **NEVER start a Mill with only `secretKey`** -- Mill key derivation (BIP-44 HD) requires a BIP-39 mnemonic. `startMill({ secretKey })` throws `MillStartError('MILL_REQUIRES_MNEMONIC')`.
+- **NEVER set `config.passphrase` on `startMill()`** -- Rejected because `fromMnemonic()` (SDK identity) does not accept a BIP-39 passphrase, which would split identity and Mill-key derivation across inconsistent seeds.
+- **NEVER assume the EVM selector / Solana discriminator TODOs are resolved** -- Settlement builders in `packages/sdk/src/settlement/` produce structurally valid but incomplete unsigned tx bytes. Must be completed before production on-chain settlement (Epic 12 retro A1).
 
 **Critical Edge Cases:**
 
@@ -2622,6 +2797,7 @@ Client                    Pet DVM Handler              ProofQueue             Mi
 - **Channel nonce conflicts require retry** -- Payment channel operations may need retry logic for blockchain transaction conflicts
 - **SDK stubs direct to Town** -- `createEventStorageHandler()` in SDK throws with message directing users to `@toon-protocol/town`
 - **Connector v2.0.0 removed fulfillment/condition** -- `ctx.accept()` returns `{ accept: true }` with optional `data` and `metadata`. No SHA-256 computation needed. The connector handles fulfillment internally at the wire level.
+- **Connector v2.3.0 requires `tokenAddress` and `privateKey` in EVM chainProvider** -- Epic 12 upgrade. Also requires `evmAddress` in `registerPeer()` calls.
 - **Data-returning handlers bypass ctx.accept()** -- Return `{ accept: true, data }` directly because `data` must be top-level for ILP FULFILL relay (pattern valid for future handlers)
 - **Bootstrap phases simplified** -- discovering -> registering -> announcing (handshaking phase eliminated in Story 2.7)
 - **Anvil mock USDC has 18 decimals, not 6** -- On-chain mock differs from production USDC. Pricing pipeline is denomination-agnostic.
@@ -2661,6 +2837,15 @@ Client                    Pet DVM Handler              ProofQueue             Mi
 - **CheckpointManager ArweaveUploadAdapter is injected** -- Pet-dvm does not import `@ardrive/turbo-sdk` directly. Caller injects adapter (same adapter isolation pattern as SDK Arweave DVM).
 - **Pet DVM handler re-uses SDK handler types via type-only copy** -- `packages/pet-dvm/src/handler/types.ts` re-declares minimal `HandlerContext` / `HandlerResponse` types (structural duck typing). pet-dvm does NOT depend on `@toon-protocol/sdk` at runtime.
 - **`import.meta.dirname` requires Node 21+** -- Use `fileURLToPath(import.meta.url)` + `path.dirname()` instead for Node 20 compatibility (recurred in 2 Epic 11 stories).
+- **IlpPeerInfo.swapPairs is optional** -- Pre-Epic-12 kind:10032 events lack `swapPairs`. Parsers default to `undefined` (absent = no swap support). No migration required.
+- **SwapPair rate `"0"` is valid** -- Means "not currently quoting this pair" (the Mill advertises the pair but is temporarily unavailable). Not an error.
+- **streamSwap() does NOT throw on mid-stream failure** -- Returns `StreamSwapResult` with `state` and `abortReason`. Only construction-time validation throws synchronously.
+- **streamSwap() does NOT retry individual packets** -- BTP-level retries happen inside `BtpRuntimeClient`. Application-layer retry (e.g., T04 insufficient inventory) is future scope.
+- **Rate deviation math uses BigInt throughout** -- `effectiveRate` on `PacketProgress` is a display-only `number` (MAX_SAFE_INTEGER guard applied).
+- **buildSignerAddresses() normalizes EVM addresses to lowercase** -- `wallet.ts` emits EIP-55 mixed-case; `buildSignerAddresses()` lowercases for deterministic byte-equal comparison during settlement verification.
+- **Mill kind:10032 publish is fire-and-forget** -- Uses `Promise.allSettled` per-relay. Relay publish failure does NOT fail Mill boot.
+- **Mill BLS server port defaults to 0 (ephemeral)** -- Operator can set `blsPort` for deterministic port assignment. Docker E2E tests use ephemeral ports.
+- **Dockerfile.sdk-e2e is for E2E peers only** -- Does NOT include supervisord, attestation-server, or TEE dependencies. Use `Dockerfile.oyster` for production Marlin Oyster CVM deployment.
 
 **Security Rules:**
 
@@ -2745,40 +2930,47 @@ Client                    Pet DVM Handler              ProofQueue             Mi
 - **Forge-UI has ATDD stubs alongside implemented web code** -- `packages/rig/src/index.ts`, `cli.ts`, `git/`, `handlers/`, `identity/` are all stubs that throw. Only `src/web/` is implemented. Both coexist in the same package.
 - **Forge-UI relay client decodes TOON format** -- The browser WebSocket client imports `decode` from `@toon-format/toon` to handle TOON-encoded EVENT messages from relays.
 - **Arweave path manifest enables SPA routing** -- `deploy-forge-ui.mjs` creates an Arweave path manifest that maps all URLs to the SPA's `index.html`, enabling clean URL routing on Arweave.
+- **Mill mirrors Town composition pipeline** -- `startMill()` follows the same pattern as `startTown()`: identity resolution, connector wiring, handler registration, BLS server, kind:10032 publish, ownership-based cleanup, idempotent `stop()`.
+- **Gift-wrap uses three-layer NIP-59 construction** -- rumor (unsigned inner event) -> seal (NIP-44 encrypt with sender privkey -> Mill pubkey, kind:1060) -> gift wrap (NIP-44 encrypt with ephemeral key -> Mill pubkey, kind:1059). Each layer serves a distinct privacy purpose.
+- **FULFILL encryption uses ephemeral key** -- The Mill generates a fresh ephemeral keypair per FULFILL. The claim is NIP-44 encrypted, ephemeral pubkey included alongside ciphertext. The Mill discards the ephemeral privkey immediately.
+- **streamSwap() produces AccumulatedClaim[]** -- consumed by `buildSettlementTx()` (Story 12.6). This is the composition seam between sender-side swap and on-chain settlement.
+- **Settlement bundles are the input contract for Chain Bridge** -- `SettlementBundle` from `buildSettlementTx()` flows directly into kind:5260 Chain Bridge DVM broadcasts (Epic 13).
+- **Dockerfile.sdk-e2e replaced Dockerfile.oyster for E2E peers** -- `scripts/sdk-e2e-infra.sh` and `docker-compose-sdk-e2e.yml` now use the lighter `docker/Dockerfile.sdk-e2e` image instead of the TEE image.
+- **Mill BTP server port 3400 avoids collision with Town** -- When auto-creating an embedded ConnectorNode, the Mill defaults to port 3400 (Town defaults to 3000). Operators running both side-by-side do not need to manually resolve port conflicts.
 
 ---
 
-## Known Action Items (From Epic 11 Final Retro -- 2026-04-09)
+## Known Action Items (From Epic 12 Final Retro -- 2026-04-20)
 
-**Critical Path Before Epic 12:**
-- A1: **Proof queue WAL decision** -- ProofQueue (`packages/pet-dvm/src/handler/ProofQueue.ts`) is in-memory. Unproven interactions lost on DVM restart. Decide: accept as known debt or create backlog story before Epic 12 settlement patterns depend on it. Owner: Jonathan. (Epic 11 retro A4)
-- A2: **Exchange rate oracle upgrade path documented** -- `DEFAULT_EXCHANGE_RATE_USDC_PER_PET = 0.50` is a hardcoded placeholder in `packages/pet-dvm/src/pricing/petActionPrices.ts`. Must document upgrade path in code + epic-12 planning before any Epic 12 story uses multi-token pricing. Owner: Charlie. (Epic 11 retro A5)
-- A3: **Story template: add unpinned CI SHA check** -- Unpinned GitHub Actions SHAs (OWASP A08) surfaced in 4 Epic 11 stories. Add to story template as standard task item. Owner: Jonathan. (Epic 11 retro A1)
+**Must-Do / High Priority (Blockers for Epic 13):**
+- A1: **Resolve EVM selector / Solana discriminator TODOs in settlement builders** -- TODO markers in `packages/sdk/src/settlement/evm.ts` and `solana.ts`. Must be resolved before real on-chain settlement in Epic 13. (Epic 12 retro A1)
+- A2: **Add Mill E2E tests to CI or establish a pre-merge gate** -- Docker E2E swap tests only run manually. Growing gap as Chain Bridge adds more E2E surface. (Epic 12 retro A2)
+- A3: **Execute Playwright E2E tests against live infra** -- 7+ Playwright specs never executed. E2E debt growing. (Carried from Epic 8 A2, 4 epics)
+- A4: **Test Token Swap + Chain Bridge composition explicitly** -- `AccumulatedClaim[]` -> `SettlementBundle` -> kind:5260 DVM flow must be an explicit E2E test in Epic 13. (Epic 12 retro A4)
 
-**Must-Do / High Priority:**
-- A4: **napi-rs binary in Docker -- create spike story** -- `packages/memvid-node` native addon requires Rust toolchain at build time. Docker image does not include it. Blocks containerized deployment of pet-dvm. Create backlog spike story. Owner: Charlie. (Epic 11 retro A7)
-- A5: **Add MAX_SAFE_INTEGER guard pattern to dev knowledge** -- u64 Rust return values must be guarded before JS number assignment. Recurred in 3 Epic 11 stories. Add to story template / dev notes. Owner: Charlie. (Epic 11 retro A2)
-- A6: **Golden test vectors as required AC for ZK story pairs** -- `packages/pet-circuit/test-vectors/golden-vectors.json` pattern (26 vectors, circuit + engine ground truth) must be a P0 AC for any future story where two systems must produce identical outputs. Owner: Alice. (Epic 11 retro A3)
-
-**Should-Do:**
-- A7: **o1js / Jest / vitest split config -- document in CLAUDE.md** -- pet-circuit uses Jest (not vitest) due to o1js WASM incompatibility. Add clear explanation to CLAUDE.md so new contributors understand the split. Owner: Dana. (Epic 11 retro A8)
-- A8: **rot.js global RNG singleton -- add warning comment** -- `RNG.setSeed()` in `DungeonGameEngine.ts` resets a global singleton. Worker thread parallelism will cause non-determinism. Add warning comment. Owner: Elena. (Epic 11 retro A6)
-- A9: **Execute Playwright E2E tests against live infra** -- 7+ Playwright specs never executed. E2E debt growing. (Carried from Epic 8 A2, 3 epics)
-- A10: **Verify 4 manual ACs after first Arweave deployment** -- AC9, AC10, AC11, AC13 from Story 8-7 still pending. (Carried from Epic 8 A3, 3 epics)
-- A11: Establish load testing infrastructure -- Deferred 10 epics (from Epic 1 NFR). (Carried)
-- A12: Formal SLOs for DVM job lifecycle -- Increasingly relevant with Pet DVM + dungeon DVM added. (Carried from Epic 6, 6 epics deferred)
-- A13: Set up facilitator ETH monitoring -- Deferred 8 epics (from Epic 3 A8). (Carried)
+**Should-Do (Quality Improvements):**
+- A5: **Abstract chain-specific logic in MultiChainClaimIssuer** -- Multi-chain key derivation and address format handling is the complexity ceiling. Further abstraction would reduce Epic 13 integration risk. (Epic 12 retro A5)
+- A6: **Resolve proof queue WAL persistence strategy** -- ProofQueue in pet-dvm is in-memory. Architectural decision deferred twice. (Carried from Epic 11, 2 epics deferred)
+- A7: **Verify 4 manual ACs after first Arweave deployment** -- AC9, AC10, AC11, AC13 from Story 8-7 still pending. (Carried from Epic 8 A3, 4 epics)
+- A8: **CI burn-in for skill tests** -- Skill structural tests still not in CI pipeline. (Carried from Epic 9 A1, 3 epics)
+- A9: Establish load testing infrastructure -- Increasingly relevant as swap throughput becomes a production concern. (Carried from Epic 1, 12 epics deferred)
+- A10: Formal SLOs for DVM job lifecycle -- With Mill + Chain Bridge + Compute, SLOs are overdue. (Carried from Epic 6, 7 epics deferred)
+- A11: Set up facilitator ETH monitoring -- x402 facilitator operational safety. (Carried from Epic 3, 10 epics deferred)
 
 **Nice-to-Have:**
-- A14: Commit flake.lock -- Carried from Epic 4 (7 epics deferred). Requires Nix.
-- A15: Publish @toon-protocol/town to npm -- Carried from Epic 2 (9 epics deferred).
-- A16: Improve blame algorithm (full Myers diff) -- Carried from Epic 8 A11.
-- A17: Weighted WoT model for reputation scoring -- Carried from Epic 6 (5 epics deferred).
-- A18: Docker E2E for workflow chain + swarm coordination -- Carried from Epic 6 (5 epics deferred).
-- A19: Add Arweave object caching to Forge-UI -- Carried from Epic 8 A13.
+- A12: Commit flake.lock -- Carried from Epic 4 (8 epics deferred). Requires Nix.
+- A13: Publish @toon-protocol/town to npm -- Carried from Epic 2 (10 epics deferred).
+- A14: Improve blame algorithm (full Myers diff) -- Carried from Epic 8 (4 epics).
+- A15: Weighted WoT model for reputation scoring -- Carried from Epic 6 (6 epics deferred).
+- A16: Add Arweave object caching to Forge-UI -- Carried from Epic 8 (4 epics).
+- A17: Investigate missing story 11-8 report -- Carried from Epic 11 (2 epics).
 
-**Resolved Action Items (from Epic 9 retro, resolved at Epic 11 start):**
-- ~~A1: Configure CI burn-in for skill tests~~ RESOLVED -- vitest root config excludes pet-circuit, CI structure validated at Epic 11 start.
+**Resolved Action Items (from Epic 11 retro, resolved during Epic 12):**
+- ~~A2: Story template: unpinned CI SHA check + MAX_SAFE_INTEGER guard~~ RESOLVED -- Added Standard Guards section to create-story template at Epic 12 start.
+- ~~A3: Document static exchange rate oracle upgrade path~~ RESOLVED -- TODO in petActionPrices.ts with 5-step upgrade path.
+- ~~A6: Golden test vectors as required AC for ZK stories~~ RESOLVED -- Added to story template at Epic 12 start.
+- ~~A7: o1js / Jest / vitest split config documented~~ RESOLVED -- Created packages/pet-circuit/README.md.
+- ~~A8: rot.js global RNG singleton warning~~ RESOLVED -- Warning comment added at Epic 12 start.
 
 **Resolved Action Items (from earlier epics):**
 - ~~Epic 8 A1 (critical): ESLint gap for packages/rig~~ RESOLVED

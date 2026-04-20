@@ -258,7 +258,7 @@ development_status:
   # Dependencies: Epic 1-3 (ILP + settlement), NIP-44/59 (encryption), Epic 3 (payment channels)
   # NOTE: Inserted as Epic 12 on 2026-04-09; all subsequent epics shifted +1
   # 6-8 stories estimated; spec: _bmad-output/epics/epic-12-token-swap-primitive.md
-  epic-12: in-progress
+  epic-12: done
   12-1-swappair-type-and-kind-10032-serialization: done
   12-2-nip59-gift-wrap-integration-for-ilp-packets: done
   12-3-mill-swap-handler: done
@@ -270,7 +270,7 @@ development_status:
   12-9-sender-chain-recipient-threading: done
   12-10-e2e-swap-flow-docker-multi-chain: done
   12-11-dockerfile-sdk-e2e-split: done
-  epic-12-retrospective: optional
+  epic-12-retrospective: done
 
   # Epic 13: Chain Bridge Primitive (kind:5260)
   # Decision source: Party Mode 2026-03-22 — Network Primitives Strategy

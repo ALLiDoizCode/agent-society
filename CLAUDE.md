@@ -26,11 +26,16 @@ pnpm lint && pnpm format                   # Lint & format
 #    builds, 120000 for tests) and NEVER run long processes in background
 #    without cleanup. Orphaned Node processes exhaust system memory.
 
-# SDK E2E infrastructure (multi-hop routing, payment channels, DVM lifecycle)
+# SDK E2E infrastructure (multi-hop routing, payment channels, DVM lifecycle, swaps)
 ./scripts/sdk-e2e-infra.sh up              # Build, start Anvil + 2 Docker peers, wait for health
 ./scripts/sdk-e2e-infra.sh down            # Stop containers
 cd packages/sdk && pnpm test:e2e:docker    # Run SDK E2E tests against infra
 cd packages/sdk && pnpm test:integration   # Run SDK integration tests against infra
+
+# Mill (multi-chain token swap peer)
+pnpm --filter @toon-protocol/mill test                # Unit tests
+pnpm --filter @toon-protocol/mill test:integration    # Integration tests (in-process)
+pnpm --filter @toon-protocol/mill test:e2e:docker     # Docker E2E (requires sdk-e2e-infra up)
 
 # Forge-UI (decentralized git forge SPA)
 cd packages/rig && pnpm dev                # Vite dev server
@@ -69,6 +74,7 @@ curl http://localhost:18545           # Anvil (JSON-RPC, returns error object = 
 # E2E validation (requires SDK E2E infra: ./scripts/sdk-e2e-infra.sh up)
 cd packages/sdk && pnpm test:e2e:docker    # SDK Docker E2E (DVM lifecycle, publish, settlement)
 cd packages/sdk && pnpm test:integration   # SDK integration tests
+cd packages/mill && pnpm test:e2e:docker   # Mill Docker E2E (multi-chain swap flows)
 cd packages/town && pnpm test:e2e          # Town E2E (lifecycle)
 
 # View logs
@@ -86,6 +92,14 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 2. `curl http://localhost:19100/health` -- Peer1 healthy?
 3. `curl http://localhost:19110/health` -- Peer2 healthy?
 4. `./scripts/sdk-e2e-infra.sh down && ./scripts/sdk-e2e-infra.sh up` -- Restart infra
+
+**Mill / swap tests failing:**
+
+1. Ensure SDK E2E infra is running: `./scripts/sdk-e2e-infra.sh up`
+2. Mill unit tests are self-contained: `pnpm --filter @toon-protocol/mill test`
+3. Mill integration tests use in-process fixtures (no Docker needed): `pnpm --filter @toon-protocol/mill test:integration`
+4. Mill Docker E2E tests need infra: `pnpm --filter @toon-protocol/mill test:e2e:docker`
+5. If swap claims fail, check connector version -- must be `@toon-protocol/connector` ^2.3.0 (v2.0.0 changed `ctx.accept()` return shape)
 
 **Port conflicts:** See `_bmad-output/project-context.md` section "Deployment" for full port allocation table. Key ranges:
 
@@ -111,6 +125,10 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 | Nix reproducible build flake | `flake.nix` (root) |
 | Attestation server source | `docker/src/attestation-server.ts` |
 | Docker entrypoint (embedded connector) | `docker/src/entrypoint-sdk.ts` |
+| Mill package (multi-chain swap peer) | `packages/mill/` |
+| Mill entrypoint + CLI | `packages/mill/src/mill.ts`, `packages/mill/src/cli.ts` |
+| SDK swap modules (gift-wrap, handler, stream, settlement) | `packages/sdk/src/gift-wrap.ts`, `swap-handler.ts`, `stream-swap.ts`, `settlement/` |
+| SwapPair validation + chain-id | `packages/core/src/events/swap-pair-validation.ts`, `packages/core/src/chain/chain-id.ts` |
 | Content publishing pipeline | `_bmad-output/planning-artifacts/content-strategy-2026-q1.md` |
 | Content publishing workflow | `_bmad-output/planning-artifacts/content/publish-workflow.md` |
 | Character spec (brand voice) | `_bmad-output/planning-artifacts/content/character-spec.md` |
