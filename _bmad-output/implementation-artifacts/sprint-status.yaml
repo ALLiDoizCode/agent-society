@@ -402,7 +402,7 @@ development_status:
   # 17 stories across 3 phases: Orchestrator Core, API + Dashboard, First-Run + Polish
   epic-21: in-progress
   21-1-package-scaffold-and-cli-entrypoint: done
-  21-2-docker-orchestration-engine: backlog
+  21-2-docker-orchestration-engine: done
   21-3-standalone-connector-integration: backlog
   21-4-hd-wallet-management-and-key-derivation: backlog
   21-5-town-node-dockerfile: backlog

@@ -1,0 +1,94 @@
+# Townhouse — Docker Compose with profiles (Story 21.2)
+#
+# Alternative to the DockerOrchestrator for operators who prefer compose.
+# Both approaches produce identical container configurations.
+#
+# Usage:
+#   docker compose -f docker-compose-townhouse.yml up                    # connector only
+#   docker compose -f docker-compose-townhouse.yml --profile town up     # connector + town
+#   docker compose -f docker-compose-townhouse.yml --profile town --profile mill up
+#   docker compose -f docker-compose-townhouse.yml --profile town --profile mill --profile dvm up
+
+networks:
+  townhouse-net:
+    driver: bridge
+
+services:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Connector — always runs (no profile restriction)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  connector:
+    image: ghcr.io/toon-protocol/connector:latest
+    container_name: townhouse-connector
+    networks:
+      - townhouse-net
+    ports:
+      - '9401:9401'
+    environment:
+      CONNECTOR_ADMIN_PORT: '9401'
+      TRANSPORT_MODE: direct
+    restart: unless-stopped
+    healthcheck:
+      # nosemgrep: trailofbits.generic.wget-unencrypted-url.wget-unencrypted-url -- container-internal health probe, TLS unnecessary
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:9401/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Town — Nostr relay node (profile: town)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  town:
+    image: toon:town
+    container_name: townhouse-town
+    profiles:
+      - town
+    networks:
+      - townhouse-net
+    depends_on:
+      connector:
+        condition: service_healthy
+    environment:
+      # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
+      CONNECTOR_URL: ws://townhouse-connector:3000
+      FEE_PER_EVENT: '0'
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Mill — multi-chain swap node (profile: mill)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  mill:
+    image: toon:mill
+    container_name: townhouse-mill
+    profiles:
+      - mill
+    networks:
+      - townhouse-net
+    depends_on:
+      connector:
+        condition: service_healthy
+    environment:
+      # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
+      CONNECTOR_URL: ws://townhouse-connector:3000
+      FEE_BASIS_POINTS: '0'
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # DVM — compute/data vending machine (profile: dvm)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  dvm:
+    image: toon:dvm
+    container_name: townhouse-dvm
+    profiles:
+      - dvm
+    networks:
+      - townhouse-net
+    depends_on:
+      connector:
+        condition: service_healthy
+    environment:
+      # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
+      CONNECTOR_URL: ws://townhouse-connector:3000
+      FEE_PER_JOB: '0'
+    restart: unless-stopped
