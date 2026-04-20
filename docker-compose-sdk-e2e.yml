@@ -222,6 +222,11 @@ services:
       NIP59_ENABLED: 'true'
       NIP59_PEER_PUBKEYS: ${PEER1_NIP59_PEER_PUBKEYS:-}
 
+      # Mill swap handler (Story 12.10 — enables swap handling on Docker peers)
+      MILL_ENABLED: 'true'
+      # Deterministic BIP-39 mnemonic for peer1 Mill key derivation (test-only)
+      MILL_MNEMONIC: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+
       # Storage
       DATA_DIR: /data
     ports:
@@ -316,6 +321,11 @@ services:
       # NIP-59 privacy wrapping
       NIP59_ENABLED: 'true'
       NIP59_PEER_PUBKEYS: ${PEER2_NIP59_PEER_PUBKEYS:-}
+
+      # Mill swap handler (Story 12.10 — enables swap handling on Docker peers)
+      MILL_ENABLED: 'true'
+      # Deterministic BIP-39 mnemonic for peer2 Mill key derivation (test-only, different account index)
+      MILL_MNEMONIC: 'zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong'
 
       # Storage
       DATA_DIR: /data
