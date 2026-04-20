@@ -400,7 +400,7 @@ development_status:
 
   # Epic 21: Townhouse — Node Provider Dashboard & Orchestrator
   # 17 stories across 3 phases: Orchestrator Core, API + Dashboard, First-Run + Polish
-  epic-21: backlog
+  epic-21: in-progress
   21-1-package-scaffold-and-cli-entrypoint: backlog
   21-2-docker-orchestration-engine: backlog
   21-3-standalone-connector-integration: backlog
