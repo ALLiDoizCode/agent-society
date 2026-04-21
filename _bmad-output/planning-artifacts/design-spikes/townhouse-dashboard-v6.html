@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOWNHOUSE — Operator Console [v6 · ink terminal + real chain/token assets]</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://icons.llamao.fi">
+<link rel="preconnect" href="https://raw.githubusercontent.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/*
+  ════════════════════════════════════════════════════════════════════════════════
+  DESIGN DIRECTION — "INK TERMINAL" (v6 · real brand assets)
+  ════════════════════════════════════════════════════════════════════════════════
+  v5 with hand-drawn monochrome symbols replaced by real brand marks sourced
+  from two public CDNs:
+
+    CHAIN MARKS  — DefiLlama icon CDN
+                   https://icons.llamao.fi/icons/chains/rsz_{chain}.jpg
+                   Verified reachable for: ethereum, base, optimism, arbitrum,
+                   solana. Returned as WebP despite .jpg extension.
+                   Mina is NOT tracked by DefiLlama's chain API.
+
+    TOKEN MARKS  — spothq/cryptocurrency-icons (CC0-1.0, public domain)
+                   https://raw.githubusercontent.com/spothq/cryptocurrency-icons
+                   /master/svg/color/{ticker}.svg
+                   Verified reachable for: eth, usdc, sol.
+                   Mina has NO entry in this repo.
+
+    MINA         — Local asset at ./assets/Mina.png (copied from the user's
+                   game_assets folder, 299KB PNG). For production, self-host
+                   alongside the other marks and document its origin/license
+                   in ASSETS.md.
+
+  PRODUCTION NOTE
+    These URLs are for spike/reference only. For production:
+      (1) Self-host these assets in packages/townhouse/web/public/marks/
+          (keeps the dashboard resilient to CDN downtime + reproducible builds)
+      (2) Run a tiny fetch script in CI that pulls fresh versions weekly
+      (3) Document each asset's license in packages/townhouse/web/ASSETS.md
+  ════════════════════════════════════════════════════════════════════════════════
+*/
+
+:root {
+  --bg:            #0B111C;
+  --bg-lift:       #131A26;
+  --bg-panel:      #0A0F18;
+  --bg-input:      #F1F4F8;
+  --bg-mark:       #F1F4F8;     /* light panel behind color marks when needed */
+
+  --ink:           #EEF1F7;
+  --ink-mid:       #9BA3B3;
+  --ink-dim:       #6B7280;
+  --ink-mute:      #3A4150;
+
+  --border:        rgba(140, 160, 200, 0.14);
+  --border-strong: #424B5C;
+  --border-tab:    #9BA3B3;
+
+  --blue:          #007aff;
+  --cyan:          #64d2ff;
+  --red:           #FF453A;
+  --green:         #32D74B;
+  --orange:        #FF9F0A;
+  --orange-hi:     #FFAE33;
+  --purple:        #BF5AF2;
+
+  --town:          var(--orange);
+  --mill:          var(--green);
+  --dvm:           var(--cyan);
+
+  --s-ok:          var(--green);
+  --s-degraded:    var(--orange);
+  --s-down:        var(--red);
+  --s-pending:     var(--ink-mid);
+  --s-idle:        var(--ink-dim);
+
+  --mono: 'Berkeley Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular,
+          Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+  --s-1: 4px;   --s-2: 8px;   --s-3: 12px;  --s-4: 16px;
+  --s-5: 20px;  --s-6: 24px;  --s-8: 32px;  --s-10: 40px;
+  --s-12: 48px; --s-16: 64px; --s-20: 80px; --s-24: 96px;
+
+  --r: 4px;
+  --r-input: 6px;
+  --r-mark: 50%;             /* brand marks are round — so their bg discs are too */
+
+  --dur-ui: 120ms;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+.shell {
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 0 var(--s-8) var(--s-12);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   BRAND MARK — rendered as <img>, consistently sized and framed.
+
+   Strategy: each mark gets a circular clip and a light disc behind it.
+   Chain logos served by DefiLlama already have their own colored backgrounds
+   (so the disc is invisible underneath them). Token SVGs from the spothq
+   library render their full color artwork on whatever ground sits behind them
+   — the light disc keeps them legible against this dark-navy palette without
+   us touching the logo itself.
+   ════════════════════════════════════════════════════════════════════════════ */
+.mark {
+  display: inline-block;
+  vertical-align: -3px;
+  border-radius: var(--r-mark);
+  object-fit: cover;
+  background: var(--bg-mark);
+  flex-shrink: 0;
+}
+.mark-sm  { width: 14px; height: 14px; vertical-align: -3px; }
+.mark-md  { width: 16px; height: 16px; vertical-align: -3px; }
+.mark-lg  { width: 20px; height: 20px; vertical-align: -4px; }
+.mark-xl  { width: 28px; height: 28px; vertical-align: -7px; }
+
+/* Placeholder (Mina) uses inline SVG symbol — matches the real-asset sizes */
+.mark-ph {
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  border-radius: var(--r-mark);
+  background: var(--orange);
+  color: var(--bg);
+  flex-shrink: 0;
+}
+.mark-ph.mark-sm  { width: 14px; height: 14px; }
+.mark-ph.mark-md  { width: 16px; height: 16px; }
+.mark-ph.mark-lg  { width: 20px; height: 20px; }
+.mark-ph.mark-xl  { width: 28px; height: 28px; }
+.mark-ph svg { width: 70%; height: 70%; fill: currentColor; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TOP BAR
+   ════════════════════════════════════════════════════════════════════════════ */
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center; gap: var(--s-6);
+  padding: var(--s-5) 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.mark-brand {
+  display: flex; align-items: baseline; gap: var(--s-3);
+  font-weight: 700; font-size: 16px; color: var(--ink);
+}
+.mark-brand .ver { font-weight: 400; font-size: 14px; color: var(--ink-dim); }
+
+.op-handle { font-size: 16px; color: var(--ink-mid); font-weight: 400; }
+.op-handle .prefix { color: var(--ink-dim); }
+.op-handle .name { color: var(--ink); font-weight: 500; }
+
+.wallet {
+  display: flex; align-items: baseline; gap: var(--s-3);
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--border); border-radius: var(--r);
+  background: var(--bg-lift);
+}
+.wallet .lbl { font-size: 14px; color: var(--ink-dim); font-weight: 500; }
+.wallet .v   { color: var(--ink); font-weight: 700; font-size: 16px; }
+.wallet .u   { color: var(--ink-mid); font-size: 14px; }
+
+.ator { display: flex; align-items: center; gap: var(--s-2); font-size: 14px; font-weight: 500; color: var(--ink-mid); }
+.ator .dot { width: 8px; height: 8px; border-radius: var(--r); background: var(--s-ok); }
+.ator b { color: var(--ink); font-weight: 700; }
+
+.clock { font-size: 16px; font-weight: 700; color: var(--ink); }
+.clock .z { font-weight: 400; font-size: 14px; color: var(--ink-dim); margin-left: var(--s-2); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   HERO
+   ════════════════════════════════════════════════════════════════════════════ */
+.hero {
+  padding: var(--s-10) 0 var(--s-8);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s-10);
+  align-items: end;
+  border-bottom: 1px solid var(--border);
+}
+.today { display: flex; flex-direction: column; gap: var(--s-2); }
+.today .lbl { font-size: 14px; color: var(--ink-dim); font-weight: 500; line-height: 2; }
+.today .num {
+  font-size: 38px; font-weight: 700; line-height: 1.5; color: var(--ink);
+  display: flex; align-items: baseline; gap: var(--s-3);
+}
+.today .num .unit { font-size: 16px; font-weight: 500; color: var(--ink-mid); }
+.today .delta { font-size: 16px; font-weight: 500; color: var(--green); }
+.today .delta::before { content: '+'; margin-right: 2px; }
+.today .delta .ref { color: var(--ink-dim); font-weight: 400; margin-left: var(--s-3); }
+
+.breakdown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-4);
+  padding-bottom: var(--s-1);
+}
+.bd-pill {
+  padding: var(--s-4) var(--s-5);
+  border: 1px solid var(--border); border-radius: var(--r);
+  background: var(--bg-lift);
+  position: relative;
+  display: flex; flex-direction: column; gap: var(--s-2);
+}
+.bd-pill::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 4px;
+  background: var(--accent);
+  border-radius: var(--r) 0 0 var(--r);
+}
+.bd-pill.t-town { --accent: var(--town); }
+.bd-pill.t-mill { --accent: var(--mill); }
+.bd-pill.t-dvm  { --accent: var(--dvm); }
+.bd-pill .head { display: flex; justify-content: space-between; align-items: baseline; }
+.bd-pill .chip { font-size: 14px; font-weight: 700; padding: 2px var(--s-2); border-radius: var(--r); color: var(--bg); background: var(--accent); }
+.bd-pill .count { font-size: 14px; color: var(--ink-dim); font-weight: 400; }
+.bd-pill .count b { color: var(--ink); font-weight: 500; }
+.bd-pill .val { font-size: 24px; font-weight: 700; color: var(--ink); line-height: 1.5; }
+.bd-pill .val .u { font-size: 14px; font-weight: 500; color: var(--ink-mid); margin-left: var(--s-1); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CHAINS STRIP
+   ════════════════════════════════════════════════════════════════════════════ */
+.chains {
+  margin-top: var(--s-6);
+  padding: var(--s-5) 0 var(--s-6);
+  border-bottom: 1px solid var(--border);
+}
+.chains-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--s-4); }
+.chains-head .title { font-size: 16px; font-weight: 700; color: var(--ink); }
+.chains-head .title .idx { color: var(--ink-dim); font-weight: 400; margin-left: var(--s-2); }
+.chains-head .meta { display: flex; gap: var(--s-5); font-size: 14px; color: var(--ink-mid); font-weight: 500; }
+.chains-head .meta b { color: var(--ink); font-weight: 700; }
+.chains-head .meta .active b { color: var(--mill); }
+.chains-head .meta .idle b { color: var(--ink-dim); }
+
+.chain-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.chain {
+  padding: var(--s-3) var(--s-4);
+  background: var(--bg-lift);
+  border: 1px solid var(--border); border-radius: var(--r);
+  display: flex; flex-direction: column; gap: var(--s-2);
+  position: relative;
+}
+.chain.is-active { border-color: color-mix(in oklab, var(--mill) 50%, var(--border-strong)); }
+.chain.is-active::after {
+  content: '';
+  position: absolute;
+  top: var(--s-3); right: var(--s-3);
+  width: 6px; height: 6px;
+  border-radius: var(--r); background: var(--mill);
+  animation: status-heartbeat 1.6s ease-in-out infinite;
+}
+.chain.is-idle { opacity: 0.6; }
+
+.chain .row-1 { display: flex; align-items: center; gap: var(--s-2); }
+.chain .name {
+  font-size: 16px; font-weight: 700; color: var(--ink);
+}
+.chain .ticker {
+  font-size: 14px; color: var(--ink-dim); font-weight: 500; margin-left: auto;
+}
+
+.chain .tokens { display: flex; align-items: center; gap: var(--s-2); font-size: 14px; color: var(--ink-mid); }
+.chain .tokens .tok {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 1px 6px 1px 3px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--ink-mid);
+}
+.chain .tokens .tok b { color: var(--ink); font-weight: 500; }
+
+.chain .status {
+  display: flex; justify-content: space-between;
+  padding-top: var(--s-2); border-top: 1px solid var(--border);
+  font-size: 14px; color: var(--ink-dim); font-weight: 400;
+}
+.chain .status .st { font-weight: 700; color: var(--s-ok); }
+.chain .status .st.idle { color: var(--s-idle); }
+.chain .status .blk { color: var(--ink-mid); font-weight: 500; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MAIN
+   ════════════════════════════════════════════════════════════════════════════ */
+.main {
+  padding-top: var(--s-8);
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--s-6);
+  align-items: start;
+}
+
+.section-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding-bottom: var(--s-4); margin-bottom: var(--s-5);
+  border-bottom: 1px solid var(--border);
+}
+.section-head .title { font-size: 16px; font-weight: 700; color: var(--ink); }
+.section-head .title .idx { color: var(--ink-dim); font-weight: 400; margin-left: var(--s-2); }
+.section-head .meta { display: flex; gap: var(--s-5); font-size: 14px; color: var(--ink-mid); font-weight: 500; }
+.section-head .meta b { color: var(--ink); font-weight: 700; }
+.section-head .meta .deg b { color: var(--orange); }
+
+.node-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4);
+}
+
+.node {
+  position: relative;
+  padding: var(--s-5);
+  background: var(--bg-lift);
+  border: 1px solid var(--border); border-radius: var(--r);
+  display: grid; gap: var(--s-4);
+  transition: border-color var(--dur-ui);
+}
+.node::before {
+  content: '';
+  position: absolute; top: 0; left: 0; bottom: 0;
+  width: 4px;
+  background: var(--accent);
+  border-radius: var(--r) 0 0 var(--r);
+}
+.node.t-town { --accent: var(--town); }
+.node.t-mill { --accent: var(--mill); }
+.node.t-dvm  { --accent: var(--dvm); }
+
+.node.is-selected { border: 1px solid var(--border-strong); }
+
+.node.is-degraded {
+  background: var(--orange);
+  border-color: var(--orange-hi);
+  animation: deg-heartbeat 3s ease-in-out infinite;
+}
+@keyframes deg-heartbeat {
+  0%, 100% { background: var(--orange); }
+  50%      { background: var(--orange-hi); }
+}
+
+.node-row-1 { display: flex; justify-content: space-between; align-items: center; gap: var(--s-3); }
+.node-id { font-size: 16px; font-weight: 700; color: var(--ink); line-height: 1.5; }
+.node-id .host { color: var(--ink-dim); font-weight: 400; font-size: 14px; margin-left: var(--s-2); }
+.node.is-degraded .node-id { color: var(--bg); }
+.node.is-degraded .node-id .host { color: rgba(11, 17, 28, 0.65); }
+
+.type-chip { font-size: 14px; font-weight: 700; padding: 2px var(--s-2); border-radius: var(--r); color: var(--bg); background: var(--accent); }
+.node.is-degraded .type-chip { background: var(--bg); color: var(--orange); }
+
+.node-row-2 { display: flex; align-items: center; gap: var(--s-2); font-size: 14px; font-weight: 500; color: var(--ink-mid); }
+
+.status-dot { width: 8px; height: 8px; border-radius: var(--r); background: var(--s-ok); }
+.status-dot.rebal { background: var(--mill); }
+.status-dot.deg { background: var(--bg); animation: status-heartbeat 2.4s ease-in-out infinite; }
+@keyframes status-heartbeat {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+.status-text { font-weight: 700; }
+.status-text.ok { color: var(--green); }
+.status-text.rebal { color: var(--mill); }
+.status-text.deg { color: var(--bg); font-weight: 700; }
+.node.is-degraded .node-row-2 { color: var(--bg); }
+.node.is-degraded .node-row-2 .meta { color: rgba(11, 17, 28, 0.72); }
+.node-row-2 .meta { margin-left: auto; color: var(--ink-dim); font-weight: 400; }
+.node-row-2 .meta b { color: var(--ink-mid); font-weight: 500; }
+
+/* pair chips — Mill cards use real asset marks now */
+.pair-chips {
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-size: 14px; color: var(--ink-mid); font-weight: 500;
+  flex-wrap: wrap;
+}
+.node.is-degraded .pair-chips { border-color: rgba(11, 17, 28, 0.18); color: rgba(11, 17, 28, 0.72); }
+.pair-chips .pc {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px var(--s-2) 3px 4px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--ink); font-weight: 500;
+}
+.pair-chips .pc .sep { color: var(--ink-mute); margin: 0 2px; }
+.pair-chips .pc b { color: var(--ink); font-weight: 700; }
+.pair-chips .ar { color: var(--mill); font-weight: 700; }
+.pair-chips .lbl { color: var(--ink-dim); font-weight: 500; }
+
+.node-row-3 { display: flex; justify-content: space-between; align-items: baseline; padding-top: var(--s-3); border-top: 1px solid var(--border); }
+.node.is-degraded .node-row-3 { border-top-color: rgba(11, 17, 28, 0.18); }
+.node.t-mill .node-row-3 { border-top: none; padding-top: 0; }
+
+.node-metric { display: flex; flex-direction: column; gap: 2px; }
+.node-metric .k { font-size: 14px; color: var(--ink-dim); font-weight: 500; }
+.node.is-degraded .node-metric .k { color: rgba(11, 17, 28, 0.7); }
+.node-metric .v { font-size: 24px; font-weight: 700; color: var(--ink); line-height: 1.5; }
+.node-metric .v .u { font-size: 14px; font-weight: 500; color: var(--ink-mid); margin-left: 4px; }
+.node.is-degraded .node-metric .v { color: var(--bg); }
+.node.is-degraded .node-metric .v .u { color: rgba(11, 17, 28, 0.7); }
+
+.node-row-4 { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--s-4); }
+.activity { display: flex; align-items: flex-end; gap: 2px; height: 24px; flex: 1; }
+.activity span { flex: 1; background: var(--accent); border-radius: 2px; opacity: 0.5; }
+.activity span.hi { opacity: 1; }
+.activity span.err { background: var(--orange); opacity: 1; }
+.node.is-degraded .activity span { background: var(--bg); opacity: 0.4; }
+.node.is-degraded .activity span.err { opacity: 0.9; }
+
+.node-sub { font-size: 14px; font-weight: 500; color: var(--ink-mid); white-space: nowrap; }
+.node-sub b { color: var(--ink); font-weight: 700; }
+.node.is-degraded .node-sub { color: rgba(11, 17, 28, 0.7); }
+.node.is-degraded .node-sub b { color: var(--bg); }
+
+/* detail panel */
+.detail {
+  position: sticky;
+  top: calc(var(--s-16) + var(--s-4));
+  padding: var(--s-6);
+  background: var(--bg-lift);
+  border: 1px solid var(--border); border-radius: var(--r);
+  display: flex; flex-direction: column; gap: var(--s-6);
+  max-height: calc(100vh - var(--s-20));
+  overflow-y: auto;
+}
+
+.detail-head { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: var(--s-4); border-bottom: 1px solid var(--border); }
+.detail-title .id { font-size: 24px; font-weight: 700; color: var(--ink); line-height: 1.5; }
+.detail-title .pair {
+  font-size: 16px; font-weight: 500; color: var(--ink-mid);
+  display: flex; align-items: center; gap: var(--s-2);
+  margin-top: var(--s-1);
+}
+.detail-title .pair .chain-id {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px var(--s-2) 4px 5px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--ink); font-weight: 700;
+}
+.detail-title .pair .arrow { color: var(--mill); font-weight: 700; }
+.detail-title .token-row {
+  font-size: 14px; color: var(--ink-dim); font-weight: 400;
+  margin-top: var(--s-2);
+  display: flex; align-items: center; gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.detail-title .token-row .tok {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 1px 6px 1px 3px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--ink-mid);
+}
+.detail-title .token-row .tok b { color: var(--ink); font-weight: 700; }
+
+.detail-status { display: flex; flex-direction: column; align-items: flex-end; gap: var(--s-2); }
+.detail-status .chip {
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--mill); border-radius: var(--r);
+  font-size: 14px; font-weight: 700; color: var(--mill);
+}
+.detail-status .chip .pulse {
+  width: 6px; height: 6px; border-radius: var(--r);
+  background: var(--mill);
+  animation: status-heartbeat 2s ease-in-out infinite;
+}
+.detail-status .uptime { font-size: 14px; color: var(--ink-dim); font-weight: 500; }
+.detail-status .uptime b { color: var(--ink-mid); font-weight: 700; }
+
+.block { display: flex; flex-direction: column; gap: var(--s-3); }
+.block-head { display: flex; justify-content: space-between; align-items: baseline; }
+.block-head .lbl { font-size: 14px; color: var(--ink-dim); font-weight: 500; }
+.block-head .r { font-size: 16px; color: var(--ink); font-weight: 700; }
+.block-head .r .u { font-size: 14px; color: var(--ink-mid); font-weight: 500; margin-left: var(--s-1); }
+
+.liq-wrap { display: grid; grid-template-columns: auto 1fr auto; gap: var(--s-3); align-items: center; }
+.liq-wrap .end {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  font-size: 14px; color: var(--ink-mid); font-weight: 500;
+}
+.liq-wrap .end .lbl { font-size: 14px; color: var(--ink); font-weight: 700; }
+
+.bar { display: flex; height: 28px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.bar .seg { display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: var(--ink); position: relative; }
+.bar .seg.allocated { flex: 12.4; background: var(--mill); color: var(--bg); }
+.bar .seg.in-swap   { flex: 3.2;  background: color-mix(in oklab, var(--mill) 45%, var(--bg-lift)); color: var(--ink); overflow: hidden; }
+.bar .seg.available { flex: 8.7;  background: var(--bg-lift); color: var(--ink-mid); }
+.bar .seg.in-swap::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: -40%;
+  width: 30%;
+  background: color-mix(in oklab, var(--mill) 80%, white);
+  opacity: 0.55;
+  animation: rebal-pulse 2.2s linear infinite;
+}
+@keyframes rebal-pulse {
+  from { left: -40%; }
+  to   { left: 110%; }
+}
+
+.bar-legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-3); font-size: 14px; color: var(--ink-mid); }
+.bar-legend .item { display: flex; align-items: center; gap: var(--s-2); }
+.bar-legend .sw { width: 12px; height: 12px; border-radius: 2px; }
+.bar-legend .sw.a { background: var(--mill); }
+.bar-legend .sw.b { background: color-mix(in oklab, var(--mill) 45%, var(--bg-lift)); }
+.bar-legend .sw.c { background: var(--bg-lift); border: 1px solid var(--border-strong); }
+.bar-legend b { color: var(--ink); font-weight: 700; margin-left: var(--s-1); }
+
+.fee-head { display: flex; justify-content: space-between; align-items: flex-end; }
+.fee-cur { display: flex; flex-direction: column; gap: var(--s-1); }
+.fee-cur .k { font-size: 14px; color: var(--ink-dim); font-weight: 500; }
+.fee-cur .v { font-size: 38px; font-weight: 700; color: var(--ink); line-height: 1.5; }
+.fee-cur .v .u { font-size: 16px; color: var(--mill); font-weight: 700; margin-left: var(--s-1); }
+.fee-est { text-align: right; display: flex; flex-direction: column; gap: var(--s-1); }
+.fee-est .k { font-size: 14px; color: var(--ink-dim); font-weight: 500; }
+.fee-est .v { font-size: 20px; font-weight: 700; color: var(--ink); line-height: 1.5; }
+.fee-est .v .u { font-size: 14px; color: var(--ink-mid); margin-left: var(--s-1); font-weight: 500; }
+.fee-est .sub { font-size: 14px; color: var(--ink-dim); font-weight: 400; }
+
+.slider { position: relative; height: 4px; background: var(--bg); border-radius: var(--r); margin-top: var(--s-3); }
+.slider .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 25%; background: var(--mill); border-radius: var(--r); }
+.slider .thumb { position: absolute; top: 50%; left: 25%; transform: translate(-50%, -50%); width: 12px; height: 12px; background: var(--ink); border-radius: var(--r); border: 2px solid var(--mill); }
+.slider-labels { display: flex; justify-content: space-between; margin-top: var(--s-2); font-size: 14px; color: var(--ink-dim); font-weight: 400; }
+.slider-labels .on { color: var(--mill); font-weight: 700; }
+
+.chart { display: flex; flex-direction: column; gap: var(--s-4); }
+.chart-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: var(--s-3); border-bottom: 1px solid var(--border); }
+.chart-head .win { display: flex; gap: var(--s-4); font-size: 14px; color: var(--ink-mid); font-weight: 500; }
+.chart-head .win .on { color: var(--ink); font-weight: 700; padding-bottom: var(--s-3); margin-bottom: calc(var(--s-3) * -1 - 1px); border-bottom: 2px solid var(--ink); }
+.bars { display: flex; align-items: flex-end; gap: var(--s-2); height: 96px; padding-bottom: var(--s-1); border-bottom: 1px solid var(--border); }
+.bar-c { flex: 1; display: flex; flex-direction: column; align-items: center; gap: var(--s-2); }
+.bar-c .b { width: 70%; background: var(--mill); border-radius: 2px 2px 0 0; opacity: 0.75; min-height: 4px; }
+.bar-c .b.hi { opacity: 1; }
+.bar-c .d { font-size: 14px; color: var(--ink-dim); font-weight: 400; }
+.bar-c .d.today { color: var(--ink); font-weight: 700; }
+.chart-foot { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; color: var(--ink-mid); font-weight: 500; }
+.chart-foot b { color: var(--ink); font-weight: 700; }
+.chart-foot .up { color: var(--green); font-weight: 700; }
+
+.events { display: flex; flex-direction: column; gap: var(--s-3); }
+.events-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: var(--s-3); border-bottom: 1px solid var(--border); }
+.events-head .live { display: flex; align-items: center; gap: var(--s-2); font-size: 14px; color: var(--green); font-weight: 700; }
+.events-head .live .pip { width: 6px; height: 6px; border-radius: var(--r); background: var(--green); animation: status-heartbeat 1.4s ease-in-out infinite; }
+.events-head .head { font-size: 14px; color: var(--ink-dim); font-weight: 500; }
+
+.evt {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--s-4);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  font-size: 14px;
+}
+.evt:last-child { border-bottom: none; }
+.evt .t { color: var(--ink-dim); font-weight: 400; }
+.evt .what { color: var(--ink-mid); font-weight: 400; display: flex; align-items: center; gap: var(--s-1); flex-wrap: wrap; }
+.evt .what .arrow { color: var(--mill); margin: 0 4px; font-weight: 700; }
+.evt .what b { color: var(--ink); font-weight: 700; }
+.evt .what em { color: var(--ink-dim); font-style: normal; margin-left: 2px; }
+.evt .what .tok-inline { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); font-weight: 700; }
+.evt .amt { color: var(--ink); font-weight: 700; text-align: right; }
+.evt .amt .u { font-size: 14px; color: var(--mill); font-weight: 500; margin-left: var(--s-1); }
+.evt .amt.pale { color: var(--ink-dim); font-weight: 400; }
+
+/* states */
+.states { margin-top: var(--s-12); padding-top: var(--s-6); border-top: 1px solid var(--border); }
+.states-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--s-5); }
+.states-head .title { font-size: 16px; font-weight: 700; color: var(--ink); }
+.states-head .note { font-size: 14px; color: var(--ink-dim); font-weight: 400; }
+.states-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-4); }
+.state { padding: var(--s-5); background: var(--bg-lift); border: 1px solid var(--border); border-radius: var(--r); min-height: 160px; display: flex; flex-direction: column; gap: var(--s-3); }
+.state .lbl { font-size: 14px; font-weight: 700; color: var(--ink-mid); }
+.state.loading .skel { display: flex; flex-direction: column; gap: var(--s-2); }
+.state.loading .skel .l { height: 12px; background: var(--bg); border-radius: 2px; position: relative; overflow: hidden; }
+.state.loading .skel .l::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, var(--ink-dim), transparent); opacity: 0.4; animation: skel-wipe 1.4s linear infinite; }
+@keyframes skel-wipe { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.state.loading .skel .l.w1 { width: 75%; }
+.state.loading .skel .l.w2 { width: 45%; }
+.state.loading .skel .l.w3 { width: 85%; }
+.state.empty .msg { color: var(--ink-mid); font-size: 14px; font-weight: 400; }
+.state.empty .msg b { color: var(--ink); font-weight: 700; display: block; font-size: 16px; margin-bottom: var(--s-1); }
+.state.empty .input { background: var(--bg-input); color: var(--bg); font-family: var(--mono); font-weight: 500; font-size: 14px; padding: var(--s-2) var(--s-4); border: 1px solid var(--border); border-radius: var(--r-input); margin-top: auto; align-self: flex-start; }
+.state.empty .input::before { content: '$ '; color: var(--ink-dim); }
+.state.error { border-color: var(--red); }
+.state.error .lbl { color: var(--red); }
+.state.error .msg { color: var(--ink-mid); font-size: 14px; font-weight: 400; }
+.state.error .msg b { color: var(--ink); font-weight: 700; display: block; font-size: 16px; margin-bottom: var(--s-1); }
+.state.error .code { font-size: 14px; color: var(--red); font-weight: 700; padding: var(--s-1) var(--s-2); border: 1px solid var(--red); border-radius: var(--r); align-self: flex-start; margin-top: auto; }
+
+/* footer */
+.foot { margin-top: var(--s-12); padding-top: var(--s-5); border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; color: var(--ink-dim); font-weight: 400; line-height: 2; }
+.foot .mark-s { color: var(--ink-mid); font-weight: 500; }
+.foot .keys { display: flex; gap: var(--s-5); }
+.foot .keys kbd { font-family: var(--mono); font-size: 14px; font-weight: 500; padding: 0 var(--s-1); border: 1px solid var(--border); border-radius: var(--r); background: var(--bg-lift); color: var(--ink-mid); margin-right: var(--s-1); }
+
+/* source attribution footer */
+.attribution {
+  margin-top: var(--s-5);
+  padding: var(--s-3) var(--s-4);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  font-size: 14px;
+  color: var(--ink-dim);
+  line-height: 1.5;
+}
+.attribution b { color: var(--ink-mid); font-weight: 700; }
+.attribution a { color: var(--ink-mid); text-decoration: underline; text-decoration-color: var(--ink-dim); text-underline-offset: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Mina placeholder mark — stylized M + zk dot, used inline where the real
+     asset isn't available. Replace with canonical brand asset in production. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-mina-placeholder" viewBox="0 0 16 16">
+      <path d="M3 13 L3 3.5 L8 10 L13 3.5 L13 13" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="8" cy="7" r="1.3" fill="currentColor"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="shell">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="mark-brand">
+      <span>TOWNHOUSE</span>
+      <span class="ver">v0.21.0</span>
+    </div>
+    <div class="op-handle">
+      <span class="prefix">operator:</span>
+      <span class="name">jonathan</span>
+      <span class="prefix">@</span>
+      <span>tower-01.local</span>
+    </div>
+    <div class="wallet">
+      <span class="lbl">wallet</span>
+      <span class="v">1,248,392</span>
+      <span class="u">sats</span>
+    </div>
+    <div class="ator">
+      <span class="dot"></span>
+      <b>ATOR connected</b>
+      <span>3 hops</span>
+    </div>
+    <div class="clock">02:14<span class="z">local</span></div>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="today">
+      <div class="lbl">today · earnings</div>
+      <div class="num">42,891<span class="unit">sats</span></div>
+      <div class="delta">12.4%<span class="ref">vs. yesterday · window 00:00–02:14</span></div>
+    </div>
+    <div class="breakdown">
+      <div class="bd-pill t-town">
+        <div class="head"><span class="chip">TOWN</span><span class="count"><b>3</b> relays</span></div>
+        <div class="val">28,442<span class="u">sats</span></div>
+      </div>
+      <div class="bd-pill t-mill">
+        <div class="head"><span class="chip">MILL</span><span class="count"><b>2</b> pairs</span></div>
+        <div class="val">11,208<span class="u">sats</span></div>
+      </div>
+      <div class="bd-pill t-dvm">
+        <div class="head"><span class="chip">DVM</span><span class="count"><b>1</b> worker</span></div>
+        <div class="val">3,241<span class="u">sats</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CHAINS STRIP — now with real brand marks -->
+  <section class="chains">
+    <div class="chains-head">
+      <div class="title">chains <span class="idx">· 6 supported</span></div>
+      <div class="meta">
+        <span class="active">active <b>3</b></span>
+        <span>healthy <b>5</b></span>
+        <span class="idle">idle <b>1</b></span>
+      </div>
+    </div>
+
+    <div class="chain-grid">
+
+      <!-- Ethereum -->
+      <div class="chain">
+        <div class="row-1">
+          <img class="mark mark-xl" src="https://icons.llamao.fi/icons/chains/rsz_ethereum.jpg" alt="Ethereum">
+          <span class="name">Ethereum</span>
+          <span class="ticker">ETH</span>
+        </div>
+        <div class="tokens">
+          <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>ETH</b></span>
+          <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>USDC</b></span>
+        </div>
+        <div class="status">
+          <span class="st">OK</span>
+          <span class="blk">blk 19,482,118</span>
+        </div>
+      </div>
+
+      <!-- Base -->
+      <div class="chain is-active">
+        <div class="row-1">
+          <img class="mark mark-xl" src="https://icons.llamao.fi/icons/chains/rsz_base.jpg" alt="Base">
+          <span class="name">Base</span>
+          <span class="ticker">ETH</span>
+        </div>
+        <div class="tokens">
+          <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>ETH</b></span>
+          <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>USDC</b></span>
+        </div>
+        <div class="status">
+          <span class="st" style="color:var(--mill)">ACTIVE</span>
+          <span class="blk">blk 12,094,228</span>
+        </div>
+      </div>
+
+      <!-- Optimism -->
+      <div class="chain is-active">
+        <div class="row-1">
+          <img class="mark mark-xl" src="https://icons.llamao.fi/icons/chains/rsz_optimism.jpg" alt="Optimism">
+          <span class="name">Optimism</span>
+          <span class="ticker">ETH</span>
+        </div>
+        <div class="tokens">
+          <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>ETH</b></span>
+          <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>USDC</b></span>
+        </div>
+        <div class="status">
+          <span class="st" style="color:var(--mill)">ACTIVE</span>
+          <span class="blk">blk 128,410,552</span>
+        </div>
+      </div>
+
+      <!-- Arbitrum -->
+      <div class="chain">
+        <div class="row-1">
+          <img class="mark mark-xl" src="https://icons.llamao.fi/icons/chains/rsz_arbitrum.jpg" alt="Arbitrum">
+          <span class="name">Arbitrum</span>
+          <span class="ticker">ETH</span>
+        </div>
+        <div class="tokens">
+          <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>ETH</b></span>
+          <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>USDC</b></span>
+        </div>
+        <div class="status">
+          <span class="st">OK</span>
+          <span class="blk">blk 305,882,491</span>
+        </div>
+      </div>
+
+      <!-- Solana -->
+      <div class="chain">
+        <div class="row-1">
+          <img class="mark mark-xl" src="https://icons.llamao.fi/icons/chains/rsz_solana.jpg" alt="Solana">
+          <span class="name">Solana</span>
+          <span class="ticker">SOL</span>
+        </div>
+        <div class="tokens">
+          <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/sol.svg" alt="SOL"><b>SOL</b></span>
+          <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>USDC</b></span>
+        </div>
+        <div class="status">
+          <span class="st">OK</span>
+          <span class="blk">slot 298,412,884</span>
+        </div>
+      </div>
+
+      <!-- Mina — sourced from MinaProtocol/mina-resources -->
+      <div class="chain is-idle">
+        <div class="row-1">
+          <img class="mark mark-xl" src="./assets/Mina.png" alt="Mina">
+          <span class="name">Mina</span>
+          <span class="ticker">MINA</span>
+        </div>
+        <div class="tokens">
+          <span class="tok"><img class="mark mark-sm" src="./assets/Mina.png" alt="MINA"><b>MINA</b></span>
+        </div>
+        <div class="status">
+          <span class="st idle">IDLE</span>
+          <span class="blk">blk 482,118</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- NODE GRID -->
+    <section>
+      <div class="section-head">
+        <div class="title">nodes <span class="idx">6 total</span></div>
+        <div class="meta">
+          <span>active <b>5</b></span>
+          <span class="deg">degraded <b>1</b></span>
+          <span>down <b>0</b></span>
+        </div>
+      </div>
+
+      <div class="node-grid">
+
+        <!-- town-01 -->
+        <article class="node t-town">
+          <div class="node-row-1">
+            <div class="node-id">town-01<span class="host">tower-01</span></div>
+            <span class="type-chip">TOWN</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot"></span>
+            <span class="status-text ok">operational</span>
+            <span class="meta">uptime <b>98d 04h</b></span>
+          </div>
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">relay events / hr</span>
+              <span class="v">14,208<span class="u">evt</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">connections</span>
+              <span class="v">312</span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity">
+              <span style="height:40%"></span><span style="height:55%"></span><span style="height:50%"></span>
+              <span style="height:65%"></span><span style="height:70%"></span><span style="height:75%"></span>
+              <span style="height:85%" class="hi"></span><span style="height:95%" class="hi"></span>
+            </div>
+            <span class="node-sub">earn <b>12,884 sats</b></span>
+          </div>
+        </article>
+
+        <!-- town-02 -->
+        <article class="node t-town">
+          <div class="node-row-1">
+            <div class="node-id">town-02<span class="host">edge-hel</span></div>
+            <span class="type-chip">TOWN</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot"></span>
+            <span class="status-text ok">operational</span>
+            <span class="meta">uptime <b>42d 18h</b></span>
+          </div>
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">relay events / hr</span>
+              <span class="v">9,487<span class="u">evt</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">connections</span>
+              <span class="v">208</span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity">
+              <span style="height:35%"></span><span style="height:45%"></span><span style="height:50%"></span>
+              <span style="height:55%"></span><span style="height:60%"></span><span style="height:65%"></span>
+              <span style="height:70%" class="hi"></span><span style="height:80%" class="hi"></span>
+            </div>
+            <span class="node-sub">earn <b>11,208 sats</b></span>
+          </div>
+        </article>
+
+        <!-- town-03 DEGRADED -->
+        <article class="node t-town is-degraded">
+          <div class="node-row-1">
+            <div class="node-id">town-03<span class="host">edge-sgp</span></div>
+            <span class="type-chip">TOWN</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot deg"></span>
+            <span class="status-text deg">DEGRADED</span>
+            <span class="meta">err rate <b>4.2%</b></span>
+          </div>
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">relay events / hr</span>
+              <span class="v">4,747<span class="u">evt</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">connections</span>
+              <span class="v">88</span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity">
+              <span style="height:70%"></span><span style="height:55%"></span><span style="height:40%"></span>
+              <span style="height:30%" class="err"></span><span style="height:25%" class="err"></span>
+              <span style="height:35%"></span><span style="height:20%" class="err"></span><span style="height:30%"></span>
+            </div>
+            <span class="node-sub">last err <b>02:11:42</b></span>
+          </div>
+        </article>
+
+        <!-- mill-eth-01 SELECTED -->
+        <article class="node t-mill is-selected">
+          <div class="node-row-1">
+            <div class="node-id">mill-eth-01<span class="host">tower-01</span></div>
+            <span class="type-chip">MILL</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot rebal"></span>
+            <span class="status-text rebal">rebalancing</span>
+            <span class="meta">pool <b>24.3 ETH</b></span>
+          </div>
+
+          <div class="pair-chips">
+            <span class="lbl">pair</span>
+            <span class="pc">
+              <img class="mark mark-md" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>ETH</b>
+              <span class="sep">·</span>
+              <img class="mark mark-md" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>USDC</b>
+            </span>
+            <span class="ar">↔</span>
+            <span class="pc">
+              <img class="mark mark-md" src="https://icons.llamao.fi/icons/chains/rsz_ethereum.jpg" alt="Ethereum"><b>ETH</b>
+              <span class="sep">↔</span>
+              <img class="mark mark-md" src="https://icons.llamao.fi/icons/chains/rsz_base.jpg" alt="Base"><b>BASE</b>
+            </span>
+          </div>
+
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">pool utilization</span>
+              <span class="v">87.3<span class="u">%</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">swaps / 24h</span>
+              <span class="v">247</span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity">
+              <span style="height:55%"></span><span style="height:65%"></span><span style="height:70%"></span>
+              <span style="height:75%"></span><span style="height:80%" class="hi"></span>
+              <span style="height:90%" class="hi"></span><span style="height:85%" class="hi"></span><span style="height:95%" class="hi"></span>
+            </div>
+            <span class="node-sub">earn <b>7,842 sats</b></span>
+          </div>
+        </article>
+
+        <!-- mill-base-01 -->
+        <article class="node t-mill">
+          <div class="node-row-1">
+            <div class="node-id">mill-base-01<span class="host">tower-01</span></div>
+            <span class="type-chip">MILL</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot" style="background:var(--mill)"></span>
+            <span class="status-text ok">operational</span>
+            <span class="meta">pool <b>18.6 ETH</b></span>
+          </div>
+
+          <div class="pair-chips">
+            <span class="lbl">pair</span>
+            <span class="pc">
+              <img class="mark mark-md" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>ETH</b>
+              <span class="sep">·</span>
+              <img class="mark mark-md" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>USDC</b>
+            </span>
+            <span class="ar">↔</span>
+            <span class="pc">
+              <img class="mark mark-md" src="https://icons.llamao.fi/icons/chains/rsz_base.jpg" alt="Base"><b>BASE</b>
+              <span class="sep">↔</span>
+              <img class="mark mark-md" src="https://icons.llamao.fi/icons/chains/rsz_optimism.jpg" alt="Optimism"><b>OP</b>
+            </span>
+          </div>
+
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">pool utilization</span>
+              <span class="v">62.1<span class="u">%</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">swaps / 24h</span>
+              <span class="v">184</span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity">
+              <span style="height:45%"></span><span style="height:50%"></span><span style="height:55%"></span>
+              <span style="height:50%"></span><span style="height:60%"></span><span style="height:58%"></span>
+              <span style="height:65%"></span><span style="height:70%" class="hi"></span>
+            </div>
+            <span class="node-sub">earn <b>3,366 sats</b></span>
+          </div>
+        </article>
+
+        <!-- dvm-whisper-01 -->
+        <article class="node t-dvm">
+          <div class="node-row-1">
+            <div class="node-id">dvm-whisper-01<span class="host">gpu-01</span></div>
+            <span class="type-chip">DVM</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot" style="background:var(--dvm)"></span>
+            <span class="status-text ok">operational</span>
+            <span class="meta">model <b>whisper-lg-v3</b></span>
+          </div>
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">jobs in queue</span>
+              <span class="v">4<span class="u">job</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">avg latency</span>
+              <span class="v">2.8<span class="u">s</span></span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity">
+              <span style="height:20%"></span><span style="height:35%"></span><span style="height:25%"></span>
+              <span style="height:50%"></span><span style="height:40%"></span><span style="height:60%" class="hi"></span>
+              <span style="height:45%"></span><span style="height:70%" class="hi"></span>
+            </div>
+            <span class="node-sub">earn <b>3,241 sats</b></span>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- MILL DETAIL PANEL -->
+    <aside class="detail">
+
+      <header class="detail-head">
+        <div class="detail-title">
+          <div class="id">mill-eth-01</div>
+          <div class="pair">
+            <span class="chain-id">
+              <img class="mark mark-md" src="https://icons.llamao.fi/icons/chains/rsz_ethereum.jpg" alt="Ethereum">ETHEREUM
+            </span>
+            <span class="arrow">↔</span>
+            <span class="chain-id">
+              <img class="mark mark-md" src="https://icons.llamao.fi/icons/chains/rsz_base.jpg" alt="Base">BASE
+            </span>
+          </div>
+          <div class="token-row">
+            <span>trades:</span>
+            <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>ETH</b></span>
+            <span class="tok"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>USDC</b></span>
+          </div>
+        </div>
+        <div class="detail-status">
+          <div class="chip"><span class="pulse"></span>REBALANCING</div>
+          <div class="uptime">uptime <b>42d 18h</b></div>
+        </div>
+      </header>
+
+      <!-- LIQUIDITY with chain marks bookending the bar -->
+      <section class="block">
+        <div class="block-head">
+          <span class="lbl">liquidity pool</span>
+          <span class="r">24.3<span class="u">ETH</span></span>
+        </div>
+        <div class="liq-wrap">
+          <div class="end">
+            <img class="mark mark-lg" src="https://icons.llamao.fi/icons/chains/rsz_ethereum.jpg" alt="Ethereum">
+            <span class="lbl">ETH</span>
+          </div>
+          <div class="bar">
+            <div class="seg allocated">12.4</div>
+            <div class="seg in-swap">3.2</div>
+            <div class="seg available">8.7</div>
+          </div>
+          <div class="end">
+            <img class="mark mark-lg" src="https://icons.llamao.fi/icons/chains/rsz_base.jpg" alt="Base">
+            <span class="lbl">BASE</span>
+          </div>
+        </div>
+        <div class="bar-legend">
+          <div class="item"><span class="sw a"></span>allocated <b>12.4</b></div>
+          <div class="item"><span class="sw b"></span>in-swap <b>3.2</b></div>
+          <div class="item"><span class="sw c"></span>available <b>8.7</b></div>
+        </div>
+      </section>
+
+      <!-- FEE -->
+      <section class="block">
+        <div class="fee-head">
+          <div class="fee-cur">
+            <span class="k">current fee</span>
+            <span class="v">0.25<span class="u">%</span></span>
+          </div>
+          <div class="fee-est">
+            <span class="k">estimated daily</span>
+            <span class="v">247,000<span class="u">sats</span></span>
+            <span class="sub">at 24h average volume</span>
+          </div>
+        </div>
+        <div class="slider">
+          <div class="fill"></div>
+          <div class="thumb"></div>
+        </div>
+        <div class="slider-labels">
+          <span>0.05%</span>
+          <span class="on">0.25%</span>
+          <span>0.50%</span>
+          <span>1.00%</span>
+        </div>
+      </section>
+
+      <!-- CHART -->
+      <section class="chart">
+        <div class="chart-head">
+          <span style="font-size:14px;color:var(--ink-dim);font-weight:500">profit · 7d</span>
+          <div class="win">
+            <span>24H</span>
+            <span class="on">7D</span>
+            <span>30D</span>
+          </div>
+        </div>
+        <div class="bars">
+          <div class="bar-c"><div class="b" style="height:45%"></div><div class="d">W</div></div>
+          <div class="bar-c"><div class="b" style="height:62%"></div><div class="d">T</div></div>
+          <div class="bar-c"><div class="b" style="height:55%"></div><div class="d">F</div></div>
+          <div class="bar-c"><div class="b" style="height:70%"></div><div class="d">S</div></div>
+          <div class="bar-c"><div class="b" style="height:52%"></div><div class="d">S</div></div>
+          <div class="bar-c"><div class="b" style="height:78%"></div><div class="d">M</div></div>
+          <div class="bar-c"><div class="b hi" style="height:92%"></div><div class="d today">T</div></div>
+        </div>
+        <div class="chart-foot">
+          <span>7d total <b>1,428,921 sats</b></span>
+          <span class="up">+14.8% vs. prev week</span>
+        </div>
+      </section>
+
+      <!-- RECENT SWAPS with inline real asset marks -->
+      <section class="events">
+        <div class="events-head">
+          <span class="head">recent swaps</span>
+          <span class="live"><span class="pip"></span>LIVE</span>
+        </div>
+
+        <div class="evt">
+          <span class="t">02:13:48</span>
+          <span class="what">
+            <span class="tok-inline"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>0.42 ETH</b></span>
+            <span class="arrow">→</span>
+            <span class="tok-inline"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>1,340 USDC</b></span>
+            <em>on</em>
+            <span class="tok-inline"><img class="mark mark-sm" src="https://icons.llamao.fi/icons/chains/rsz_base.jpg" alt="Base"><b>BASE</b></span>
+          </span>
+          <span class="amt">312<span class="u">sats</span></span>
+        </div>
+
+        <div class="evt">
+          <span class="t">02:13:21</span>
+          <span class="what">
+            <span class="tok-inline"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>5,740 USDC</b></span>
+            <span class="arrow">→</span>
+            <span class="tok-inline"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>1.80 ETH</b></span>
+            <em>on</em>
+            <span class="tok-inline"><img class="mark mark-sm" src="https://icons.llamao.fi/icons/chains/rsz_ethereum.jpg" alt="Ethereum"><b>ETH</b></span>
+          </span>
+          <span class="amt">1,340<span class="u">sats</span></span>
+        </div>
+
+        <div class="evt">
+          <span class="t">02:12:55</span>
+          <span class="what">
+            <span class="tok-inline"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>0.08 ETH</b></span>
+            <span class="arrow">→</span>
+            <span class="tok-inline"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>255 USDC</b></span>
+            <em>on</em>
+            <span class="tok-inline"><img class="mark mark-sm" src="https://icons.llamao.fi/icons/chains/rsz_base.jpg" alt="Base"><b>BASE</b></span>
+          </span>
+          <span class="amt">62<span class="u">sats</span></span>
+        </div>
+
+        <div class="evt">
+          <span class="t">02:12:14</span>
+          <span class="what">
+            <span class="tok-inline"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>3.20 ETH</b></span>
+            <span class="arrow">→</span>
+            <span class="tok-inline"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>3.20 ETH</b></span>
+            <em>rebal</em>
+            <span class="tok-inline">
+              <img class="mark mark-sm" src="https://icons.llamao.fi/icons/chains/rsz_ethereum.jpg" alt="Ethereum">
+              →
+              <img class="mark mark-sm" src="https://icons.llamao.fi/icons/chains/rsz_base.jpg" alt="Base">
+            </span>
+          </span>
+          <span class="amt pale">—</span>
+        </div>
+
+        <div class="evt">
+          <span class="t">02:11:09</span>
+          <span class="what">
+            <span class="tok-inline"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/usdc.svg" alt="USDC"><b>798 USDC</b></span>
+            <span class="arrow">→</span>
+            <span class="tok-inline"><img class="mark mark-sm" src="https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/svg/color/eth.svg" alt="ETH"><b>0.25 ETH</b></span>
+            <em>on</em>
+            <span class="tok-inline"><img class="mark mark-sm" src="https://icons.llamao.fi/icons/chains/rsz_ethereum.jpg" alt="Ethereum"><b>ETH</b></span>
+          </span>
+          <span class="amt">190<span class="u">sats</span></span>
+        </div>
+
+      </section>
+
+    </aside>
+
+  </main>
+
+  <!-- STATES -->
+  <section class="states">
+    <div class="states-head">
+      <span class="title">states · reference</span>
+      <span class="note">loading · empty · error conventions for all data surfaces</span>
+    </div>
+    <div class="states-grid">
+      <div class="state loading">
+        <span class="lbl">loading</span>
+        <div class="skel">
+          <div class="l w1"></div>
+          <div class="l w2"></div>
+          <div class="l w3"></div>
+        </div>
+      </div>
+      <div class="state empty">
+        <span class="lbl">empty</span>
+        <div class="msg">
+          <b>No nodes configured</b>
+          Register your first node from the command line to begin.
+        </div>
+        <span class="input">townhouse init</span>
+      </div>
+      <div class="state error">
+        <span class="lbl">error</span>
+        <div class="msg">
+          <b>Daemon unreachable</b>
+          Operator action required. Check the daemon process and reconnect.
+        </div>
+        <span class="code">ERR · DAEMON_UNREACHABLE</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ASSET ATTRIBUTION — small prose footer for provenance -->
+  <aside class="attribution">
+    <b>Brand-asset sourcing (spike reference):</b>
+    chain marks hotlinked from <a href="https://icons.llamao.fi" target="_blank" rel="noopener">DefiLlama icon CDN</a>;
+    token marks from <a href="https://github.com/spothq/cryptocurrency-icons" target="_blank" rel="noopener">spothq/cryptocurrency-icons (CC0-1.0)</a>;
+    Mina mark served locally from <code>./assets/Mina.png</code> (supplied by operator).
+    For shipped code, self-host all marks in <code>packages/townhouse/web/public/marks/</code> and document licenses in <code>ASSETS.md</code>.
+  </aside>
+
+  <!-- FOOTER -->
+  <footer class="foot">
+    <div class="mark-s">TOWNHOUSE · operator console</div>
+    <div class="keys">
+      <span><kbd>⌘K</kbd>command</span>
+      <span><kbd>N</kbd>nodes</span>
+      <span><kbd>C</kbd>chains</span>
+      <span><kbd>W</kbd>wallet</span>
+      <span><kbd>?</kbd>help</span>
+    </div>
+    <div>design-direction-spike · v6 · ink-terminal · real-assets</div>
+  </footer>
+
+</div>
+
+</body>
+</html>

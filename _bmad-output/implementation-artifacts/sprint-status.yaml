@@ -399,16 +399,19 @@ development_status:
   # ═══════════════════════════════════════════════════════════════
 
   # Epic 21: Townhouse — Node Provider Dashboard & Orchestrator
-  # 17 stories across 3 phases: Orchestrator Core, API + Dashboard, First-Run + Polish
+  # 18 stories across 3 phases: Orchestrator Core, API + Dashboard, First-Run + Polish
+  # Story 21.8.5 inserted 2026-04-20 from design-direction spike work
+  # (v1–v6 in _bmad-output/planning-artifacts/design-spikes/; chosen direction: v6 Ink Terminal)
   epic-21: in-progress
   21-1-package-scaffold-and-cli-entrypoint: done
   21-2-docker-orchestration-engine: done
   21-3-standalone-connector-integration: done
-  21-4-hd-wallet-management-and-key-derivation: backlog
+  21-4-hd-wallet-management-and-key-derivation: done
   21-5-town-node-dockerfile: backlog
   21-6-mill-node-dockerfile: backlog
   21-7-dvm-node-dockerfile: backlog
   21-8-fastify-rest-websocket-metrics-api: backlog
+  21-8-5-dashboard-design-system-foundation: backlog
   21-9-dashboard-spa-home-view: backlog
   21-10-dashboard-town-management-view: backlog
   21-11-dashboard-mill-management-view: backlog
