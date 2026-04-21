@@ -57,10 +57,26 @@ services:
     # BTP port 3000 exposed for connector peer communication (Docker-internal only)
     expose:
       - '3000'
+    ports:
+      - '127.0.0.1:7100:7100'
+      - '127.0.0.1:3100:3100'
     environment:
       # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
       CONNECTOR_URL: ws://townhouse-connector:3000
       FEE_PER_EVENT: '0'
+      # Identity env vars (injected by orchestrator at runtime)
+      NODE_NOSTR_PUBKEY: ''
+      NODE_EVM_ADDRESS: ''
+      NODE_NOSTR_SECRET_KEY: ''
+    volumes:
+      - townhouse-town-data:/data
+    healthcheck:
+      # nosemgrep: trailofbits.generic.wget-unencrypted-url.wget-unencrypted-url -- container-internal health probe, TLS unnecessary
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3100/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -106,3 +122,6 @@ services:
       CONNECTOR_URL: ws://townhouse-connector:3000
       FEE_PER_JOB: '0'
     restart: unless-stopped
+
+volumes:
+  townhouse-town-data:

@@ -407,7 +407,7 @@ development_status:
   21-2-docker-orchestration-engine: done
   21-3-standalone-connector-integration: done
   21-4-hd-wallet-management-and-key-derivation: done
-  21-5-town-node-dockerfile: backlog
+  21-5-town-node-dockerfile: done
   21-6-mill-node-dockerfile: backlog
   21-7-dvm-node-dockerfile: backlog
   21-8-fastify-rest-websocket-metrics-api: backlog
