@@ -23,9 +23,14 @@ services:
     networks:
       - townhouse-net
     ports:
-      - '9401:9401'
+      - '127.0.0.1:9401:9401'
     environment:
       CONNECTOR_ADMIN_PORT: '9401'
+      CONNECTOR_ILP_ADDRESS: g.townhouse
+      # CONNECTOR_PEERS is overridden at runtime by the orchestrator.
+      # Default value includes all three node types for compose-only usage.
+      # nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket -- Docker-internal BTP URLs, TLS unnecessary
+      CONNECTOR_PEERS: '[{"id":"town","relation":"child","btpUrl":"btp+ws://townhouse-town:3000","assetCode":"USD","assetScale":6},{"id":"mill","relation":"child","btpUrl":"btp+ws://townhouse-mill:3000","assetCode":"USD","assetScale":6},{"id":"dvm","relation":"child","btpUrl":"btp+ws://townhouse-dvm:3000","assetCode":"USD","assetScale":6}]'
       TRANSPORT_MODE: direct
     restart: unless-stopped
     healthcheck:
@@ -49,6 +54,9 @@ services:
     depends_on:
       connector:
         condition: service_healthy
+    # BTP port 3000 exposed for connector peer communication (Docker-internal only)
+    expose:
+      - '3000'
     environment:
       # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
       CONNECTOR_URL: ws://townhouse-connector:3000
@@ -68,6 +76,9 @@ services:
     depends_on:
       connector:
         condition: service_healthy
+    # BTP port 3000 exposed for connector peer communication (Docker-internal only)
+    expose:
+      - '3000'
     environment:
       # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
       CONNECTOR_URL: ws://townhouse-connector:3000
@@ -87,6 +98,9 @@ services:
     depends_on:
       connector:
         condition: service_healthy
+    # BTP port 3000 exposed for connector peer communication (Docker-internal only)
+    expose:
+      - '3000'
     environment:
       # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
       CONNECTOR_URL: ws://townhouse-connector:3000

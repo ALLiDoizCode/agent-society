@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOWNHOUSE — Operator Console [design-direction-spike v1]</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/*
+  ════════════════════════════════════════════════════════════════════════════════
+  DESIGN DIRECTION — "NIGHT SHIFT TERMINAL"
+  ════════════════════════════════════════════════════════════════════════════════
+  Committed mono-typographic operator console. Warm graphite ground (not pitch
+  black — easier on 2am eyes). JetBrains Mono for body + numerics (tabular), Space
+  Mono for display. Dense but breathing. ASCII-flavored rule work and corner
+  brackets read as infrastructure, not ornament. Accents are muted, earth-pulled —
+  no neon. Two motion moments earn their keep:
+    (1) REBALANCE SCANLINE — a diagonal shimmer across the "in-swap" segment of
+        the active Mill's liquidity bar. Present tense, not decoration.
+    (2) DEGRADED HEARTBEAT — a slow, quiet pulse on town-03's status dot. Not
+        alarming. Present. "This one needs you."
+  Everything else holds still. A dashboard that twitches for no reason is an
+  insult to a tired operator.
+  ════════════════════════════════════════════════════════════════════════════════
+*/
+
+:root {
+  /* ── surfaces ─────────────────────────────────────── */
+  --bg-deep:    #0A0C10;
+  --bg-base:    #0F1218;
+  --bg-raise:   #151924;
+  --bg-raise-2: #1B2030;
+  --bg-inset:   #080A0E;
+
+  /* ── lines ────────────────────────────────────────── */
+  --line-dim:   #1A1E28;
+  --line:       #262B38;
+  --line-hi:    #3A4152;
+
+  /* ── ink ──────────────────────────────────────────── */
+  --ink-hi:     #EAECF3;
+  --ink:        #C0C5D0;
+  --ink-mid:    #838A9B;
+  --ink-dim:    #545B6C;
+  --ink-mute:   #353B49;
+
+  /* ── node identity (non-negotiable per epic spec) ──── */
+  --town:       #E8B14A;  --town-soft:  #2E2413;
+  --mill:       #6FD389;  --mill-soft:  #142A1B;
+  --dvm:        #6FA5FF;  --dvm-soft:   #141F33;
+
+  /* ── status (distinct from identity) ──────────────── */
+  --s-ok:       #6FD389;
+  --s-deg:      #F29D4E;
+  --s-down:     #E5584F;
+  --s-pend:     #838A9B;
+
+  /* ── type ─────────────────────────────────────────── */
+  --mono:     'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --display:  'Space Mono', 'JetBrains Mono', monospace;
+  --ease:     cubic-bezier(.2, .8, .2, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg-deep);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.5;
+  font-feature-settings: "tnum" 1, "ss01" 1;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* subtle noise for atmosphere — kills banding on dark surfaces */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .08 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+  opacity: .55;
+}
+
+/* subtle radial vignette — pulls focus to the console */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 99;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(232,177,74,.025), transparent 60%),
+    radial-gradient(ellipse at 100% 100%, rgba(111,165,255,.02), transparent 55%);
+}
+
+.shell {
+  position: relative;
+  z-index: 2;
+  max-width: 1620px;
+  margin: 0 auto;
+  padding: 0 28px 56px;
+}
+
+/* utility — ascii-flavored corner brackets */
+.bracketed { position: relative; }
+.bracketed::before,
+.bracketed::after,
+.bracketed > .br-tl,
+.bracketed > .br-tr,
+.bracketed > .br-bl,
+.bracketed > .br-br { content: ''; position: absolute; width: 9px; height: 9px; pointer-events: none; }
+.bracketed::before  { top: -1px; left: -1px;  border-top: 1px solid var(--line-hi); border-left: 1px solid var(--line-hi); }
+.bracketed::after   { top: -1px; right: -1px; border-top: 1px solid var(--line-hi); border-right: 1px solid var(--line-hi); }
+.bracketed .br-bl   { bottom: -1px; left: -1px;  border-bottom: 1px solid var(--line-hi); border-left: 1px solid var(--line-hi); }
+.bracketed .br-br   { bottom: -1px; right: -1px; border-bottom: 1px solid var(--line-hi); border-right: 1px solid var(--line-hi); }
+
+/* utility — section eyebrow label */
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  font-weight: 500;
+}
+.eyebrow .sep { color: var(--ink-mute); margin: 0 .6em; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TOP BAR
+   ════════════════════════════════════════════════════════════════════════════ */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto auto;
+  align-items: center;
+  gap: 28px;
+  padding: 16px 0 15px;
+  background: linear-gradient(to bottom, var(--bg-deep) 70%, rgba(10,12,16,.7));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+.topbar::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: linear-gradient(to right,
+    transparent 0%,
+    var(--town) 18%,
+    var(--mill) 50%,
+    var(--dvm) 82%,
+    transparent 100%);
+  opacity: .3;
+}
+
+.mark {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: .22em;
+  color: var(--ink-hi);
+}
+.mark .pip {
+  display: inline-block;
+  width: 5px; height: 5px;
+  background: var(--town);
+  box-shadow: 0 0 8px rgba(232,177,74,.6);
+  transform: translateY(-1px);
+}
+.mark .ver {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .12em;
+  color: var(--ink-dim);
+  font-weight: 400;
+}
+
+.op-handle {
+  font-size: 12px;
+  color: var(--ink-mid);
+  letter-spacing: .04em;
+}
+.op-handle .prompt { color: var(--ink-mute); margin-right: 6px; }
+.op-handle .name { color: var(--ink-hi); font-weight: 500; }
+
+.wallet {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 14px 7px 12px;
+  background: var(--bg-base);
+  border: 1px solid var(--line);
+  position: relative;
+}
+.wallet .lbl {
+  font-size: 9px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink-dim); font-weight: 500;
+}
+.wallet .val {
+  font-size: 14px; font-weight: 600; color: var(--ink-hi); letter-spacing: .02em;
+}
+.wallet .unit { font-size: 10px; color: var(--ink-mid); letter-spacing: .1em; }
+
+.ator {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--ink-mid);
+}
+.ator .led {
+  width: 7px; height: 7px;
+  background: var(--s-ok);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--s-ok), inset 0 0 2px rgba(255,255,255,.4);
+  position: relative;
+}
+.ator .led::after {
+  content: '';
+  position: absolute; inset: -6px;
+  border: 1px solid var(--s-ok);
+  border-radius: 50%;
+  opacity: .2;
+}
+.ator .hop {
+  color: var(--ink-dim); font-size: 10px; font-weight: 500;
+}
+
+.clock {
+  font-family: var(--display);
+  font-size: 16px; font-weight: 700; color: var(--ink-hi); letter-spacing: .06em;
+  padding-left: 20px; border-left: 1px solid var(--line);
+  display: flex; align-items: baseline; gap: 10px;
+}
+.clock .zone {
+  font-family: var(--mono);
+  font-size: 9px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--ink-dim); font-weight: 500;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   HERO — TODAY EARNINGS
+   ════════════════════════════════════════════════════════════════════════════ */
+.hero {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: end;
+  gap: 40px;
+  padding: 40px 28px 32px;
+  margin: 0 -28px 32px;
+  border-bottom: 1px solid var(--line-dim);
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(232,177,74,.04) 0%, transparent 30%),
+    linear-gradient(215deg, rgba(111,165,255,.03) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+.today {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.today .lbl {
+  font-size: 10px; letter-spacing: .24em; text-transform: uppercase;
+  color: var(--ink-dim); font-weight: 500;
+  display: flex; align-items: center; gap: 10px;
+}
+.today .lbl::before {
+  content: '▸';
+  color: var(--town); font-size: 10px;
+}
+.today .num {
+  font-family: var(--display);
+  font-size: 56px; font-weight: 700;
+  color: var(--ink-hi);
+  line-height: 1;
+  letter-spacing: -.01em;
+  display: flex; align-items: baseline; gap: 16px;
+}
+.today .num .unit {
+  font-family: var(--mono);
+  font-size: 16px; font-weight: 500;
+  color: var(--ink-mid); letter-spacing: .08em;
+}
+.today .delta {
+  display: flex; align-items: center; gap: 14px;
+  font-size: 12px;
+}
+.today .delta .up {
+  color: var(--s-ok);
+  font-weight: 500;
+  display: flex; align-items: center; gap: 4px;
+}
+.today .delta .up::before { content: '▲'; font-size: 8px; }
+.today .delta .ref { color: var(--ink-dim); }
+
+.breakdown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding-bottom: 6px;
+}
+.bd-pill {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--bg-base);
+  border: 1px solid var(--line);
+  position: relative;
+}
+.bd-pill::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--accent, var(--ink-mid));
+}
+.bd-pill.t-town { --accent: var(--town); }
+.bd-pill.t-mill { --accent: var(--mill); }
+.bd-pill.t-dvm  { --accent: var(--dvm); }
+
+.bd-pill .chip {
+  font-size: 9px; letter-spacing: .2em; text-transform: uppercase;
+  padding: 3px 7px;
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  font-weight: 600;
+}
+.bd-pill .amount {
+  font-size: 18px; font-weight: 600; color: var(--ink-hi);
+  letter-spacing: .01em;
+}
+.bd-pill .amount .u { font-size: 10px; color: var(--ink-mid); margin-left: 4px; font-weight: 400; }
+.bd-pill .spark {
+  display: flex; align-items: flex-end; gap: 2px; height: 22px;
+}
+.bd-pill .spark span {
+  width: 3px; background: var(--accent); opacity: .55;
+}
+
+.hero-spark {
+  display: flex; align-items: flex-end; gap: 3px;
+  height: 64px; width: 260px;
+  padding: 8px 0;
+}
+.hero-spark span {
+  flex: 1;
+  background: linear-gradient(to top, var(--line-hi), var(--ink-mid));
+  opacity: .4;
+  min-height: 4px;
+}
+.hero-spark span.accent { background: linear-gradient(to top, var(--town), var(--ink-hi)); opacity: 1; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MAIN GRID
+   ════════════════════════════════════════════════════════════════════════════ */
+.main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--line);
+}
+.section-head .title {
+  font-family: var(--display); font-weight: 700; font-size: 12px;
+  letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink-hi);
+  display: flex; align-items: center; gap: 10px;
+}
+.section-head .title .idx {
+  color: var(--ink-dim); font-weight: 400;
+}
+.section-head .meta {
+  display: flex; gap: 16px;
+  font-size: 10px; letter-spacing: .15em; text-transform: uppercase;
+  color: var(--ink-mid);
+}
+.section-head .meta b { color: var(--ink-hi); font-weight: 600; }
+
+/* ── NODE GRID ───────────────────────────────────────── */
+.node-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.node {
+  position: relative;
+  padding: 18px 18px 16px;
+  background: var(--bg-raise);
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+  opacity: 0;
+  transform: translateY(6px);
+  animation: cardIn .6s var(--ease) forwards;
+}
+.node:nth-child(1) { animation-delay: .04s; }
+.node:nth-child(2) { animation-delay: .10s; }
+.node:nth-child(3) { animation-delay: .16s; }
+.node:nth-child(4) { animation-delay: .22s; }
+.node:nth-child(5) { animation-delay: .28s; }
+.node:nth-child(6) { animation-delay: .34s; }
+
+@keyframes cardIn { to { opacity: 1; transform: translateY(0); } }
+
+.node::before {
+  content: '';
+  position: absolute; top: 0; left: 0; bottom: 0;
+  width: 2px;
+  background: var(--accent, var(--ink-mid));
+  opacity: .9;
+}
+.node.t-town { --accent: var(--town); }
+.node.t-mill { --accent: var(--mill); }
+.node.t-dvm  { --accent: var(--dvm); }
+
+.node.is-active {
+  background: linear-gradient(180deg, var(--bg-raise) 0%, var(--bg-raise-2) 100%);
+  border-color: var(--line-hi);
+  box-shadow: inset 0 0 0 1px rgba(111,211,137,.08);
+}
+.node.is-active::after {
+  content: '';
+  position: absolute; inset: -1px;
+  border: 1px solid var(--mill);
+  opacity: .25;
+  pointer-events: none;
+}
+
+.node-row-1 {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+}
+.node-id {
+  font-size: 13px; font-weight: 600; color: var(--ink-hi);
+  letter-spacing: .02em;
+}
+.node-id .host {
+  color: var(--ink-dim); font-weight: 400; margin-left: 6px; font-size: 11px;
+}
+.type-chip {
+  font-size: 9px; letter-spacing: .24em; text-transform: uppercase;
+  padding: 3px 8px 3px;
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+  font-weight: 600;
+}
+
+.node-row-2 {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--ink-mid);
+}
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--s-ok);
+  box-shadow: 0 0 6px color-mix(in oklab, var(--s-ok) 60%, transparent);
+}
+.status-dot.deg {
+  background: var(--s-deg);
+  box-shadow: 0 0 6px color-mix(in oklab, var(--s-deg) 60%, transparent);
+  /* DEGRADED HEARTBEAT — quiet 2.4s pulse, not alarming */
+  animation: heartbeat 2.4s var(--ease) infinite;
+}
+.status-dot.pending { background: var(--s-pend); box-shadow: none; }
+.status-text.deg { color: var(--s-deg); }
+.status-text.rebal { color: var(--mill); }
+
+@keyframes heartbeat {
+  0%, 100% { box-shadow: 0 0 6px color-mix(in oklab, var(--s-deg) 60%, transparent), 0 0 0 0 color-mix(in oklab, var(--s-deg) 30%, transparent); }
+  50%      { box-shadow: 0 0 10px color-mix(in oklab, var(--s-deg) 80%, transparent), 0 0 0 8px color-mix(in oklab, var(--s-deg) 0%, transparent); }
+}
+
+.node-row-3 {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-dim);
+}
+.node-metric {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.node-metric .k {
+  font-size: 9px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink-dim); font-weight: 500;
+}
+.node-metric .v {
+  font-family: var(--display);
+  font-size: 22px; font-weight: 700; color: var(--ink-hi);
+  line-height: 1; letter-spacing: -.01em;
+  display: flex; align-items: baseline; gap: 6px;
+}
+.node-metric .v .u { font-family: var(--mono); font-size: 10px; color: var(--ink-mid); font-weight: 500; letter-spacing: .1em; }
+
+.node-row-4 {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 14px;
+}
+.activity {
+  display: flex; align-items: flex-end; gap: 2px; height: 22px; flex: 1;
+}
+.activity span {
+  flex: 1; background: var(--accent, var(--ink-dim)); opacity: .35;
+}
+.activity.deg span { background: var(--s-deg); opacity: .4; }
+.activity span.hi { opacity: .85; }
+.activity span.err { background: var(--s-deg); opacity: .8; }
+
+.node-sub {
+  font-size: 10px; color: var(--ink-dim); letter-spacing: .04em;
+  white-space: nowrap;
+}
+.node-sub b { color: var(--ink-mid); font-weight: 500; }
+.node-sub.warn b { color: var(--s-deg); }
+
+/* ── MILL DETAIL PANEL ─────────────────────────────── */
+.detail {
+  position: sticky;
+  top: 84px;
+  padding: 22px 22px 0;
+  background: var(--bg-raise);
+  border: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  max-height: calc(100vh - 100px);
+}
+.detail::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--mill);
+  opacity: .8;
+}
+
+.detail-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding-bottom: 18px;
+  border-bottom: 1px dashed var(--line);
+}
+.detail-title {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.detail-title .id {
+  font-family: var(--display);
+  font-size: 22px; font-weight: 700; color: var(--ink-hi); letter-spacing: -.01em;
+}
+.detail-title .pair {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ink-mid);
+}
+.detail-title .pair .arrow { color: var(--mill); }
+.detail-title .pair b { color: var(--ink-hi); font-weight: 500; }
+
+.detail-status {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+}
+.detail-status .chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  background: color-mix(in oklab, var(--mill) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--mill) 40%, transparent);
+  font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--mill); font-weight: 600;
+}
+.detail-status .chip .pulse {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--mill);
+  animation: heartbeat-m 1.8s var(--ease) infinite;
+}
+@keyframes heartbeat-m {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--mill) 40%, transparent); }
+  60%      { box-shadow: 0 0 0 6px color-mix(in oklab, var(--mill) 0%, transparent); }
+}
+.detail-status .uptime {
+  font-size: 10px; color: var(--ink-dim); letter-spacing: .1em;
+}
+.detail-status .uptime b { color: var(--ink-mid); font-weight: 500; }
+
+/* liquidity bar */
+.liquidity {
+  padding: 20px 0 22px;
+  border-bottom: 1px dashed var(--line);
+}
+.liquidity .row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 10px;
+}
+.liquidity .lbl {
+  font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink-dim); font-weight: 500;
+}
+.liquidity .tot {
+  font-family: var(--display); font-size: 13px; font-weight: 700; color: var(--ink-hi);
+}
+.liquidity .tot .u { font-family: var(--mono); font-size: 10px; color: var(--ink-mid); margin-left: 4px; font-weight: 400; }
+
+.bar {
+  display: flex;
+  height: 26px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  position: relative;
+  overflow: hidden;
+}
+.bar .seg {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 600; letter-spacing: .08em;
+  color: var(--ink-hi);
+  position: relative;
+}
+.bar .seg.allocated { background: color-mix(in oklab, var(--mill) 55%, var(--bg-raise-2)); flex: 12.4; }
+.bar .seg.in-swap   { background: color-mix(in oklab, var(--mill) 25%, var(--bg-raise-2)); flex: 3.2; overflow: hidden; }
+.bar .seg.available { background: var(--bg-raise-2); flex: 8.7; color: var(--ink-mid); }
+
+/* ─── SIGNATURE MOTION: rebalance scanline ────────────
+   Diagonal shimmer sweeps across the in-swap segment.
+   Present tense — "liquidity is currently moving." */
+.bar .seg.in-swap::before {
+  content: '';
+  position: absolute; top: -20%; left: -60%;
+  width: 60%; height: 140%;
+  background: linear-gradient(100deg,
+    transparent 30%,
+    rgba(234,236,243,.15) 50%,
+    rgba(111,211,137,.35) 52%,
+    rgba(234,236,243,.15) 54%,
+    transparent 70%);
+  animation: rebal-sweep 2.2s linear infinite;
+  transform: skewX(-20deg);
+}
+@keyframes rebal-sweep {
+  from { left: -60%; }
+  to   { left: 120%; }
+}
+
+.bar-legend {
+  display: flex; justify-content: space-between;
+  margin-top: 10px;
+  font-size: 10px; letter-spacing: .1em; color: var(--ink-dim);
+}
+.bar-legend .item { display: flex; align-items: center; gap: 6px; }
+.bar-legend .sw { width: 9px; height: 9px; }
+.bar-legend .sw.a { background: color-mix(in oklab, var(--mill) 55%, var(--bg-raise-2)); }
+.bar-legend .sw.b { background: color-mix(in oklab, var(--mill) 25%, var(--bg-raise-2)); border: 1px solid var(--mill); }
+.bar-legend .sw.c { background: var(--bg-raise-2); border: 1px solid var(--line-hi); }
+.bar-legend b { color: var(--ink-hi); font-weight: 500; margin-left: 4px; }
+
+/* fee config */
+.fee {
+  padding: 20px 0 22px;
+  border-bottom: 1px dashed var(--line);
+}
+.fee .row {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  margin-bottom: 16px;
+}
+.fee .cur {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.fee .cur .k { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); }
+.fee .cur .v { font-family: var(--display); font-size: 28px; font-weight: 700; color: var(--ink-hi); line-height: 1; }
+.fee .cur .v .u { font-family: var(--mono); font-size: 13px; color: var(--mill); margin-left: 4px; font-weight: 500; }
+
+.fee .est {
+  text-align: right;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.fee .est .k { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); }
+.fee .est .v { font-size: 15px; font-weight: 600; color: var(--ink-hi); }
+.fee .est .v .u { font-size: 10px; color: var(--ink-mid); margin-left: 3px; font-weight: 400; }
+.fee .est .sub { font-size: 10px; color: var(--ink-dim); }
+
+.slider {
+  position: relative;
+  height: 8px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+}
+.slider .fill {
+  position: absolute; inset: 0;
+  width: 25%;
+  background: linear-gradient(to right, var(--mill-soft), var(--mill));
+}
+.slider .tick {
+  position: absolute;
+  top: -4px;
+  width: 2px; height: 16px;
+  background: var(--ink-hi);
+  left: 25%; transform: translateX(-50%);
+  box-shadow: 0 0 6px var(--mill);
+}
+.slider-labels {
+  display: flex; justify-content: space-between;
+  margin-top: 8px;
+  font-size: 9px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-dim);
+}
+
+/* profit chart */
+.chart {
+  padding: 20px 0 22px;
+  border-bottom: 1px dashed var(--line);
+}
+.chart .head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 18px;
+}
+.chart .head .ttl {
+  font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); font-weight: 500;
+}
+.chart .head .win {
+  display: flex; gap: 12px; font-size: 10px; letter-spacing: .12em; color: var(--ink-mid);
+}
+.chart .head .win .on { color: var(--ink-hi); border-bottom: 1px solid var(--mill); padding-bottom: 2px; }
+
+.bars {
+  display: flex; align-items: flex-end; gap: 8px; height: 90px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 2px;
+  position: relative;
+}
+.bars::before,
+.bars::after {
+  content: '';
+  position: absolute; left: 0; right: 0;
+  border-top: 1px dashed var(--line-dim);
+}
+.bars::before { top: 33%; }
+.bars::after  { top: 66%; }
+
+.bars .bar-c {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.bars .bar-c .b {
+  width: 100%;
+  background: linear-gradient(to top, var(--mill-soft), var(--mill));
+  opacity: .85;
+  min-height: 4px;
+}
+.bars .bar-c .b.hi { opacity: 1; box-shadow: 0 0 14px color-mix(in oklab, var(--mill) 30%, transparent); }
+.bars .bar-c .d {
+  font-size: 9px; letter-spacing: .1em; color: var(--ink-dim);
+}
+.bars .bar-c .d.today { color: var(--ink-hi); font-weight: 500; }
+
+.chart-foot {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 12px;
+  font-size: 10px; color: var(--ink-mid); letter-spacing: .1em;
+}
+.chart-foot b { color: var(--ink-hi); font-weight: 500; }
+.chart-foot .up { color: var(--s-ok); }
+
+/* swap events */
+.events {
+  padding: 18px 0 22px;
+}
+.events .head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 14px;
+}
+.events .head .ttl {
+  font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-dim); font-weight: 500;
+}
+.events .head .live {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 9px; letter-spacing: .18em; color: var(--s-ok);
+}
+.events .head .live .pip {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--s-ok);
+  animation: live-pulse 1.4s var(--ease) infinite;
+}
+@keyframes live-pulse {
+  0%,100% { opacity: 1; } 50% { opacity: .3; }
+}
+
+.evt {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-dim);
+  align-items: center;
+  font-size: 11px;
+}
+.evt:last-child { border-bottom: none; }
+.evt .t { color: var(--ink-dim); font-size: 10px; letter-spacing: .08em; }
+.evt .what { color: var(--ink); }
+.evt .what .arrow { color: var(--mill); margin: 0 6px; }
+.evt .what b { color: var(--ink-hi); font-weight: 500; }
+.evt .amt { color: var(--ink-hi); font-weight: 500; }
+.evt .amt .u { font-size: 9px; color: var(--ink-mid); margin-left: 3px; }
+.evt .fee { color: var(--mill); font-size: 10px; letter-spacing: .04em; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   STATES REFERENCE
+   ════════════════════════════════════════════════════════════════════════════ */
+.states {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px dashed var(--line);
+}
+.states .sh {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px;
+}
+.states .sh .ttl {
+  font-family: var(--display); font-weight: 700; font-size: 11px;
+  letter-spacing: .22em; text-transform: uppercase; color: var(--ink-mid);
+}
+.states .sh .note { font-size: 10px; color: var(--ink-dim); letter-spacing: .08em; }
+
+.states .grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.state {
+  padding: 20px 18px;
+  background: var(--bg-raise);
+  border: 1px solid var(--line);
+  position: relative;
+  min-height: 130px;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.state .lbl {
+  font-size: 9px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--ink-dim); font-weight: 500;
+}
+
+/* loading */
+.state.loading .skel {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.state.loading .skel .l {
+  height: 10px;
+  background: linear-gradient(90deg, var(--bg-raise-2), var(--line), var(--bg-raise-2));
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+.state.loading .skel .l.w1 { width: 70%; }
+.state.loading .skel .l.w2 { width: 40%; }
+.state.loading .skel .l.w3 { width: 85%; }
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* empty */
+.state.empty .msg {
+  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  color: var(--ink-dim); font-size: 11px;
+  margin: auto 0;
+}
+.state.empty .ascii {
+  font-family: var(--mono); font-size: 20px; color: var(--ink-mute); letter-spacing: -.02em;
+}
+.state.empty .msg b { color: var(--ink-mid); font-weight: 500; letter-spacing: .04em; }
+.state.empty .hint { font-size: 10px; color: var(--ink-mute); }
+
+/* error */
+.state.error {
+  border-color: color-mix(in oklab, var(--s-down) 45%, var(--line));
+  background: linear-gradient(180deg, color-mix(in oklab, var(--s-down) 5%, var(--bg-raise)), var(--bg-raise));
+}
+.state.error .lbl { color: var(--s-down); }
+.state.error .msg {
+  color: var(--ink-mid); font-size: 11px; line-height: 1.5;
+  margin-top: 8px;
+}
+.state.error .code {
+  font-size: 9px; letter-spacing: .12em; color: var(--s-down);
+  text-transform: uppercase;
+  padding: 3px 6px;
+  background: color-mix(in oklab, var(--s-down) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--s-down) 35%, transparent);
+  align-self: flex-start;
+  margin-top: 10px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   FOOTER / OPERATOR RULE
+   ════════════════════════════════════════════════════════════════════════════ */
+.foot {
+  margin-top: 56px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-dim);
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 10px; color: var(--ink-dim); letter-spacing: .1em;
+}
+.foot .mark-s {
+  font-family: var(--display); font-weight: 700; letter-spacing: .22em; color: var(--ink-mute);
+  font-size: 10px;
+}
+.foot .keys {
+  display: flex; gap: 20px;
+}
+.foot .keys kbd {
+  font-family: var(--mono); font-size: 10px;
+  padding: 2px 6px;
+  background: var(--bg-base);
+  border: 1px solid var(--line);
+  color: var(--ink-mid);
+  margin-right: 6px;
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ══════════ TOP BAR ══════════ -->
+  <header class="topbar">
+    <div class="mark">
+      <span class="pip"></span>
+      TOWNHOUSE
+      <span class="ver">v0.21.0</span>
+    </div>
+    <div class="op-handle"><span class="prompt">op:</span><span class="name">jonathan</span><span class="prompt" style="margin-left:8px;">@</span><span>tower-01.local</span></div>
+    <div class="wallet">
+      <span class="lbl">wallet</span>
+      <span class="val">1,248,392</span>
+      <span class="unit">SATS</span>
+    </div>
+    <div class="ator">
+      <span class="led"></span>
+      <span>ATOR // CONNECTED</span>
+      <span class="hop">3 HOPS</span>
+    </div>
+    <div class="clock">
+      02:14<span class="zone">LOCAL</span>
+    </div>
+  </header>
+
+  <!-- ══════════ HERO ══════════ -->
+  <section class="hero">
+    <div class="today">
+      <div class="lbl">TODAY // EARNINGS</div>
+      <div class="num">42,891<span class="unit">SATS</span></div>
+      <div class="delta">
+        <span class="up">12.4%</span>
+        <span class="ref">vs yesterday · window 00:00 — 02:14</span>
+      </div>
+    </div>
+    <div class="breakdown">
+      <div class="bd-pill t-town">
+        <span class="chip">TOWN</span>
+        <span class="amount">28,442<span class="u">sats</span></span>
+        <span class="spark">
+          <span style="height:30%"></span><span style="height:50%"></span><span style="height:40%"></span>
+          <span style="height:70%"></span><span style="height:60%"></span><span style="height:85%"></span>
+          <span style="height:75%"></span><span style="height:95%"></span>
+        </span>
+      </div>
+      <div class="bd-pill t-mill">
+        <span class="chip">MILL</span>
+        <span class="amount">11,208<span class="u">sats</span></span>
+        <span class="spark">
+          <span style="height:40%"></span><span style="height:55%"></span><span style="height:45%"></span>
+          <span style="height:65%"></span><span style="height:80%"></span><span style="height:70%"></span>
+          <span style="height:60%"></span><span style="height:85%"></span>
+        </span>
+      </div>
+      <div class="bd-pill t-dvm">
+        <span class="chip">DVM</span>
+        <span class="amount">3,241<span class="u">sats</span></span>
+        <span class="spark">
+          <span style="height:20%"></span><span style="height:15%"></span><span style="height:35%"></span>
+          <span style="height:25%"></span><span style="height:45%"></span><span style="height:30%"></span>
+          <span style="height:50%"></span><span style="height:40%"></span>
+        </span>
+      </div>
+    </div>
+    <div class="hero-spark">
+      <span style="height:22%"></span><span style="height:35%"></span><span style="height:28%"></span>
+      <span style="height:45%"></span><span style="height:40%"></span><span style="height:55%"></span>
+      <span style="height:48%"></span><span style="height:62%"></span><span style="height:55%"></span>
+      <span style="height:70%"></span><span style="height:60%"></span><span style="height:78%"></span>
+      <span style="height:72%"></span><span style="height:85%"></span><span style="height:80%"></span>
+      <span style="height:92%" class="accent"></span>
+    </div>
+  </section>
+
+  <!-- ══════════ MAIN ══════════ -->
+  <main class="main">
+
+    <!-- NODE GRID -->
+    <section>
+      <div class="section-head">
+        <div class="title">NODES <span class="idx">// 06</span></div>
+        <div class="meta">
+          <span>ACTIVE <b>05</b></span>
+          <span>DEGRADED <b style="color:var(--s-deg)">01</b></span>
+          <span>DOWN <b>00</b></span>
+        </div>
+      </div>
+
+      <div class="node-grid">
+
+        <!-- town-01 : ok -->
+        <article class="node t-town">
+          <div class="node-row-1">
+            <div class="node-id">town-01<span class="host">// tower-01</span></div>
+            <span class="type-chip">TOWN</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot"></span><span class="status-text">OPERATIONAL</span>
+            <span style="margin-left:auto;color:var(--ink-dim)">uptime <b style="color:var(--ink-mid);font-weight:500">98d 04h</b></span>
+          </div>
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">RELAY EVENTS / HR</span>
+              <span class="v">14,208<span class="u">evt</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">CONNS</span>
+              <span class="v">312</span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity">
+              <span style="height:40%"></span><span style="height:55%"></span><span style="height:45%"></span>
+              <span style="height:60%"></span><span style="height:50%"></span><span style="height:70%"></span>
+              <span style="height:65%"></span><span style="height:80%"></span><span style="height:75%"></span>
+              <span style="height:90%" class="hi"></span><span style="height:85%"></span><span style="height:95%" class="hi"></span>
+            </div>
+            <span class="node-sub">earn <b>12,884 sats</b></span>
+          </div>
+        </article>
+
+        <!-- town-02 : ok -->
+        <article class="node t-town">
+          <div class="node-row-1">
+            <div class="node-id">town-02<span class="host">// edge-hel</span></div>
+            <span class="type-chip">TOWN</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot"></span><span class="status-text">OPERATIONAL</span>
+            <span style="margin-left:auto;color:var(--ink-dim)">uptime <b style="color:var(--ink-mid);font-weight:500">42d 18h</b></span>
+          </div>
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">RELAY EVENTS / HR</span>
+              <span class="v">9,487<span class="u">evt</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">CONNS</span>
+              <span class="v">208</span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity">
+              <span style="height:35%"></span><span style="height:40%"></span><span style="height:50%"></span>
+              <span style="height:45%"></span><span style="height:55%"></span><span style="height:50%"></span>
+              <span style="height:65%"></span><span style="height:60%"></span><span style="height:70%"></span>
+              <span style="height:75%"></span><span style="height:68%"></span><span style="height:80%" class="hi"></span>
+            </div>
+            <span class="node-sub">earn <b>11,208 sats</b></span>
+          </div>
+        </article>
+
+        <!-- town-03 : DEGRADED -->
+        <article class="node t-town">
+          <div class="node-row-1">
+            <div class="node-id">town-03<span class="host">// edge-sgp</span></div>
+            <span class="type-chip">TOWN</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot deg"></span><span class="status-text deg">DEGRADED</span>
+            <span style="margin-left:auto;color:var(--s-deg);font-size:10px">ERR RATE <b>4.2%</b></span>
+          </div>
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">RELAY EVENTS / HR</span>
+              <span class="v" style="color:var(--s-deg)">4,747<span class="u">evt</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">CONNS</span>
+              <span class="v">88</span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity deg">
+              <span style="height:70%"></span><span style="height:60%"></span><span style="height:55%"></span>
+              <span style="height:40%"></span><span style="height:35%"></span><span style="height:45%"></span>
+              <span style="height:30%" class="err"></span><span style="height:25%" class="err"></span>
+              <span style="height:35%"></span><span style="height:20%" class="err"></span>
+              <span style="height:30%"></span><span style="height:25%" class="err"></span>
+            </div>
+            <span class="node-sub warn">last err <b>02:11:42</b></span>
+          </div>
+        </article>
+
+        <!-- mill-eth-01 : REBALANCING -->
+        <article class="node t-mill is-active">
+          <div class="node-row-1">
+            <div class="node-id">mill-eth-01<span class="host">// tower-01</span></div>
+            <span class="type-chip">MILL</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot" style="background:var(--mill)"></span>
+            <span class="status-text rebal">REBALANCING</span>
+            <span style="margin-left:auto;color:var(--ink-dim)">ETH ↔ BASE</span>
+          </div>
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">POOL UTILIZATION</span>
+              <span class="v">87.3<span class="u">%</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">SWAPS / 24H</span>
+              <span class="v">247</span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity">
+              <span style="height:55%"></span><span style="height:60%"></span><span style="height:70%"></span>
+              <span style="height:68%"></span><span style="height:75%"></span><span style="height:80%"></span>
+              <span style="height:78%"></span><span style="height:85%" class="hi"></span>
+              <span style="height:90%" class="hi"></span><span style="height:85%"></span>
+              <span style="height:92%" class="hi"></span><span style="height:95%" class="hi"></span>
+            </div>
+            <span class="node-sub">earn <b>7,842 sats</b></span>
+          </div>
+        </article>
+
+        <!-- mill-base-01 : ok -->
+        <article class="node t-mill">
+          <div class="node-row-1">
+            <div class="node-id">mill-base-01<span class="host">// tower-01</span></div>
+            <span class="type-chip">MILL</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot" style="background:var(--mill)"></span><span class="status-text">OPERATIONAL</span>
+            <span style="margin-left:auto;color:var(--ink-dim)">BASE ↔ OP</span>
+          </div>
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">POOL UTILIZATION</span>
+              <span class="v">62.1<span class="u">%</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">SWAPS / 24H</span>
+              <span class="v">184</span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity">
+              <span style="height:40%"></span><span style="height:50%"></span><span style="height:55%"></span>
+              <span style="height:48%"></span><span style="height:60%"></span><span style="height:58%"></span>
+              <span style="height:65%"></span><span style="height:62%"></span><span style="height:70%"></span>
+              <span style="height:68%"></span><span style="height:75%" class="hi"></span><span style="height:72%"></span>
+            </div>
+            <span class="node-sub">earn <b>3,366 sats</b></span>
+          </div>
+        </article>
+
+        <!-- dvm-whisper-01 : ok -->
+        <article class="node t-dvm">
+          <div class="node-row-1">
+            <div class="node-id">dvm-whisper-01<span class="host">// gpu-01</span></div>
+            <span class="type-chip">DVM</span>
+          </div>
+          <div class="node-row-2">
+            <span class="status-dot" style="background:var(--dvm)"></span><span class="status-text">OPERATIONAL</span>
+            <span style="margin-left:auto;color:var(--ink-dim)">MODEL <b style="color:var(--ink-mid);font-weight:500">whisper-lg-v3</b></span>
+          </div>
+          <div class="node-row-3">
+            <div class="node-metric">
+              <span class="k">JOBS IN QUEUE</span>
+              <span class="v">4<span class="u">job</span></span>
+            </div>
+            <div class="node-metric" style="text-align:right">
+              <span class="k">AVG LATENCY</span>
+              <span class="v">2.8<span class="u">s</span></span>
+            </div>
+          </div>
+          <div class="node-row-4">
+            <div class="activity">
+              <span style="height:20%"></span><span style="height:35%"></span><span style="height:15%"></span>
+              <span style="height:50%"></span><span style="height:40%"></span><span style="height:25%"></span>
+              <span style="height:55%"></span><span style="height:45%"></span><span style="height:60%" class="hi"></span>
+              <span style="height:35%"></span><span style="height:70%" class="hi"></span><span style="height:40%"></span>
+            </div>
+            <span class="node-sub">earn <b>3,241 sats</b></span>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- ══════════ MILL DETAIL PANEL ══════════ -->
+    <aside class="detail">
+
+      <div class="detail-head">
+        <div class="detail-title">
+          <div class="id">mill-eth-01</div>
+          <div class="pair"><b>ETHEREUM</b><span class="arrow">↔</span><b>BASE</b></div>
+        </div>
+        <div class="detail-status">
+          <div class="chip"><span class="pulse"></span>REBALANCING</div>
+          <div class="uptime">uptime <b>42d 18h</b></div>
+        </div>
+      </div>
+
+      <!-- liquidity -->
+      <div class="liquidity">
+        <div class="row">
+          <span class="lbl">LIQUIDITY POOL</span>
+          <span class="tot">24.3<span class="u">ETH</span></span>
+        </div>
+        <div class="bar">
+          <div class="seg allocated">12.4</div>
+          <!-- REBALANCE SCANLINE lives inside this seg -->
+          <div class="seg in-swap">3.2</div>
+          <div class="seg available">8.7</div>
+        </div>
+        <div class="bar-legend">
+          <div class="item"><span class="sw a"></span>ALLOCATED<b>12.4 ETH</b></div>
+          <div class="item"><span class="sw b"></span>IN-SWAP<b>3.2 ETH</b></div>
+          <div class="item"><span class="sw c"></span>AVAILABLE<b>8.7 ETH</b></div>
+        </div>
+      </div>
+
+      <!-- fee -->
+      <div class="fee">
+        <div class="row">
+          <div class="cur">
+            <span class="k">CURRENT FEE</span>
+            <span class="v">0.25<span class="u">%</span></span>
+          </div>
+          <div class="est">
+            <span class="k">EST. DAILY</span>
+            <span class="v">247,000<span class="u">sats</span></span>
+            <span class="sub">@ 24h avg volume</span>
+          </div>
+        </div>
+        <div class="slider">
+          <div class="fill"></div>
+          <div class="tick"></div>
+        </div>
+        <div class="slider-labels">
+          <span>0.05%</span>
+          <span>0.25%</span>
+          <span>0.50%</span>
+          <span>1.00%</span>
+        </div>
+      </div>
+
+      <!-- chart -->
+      <div class="chart">
+        <div class="head">
+          <span class="ttl">PROFIT // 7D</span>
+          <div class="win">
+            <span>24H</span>
+            <span class="on">7D</span>
+            <span>30D</span>
+          </div>
+        </div>
+        <div class="bars">
+          <div class="bar-c"><div class="b" style="height:45%"></div><div class="d">W</div></div>
+          <div class="bar-c"><div class="b" style="height:62%"></div><div class="d">T</div></div>
+          <div class="bar-c"><div class="b" style="height:55%"></div><div class="d">F</div></div>
+          <div class="bar-c"><div class="b" style="height:70%"></div><div class="d">S</div></div>
+          <div class="bar-c"><div class="b" style="height:52%"></div><div class="d">S</div></div>
+          <div class="bar-c"><div class="b" style="height:78%"></div><div class="d">M</div></div>
+          <div class="bar-c"><div class="b hi" style="height:92%"></div><div class="d today">T•</div></div>
+        </div>
+        <div class="chart-foot">
+          <span>7D TOTAL <b>1,428,921 sats</b></span>
+          <span class="up">▲ 14.8% vs prev week</span>
+        </div>
+      </div>
+
+      <!-- swap events -->
+      <div class="events">
+        <div class="head">
+          <span class="ttl">RECENT SWAPS</span>
+          <div class="live"><span class="pip"></span>LIVE</div>
+        </div>
+        <div class="evt">
+          <span class="t">02:13:48</span>
+          <span class="what"><b>0.42 ETH</b><span class="arrow">→</span><b>0.42 ETH</b> on BASE</span>
+          <span class="amt">312<span class="u">sats</span></span>
+          <span class="fee">+0.25%</span>
+        </div>
+        <div class="evt">
+          <span class="t">02:13:21</span>
+          <span class="what"><b>1.80 ETH</b><span class="arrow">→</span><b>1.80 ETH</b> on BASE</span>
+          <span class="amt">1,340<span class="u">sats</span></span>
+          <span class="fee">+0.25%</span>
+        </div>
+        <div class="evt">
+          <span class="t">02:12:55</span>
+          <span class="what"><b>0.08 ETH</b><span class="arrow">→</span><b>0.08 ETH</b> on BASE</span>
+          <span class="amt">62<span class="u">sats</span></span>
+          <span class="fee">+0.25%</span>
+        </div>
+        <div class="evt">
+          <span class="t">02:12:14</span>
+          <span class="what"><b>3.20 ETH</b><span class="arrow">→</span><b>3.20 ETH</b> on BASE <span style="color:var(--ink-dim)">[internal rebal]</span></span>
+          <span class="amt">—</span>
+          <span class="fee" style="color:var(--ink-dim)">rebal</span>
+        </div>
+        <div class="evt">
+          <span class="t">02:11:09</span>
+          <span class="what"><b>0.25 ETH</b><span class="arrow">→</span><b>0.25 ETH</b> on BASE</span>
+          <span class="amt">190<span class="u">sats</span></span>
+          <span class="fee">+0.25%</span>
+        </div>
+      </div>
+
+    </aside>
+
+  </main>
+
+  <!-- ══════════ STATES REFERENCE ══════════ -->
+  <section class="states">
+    <div class="sh">
+      <span class="ttl">STATES // REFERENCE</span>
+      <span class="note">loading · empty · error conventions for all data surfaces</span>
+    </div>
+    <div class="grid">
+
+      <div class="state loading">
+        <span class="lbl">LOADING</span>
+        <div class="skel">
+          <div class="l w1"></div>
+          <div class="l w2"></div>
+          <div class="l w3"></div>
+        </div>
+      </div>
+
+      <div class="state empty">
+        <span class="lbl">EMPTY</span>
+        <div class="msg">
+          <span class="ascii">[ ∅ ]</span>
+          <b>NO NODES CONFIGURED</b>
+          <span class="hint">run <kbd style="font-family:var(--mono);font-size:10px;padding:1px 5px;background:var(--bg-inset);border:1px solid var(--line);color:var(--ink-mid)">townhouse init</kbd> to begin</span>
+        </div>
+      </div>
+
+      <div class="state error">
+        <span class="lbl">ERROR</span>
+        <div class="msg">
+          Lost connection to node daemon. Operator action required — check daemon process and reconnect.
+        </div>
+        <span class="code">ERR // DAEMON_UNREACHABLE</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ FOOTER ══════════ -->
+  <footer class="foot">
+    <div class="mark-s">TOWNHOUSE // OPERATOR CONSOLE</div>
+    <div class="keys">
+      <span><kbd>⌘K</kbd>command</span>
+      <span><kbd>N</kbd>nodes</span>
+      <span><kbd>W</kbd>wallet</span>
+      <span><kbd>?</kbd>help</span>
+    </div>
+    <div>design-direction-spike · v1 · night-shift-terminal</div>
+  </footer>
+
+</div>
+
+</body>
+</html>

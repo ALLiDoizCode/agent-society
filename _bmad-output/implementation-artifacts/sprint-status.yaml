@@ -403,7 +403,7 @@ development_status:
   epic-21: in-progress
   21-1-package-scaffold-and-cli-entrypoint: done
   21-2-docker-orchestration-engine: done
-  21-3-standalone-connector-integration: backlog
+  21-3-standalone-connector-integration: done
   21-4-hd-wallet-management-and-key-derivation: backlog
   21-5-town-node-dockerfile: backlog
   21-6-mill-node-dockerfile: backlog
