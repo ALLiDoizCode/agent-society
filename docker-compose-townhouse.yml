@@ -30,7 +30,10 @@ services:
       # CONNECTOR_PEERS is overridden at runtime by the orchestrator.
       # Default value includes all three node types for compose-only usage.
       # nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket -- Docker-internal BTP URLs, TLS unnecessary
-      CONNECTOR_PEERS: '[{"id":"town","relation":"child","btpUrl":"btp+ws://townhouse-town:3000","assetCode":"USD","assetScale":6},{"id":"mill","relation":"child","btpUrl":"btp+ws://townhouse-mill:3000","assetCode":"USD","assetScale":6},{"id":"dvm","relation":"child","btpUrl":"btp+ws://townhouse-dvm:3000","assetCode":"USD","assetScale":6}]'
+      # DVM uses standalone HTTP mode (not BTP), so it gets HTTP URL instead of btp+ws://
+      # Town and Mill use embedded BTP on port 3000
+      # DVM uses standalone HTTP on port 3300 (Docker-internal)
+      CONNECTOR_PEERS: '[{"id":"town","relation":"child","btpUrl":"btp+ws://townhouse-town:3000","assetCode":"USD","assetScale":6},{"id":"mill","relation":"child","btpUrl":"btp+ws://townhouse-mill:3000","assetCode":"USD","assetScale":6},{"id":"dvm","relation":"child","httpUrl":"http://townhouse-dvm:3300","assetCode":"USD","assetScale":6}]'
       TRANSPORT_MODE: direct
     restart: unless-stopped
     healthcheck:
@@ -95,10 +98,29 @@ services:
     # BTP port 3000 exposed for connector peer communication (Docker-internal only)
     expose:
       - '3000'
+    ports:
+      - '127.0.0.1:3200:3200'
     environment:
       # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
-      CONNECTOR_URL: ws://townhouse-connector:3000
+      # CONNECTOR_URL: accepted but IGNORED — Mill uses embedded connector on BTP port 3000
+      # (see docker/src/entrypoint-mill.ts Dev Notes)
       FEE_BASIS_POINTS: '0'
+      # Identity env vars (injected by orchestrator at runtime)
+      NODE_NOSTR_PUBKEY: ''
+      NODE_EVM_ADDRESS: ''
+      NODE_NOSTR_SECRET_KEY: ''
+      # Config via mounted file (optional, uncomment and mount config to enable)
+      # MILL_CONFIG_PATH: /config/mill.config.json
+    volumes:
+      # - ./config/mill:/config:ro   # optional: mount mill config directory
+      - townhouse-mill-data:/data
+    healthcheck:
+      # nosemgrep: trailofbits.generic.wget-unencrypted-url.wget-unencrypted-url -- container-internal health probe, TLS unnecessary
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3200/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -114,14 +136,36 @@ services:
     depends_on:
       connector:
         condition: service_healthy
-    # BTP port 3000 exposed for connector peer communication (Docker-internal only)
+    # HTTP ILP handler (standalone mode: connector sends HTTP POST)
+    # Port 3300 is Docker-internal only — connector reaches via Docker DNS
     expose:
-      - '3000'
+      - '3300'
+    ports:
+      # localhost-only for BLS health/status endpoint
+      - '127.0.0.1:3400:3400'
     environment:
       # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
+      # CONNECTOR_URL maps to connectorUrl in createNode() for standalone HTTP mode
       CONNECTOR_URL: ws://townhouse-connector:3000
       FEE_PER_JOB: '0'
+      # Identity env vars (injected by orchestrator at runtime)
+      NODE_NOSTR_PUBKEY: ''
+      NODE_EVM_ADDRESS: ''
+      NODE_NOSTR_SECRET_KEY: ''
+      # Arweave upload token (operator supplies at deploy time)
+      TURBO_TOKEN: ''
+    volumes:
+      - townhouse-dvm-data:/data
+    healthcheck:
+      # Health endpoint on BLS port 3400
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3400/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
 volumes:
   townhouse-town-data:
+  townhouse-mill-data:
+  townhouse-dvm-data:
