@@ -401,16 +401,22 @@ development_status:
   # Epic 21: Townhouse — Node Provider Dashboard & Orchestrator
   # 18 stories across 3 phases: Orchestrator Core, API + Dashboard, First-Run + Polish
   # Story 21.8.5 inserted 2026-04-20 from design-direction spike work
-  # (v1–v6 in _bmad-output/planning-artifacts/design-spikes/; chosen direction: v6 Ink Terminal)
+  # (v1–v6 in _bmad-output/planning-artifacts/design-spikes/; superseded 2026-04-21)
+  # Current direction: Vercel/Geist-inspired (near-white canvas, shadow-as-border,
+  # Geist Sans with aggressive negative tracking, workflow-accent node identity).
+  # Stories 21.9–21.13 MUST be developed against the Townhouse dev stack
+  # (./scripts/townhouse-dev-infra.sh up  +  docker-compose-townhouse-dev.yml:
+  #  standalone connector + 2 Town + 2 Mill + 1 DVM + Anvil + Solana + Mina +
+  #  SOCKS5). No mocks. `pnpm --filter @toon-protocol/townhouse-web dev:docker`.
   epic-21: in-progress
   21-1-package-scaffold-and-cli-entrypoint: done
   21-2-docker-orchestration-engine: done
   21-3-standalone-connector-integration: done
   21-4-hd-wallet-management-and-key-derivation: done
   21-5-town-node-dockerfile: done
-  21-6-mill-node-dockerfile: backlog
-  21-7-dvm-node-dockerfile: backlog
-  21-8-fastify-rest-websocket-metrics-api: backlog
+  21-6-mill-node-dockerfile: done
+  21-7-dvm-node-dockerfile: done
+  21-8-fastify-rest-websocket-metrics-api: done
   21-8-5-dashboard-design-system-foundation: backlog
   21-9-dashboard-spa-home-view: backlog
   21-10-dashboard-town-management-view: backlog
