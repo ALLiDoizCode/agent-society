@@ -40,7 +40,7 @@ so that I can initialize, start, stop, and check status of my nodes.
     - `transport: { mode: 'ator' | 'direct'; socksProxy?: string }`
     - `api: { port: number; host: string }`
     - `logging: { level: 'debug' | 'info' | 'warn' | 'error' }` (operator needs log-level control)
-  - [x] 2.2 Create `src/config/defaults.ts` with sensible default values (all nodes disabled, connector image `ghcr.io/toon-protocol/connector:latest`, api port 9400, host `127.0.0.1`, logging level `info`, transport mode `direct`)
+  - [x] 2.2 Create `src/config/defaults.ts` with sensible default values (all nodes disabled, connector image `ghcr.io/toon-protocol/connector:3.3.0`, api port 9400, host `127.0.0.1`, logging level `info`, transport mode `direct`)
   - [x] 2.3 Create `src/config/loader.ts` with `loadConfig(configPath: string): TownhouseConfig` function. Uses `yaml` package to parse YAML. Supports env var overrides for key settings: `TOWNHOUSE_API_PORT`, `TOWNHOUSE_TRANSPORT_MODE`, `TOWNHOUSE_LOG_LEVEL` (env vars take precedence over YAML values; required for T-006).
   - [x] 2.4 Create `src/config/validator.ts` with `validateConfig(raw: unknown): TownhouseConfig` that validates shape, narrows types, and returns typed config or throws descriptive errors. Note: schema.ts defines the TypeScript types/interfaces only; validator.ts owns all runtime validation logic.
   - [x] 2.5 Create `src/config/index.ts` re-exporting all config modules
@@ -71,7 +71,7 @@ Townhouse is a **host-native** orchestrator + dashboard managing Docker-containe
 
 **Key decision D21-002:** Standalone connector, not embedded. A single shared connector handles all ILP routing. Townhouse CLI manages the connector container alongside node containers. This is fundamentally different from Town/Mill which each embed their own connector instance.
 
-**Key decision D21-003:** Connector image is pre-built (`ghcr.io/toon-protocol/connector:latest`). No custom Dockerfile.
+**Key decision D21-003:** Connector image is pre-built (`ghcr.io/toon-protocol/connector:3.3.0`). No custom Dockerfile.
 
 ### Standard Guards (Epic 11 Retro)
 

@@ -18,7 +18,7 @@ services:
   # Connector — always runs (no profile restriction)
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   connector:
-    image: ghcr.io/toon-protocol/connector:latest
+    image: ghcr.io/toon-protocol/connector:3.3.0
     container_name: townhouse-connector
     networks:
       - townhouse-net
@@ -104,6 +104,7 @@ services:
       # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
       # CONNECTOR_URL: accepted but IGNORED — Mill uses embedded connector on BTP port 3000
       # (see docker/src/entrypoint-mill.ts Dev Notes)
+      CONNECTOR_URL: ws://townhouse-connector:3000
       FEE_BASIS_POINTS: '0'
       # Identity env vars (injected by orchestrator at runtime)
       NODE_NOSTR_PUBKEY: ''

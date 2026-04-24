@@ -42,7 +42,7 @@ so that I don't need to manually run Docker commands.
 
 - [x] Task 2: Docker Compose file (AC: #2, #3)
   - [x] 2.1 Create `docker-compose-townhouse.yml` at project root with Docker Compose profiles. Include `connector` service (always, no profile — runs unconditionally), `town` service (profile: town), `mill` service (profile: mill), `dvm` service (profile: dvm).
-  - [x] 2.2 Connector service definition: image from config (`ghcr.io/toon-protocol/connector:latest`), container_name `townhouse-connector`, network `townhouse-net`, healthcheck using `/health` endpoint, restart `unless-stopped`, expose admin port.
+  - [x] 2.2 Connector service definition: image from config (`ghcr.io/toon-protocol/connector:3.3.0`), container_name `townhouse-connector`, network `townhouse-net`, healthcheck using `/health` endpoint, restart `unless-stopped`, expose admin port.
   - [x] 2.3 Town service definition: image `toon:town` (placeholder, built in Story 21.5), container_name `townhouse-town`, network `townhouse-net`, depends_on connector (service_healthy), profiles: [`town`], env vars from config.
   - [x] 2.4 Mill service definition: image `toon:mill` (placeholder, built in Story 21.6), container_name `townhouse-mill`, network `townhouse-net`, depends_on connector (service_healthy), profiles: [`mill`], env vars from config.
   - [x] 2.5 DVM service definition: image `toon:dvm` (placeholder, built in Story 21.7), container_name `townhouse-dvm`, network `townhouse-net`, depends_on connector (service_healthy), profiles: [`dvm`], env vars from config.
@@ -317,7 +317,7 @@ None required.
 - **Medium:** Residual non-idiomatic `'image' in nodeConfig` check in `startNode()` replaced with `nodeConfig.image ?? DEFAULT_NODE_IMAGES[type]`
 - **Medium:** `healthCheck()` could propagate transient `inspect()` errors immediately instead of retrying — added try/catch within polling loop to absorb transient failures and retry within the timeout window
 - **Low:** Misleading JSDoc comment on `normalizeImageTag()` referenced impossible `toon:town:latest` case — corrected to describe the actual untagged image scenario (e.g., `nginx` vs `nginx:latest`)
-- **Low:** `pullImages()` test asserted against `config.connector.image` variable instead of the explicit normalized string — updated to assert against `'ghcr.io/toon-protocol/connector:latest'` directly for precision
+- **Low:** `pullImages()` test asserted against `config.connector.image` variable instead of the explicit normalized string — updated to assert against `'ghcr.io/toon-protocol/connector:3.3.0'` directly for precision
 
 ### Review Pass #3 (Security + Adversarial)
 

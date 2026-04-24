@@ -21,7 +21,7 @@ Provide a simple, beautiful way for node providers to spin up and manage one or 
 
 **D21-002: Standalone connector, not embedded.** A single shared connector instance (pulled from `ghcr.io/toon-protocol/connector`) handles all ILP routing for all nodes. Benefits: single routing table, shared ATOR transport, unified balance tracking, resource efficiency, cleaner separation of concerns. Each node registers as a peer with the standalone connector over the Docker network. Fee enforcement happens at the connector's routing layer.
 
-**D21-003: Connector image is pre-built.** Townhouse pulls `ghcr.io/toon-protocol/connector:latest` — no custom connector Dockerfile needed. Updates are trivial: `docker pull` + restart.
+**D21-003: Connector image is pre-built.** Townhouse pulls `ghcr.io/toon-protocol/connector:3.3.0` — no custom connector Dockerfile needed. Updates are trivial: `docker pull` + restart.
 
 **D21-004: ATOR is a config option, not a container.** Nodes connect to the public Anyone/ATOR SOCKS5 proxy network via the `ator-transport` layer from Epic 12. No ATOR proxy container to build or manage. Operators choose ATOR (privacy) or Direct (speed) in setup.
 

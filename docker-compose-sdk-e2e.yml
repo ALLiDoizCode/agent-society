@@ -214,6 +214,11 @@ services:
       ASSET_CODE: USD
       ASSET_SCALE: '6'
 
+      # Static BTP peers (pre-configured for payment channel creation)
+      # Peer1 knows about Peer2 at startup (ConnectorNode constructor peers)
+      BTP_PEERS: '[{"id":"peer2","url":"ws://peer2:3000","authToken":"","evmAddress":"0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC","chain":"evm:31337"}]'
+      BTP_ROUTES: '[{"prefix":"g.toon.peer2","nextHop":"peer2","priority":0}]'
+
       # No bootstrap peers (genesis)
       # Arweave DVM: enabled on peer1 (provider), uses free tier (<=100KB)
       ARDRIVE_ENABLED: 'true'
@@ -314,7 +319,14 @@ services:
       ASSET_CODE: USD
       ASSET_SCALE: '6'
 
+      # Static BTP peers (pre-configured for payment channel creation)
+      # Peer2 knows about Peer1 at startup (ConnectorNode constructor peers)
+      BTP_PEERS: '[{"id":"peer1","url":"ws://peer1:3000","authToken":"","evmAddress":"0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266","chain":"evm:31337"}]'
+      BTP_ROUTES: '[{"prefix":"g.toon.peer1","nextHop":"peer1","priority":0}]'
+
       # Bootstrap from Peer 1 (pubkey derived from peer1's NOSTR_SECRET_KEY)
+      # NOTE: BOOTSTRAP_PEERS is used by SDK BootstrapService for Nostr relay discovery.
+      # BTP peering is now handled via BTP_PEERS above (ConnectorNode constructor).
       BOOTSTRAP_PEERS: ${PEER2_BOOTSTRAP_PEERS:-[]}
 
       # Arweave DVM: enabled on peer2 as fallback provider (higher price than peer1)

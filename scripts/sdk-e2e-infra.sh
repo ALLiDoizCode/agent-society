@@ -81,17 +81,8 @@ cmd_up() {
   log_info "Starting SDK E2E infrastructure..."
 
   # Build the Docker image
-  # Requires the `memvid` sibling repo (for memvid-core Rust crate via
-  # path dep in packages/memvid-node/Cargo.toml). Override with MEMVID_DIR
-  # env var if it lives elsewhere.
-  local memvid_dir="${MEMVID_DIR:-$REPO_ROOT/../memvid}"
-  if [ ! -d "$memvid_dir" ]; then
-    log_error "memvid sibling repo not found at $memvid_dir (set MEMVID_DIR env var to override)"
-    return 1
-  fi
-  log_info "Building toon:sdk-e2e image (memvid context: $memvid_dir)..."
+  log_info "Building toon:sdk-e2e image..."
   DOCKER_BUILDKIT=1 docker build \
-    --build-context "memvid=$memvid_dir" \
     -f "$REPO_ROOT/docker/Dockerfile.sdk-e2e" \
     -t toon:sdk-e2e \
     "$REPO_ROOT"
@@ -183,24 +174,20 @@ cmd_up() {
   fi
   export SOLANA_PROGRAM_ID="${solana_program_id}"
 
-  # Wait for Mina lightnet sync (takes 1-3 minutes)
-  log_info "Waiting for Mina lightnet to sync (may take up to 3 minutes)..."
-  local mina_ready=false
+  # Wait for Mina lightnet accounts manager only (connector-style — no sync wait)
+  log_info "Waiting for Mina lightnet accounts manager..."
+  local mina_accounts_ready=false
   local mina_zkapp_address=""
-  for i in $(seq 1 90); do
+  for i in $(seq 1 30); do
     if curl -sf http://localhost:19181/list-acquired-accounts > /dev/null 2>&1; then
-      if curl -sf -X POST -H 'Content-Type: application/json' \
-        -d '{"query":"{syncStatus}"}' \
-        http://localhost:19085/graphql 2>/dev/null | grep -q 'SYNCED'; then
-        mina_ready=true
-        break
-      fi
+      mina_accounts_ready=true
+      break
     fi
     sleep 2
   done
-  if $mina_ready; then
-    log_success "Mina lightnet is synced"
-    # Deploy Mina zkApp
+  if $mina_accounts_ready; then
+    log_success "Mina lightnet accounts manager is ready"
+    # Attempt zkApp deploy without waiting for sync (tests skip if Mina unavailable)
     log_info "Deploying Mina Payment Channel zkApp..."
     mina_zkapp_address=$(cd "$REPO_ROOT" && \
       MINA_GRAPHQL_URL="http://localhost:19085/graphql" \
@@ -212,7 +199,7 @@ cmd_up() {
       log_warning "Mina zkApp deployment failed (non-fatal — Mina tests may fail)"
     fi
   else
-    log_warning "Mina lightnet not synced after 3 minutes (non-fatal — Mina tests may fail)"
+    log_warning "Mina lightnet accounts manager not ready (non-fatal — Mina tests may fail)"
   fi
   export MINA_ZKAPP_ADDRESS="${mina_zkapp_address}"
 

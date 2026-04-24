@@ -95,9 +95,9 @@ Note: This workflow does not generate tests. If gaps exist, run `*atdd` or `*aut
   - `T-011` - `orchestrator.test.ts`:436 -- `pullImages() -- progress reporting (T-011)`
     - **Given:** Town profile requested
     - **When:** `pullImages(['town'])` called
-    - **Then:** `docker.pull()` called with `ghcr.io/toon-protocol/connector:latest`
+    - **Then:** `docker.pull()` called with `ghcr.io/toon-protocol/connector:3.3.0`
   - Additional: `orchestrator.test.ts`:384 -- Empty profiles starts only connector
-- **Evidence:** `docker-compose-townhouse.yml` line 21: `image: ghcr.io/toon-protocol/connector:latest`; orchestrator.ts line 170: connector image always included in pullImages.
+- **Evidence:** `docker-compose-townhouse.yml` line 21: `image: ghcr.io/toon-protocol/connector:3.3.0`; orchestrator.ts line 170: connector image always included in pullImages.
 
 ---
 

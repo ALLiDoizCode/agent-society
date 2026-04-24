@@ -99,7 +99,7 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 2. Mill unit tests are self-contained: `pnpm --filter @toon-protocol/mill test`
 3. Mill integration tests use in-process fixtures (no Docker needed): `pnpm --filter @toon-protocol/mill test:integration`
 4. Mill Docker E2E tests need infra: `pnpm --filter @toon-protocol/mill test:e2e:docker`
-5. If swap claims fail, check connector version -- must be `@toon-protocol/connector` ^2.3.0 (v2.0.0 changed `ctx.accept()` return shape)
+5. If swap claims fail, check connector version -- must be `@toon-protocol/connector` ^3.3.2 (v2.0.0 changed `ctx.accept()` return shape)
 
 **Port conflicts:** See `_bmad-output/project-context.md` section "Deployment" for full port allocation table. Key ranges:
 
