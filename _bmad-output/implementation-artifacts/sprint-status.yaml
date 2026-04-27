@@ -428,3 +428,23 @@ development_status:
   21-16-e2e-integration-tests: backlog
   21-17-publish-package: backlog
   epic-21-retrospective: optional
+
+  # ═══════════════════════════════════════════════════════════════
+  # Epic 22: Restore Green CI Post-Connector v3.3.2 Upgrade
+  # Decision source: Test regression analysis (2026-04-27)
+  # PR 28 (epic-12, commit 7b47962) was last green CI baseline.
+  # After upgrading @toon-protocol/connector to v3.3.2 (commit b985c5f),
+  # 8 test phases broke across 5 packages. Systematic repair epic.
+  # 5 stories: 1 trivial fixes, 2+3 investigation spikes, 4 Solana, 5 prevention
+  # Excluded: pet-circuit (pre-existing o1js WASM memory limitation)
+  # Epic file: _bmad-output/epics/epic-22-restore-green-ci.md
+  # ═══════════════════════════════════════════════════════════════
+
+  # Epic 22: Restore Green CI Post-Connector v3.3.2 Upgrade
+  epic-22: backlog
+  22-1-trivial-config-api-fixes: backlog
+  22-2-multi-hop-publish-e2e-routing: backlog
+  22-3-workflow-chain-e2e-relay-query: backlog
+  22-4-solana-settlement-e2e: backlog
+  22-5-connector-contract-smoke-test: backlog
+  epic-22-retrospective: optional
