@@ -1,4 +1,5 @@
-# generated: 2026-03-03
+# generated: 2026-04-27
+# last_updated: 2026-04-28 (story 22.5 → done after code review)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -33,7 +34,7 @@
 # - SM typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: 2026-03-03
+generated: 2026-04-27
 project: toon
 project_key: NOKEY
 tracking_system: file-system
@@ -441,10 +442,10 @@ development_status:
   # ═══════════════════════════════════════════════════════════════
 
   # Epic 22: Restore Green CI Post-Connector v3.3.2 Upgrade
-  epic-22: backlog
-  22-1-trivial-config-api-fixes: backlog
-  22-2-multi-hop-publish-e2e-routing: backlog
-  22-3-workflow-chain-e2e-relay-query: backlog
-  22-4-solana-settlement-e2e: backlog
-  22-5-connector-contract-smoke-test: backlog
+  epic-22: in-progress
+  22-1-trivial-config-api-fixes: done
+  22-2-multi-hop-publish-e2e-routing: done
+  22-3-workflow-chain-e2e-relay-query: done
+  22-4-solana-settlement-e2e: done
+  22-5-connector-contract-smoke-test: done
   epic-22-retrospective: optional

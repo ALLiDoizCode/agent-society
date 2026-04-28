@@ -203,6 +203,12 @@ cmd_up() {
   fi
   export MINA_ZKAPP_ADDRESS="${mina_zkapp_address}"
 
+  # Persist discovered env vars for host-side test consumption
+  cat > "$REPO_ROOT/.env.sdk-e2e" <<EOF
+SOLANA_PROGRAM_ID=${solana_program_id}
+MINA_ZKAPP_ADDRESS=${mina_zkapp_address}
+EOF
+
   # Placeholder env vars for Solana/Mina settlement accounts on peers
   # Peers use their own settlement keys; these are the token/program addresses
   export SOLANA_TOKEN_MINT="${SOLANA_TOKEN_MINT:-So11111111111111111111111111111111111111112}"
@@ -257,12 +263,14 @@ cmd_up() {
 cmd_down() {
   log_info "Stopping SDK E2E infrastructure..."
   docker compose -p "$PROJECT_NAME" -f "$REPO_ROOT/$COMPOSE_FILE" down
+  rm -f "$REPO_ROOT/.env.sdk-e2e"
   log_success "Stopped"
 }
 
 cmd_down_v() {
   log_info "Stopping SDK E2E infrastructure and removing volumes..."
   docker compose -p "$PROJECT_NAME" -f "$REPO_ROOT/$COMPOSE_FILE" down -v
+  rm -f "$REPO_ROOT/.env.sdk-e2e"
   log_success "Stopped and volumes removed"
 }
 

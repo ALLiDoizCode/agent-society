@@ -101,6 +101,12 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 4. Mill Docker E2E tests need infra: `pnpm --filter @toon-protocol/mill test:e2e:docker`
 5. If swap claims fail, check connector version -- must be `@toon-protocol/connector` ^3.3.2 (v2.0.0 changed `ctx.accept()` return shape)
 
+**Connector API drift / breaking change suspected:**
+
+1. Run the contract canary: `pnpm --filter @toon-protocol/sdk test:integration -- tests/integration/connector-contract.test.ts` (expected <2s, ceiling 60s)
+2. If it fails, see `packages/sdk/CONNECTOR_MIGRATION.md` for the version-to-version contract mapping and migration steps
+3. Update both the canary and the migration doc when bumping `@toon-protocol/connector`
+
 **Port conflicts:** See `_bmad-output/project-context.md` section "Deployment" for full port allocation table. Key ranges:
 
 - SDK E2E: Anvil 18545, Peer1 19000/19100/19700, Peer2 19010/19110/19710
@@ -113,6 +119,8 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 | Topic | Location |
 | --- | --- |
 | **All coding rules, patterns, conventions** | `_bmad-output/project-context.md` |
+| Connector API contract + migration history | `packages/sdk/CONNECTOR_MIGRATION.md` |
+| Connector contract canary test | `packages/sdk/tests/integration/connector-contract.test.ts` |
 | HyperBEAM integration strategy & R&D phases | `_bmad-output/planning-artifacts/research/toon-hyperbeam-integration-strategy.md` |
 | Claude Agent Skills (55 skill directories) | `.claude/skills/` |
 | NIP-to-TOON Skill Pipeline | `.claude/skills/nip-to-toon-skill/SKILL.md` |
