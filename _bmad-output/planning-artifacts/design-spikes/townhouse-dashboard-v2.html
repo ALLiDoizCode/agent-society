@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOWNHOUSE — The Operator Console [design-direction-spike v2]</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/*
+  ════════════════════════════════════════════════════════════════════════════════
+  DESIGN DIRECTION — "BROADSHEET OPERATIONS"
+  ════════════════════════════════════════════════════════════════════════════════
+  If v1 was the terminal, v2 is the editor's desk. This is an operator console
+  set like a daily broadsheet — serif masthead, column rules, drop caps,
+  marginalia, and numerals treated as lead features rather than data cells. The
+  idea: infrastructure status read as journalism. "Today, town-03 is struggling"
+  rather than "DEGRADED: town-03." Warm paper-dark ground, cream ink, editorial
+  accents. For the operator who reads their nodes at 2am the way others read
+  the morning paper.
+
+  TYPOGRAPHY
+    Display   — Instrument Serif (with italic, used for emphasis & marginalia)
+    Body      — Instrument Sans (quiet grotesque from the same family)
+    Numerics  — IBM Plex Mono (tabular, with characterful serifs on 1/l/I)
+
+  MOTION
+    (1) "Typographic rebalance" — the word REBALANCING on mill-eth-01 breathes
+        in italic, its underline extending and retreating like a live caret.
+    (2) "Marginalia attention" — town-03's editorial note in the margin fades
+        in with a slight rise, as if just penciled by the editor. The lead
+        story's drop cap has a subtle ink-bleed.
+  ════════════════════════════════════════════════════════════════════════════════
+*/
+
+:root {
+  /* ── surfaces — warm paper-dark ──────────────────── */
+  --paper:       #100D08;  /* page ground, warm black */
+  --paper-2:     #17130D;  /* slight lift */
+  --paper-3:     #1F1A12;  /* card ground */
+  --paper-sunk:  #0A0805;  /* insets */
+
+  /* ── rules & lines ───────────────────────────────── */
+  --rule-faint:  #2A231A;
+  --rule:        #3C3325;
+  --rule-hi:     #5A4E38;
+
+  /* ── ink — cream, warm ───────────────────────────── */
+  --ink-hi:      #F1E8D3;  /* headlines & numerals */
+  --ink:         #D8CEB5;  /* body */
+  --ink-mid:     #9E9279;  /* secondary */
+  --ink-dim:     #6A5F47;  /* captions */
+  --ink-mute:    #453D2B;  /* marginalia, tertiary */
+
+  /* ── node identity (epic-mandated, pulled toward editorial palette) ── */
+  --town:        #E0A947;   /* ochre-amber — Nostr relays */
+  --town-soft:   #3A2A12;
+  --mill:        #7FB97E;   /* botanical green — swap peers */
+  --mill-soft:   #1D2E1C;
+  --dvm:         #7798D4;   /* Prussian blue — compute workers */
+  --dvm-soft:    #1A2238;
+
+  /* ── status (editorial — softer than v1) ─────────── */
+  --s-ok:        #7FB97E;
+  --s-deg:       #E89B4C;   /* attention, not alarm */
+  --s-down:      #D26A5A;
+  --s-pend:      #9E9279;
+
+  --serif:       'Instrument Serif', Georgia, serif;
+  --sans:        'Instrument Sans', -apple-system, sans-serif;
+  --mono:        'IBM Plex Mono', ui-monospace, monospace;
+  --ease:        cubic-bezier(.2, .8, .2, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* paper grain — different noise character than v1, warmer */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.65' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .09 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+  opacity: .7;
+}
+
+/* warm vignette — ink-and-candle */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 99;
+  background: radial-gradient(ellipse at 50% 0%, rgba(224,169,71,.04), transparent 55%);
+}
+
+.paper {
+  position: relative;
+  z-index: 2;
+  max-width: 1460px;
+  margin: 0 auto;
+  padding: 0 44px 64px;
+}
+
+/* numerics globally */
+.num, .num *, [data-num] { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MASTHEAD
+   ════════════════════════════════════════════════════════════════════════════ */
+.masthead {
+  padding: 36px 0 18px;
+  border-bottom: 3px double var(--rule);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 32px;
+  position: relative;
+}
+.masthead::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 8px;
+  height: 1px;
+  background: var(--rule);
+}
+
+.nameplate {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 62px;
+  line-height: .95;
+  color: var(--ink-hi);
+  letter-spacing: -.02em;
+  font-feature-settings: "liga" 1;
+  position: relative;
+}
+.nameplate .tagline {
+  display: block;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--ink-mid);
+  margin-top: 2px;
+  letter-spacing: .01em;
+}
+
+.mast-center {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 24px;
+}
+.mast-center .issue {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-mid);
+}
+.mast-center .issue b { color: var(--ink-hi); font-weight: 400; font-style: normal; }
+.mast-center .date {
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--ink-hi);
+  letter-spacing: .02em;
+}
+
+.mast-right {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-mid);
+  letter-spacing: .04em;
+}
+.mast-right .ator {
+  display: flex; justify-content: flex-end; align-items: center; gap: 10px;
+  color: var(--ink-mid);
+}
+.mast-right .ator .led {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--s-ok);
+  box-shadow: 0 0 6px var(--s-ok);
+}
+.mast-right .ator b { font-family: var(--sans); font-weight: 500; color: var(--ink-hi); letter-spacing: .08em; text-transform: uppercase; font-size: 10px; }
+.mast-right .clock {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-hi);
+  letter-spacing: .04em;
+}
+.mast-right .clock small {
+  font-family: var(--serif); font-style: italic; color: var(--ink-dim); margin-left: 6px; font-size: 12px;
+}
+.mast-right .op {
+  font-family: var(--serif); font-style: italic; color: var(--ink-mid); font-size: 13px;
+}
+.mast-right .op b { font-style: normal; color: var(--ink-hi); font-weight: 400; }
+.mast-right .wallet {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-hi);
+}
+.mast-right .wallet .k { font-family: var(--serif); font-style: italic; color: var(--ink-dim); margin-right: 8px; font-size: 13px; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   HEADLINE — "THE NUMBER"
+   ════════════════════════════════════════════════════════════════════════════ */
+.hero {
+  padding: 40px 0 34px;
+  border-bottom: 1px solid var(--rule-faint);
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 48px;
+  align-items: end;
+}
+
+.hero-l {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 28px;
+  align-items: baseline;
+}
+
+.eyebrow {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: .26em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  font-weight: 500;
+}
+.eyebrow .em { color: var(--town); }
+
+.todays-number {
+  font-family: var(--mono);
+  font-size: 96px;
+  font-weight: 300;
+  line-height: .9;
+  color: var(--ink-hi);
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+}
+.todays-number .unit {
+  display: block;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 18px;
+  color: var(--ink-mid);
+  font-weight: 400;
+  letter-spacing: 0;
+  margin-top: 6px;
+}
+
+.kicker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+.kicker .lead {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-style: italic;
+  color: var(--ink);
+  line-height: 1.4;
+  max-width: 28em;
+}
+.kicker .lead b {
+  font-style: normal;
+  color: var(--ink-hi);
+  font-weight: 400;
+}
+.kicker .meta {
+  display: flex;
+  gap: 22px;
+  font-size: 11px;
+  color: var(--ink-mid);
+  letter-spacing: .04em;
+}
+.kicker .meta .up {
+  font-family: var(--mono);
+  color: var(--s-ok);
+  font-weight: 500;
+}
+.kicker .meta .up::before { content: '▴ '; font-size: 9px; }
+.kicker .meta em {
+  font-family: var(--serif); font-style: italic; color: var(--ink-dim);
+}
+
+/* earnings by node type — byline style */
+.by-type {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border-left: 1px solid var(--rule-faint);
+}
+.by-type .col {
+  padding: 4px 22px;
+  border-right: 1px solid var(--rule-faint);
+  position: relative;
+}
+.by-type .col:last-child { border-right: none; }
+.by-type .col::before {
+  content: '';
+  position: absolute;
+  left: 22px; top: 0;
+  width: 28px; height: 2px;
+  background: var(--accent);
+}
+.by-type .col.t-town { --accent: var(--town); }
+.by-type .col.t-mill { --accent: var(--mill); }
+.by-type .col.t-dvm  { --accent: var(--dvm); }
+
+.by-type .col .lbl {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--accent);
+  margin: 10px 0 4px;
+  letter-spacing: .01em;
+}
+.by-type .col .val {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--ink-hi);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.by-type .col .val .u {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-mid);
+  margin-left: 4px;
+}
+.by-type .col .sub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--ink-dim);
+  margin-top: 6px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SECTION HEAD (broadsheet rubric)
+   ════════════════════════════════════════════════════════════════════════════ */
+.rubric {
+  padding: 32px 0 14px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 24px;
+}
+.rubric .r-title {
+  font-family: var(--serif);
+  font-size: 36px;
+  font-weight: 400;
+  color: var(--ink-hi);
+  letter-spacing: -.01em;
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.rubric .r-title .folio {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 18px;
+  color: var(--ink-dim);
+  font-weight: 400;
+}
+.rubric .r-meta {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  color: var(--ink-mid);
+  display: flex;
+  gap: 24px;
+}
+.rubric .r-meta b { color: var(--ink-hi); font-weight: 600; }
+.rubric .r-meta .deg { color: var(--s-deg); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LEAD STORY — degraded town gets front-page treatment
+   ════════════════════════════════════════════════════════════════════════════ */
+.lead-story {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 40px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--rule-faint);
+  margin-bottom: 28px;
+  position: relative;
+}
+
+.lead-story::before {
+  content: 'LEAD';
+  position: absolute;
+  top: -9px; left: 0;
+  font-family: var(--sans);
+  font-size: 9px;
+  letter-spacing: .3em;
+  color: var(--s-deg);
+  background: var(--paper);
+  padding-right: 12px;
+  font-weight: 600;
+}
+
+.lead-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+}
+.lead-drop {
+  font-family: var(--serif);
+  font-size: 118px;
+  line-height: .82;
+  color: var(--s-deg);
+  font-style: italic;
+  padding-top: 4px;
+  position: relative;
+  /* MOTION 2: ink-bleed drop cap — a slow bloom on load */
+  animation: inkBleed 2.4s var(--ease) .4s both;
+}
+@keyframes inkBleed {
+  from { filter: blur(6px); opacity: 0; transform: translateY(4px); }
+  70%  { filter: blur(0);  opacity: 1; }
+  to   { filter: blur(0);  opacity: 1; text-shadow: 0 0 18px color-mix(in oklab, var(--s-deg) 18%, transparent); }
+}
+
+.lead-text h2 {
+  font-family: var(--serif);
+  font-size: 34px;
+  font-weight: 400;
+  color: var(--ink-hi);
+  line-height: 1.05;
+  letter-spacing: -.01em;
+  margin-bottom: 6px;
+}
+.lead-text h2 em {
+  font-style: italic;
+  color: var(--s-deg);
+}
+.lead-text .byline {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-mid);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lead-text .byline::before {
+  content: '';
+  width: 24px; height: 1px;
+  background: var(--s-deg);
+}
+.lead-text .byline b { color: var(--s-deg); font-weight: 400; font-style: normal; font-family: var(--mono); font-size: 12px; }
+
+.lead-text p {
+  font-family: var(--serif);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 38em;
+  margin-bottom: 12px;
+}
+.lead-text p .n { font-family: var(--mono); font-weight: 500; color: var(--ink-hi); font-variant-numeric: tabular-nums; font-style: normal; }
+.lead-text p .n.bad { color: var(--s-deg); }
+.lead-text .stats {
+  display: flex;
+  gap: 36px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule-faint);
+  margin-top: 18px;
+}
+.lead-text .stats .s {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.lead-text .stats .s .k {
+  font-family: var(--sans);
+  font-size: 9px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  font-weight: 500;
+}
+.lead-text .stats .s .v {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ink-hi);
+  font-variant-numeric: tabular-nums;
+}
+.lead-text .stats .s .v.bad { color: var(--s-deg); }
+
+/* marginalia — editorial note in the right column */
+.marginalia {
+  border-left: 2px solid var(--s-deg);
+  padding: 2px 0 2px 18px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  position: relative;
+  /* MOTION: fades in, slight rise — as if just penciled by the editor */
+  animation: penciled 1.8s var(--ease) 1s both;
+}
+@keyframes penciled {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.marginalia::before {
+  content: '¶';
+  position: absolute;
+  top: -2px;
+  left: -16px;
+  font-family: var(--serif);
+  color: var(--s-deg);
+  font-size: 22px;
+  line-height: 1;
+}
+.marginalia .tag {
+  display: block;
+  font-family: var(--sans);
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: var(--s-deg);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.marginalia p + p { margin-top: 10px; }
+.marginalia .sig {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-dim);
+  margin-top: 14px;
+}
+
+/* event sparkline inside lead */
+.lead-spark {
+  display: flex; align-items: flex-end; gap: 3px; height: 40px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--rule-faint);
+}
+.lead-spark span {
+  flex: 1; background: var(--s-deg); opacity: .4; min-height: 3px;
+}
+.lead-spark span.err { opacity: .95; }
+.lead-spark span.low { opacity: .2; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   NODE ROSTER — newspaper columns
+   ════════════════════════════════════════════════════════════════════════════ */
+.roster {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-top: 1px solid var(--rule-faint);
+  border-bottom: 1px solid var(--rule-faint);
+  margin-bottom: 36px;
+}
+.roster .col {
+  padding: 24px 32px;
+  border-right: 1px solid var(--rule-faint);
+}
+.roster .col:last-child { border-right: none; }
+.roster h3 {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--ink-hi);
+  margin-bottom: 4px;
+  letter-spacing: -.005em;
+}
+.roster h3 .count {
+  font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-dim); margin-left: 8px;
+}
+.roster .strap {
+  font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-mid);
+  padding-bottom: 14px;
+  border-bottom: 1px dotted var(--rule-faint);
+  margin-bottom: 14px;
+}
+
+.node-line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px dotted var(--rule-faint);
+  position: relative;
+}
+.node-line:last-child { border-bottom: none; }
+.node-line .name {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-hi);
+  letter-spacing: 0;
+}
+.node-line .desc {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--ink-mid);
+  line-height: 1.35;
+}
+.node-line .desc .n { font-family: var(--mono); font-style: normal; color: var(--ink-hi); font-weight: 500; font-variant-numeric: tabular-nums; font-size: 13px; }
+.node-line .desc .tag {
+  font-family: var(--sans); font-style: normal;
+  font-size: 9px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--s-ok); font-weight: 600;
+}
+.node-line .desc .tag.rebal { color: var(--mill); font-style: normal; }
+.node-line .earn {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-hi);
+  font-weight: 400;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.node-line .earn .u { font-family: var(--serif); font-style: italic; font-size: 11px; color: var(--ink-dim); margin-left: 4px; }
+
+/* "typographic rebalance" — breathing italic with animated caret underline */
+.rebal-word {
+  position: relative;
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--mill);
+  font-size: 15px;
+  padding: 0 2px;
+  animation: breathe 3.2s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { opacity: .7; }
+  50%      { opacity: 1; }
+}
+.rebal-word::after {
+  content: '';
+  position: absolute;
+  left: 2px; right: 2px; bottom: -3px;
+  height: 1px;
+  background: var(--mill);
+  transform-origin: left;
+  animation: caret 2.2s ease-in-out infinite;
+}
+@keyframes caret {
+  0%, 100% { transform: scaleX(0);   }
+  50%      { transform: scaleX(1); }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   FEATURED OPERATION — Mill detail as feature story
+   ════════════════════════════════════════════════════════════════════════════ */
+.featured {
+  position: relative;
+  padding: 32px 0 0;
+  border-top: 3px double var(--rule);
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 44px;
+}
+.featured::before {
+  content: 'FEATURED OPERATION';
+  position: absolute;
+  top: -8px; left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: .36em;
+  color: var(--mill);
+  background: var(--paper);
+  padding: 0 18px;
+  font-weight: 600;
+}
+
+.feat-title {
+  grid-column: 1 / -1;
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--rule-faint);
+}
+.feat-title .kicker-t {
+  font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--mill); margin-bottom: 6px;
+}
+.feat-title h2 {
+  font-family: var(--serif);
+  font-size: 44px;
+  font-weight: 400;
+  color: var(--ink-hi);
+  line-height: 1;
+  letter-spacing: -.01em;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.feat-title h2 .arrow {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--mill);
+  font-size: 36px;
+}
+.feat-title .dek {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--ink-mid);
+  margin-top: 10px;
+  max-width: 44em;
+  line-height: 1.45;
+}
+.feat-title .dek b { font-style: normal; color: var(--ink-hi); font-weight: 400; }
+.feat-title .dek .n { font-family: var(--mono); color: var(--ink-hi); font-style: normal; font-variant-numeric: tabular-nums; }
+
+/* liquidity as typographic block quote */
+.liquidity {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--rule-faint);
+}
+.liquidity .h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 14px;
+}
+.liquidity .h .t {
+  font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-mid);
+}
+.liquidity .h .tot {
+  font-family: var(--mono); font-size: 20px; color: var(--ink-hi); font-weight: 500; font-variant-numeric: tabular-nums;
+}
+.liquidity .h .tot .u { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-dim); margin-left: 4px; }
+
+.liq-bar {
+  display: flex; height: 24px;
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  position: relative;
+}
+.liq-bar .seg {
+  position: relative;
+  display: flex; align-items: center; padding: 0 10px;
+  font-family: var(--mono); font-size: 11px; color: var(--ink-hi);
+  font-variant-numeric: tabular-nums;
+}
+.liq-bar .seg.alloc { background: color-mix(in oklab, var(--mill) 50%, var(--paper-3)); flex: 12.4; }
+.liq-bar .seg.swap  { background: color-mix(in oklab, var(--mill) 22%, var(--paper-3)); flex: 3.2; overflow: hidden; }
+.liq-bar .seg.avail { background: var(--paper-3); flex: 8.7; color: var(--ink-mid); }
+
+/* subtle editorial rebalance motion — a thin caret sweeping the swap segment */
+.liq-bar .seg.swap::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: var(--ink-hi);
+  box-shadow: 0 0 8px var(--mill);
+  animation: sweep-caret 2.6s ease-in-out infinite;
+  opacity: .7;
+}
+@keyframes sweep-caret {
+  0%,100% { left: 10%; opacity: .2; }
+  50%     { left: 90%; opacity: .9; }
+}
+
+.liq-notes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 14px;
+}
+.liq-notes .n {
+  font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-mid);
+}
+.liq-notes .n::before {
+  content: '';
+  display: inline-block;
+  width: 12px; height: 2px;
+  background: var(--accent);
+  margin-right: 10px;
+  transform: translateY(-3px);
+}
+.liq-notes .n.a { --accent: color-mix(in oklab, var(--mill) 50%, var(--paper-3)); }
+.liq-notes .n.b { --accent: color-mix(in oklab, var(--mill) 22%, var(--paper-3)); }
+.liq-notes .n.c { --accent: var(--paper-3); }
+.liq-notes .n b { font-family: var(--mono); font-style: normal; color: var(--ink-hi); font-weight: 500; margin-left: 4px; font-variant-numeric: tabular-nums; }
+
+/* fee config — editorial */
+.fee-block {
+  padding: 22px 0;
+  border-bottom: 1px solid var(--rule-faint);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  align-items: end;
+}
+.fee-block .cur {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.fee-block .cur .k {
+  font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-mid);
+}
+.fee-block .cur .v {
+  font-family: var(--mono); font-size: 46px; font-weight: 300; color: var(--ink-hi);
+  line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+.fee-block .cur .v .u {
+  font-family: var(--serif); font-style: italic; font-size: 18px; color: var(--mill); margin-left: 4px; font-weight: 400;
+}
+.fee-block .est {
+  text-align: right;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.fee-block .est .k {
+  font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-mid);
+}
+.fee-block .est .v {
+  font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--ink-hi);
+  font-variant-numeric: tabular-nums;
+}
+.fee-block .est .v .u { font-family: var(--serif); font-style: italic; font-size: 12px; color: var(--ink-dim); margin-left: 4px; font-weight: 400; }
+.fee-block .est .sub { font-family: var(--serif); font-style: italic; font-size: 12px; color: var(--ink-dim); }
+
+.slider-wrap {
+  grid-column: 1 / -1;
+  padding-top: 14px;
+}
+.slider {
+  position: relative;
+  height: 4px;
+  background: var(--paper-sunk);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.slider .fill {
+  position: absolute; inset: 0;
+  width: 25%;
+  background: linear-gradient(to right, var(--mill-soft), var(--mill));
+}
+.slider .tick {
+  position: absolute;
+  top: -6px;
+  width: 2px; height: 16px;
+  background: var(--ink-hi);
+  left: 25%; transform: translateX(-50%);
+  box-shadow: 0 0 8px var(--mill);
+}
+.slider-labels {
+  display: flex; justify-content: space-between;
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 11px; color: var(--ink-dim); font-variant-numeric: tabular-nums;
+}
+.slider-labels span.on { color: var(--mill); }
+
+/* profit chart — broadsheet bar */
+.chart {
+  grid-column: 1 / -1;
+  padding: 24px 0 20px;
+  border-bottom: 1px solid var(--rule-faint);
+}
+.chart .h {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 18px;
+}
+.chart .h .t {
+  font-family: var(--serif); font-size: 17px; color: var(--ink-hi); font-weight: 400;
+}
+.chart .h .t em { font-style: italic; color: var(--ink-mid); }
+.chart .h .win {
+  font-family: var(--mono);
+  font-size: 11px; color: var(--ink-mid); display: flex; gap: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.chart .h .win .on { color: var(--mill); border-bottom: 1px solid var(--mill); padding-bottom: 2px; }
+
+.bars {
+  display: flex; align-items: flex-end; gap: 12px; height: 96px;
+  border-bottom: 1px solid var(--rule);
+  position: relative;
+}
+.bars::before, .bars::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  border-top: 1px dotted var(--rule-faint);
+}
+.bars::before { top: 33%; }
+.bars::after  { top: 66%; }
+
+.bars .bar-c { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.bars .bar-c .b {
+  width: 70%;
+  background: linear-gradient(to top, var(--mill-soft), var(--mill));
+  min-height: 4px;
+  opacity: .85;
+}
+.bars .bar-c .b.hi { opacity: 1; }
+.bars .bar-c .d {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+.bars .bar-c .d.today { color: var(--ink-hi); font-style: normal; font-family: var(--mono); font-size: 12px; }
+
+.chart-foot {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 14px;
+}
+.chart-foot .tot {
+  font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-mid);
+}
+.chart-foot .tot b { font-family: var(--mono); color: var(--ink-hi); font-style: normal; font-variant-numeric: tabular-nums; font-weight: 500; }
+.chart-foot .up {
+  font-family: var(--mono); font-size: 12px; color: var(--s-ok); font-variant-numeric: tabular-nums;
+}
+
+/* recent swaps — classifieds style */
+.classifieds {
+  grid-column: 2 / 3;
+  padding: 20px 0 0;
+}
+.classifieds .h {
+  font-family: var(--serif); font-size: 17px; color: var(--ink-hi); font-weight: 400;
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule-faint);
+}
+.classifieds .h em { font-family: var(--serif); font-style: italic; color: var(--ink-mid); font-size: 13px; }
+.classifieds .h .live {
+  font-family: var(--sans);
+  font-size: 9px; letter-spacing: .22em; color: var(--s-ok);
+  display: flex; align-items: center; gap: 6px; font-weight: 600;
+}
+.classifieds .h .live .pip {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--s-ok);
+  animation: live 1.4s var(--ease) infinite;
+}
+@keyframes live {
+  0%,100% { opacity: 1; } 50% { opacity: .3; }
+}
+
+.swap {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  padding: 8px 0;
+  align-items: baseline;
+  border-bottom: 1px dotted var(--rule-faint);
+}
+.swap:last-child { border-bottom: none; }
+.swap .t {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-dim); font-variant-numeric: tabular-nums;
+}
+.swap .d {
+  font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink);
+}
+.swap .d b { font-family: var(--mono); font-style: normal; color: var(--ink-hi); font-weight: 500; font-variant-numeric: tabular-nums; }
+.swap .d .arr { color: var(--mill); margin: 0 4px; font-style: normal; }
+.swap .d em { color: var(--ink-dim); }
+.swap .amt {
+  font-family: var(--mono); font-size: 12px; color: var(--ink-hi); font-variant-numeric: tabular-nums; font-weight: 500;
+}
+.swap .amt .u { font-family: var(--serif); font-style: italic; font-size: 10px; color: var(--mill); margin-left: 3px; font-weight: 400; }
+.swap .amt.pale { color: var(--ink-dim); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   STATES — reference at foot
+   ════════════════════════════════════════════════════════════════════════════ */
+.states {
+  margin-top: 48px;
+  padding-top: 28px;
+  border-top: 3px double var(--rule);
+  position: relative;
+}
+.states::before {
+  content: 'STATES / REFERENCE';
+  position: absolute;
+  top: -8px; left: 0;
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: .32em;
+  color: var(--ink-mid);
+  background: var(--paper);
+  padding-right: 14px;
+  font-weight: 600;
+}
+.states .note {
+  position: absolute;
+  top: -5px; right: 0;
+  font-family: var(--serif); font-style: italic;
+  font-size: 12px; color: var(--ink-dim);
+  background: var(--paper);
+  padding-left: 14px;
+}
+
+.states .grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--rule-faint);
+  margin-top: 28px;
+}
+
+.state {
+  padding: 22px 28px;
+  border-right: 1px solid var(--rule-faint);
+  min-height: 150px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  position: relative;
+}
+.state:last-child { border-right: none; }
+.state .lbl {
+  font-family: var(--serif); font-style: italic;
+  font-size: 13px;
+  color: var(--ink-mid);
+  margin-bottom: 14px;
+}
+
+/* loading */
+.state.loading .skel { display: flex; flex-direction: column; gap: 10px; }
+.state.loading .skel .l {
+  height: 11px;
+  background: linear-gradient(90deg, var(--paper-3), var(--rule), var(--paper-3));
+  background-size: 200% 100%;
+  animation: shimmer 1.8s linear infinite;
+}
+.state.loading .skel .l.w1 { width: 75%; }
+.state.loading .skel .l.w2 { width: 45%; }
+.state.loading .skel .l.w3 { width: 85%; }
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* empty */
+.state.empty { text-align: left; }
+.state.empty .msg {
+  font-family: var(--serif); font-style: italic;
+  font-size: 16px; color: var(--ink-mid); line-height: 1.4;
+}
+.state.empty .msg b {
+  font-style: normal; color: var(--ink-hi); font-weight: 400;
+  display: block; margin-bottom: 6px;
+  font-size: 20px;
+}
+.state.empty .run {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--mill);
+  margin-top: 12px;
+  padding: 6px 10px;
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  align-self: flex-start;
+}
+.state.empty .run::before { content: '$ '; color: var(--ink-dim); }
+
+/* error */
+.state.error {
+  background: color-mix(in oklab, var(--s-down) 4%, transparent);
+}
+.state.error .lbl { color: var(--s-down); }
+.state.error .msg {
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.state.error .msg b {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--s-down);
+  font-weight: 400;
+  display: block;
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+.state.error .code {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--s-down);
+  letter-spacing: .12em;
+  margin-top: 12px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in oklab, var(--s-down) 40%, transparent);
+  align-self: flex-start;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   COLOPHON
+   ════════════════════════════════════════════════════════════════════════════ */
+.colophon {
+  margin-top: 48px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule-faint);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+.colophon .end {
+  font-family: var(--serif); font-style: italic;
+}
+.colophon .end::before { content: '— ❊ — '; color: var(--ink-mute); margin-right: 6px; }
+.colophon .meta {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .08em; color: var(--ink-mute);
+}
+</style>
+</head>
+<body>
+
+<div class="paper">
+
+  <!-- ══════════ MASTHEAD ══════════ -->
+  <header class="masthead">
+    <div class="nameplate">
+      Townhouse
+      <span class="tagline">The Operator Console, in daily edition</span>
+    </div>
+    <div class="mast-center">
+      <div class="date">Monday, the Twentieth of April</div>
+      <div class="issue">No. <b>021</b> · Vol. <b>III</b> · Night Edition</div>
+    </div>
+    <div class="mast-right">
+      <div class="clock">02:14<small>local</small></div>
+      <div class="ator"><span class="led"></span><b>ATOR Connected</b> — 3 hops</div>
+      <div class="op">operator <b>jonathan</b>, at <b>tower-01</b></div>
+      <div class="wallet"><span class="k">Wallet</span>1,248,392 sats</div>
+    </div>
+  </header>
+
+  <!-- ══════════ HEADLINE ══════════ -->
+  <section class="hero">
+    <div class="hero-l">
+      <div>
+        <div class="eyebrow"><span class="em">▸</span>&nbsp;TODAY · EARNINGS</div>
+        <div class="todays-number" style="margin-top:12px;">42,891<span class="unit">satoshis, in aggregate, since midnight</span></div>
+      </div>
+      <div class="kicker">
+        <p class="lead">A quiet night on the network. Every node reporting save <b>one</b>, whose story appears at right.</p>
+        <div class="meta">
+          <span class="up">12.4% vs. yesterday</span>
+          <em>window 00:00 — 02:14</em>
+        </div>
+      </div>
+    </div>
+    <div class="by-type">
+      <div class="col t-town">
+        <div class="lbl">Towns</div>
+        <div class="val">28,442<span class="u">sats</span></div>
+        <div class="sub">three relays in service</div>
+      </div>
+      <div class="col t-mill">
+        <div class="lbl">Mills</div>
+        <div class="val">11,208<span class="u">sats</span></div>
+        <div class="sub">two pairs under management</div>
+      </div>
+      <div class="col t-dvm">
+        <div class="lbl">D.V.M.</div>
+        <div class="val">3,241<span class="u">sats</span></div>
+        <div class="sub">one worker on bench</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ RUBRIC ══════════ -->
+  <div class="rubric">
+    <div class="r-title">Nodes in Service <span class="folio">&mdash; a full accounting</span></div>
+    <div class="r-meta">
+      <span>TOTAL <b>06</b></span>
+      <span>OPERATIONAL <b>05</b></span>
+      <span class="deg">ATTENTION <b>01</b></span>
+    </div>
+  </div>
+
+  <!-- ══════════ LEAD STORY — DEGRADED TOWN ══════════ -->
+  <section class="lead-story">
+    <div class="lead-body">
+      <div class="lead-drop">T</div>
+      <div class="lead-text">
+        <h2>own-03 is <em>struggling,</em> and has been for the better part of an hour.</h2>
+        <div class="byline">FROM TOWN — <b>town-03 @ edge-sgp</b> — filed 02:11:42</div>
+        <p>The relay's error rate has climbed to <span class="n bad">4.2%</span>, well above the one-tenth of a percent this operator has grown accustomed to. Event throughput has fallen from a typical <span class="n">13,000</span> per hour down to a worrying <span class="n bad">4,747</span>. Active connections hold at <span class="n">88</span>, which is roughly a third of normal. Uptime is not the question; the process is alive, but tired.</p>
+        <p>Nothing here suggests a crash. The signals read as network stress or a misbehaving upstream peer — something worth looking at before the Singapore edge takes heavier morning traffic.</p>
+        <div class="stats">
+          <div class="s"><div class="k">Error Rate</div><div class="v bad">4.2%</div></div>
+          <div class="s"><div class="k">Events · hr</div><div class="v bad">4,747</div></div>
+          <div class="s"><div class="k">Connections</div><div class="v">88</div></div>
+          <div class="s"><div class="k">Last Error</div><div class="v">02:11:42</div></div>
+        </div>
+        <div class="lead-spark">
+          <span style="height:70%"></span><span style="height:60%"></span><span style="height:55%"></span>
+          <span style="height:40%" class="low"></span><span style="height:35%" class="low"></span>
+          <span style="height:45%" class="err"></span><span style="height:30%" class="err"></span>
+          <span style="height:25%" class="err"></span><span style="height:35%" class="low"></span>
+          <span style="height:20%" class="err"></span><span style="height:30%" class="low"></span>
+          <span style="height:25%" class="err"></span>
+        </div>
+      </div>
+    </div>
+    <aside class="marginalia">
+      <span class="tag">Editor's note</span>
+      <p>This one needs you, when you have a moment. Not urgent — but not to be left until morning either.</p>
+      <p>Suggest checking upstream relay peers first; the error pattern is periodic, not monotonic.</p>
+      <div class="sig">— the console</div>
+    </aside>
+  </section>
+
+  <!-- ══════════ ROSTER — OTHER NODES ══════════ -->
+  <div class="roster">
+    <div class="col">
+      <h3>Other Towns <span class="count">— operational</span></h3>
+      <div class="strap">Both relays reporting nominal throughput and healthy peer counts.</div>
+
+      <div class="node-line">
+        <div class="name">town-01</div>
+        <div class="desc">
+          <span class="tag">OK</span> · relaying <span class="n">14,208</span> events per hour across <span class="n">312</span> connections, with uptime of <span class="n">98d 04h</span>.
+        </div>
+        <div class="earn">12,884<span class="u">sats today</span></div>
+      </div>
+
+      <div class="node-line">
+        <div class="name">town-02</div>
+        <div class="desc">
+          <span class="tag">OK</span> · the Helsinki edge holds at <span class="n">9,487</span> events per hour, <span class="n">208</span> connections, steady since its last restart.
+        </div>
+        <div class="earn">11,208<span class="u">sats today</span></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <h3>Mills at Work <span class="count">— two pairs</span></h3>
+      <div class="strap">One pair currently <em>rebalancing</em>; the other holding position.</div>
+
+      <div class="node-line">
+        <div class="name">mill-eth-01</div>
+        <div class="desc">
+          <span class="rebal-word">rebalancing</span> the <span class="n">ETH ↔ BASE</span> pair, now at <span class="n">87.3%</span> pool utilization over <span class="n">247</span> swaps today. See feature below.
+        </div>
+        <div class="earn">7,842<span class="u">sats today</span></div>
+      </div>
+
+      <div class="node-line">
+        <div class="name">mill-base-01</div>
+        <div class="desc">
+          <span class="tag">OK</span> · BASE ↔ OP at <span class="n">62.1%</span> utilization, <span class="n">184</span> swaps in the last day.
+        </div>
+        <div class="earn">3,366<span class="u">sats today</span></div>
+      </div>
+
+      <h3 style="margin-top:22px;padding-top:18px;border-top:1px dotted var(--rule-faint);">The Bench <span class="count">— one worker</span></h3>
+
+      <div class="node-line">
+        <div class="name">dvm-whisper-01</div>
+        <div class="desc">
+          <span class="tag">OK</span> · <span class="n">4</span> jobs queued, average latency <span class="n">2.8s</span>, serving the whisper-lg-v3 model.
+        </div>
+        <div class="earn">3,241<span class="u">sats today</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ FEATURED OPERATION — MILL DETAIL ══════════ -->
+  <section class="featured">
+
+    <div class="feat-title">
+      <div class="kicker-t">A Feature · Mills at Work</div>
+      <h2>mill-eth-01 <span class="arrow">between two chains</span></h2>
+      <div class="dek">
+        The mill has been <b>rebalancing</b> liquidity across <b>Ethereum</b> and <b>Base</b> since <span class="n">01:53</span>, shifting
+        <span class="n">3.2 ETH</span> through active swaps. At current fee of <span class="n">0.25%</span>, the operator can expect
+        <span class="n">247,000</span> sats per day at the present volume.
+      </div>
+    </div>
+
+    <!-- left column: liquidity + fee + chart -->
+    <div>
+      <div class="liquidity">
+        <div class="h">
+          <span class="t">Liquidity — by disposition</span>
+          <span class="tot">24.3<span class="u">ETH</span></span>
+        </div>
+        <div class="liq-bar">
+          <div class="seg alloc">12.4</div>
+          <div class="seg swap">3.2</div>
+          <div class="seg avail">8.7</div>
+        </div>
+        <div class="liq-notes">
+          <div class="n a">allocated<b>12.4 ETH</b></div>
+          <div class="n b">in swap<b>3.2 ETH</b></div>
+          <div class="n c">available<b>8.7 ETH</b></div>
+        </div>
+      </div>
+
+      <div class="fee-block">
+        <div class="cur">
+          <span class="k">Current fee</span>
+          <span class="v">0.25<span class="u">per cent</span></span>
+        </div>
+        <div class="est">
+          <span class="k">Estimated daily</span>
+          <span class="v">247,000<span class="u">sats</span></span>
+          <span class="sub">at 24-hour average volume</span>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider">
+            <div class="fill"></div>
+            <div class="tick"></div>
+          </div>
+          <div class="slider-labels">
+            <span>0.05%</span>
+            <span class="on">0.25%</span>
+            <span>0.50%</span>
+            <span>1.00%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart">
+        <div class="h">
+          <div class="t">Profit <em>— over the last week</em></div>
+          <div class="win"><span>24H</span><span class="on">7D</span><span>30D</span></div>
+        </div>
+        <div class="bars">
+          <div class="bar-c"><div class="b" style="height:45%"></div><div class="d">Wed</div></div>
+          <div class="bar-c"><div class="b" style="height:62%"></div><div class="d">Thu</div></div>
+          <div class="bar-c"><div class="b" style="height:55%"></div><div class="d">Fri</div></div>
+          <div class="bar-c"><div class="b" style="height:70%"></div><div class="d">Sat</div></div>
+          <div class="bar-c"><div class="b" style="height:52%"></div><div class="d">Sun</div></div>
+          <div class="bar-c"><div class="b" style="height:78%"></div><div class="d">Mon</div></div>
+          <div class="bar-c"><div class="b hi" style="height:92%"></div><div class="d today">today</div></div>
+        </div>
+        <div class="chart-foot">
+          <span class="tot">7-day total <b>1,428,921 sats</b></span>
+          <span class="up">▴ 14.8% vs. previous week</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- right column: swap events -->
+    <div class="classifieds">
+      <div class="h">
+        <span>Recent Swaps <em>— a ledger</em></span>
+        <span class="live"><span class="pip"></span>LIVE</span>
+      </div>
+
+      <div class="swap">
+        <span class="t">02:13:48</span>
+        <span class="d"><b>0.42 ETH</b><span class="arr">→</span><b>0.42 ETH</b> <em>on BASE</em></span>
+        <span class="amt">312<span class="u">sats</span></span>
+      </div>
+      <div class="swap">
+        <span class="t">02:13:21</span>
+        <span class="d"><b>1.80 ETH</b><span class="arr">→</span><b>1.80 ETH</b> <em>on BASE</em></span>
+        <span class="amt">1,340<span class="u">sats</span></span>
+      </div>
+      <div class="swap">
+        <span class="t">02:12:55</span>
+        <span class="d"><b>0.08 ETH</b><span class="arr">→</span><b>0.08 ETH</b> <em>on BASE</em></span>
+        <span class="amt">62<span class="u">sats</span></span>
+      </div>
+      <div class="swap">
+        <span class="t">02:12:14</span>
+        <span class="d"><b>3.20 ETH</b><span class="arr">→</span><b>3.20 ETH</b> <em>internal rebalance</em></span>
+        <span class="amt pale">—</span>
+      </div>
+      <div class="swap">
+        <span class="t">02:11:09</span>
+        <span class="d"><b>0.25 ETH</b><span class="arr">→</span><b>0.25 ETH</b> <em>on BASE</em></span>
+        <span class="amt">190<span class="u">sats</span></span>
+      </div>
+      <div class="swap">
+        <span class="t">02:09:37</span>
+        <span class="d"><b>0.76 ETH</b><span class="arr">→</span><b>0.76 ETH</b> <em>on BASE</em></span>
+        <span class="amt">568<span class="u">sats</span></span>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══════════ STATES REFERENCE ══════════ -->
+  <section class="states">
+    <span class="note">loading · empty · error — conventions, for every data surface</span>
+    <div class="grid">
+
+      <div class="state loading">
+        <span class="lbl">while loading</span>
+        <div class="skel">
+          <div class="l w1"></div>
+          <div class="l w2"></div>
+          <div class="l w3"></div>
+        </div>
+      </div>
+
+      <div class="state empty">
+        <span class="lbl">when empty</span>
+        <div class="msg">
+          <b>No nodes yet configured.</b>
+          The console is quiet. Begin by registering your first node from the command line.
+        </div>
+        <div class="run">townhouse init</div>
+      </div>
+
+      <div class="state error">
+        <span class="lbl">on error</span>
+        <div class="msg">
+          <b>The daemon is unreachable.</b>
+          The operator's attention is required. Check the daemon process on this host and reconnect.
+        </div>
+        <div class="code">ERR · DAEMON_UNREACHABLE</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ COLOPHON ══════════ -->
+  <footer class="colophon">
+    <div class="end">Townhouse · The Operator Console · Night Edition</div>
+    <div class="meta">design-direction-spike · v2 · broadsheet-operations</div>
+  </footer>
+
+</div>
+
+</body>
+</html>

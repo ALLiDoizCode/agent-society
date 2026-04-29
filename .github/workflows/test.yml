@@ -166,6 +166,73 @@ jobs:
           retention-days: 14
 
   # ─────────────────────────────────────────────
+  # Stage 2c: Connector Contract Canary (every PR)
+  # Lightweight smoke test against @toon-protocol/connector public API.
+  # Fails fast (<60s) when the connector breaks its API contract, before
+  # the heavy E2E matrix runs. See packages/sdk/CONNECTOR_MIGRATION.md.
+  # Story 22.5.
+  #
+  # Action references in THIS job are pinned to full commit SHAs per
+  # OWASP A08 (Software & Data Integrity Failures). Other jobs in this
+  # file use floating @v4 tags — pinning the rest is out of scope here.
+  # ─────────────────────────────────────────────
+  connector-contract-canary:
+    name: Connector Contract Canary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: lint-and-build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0c17529a66aca453f9227af23103ed11469b1e47 # v4.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          # Intentionally no `cache: 'pnpm'` — this job relies on the
+          # `build-${{ github.sha }}` cache below for node_modules. On a
+          # build-cache hit we skip `pnpm install`, so pnpm's store directory
+          # never gets populated and the setup-node post-step would error
+          # ("Path Validation Error") trying to save a nonexistent path.
+
+      - name: Restore build artifacts
+        id: build-cache
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4.2.0
+        with:
+          path: |
+            packages/*/dist
+            node_modules
+            packages/*/node_modules
+          key: build-${{ github.sha }}
+
+      # Fallback when the build cache misses (eviction / re-run after a
+      # transient lint-and-build failure). Without this, vitest would fail
+      # with module-resolution errors that mimic a real contract regression.
+      - name: Install dependencies (cache miss fallback)
+        if: steps.build-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build sdk + deps (cache miss fallback)
+        if: steps.build-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @toon-protocol/sdk... build
+
+      # Type-level guards in the canary (e.g. `@ts-expect-error` on
+      # `ConnectorConfig['settlementInfra']`) are stripped by vitest's
+      # esbuild transform. Run `tsc --noEmit` over the test file so those
+      # guards fail the canary at compile time, not just at vitest runtime.
+      - name: Type-check connector contract canary
+        working-directory: packages/sdk
+        run: pnpm exec tsc --noEmit --project tests/integration/tsconfig.json
+
+      - name: Run connector contract canary
+        working-directory: packages/sdk
+        run: pnpm test:integration -- tests/integration/connector-contract.test.ts --reporter=verbose
+
+  # ─────────────────────────────────────────────
   # Stage 2b: Security Audit (every PR)
   # ─────────────────────────────────────────────
   security-audit:
@@ -205,7 +272,7 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: lint-and-build
+    needs: [lint-and-build, connector-contract-canary]
     if: >-
       github.event_name == 'schedule' ||
       (github.event_name == 'workflow_dispatch' &&
@@ -258,7 +325,7 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: lint-and-build
+    needs: [lint-and-build, connector-contract-canary]
     # Only run on nightly schedule or manual dispatch (requires genesis infrastructure)
     if: >-
       github.event_name == 'schedule' ||

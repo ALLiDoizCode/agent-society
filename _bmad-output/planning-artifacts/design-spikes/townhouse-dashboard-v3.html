@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOWNHOUSE :: /dev/console [design-direction-spike v3]</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/*
+  ════════════════════════════════════════════════════════════════════════════════
+  DESIGN DIRECTION — "TERMINAL-BRUTALIST"
+  ════════════════════════════════════════════════════════════════════════════════
+  A text-mode dashboard that doesn't cosplay a CRT — it asserts itself as one.
+  True black ground, one typeface (Fira Code, contextual ligatures on), one
+  weight-vocabulary, maximum contrast. Box-drawing characters do real
+  structural work — ┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼ ═ ║ ╔ ╗ ╚ ╝ are DOM content, not
+  decoration. Information density is high on purpose. Status is declared, not
+  suggested. The degraded Town gets INVERTED: black text on amber ground. No
+  soft grays cushioning hard truths.
+
+  TYPE     — Fira Code, only. Weights 300/400/500/700. Ligatures on.
+  MOTION   — (1) Hard blinking block cursor at the command line (1s cycle).
+             (2) Inverted-block FLASH on the degraded Town row (3s cycle,
+                 subtle brightness shift — a heartbeat for grown-ups).
+             (3) Ticker scroll on live events strip (linear, pauseable-feeling).
+  DENSITY  — Imagine an operator running this in tmux over SSH. That's the brief.
+  ════════════════════════════════════════════════════════════════════════════════
+*/
+
+:root {
+  /* ── ground ───────────────────────────────────────── */
+  --bg:         #000000;
+  --bg-alt:     #0A0A0A;
+  --bg-panel:   #070707;
+  --bg-inv:     #F5B93A;   /* used only for inverted attention rows */
+
+  /* ── ink ──────────────────────────────────────────── */
+  --ink-hi:     #FFFFFF;
+  --ink:        #E6E6E6;
+  --ink-mid:    #A0A0A0;
+  --ink-dim:    #606060;
+  --ink-mute:   #333333;
+
+  /* ── rules ────────────────────────────────────────── */
+  --rule:       #2A2A2A;
+  --rule-hi:    #505050;
+  --rule-punch: #FFFFFF;
+
+  /* ── node identity (epic spec, brutalist saturation) ─ */
+  --town:       #F5B93A;
+  --mill:       #3FDB63;
+  --dvm:        #5E9CFF;
+
+  /* ── status ───────────────────────────────────────── */
+  --s-ok:       #3FDB63;
+  --s-deg:      #F5B93A;
+  --s-down:     #FF4747;
+  --s-pend:     #A0A0A0;
+
+  --mono:       'Fira Code', ui-monospace, 'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.5;
+  font-variant-ligatures: contextual;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "calt" 1, "tnum" 1, "zero" 1;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  /* terminal cursor feel */
+  cursor: default;
+}
+
+/* No noise overlay — brutalism doesn't soften. But an extremely subtle scanline. */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 3px,
+    rgba(255,255,255,.012) 3px,
+    rgba(255,255,255,.012) 4px
+  );
+}
+
+.console {
+  position: relative;
+  z-index: 2;
+  max-width: 1580px;
+  margin: 0 auto;
+  padding: 20px 24px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── utility: box-drawing rule as real content ───── */
+.bd-rule {
+  display: block;
+  color: var(--ink-mute);
+  font-family: var(--mono);
+  white-space: pre;
+  overflow: hidden;
+  line-height: 1;
+  user-select: none;
+}
+.bd-rule.hi { color: var(--ink-dim); }
+.bd-rule.bright { color: var(--ink-hi); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TOP BAR (header frame with ═ border)
+   ════════════════════════════════════════════════════════════════════════════ */
+.frame {
+  border: 1px solid var(--ink-hi);
+  background: var(--bg);
+  position: relative;
+}
+.frame.heavy { border-width: 1px; box-shadow: 0 0 0 1px var(--ink-hi) inset; }
+
+.topbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid var(--ink-hi);
+}
+.topbar > * {
+  padding: 12px 18px;
+  border-right: 1px solid var(--ink-hi);
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.topbar > *:last-child { border-right: none; }
+
+.tb-mark {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: .08em;
+  color: var(--ink-hi);
+  background: var(--ink-hi);
+  color: var(--bg);
+  padding: 14px 20px;
+}
+.tb-mark .ver { color: var(--bg); opacity: .5; font-weight: 400; margin-left: 12px; font-size: 11px; letter-spacing: 0; }
+
+.tb-op {
+  color: var(--ink);
+  font-size: 12px;
+}
+.tb-op .at { color: var(--ink-dim); }
+.tb-op .host { color: var(--ink-mid); }
+
+.tb-wallet {
+  font-size: 12px;
+  color: var(--ink-mid);
+  display: flex; align-items: baseline; gap: 10px;
+}
+.tb-wallet .lbl { color: var(--ink-dim); font-size: 11px; }
+.tb-wallet .v { color: var(--ink-hi); font-weight: 600; font-size: 14px; letter-spacing: 0; }
+.tb-wallet .u { color: var(--ink-dim); font-size: 10px; }
+
+.tb-ator {
+  font-size: 11px;
+  color: var(--ink);
+  display: flex; align-items: center; gap: 10px;
+}
+.tb-ator .blk {
+  width: 10px; height: 10px;
+  background: var(--s-ok);
+}
+.tb-ator b { color: var(--ink-hi); font-weight: 500; }
+.tb-ator .hops { color: var(--ink-dim); }
+
+.tb-clock {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-hi);
+  display: flex; align-items: baseline; gap: 10px;
+}
+.tb-clock .z { color: var(--ink-dim); font-size: 10px; font-weight: 400; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   HERO STRIP — earnings line
+   ════════════════════════════════════════════════════════════════════════════ */
+.hero {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto auto;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid var(--ink-hi);
+}
+.hero > * {
+  padding: 16px 20px;
+  border-right: 1px solid var(--ink-hi);
+  display: flex; align-items: baseline; gap: 10px;
+}
+.hero > *:last-child { border-right: none; }
+
+.hero .h-lbl {
+  font-size: 11px;
+  color: var(--ink-dim);
+  letter-spacing: .14em;
+}
+.hero .h-big {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--ink-hi);
+  letter-spacing: -.01em;
+}
+.hero .h-big .u { font-size: 12px; color: var(--ink-mid); font-weight: 400; margin-left: 4px; }
+.hero .h-delta { font-size: 12px; color: var(--s-ok); font-weight: 500; }
+.hero .h-delta::before { content: '++'; margin-right: 4px; opacity: .7; }
+
+.hero .h-type {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 12px;
+  color: var(--ink-mid);
+}
+.hero .h-type .k {
+  padding: 2px 6px;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: .12em;
+  color: var(--bg);
+  background: var(--accent);
+}
+.hero .h-type.t-town { --accent: var(--town); }
+.hero .h-type.t-mill { --accent: var(--mill); }
+.hero .h-type.t-dvm  { --accent: var(--dvm); }
+.hero .h-type .v {
+  color: var(--ink-hi); font-weight: 500; font-size: 14px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MAIN — split panel with ASCII divider between
+   ════════════════════════════════════════════════════════════════════════════ */
+.main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--ink-hi);
+  min-height: 600px;
+}
+.main > .panel { padding: 0; }
+.main > .panel.left { border-right: 1px solid var(--ink-hi); }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--bg-alt);
+}
+.panel-head .t {
+  font-weight: 600; color: var(--ink-hi);
+  font-size: 12px;
+  letter-spacing: .1em;
+}
+.panel-head .t::before {
+  content: '>>';
+  color: var(--ink-dim);
+  margin-right: 10px;
+  font-weight: 400;
+}
+.panel-head .meta {
+  font-size: 11px;
+  color: var(--ink-dim);
+  display: flex; gap: 16px;
+}
+.panel-head .meta b { color: var(--ink-hi); font-weight: 500; }
+.panel-head .meta .deg { color: var(--s-deg); }
+
+/* ── NODE TABLE ───────────────────────────────────── */
+.node-table {
+  font-size: 12px;
+  width: 100%;
+  border-collapse: collapse;
+}
+.node-table thead th {
+  font-weight: 400;
+  color: var(--ink-dim);
+  font-size: 10px;
+  letter-spacing: .15em;
+  text-align: left;
+  padding: 10px 18px 8px;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.node-table thead th.r { text-align: right; }
+.node-table tbody tr {
+  border-bottom: 1px solid var(--rule);
+  position: relative;
+  transition: background .15s;
+}
+.node-table tbody tr.selected {
+  background: var(--ink-hi);
+  color: var(--bg);
+}
+.node-table tbody tr.selected td { color: var(--bg); }
+.node-table tbody tr.selected td b,
+.node-table tbody tr.selected td .v { color: var(--bg); }
+
+/* DEGRADED ROW — fully inverted, amber ground + black ink */
+.node-table tbody tr.degraded {
+  background: var(--town);
+  /* MOTION 2: subtle heartbeat flash — brightness shifts 3s cycle */
+  animation: inv-heartbeat 3s ease-in-out infinite;
+}
+.node-table tbody tr.degraded td,
+.node-table tbody tr.degraded td b,
+.node-table tbody tr.degraded td .v,
+.node-table tbody tr.degraded td .t { color: var(--bg) !important; }
+.node-table tbody tr.degraded .sel-arrow { visibility: hidden; }
+
+@keyframes inv-heartbeat {
+  0%, 100% { background: var(--town); }
+  50%      { background: color-mix(in oklab, var(--town) 82%, white); }
+}
+
+.node-table td {
+  padding: 11px 18px;
+  vertical-align: middle;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.node-table td.r { text-align: right; }
+.node-table .sel-arrow {
+  display: inline-block;
+  width: 12px;
+  color: var(--ink-hi);
+  font-weight: 700;
+}
+.node-table tr:hover:not(.degraded):not(.selected) { background: var(--bg-alt); }
+
+.n-name { font-weight: 500; color: var(--ink-hi); }
+.n-type {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  color: var(--bg);
+}
+.n-type.t-town { background: var(--town); }
+.n-type.t-mill { background: var(--mill); }
+.n-type.t-dvm  { background: var(--dvm); }
+
+.n-status {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px;
+  letter-spacing: .1em;
+  font-weight: 600;
+}
+.n-status .sq { width: 9px; height: 9px; }
+.n-status .sq.ok { background: var(--s-ok); }
+.n-status .sq.deg { background: var(--bg); border: 1px solid var(--bg); }
+.n-status .sq.rbl { background: var(--mill); }
+.n-status.ok { color: var(--s-ok); }
+.n-status.deg { color: var(--bg); font-weight: 700; }
+.n-status.rbl { color: var(--mill); }
+
+.n-metric { font-weight: 500; color: var(--ink-hi); }
+.n-metric .u { font-size: 10px; color: var(--ink-dim); margin-left: 3px; font-weight: 400; }
+.tr.degraded .n-metric .u { color: var(--bg); opacity: .6; }
+
+.n-spark {
+  display: inline-flex; align-items: flex-end; gap: 1px; height: 14px; width: 60px;
+  vertical-align: middle;
+}
+.n-spark span {
+  flex: 1; background: var(--accent, var(--ink-dim)); opacity: .5;
+}
+.n-spark span.hi { opacity: 1; }
+tr.t-town .n-spark { --accent: var(--town); }
+tr.t-mill .n-spark { --accent: var(--mill); }
+tr.t-dvm  .n-spark { --accent: var(--dvm); }
+tr.degraded .n-spark span { background: var(--bg); opacity: .4; }
+tr.degraded .n-spark span.err { opacity: .9; }
+
+.n-earn {
+  font-weight: 500; color: var(--ink-hi);
+}
+.n-earn .u { font-size: 10px; color: var(--ink-dim); margin-left: 3px; font-weight: 400; }
+
+/* ── DETAIL PANEL ─────────────────────────────────── */
+.detail {
+  padding: 20px 24px;
+  font-size: 12px;
+}
+
+.d-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: baseline;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 16px;
+}
+.d-head .path {
+  color: var(--ink-dim);
+  font-size: 11px;
+}
+.d-head .path b { color: var(--ink-hi); font-weight: 600; }
+.d-head .path .sep { margin: 0 4px; color: var(--ink-mute); }
+
+.d-title {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.d-title .id {
+  font-size: 22px; font-weight: 700; color: var(--ink-hi); letter-spacing: -.01em;
+}
+.d-title .sub {
+  font-size: 12px; color: var(--ink-mid);
+  display: flex; align-items: center; gap: 10px;
+}
+.d-title .sub .arr { color: var(--mill); }
+.d-title .sub b { color: var(--ink-hi); font-weight: 500; }
+
+.d-status {
+  padding: 8px 14px;
+  border: 1px solid var(--mill);
+  color: var(--mill);
+  font-size: 11px;
+  letter-spacing: .16em;
+  font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+.d-status .blk {
+  width: 8px; height: 8px;
+  background: var(--mill);
+  animation: blk-blink 1.2s steps(2, start) infinite;
+}
+@keyframes blk-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: .25; }
+}
+
+/* section label */
+.s-lbl {
+  font-size: 10px;
+  letter-spacing: .22em;
+  color: var(--ink-dim);
+  font-weight: 600;
+  margin-bottom: 10px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed var(--rule);
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.s-lbl .r { color: var(--ink-hi); font-weight: 500; letter-spacing: 0; font-size: 12px; }
+.s-lbl .r .u { color: var(--ink-dim); font-size: 10px; margin-left: 3px; }
+
+/* LIQUIDITY — rendered as ASCII blocks █ ▓ ░ */
+.liquidity {
+  margin-bottom: 22px;
+}
+.liq-ascii {
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: 0;
+  font-weight: 400;
+  overflow: hidden;
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: var(--bg-panel);
+}
+.liq-ascii .a { color: var(--mill); letter-spacing: 0; }
+.liq-ascii .b {
+  color: var(--mill);
+  opacity: .55;
+  position: relative;
+  overflow: hidden;
+  letter-spacing: 0;
+}
+.liq-ascii .c { color: var(--ink-mute); letter-spacing: 0; }
+
+/* REBALANCE SCANNER — a single | caret travels through the swap block */
+.liq-ascii .b::after {
+  content: '│';
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+  color: var(--ink-hi);
+  text-shadow: 0 0 8px var(--mill);
+  font-weight: 700;
+  animation: scan-caret 2.4s linear infinite;
+}
+@keyframes scan-caret {
+  from { left: -.4em; }
+  to   { left: 100%; }
+}
+
+.liq-legend {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 11px;
+}
+.liq-legend .item { display: flex; align-items: center; gap: 8px; color: var(--ink-mid); }
+.liq-legend .sw {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+}
+.liq-legend .sw.a { color: var(--mill); }
+.liq-legend .sw.b { color: var(--mill); opacity: .55; }
+.liq-legend .sw.c { color: var(--ink-mute); }
+.liq-legend b { color: var(--ink-hi); font-weight: 500; margin-left: auto; }
+
+/* FEE */
+.fee {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 18px;
+  align-items: end;
+}
+.fee .cur .v {
+  font-size: 38px;
+  font-weight: 700;
+  color: var(--ink-hi);
+  line-height: 1;
+  letter-spacing: -.02em;
+  margin-top: 6px;
+}
+.fee .cur .v .u { font-size: 16px; color: var(--mill); font-weight: 500; margin-left: 4px; }
+.fee .est { text-align: right; }
+.fee .est .v {
+  font-size: 18px; font-weight: 600; color: var(--ink-hi);
+  margin-top: 6px;
+}
+.fee .est .v .u { font-size: 11px; color: var(--ink-dim); margin-left: 3px; font-weight: 400; }
+.fee .est .sub { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+
+.fee .slider {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+}
+.fee .slider .track {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink-mute);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.fee .slider .track .fill { color: var(--mill); }
+.fee .slider .track .thumb { color: var(--ink-hi); font-weight: 700; }
+.fee .slider .labels {
+  display: flex; justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10px; color: var(--ink-dim); letter-spacing: .08em;
+}
+.fee .slider .labels .on { color: var(--mill); font-weight: 600; }
+
+/* CHART — ASCII bar chart */
+.chart {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 18px;
+}
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+  align-items: end;
+  height: 110px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 4px;
+  position: relative;
+}
+.chart-grid::before, .chart-grid::after {
+  content: ''; position: absolute; left: 0; right: 0;
+  border-top: 1px dashed var(--rule);
+}
+.chart-grid::before { top: 33%; }
+.chart-grid::after  { top: 66%; }
+.chart-col { display: flex; flex-direction: column; align-items: stretch; gap: 4px; height: 100%; justify-content: flex-end; }
+.chart-col .bar {
+  background: var(--mill);
+  opacity: .75;
+}
+.chart-col .bar.hi { opacity: 1; box-shadow: 0 0 12px color-mix(in oklab, var(--mill) 30%, transparent); }
+.chart-x {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--ink-dim);
+  text-align: center;
+}
+.chart-x .today { color: var(--ink-hi); font-weight: 500; }
+.chart-foot {
+  display: flex; justify-content: space-between; margin-top: 10px;
+  font-size: 11px; color: var(--ink-mid);
+}
+.chart-foot b { color: var(--ink-hi); font-weight: 500; }
+.chart-foot .up { color: var(--s-ok); }
+
+/* EVENTS */
+.events { margin-top: 4px; }
+.evt-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  padding: 7px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--rule);
+  align-items: baseline;
+}
+.evt-row:last-child { border-bottom: none; }
+.evt-row .t { color: var(--ink-dim); font-size: 11px; }
+.evt-row .d { color: var(--ink); }
+.evt-row .d .arr { color: var(--mill); margin: 0 4px; }
+.evt-row .d b { color: var(--ink-hi); font-weight: 500; }
+.evt-row .d em { color: var(--ink-dim); font-style: normal; margin-left: 6px; }
+.evt-row .amt { color: var(--ink-hi); font-weight: 500; font-size: 12px; }
+.evt-row .amt .u { font-size: 10px; color: var(--mill); margin-left: 3px; font-weight: 400; }
+.evt-row .amt.pale { color: var(--ink-dim); font-weight: 400; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   STATES REFERENCE
+   ════════════════════════════════════════════════════════════════════════════ */
+.states {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid var(--ink-hi);
+}
+.state {
+  padding: 20px 24px;
+  border-right: 1px solid var(--ink-hi);
+  min-height: 150px;
+  position: relative;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.state:last-child { border-right: none; }
+.state .lbl {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .22em;
+  color: var(--ink-hi);
+  background: var(--ink-hi);
+  color: var(--bg);
+  padding: 4px 8px;
+  align-self: flex-start;
+  margin-bottom: 12px;
+}
+
+/* loading */
+.state.loading .skel { display: flex; flex-direction: column; gap: 8px; }
+.state.loading .skel .l {
+  height: 10px;
+  background: var(--ink-mute);
+  position: relative;
+  overflow: hidden;
+}
+.state.loading .skel .l::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, var(--ink-dim), transparent);
+  animation: skel-wipe 1.4s linear infinite;
+}
+@keyframes skel-wipe {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+.state.loading .skel .l.w1 { width: 80%; }
+.state.loading .skel .l.w2 { width: 45%; }
+.state.loading .skel .l.w3 { width: 90%; }
+.state.loading .cap { font-size: 11px; color: var(--ink-dim); margin-top: 10px; }
+.state.loading .cap::before {
+  content: '> ';
+  color: var(--ink-hi);
+}
+
+/* empty */
+.state.empty .msg {
+  color: var(--ink-mid);
+  font-size: 13px;
+}
+.state.empty .msg b {
+  color: var(--ink-hi); font-weight: 600; display: block; margin-bottom: 4px;
+}
+.state.empty .prompt {
+  font-size: 13px;
+  color: var(--ink-hi);
+  margin-top: auto;
+  padding: 6px 10px;
+  border: 1px solid var(--ink-hi);
+  align-self: flex-start;
+}
+.state.empty .prompt::before { content: '$ '; color: var(--ink-dim); margin-right: 2px; }
+.state.empty .prompt::after {
+  content: '_';
+  color: var(--ink-hi);
+  margin-left: 2px;
+  animation: blink 1s steps(2, start) infinite;
+}
+
+/* error */
+.state.error {
+  background: var(--s-down);
+  color: var(--bg);
+}
+.state.error .lbl {
+  background: var(--bg); color: var(--s-down);
+}
+.state.error .msg {
+  font-size: 13px;
+  color: var(--bg);
+}
+.state.error .msg b {
+  font-weight: 700; display: block; margin-bottom: 6px; font-size: 15px;
+}
+.state.error .code {
+  font-size: 11px;
+  margin-top: auto;
+  padding: 4px 8px;
+  background: var(--bg); color: var(--s-down);
+  align-self: flex-start;
+  font-weight: 600;
+  letter-spacing: .1em;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   STATUS LINE (vim-modeline style at the bottom)
+   ════════════════════════════════════════════════════════════════════════════ */
+.statusline {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0;
+  background: var(--ink-hi);
+  color: var(--bg);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: .04em;
+  margin-top: 0;
+}
+.statusline > * {
+  padding: 8px 16px;
+  border-right: 1px solid var(--bg);
+}
+.statusline > *:last-child { border-right: none; }
+.statusline .mode {
+  background: var(--bg); color: var(--ink-hi); font-weight: 700;
+  border-right: 1px solid var(--ink-hi);
+}
+.statusline .note {
+  display: flex; align-items: center; gap: 8px;
+}
+.statusline .note .warn {
+  color: var(--s-down);
+  background: var(--bg);
+  padding: 1px 6px;
+  font-weight: 700;
+  font-size: 11px;
+}
+.statusline .tally { font-variant-numeric: tabular-nums; }
+.statusline .tally b { font-weight: 700; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   COMMAND LINE (the blinker)
+   ════════════════════════════════════════════════════════════════════════════ */
+.cmdline {
+  padding: 12px 18px;
+  font-size: 13px;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cmdline .prompt { color: var(--mill); font-weight: 600; }
+.cmdline .input { color: var(--ink); }
+.cmdline .caret {
+  display: inline-block;
+  width: 9px;
+  height: 15px;
+  background: var(--ink-hi);
+  /* MOTION 1: hard block cursor blink */
+  animation: blink 1s steps(2, start) infinite;
+  vertical-align: text-bottom;
+}
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+
+.keys {
+  display: flex; flex-wrap: wrap; gap: 18px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--ink-mute);
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+.keys kbd {
+  font-family: var(--mono);
+  padding: 1px 6px;
+  border: 1px solid var(--ink-mute);
+  background: var(--bg);
+  color: var(--ink-hi);
+  font-weight: 600;
+  margin-right: 4px;
+  font-size: 11px;
+}
+</style>
+</head>
+<body>
+
+<div class="console">
+
+  <!-- ══════════ TOP BAR ══════════ -->
+  <header class="topbar">
+    <div class="tb-mark">TOWNHOUSE<span class="ver">v0.21.0</span></div>
+    <div class="tb-op">operator <b style="color:var(--ink-hi)">jonathan</b> <span class="at">@</span> <span class="host">tower-01.local</span></div>
+    <div class="tb-wallet"><span class="lbl">WALLET</span><span class="v">1,248,392</span><span class="u">SATS</span></div>
+    <div class="tb-ator"><span class="blk"></span>ATOR <b>CONNECTED</b> <span class="hops">[3 HOPS]</span></div>
+    <div class="tb-clock">02:14<span class="z">LOCAL</span></div>
+  </header>
+
+  <!-- ══════════ HERO ══════════ -->
+  <section class="hero">
+    <div><span class="h-lbl">TODAY</span></div>
+    <div>
+      <span class="h-big">42,891<span class="u">SATS</span></span>
+      <span class="h-delta">12.4%</span>
+    </div>
+    <div></div>
+    <div class="h-type t-town"><span class="k">TOWN</span><span class="v">28,442</span></div>
+    <div class="h-type t-mill"><span class="k">MILL</span><span class="v">11,208</span></div>
+    <div class="h-type t-dvm"><span class="k">DVM</span><span class="v">3,241</span></div>
+  </section>
+
+  <!-- ══════════ MAIN ══════════ -->
+  <main class="main">
+
+    <!-- LEFT: NODE TABLE -->
+    <section class="panel left">
+      <header class="panel-head">
+        <div class="t">NODES</div>
+        <div class="meta">
+          <span>TOTAL <b>06</b></span>
+          <span>OK <b>05</b></span>
+          <span class="deg">DEG <b style="color:var(--s-deg)">01</b></span>
+          <span>DOWN <b>00</b></span>
+        </div>
+      </header>
+
+      <table class="node-table">
+        <thead>
+          <tr>
+            <th style="width:18px"></th>
+            <th>ID</th>
+            <th>TYPE</th>
+            <th>STATUS</th>
+            <th class="r">METRIC</th>
+            <th class="r">ACTIVITY</th>
+            <th class="r">EARNED</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- town-01 -->
+          <tr class="t-town">
+            <td><span class="sel-arrow"></span></td>
+            <td class="n-name">town-01</td>
+            <td><span class="n-type t-town">TOWN</span></td>
+            <td><span class="n-status ok"><span class="sq ok"></span>OK</span></td>
+            <td class="r"><span class="n-metric">14,208<span class="u">ev/h</span></span></td>
+            <td class="r">
+              <span class="n-spark">
+                <span style="height:40%"></span><span style="height:55%"></span><span style="height:50%"></span>
+                <span style="height:65%"></span><span style="height:70%"></span><span style="height:75%"></span>
+                <span style="height:85%" class="hi"></span><span style="height:95%" class="hi"></span>
+              </span>
+            </td>
+            <td class="r"><span class="n-earn">12,884<span class="u">sats</span></span></td>
+          </tr>
+
+          <!-- town-02 -->
+          <tr class="t-town">
+            <td></td>
+            <td class="n-name">town-02</td>
+            <td><span class="n-type t-town">TOWN</span></td>
+            <td><span class="n-status ok"><span class="sq ok"></span>OK</span></td>
+            <td class="r"><span class="n-metric">9,487<span class="u">ev/h</span></span></td>
+            <td class="r">
+              <span class="n-spark">
+                <span style="height:35%"></span><span style="height:45%"></span><span style="height:50%"></span>
+                <span style="height:55%"></span><span style="height:60%"></span><span style="height:65%"></span>
+                <span style="height:70%" class="hi"></span><span style="height:75%" class="hi"></span>
+              </span>
+            </td>
+            <td class="r"><span class="n-earn">11,208<span class="u">sats</span></span></td>
+          </tr>
+
+          <!-- town-03 — DEGRADED, fully inverted row -->
+          <tr class="t-town degraded">
+            <td>!</td>
+            <td class="n-name" style="font-weight:700">town-03</td>
+            <td><span class="n-type" style="background:var(--bg);color:var(--town)">TOWN</span></td>
+            <td><span class="n-status deg"><span class="sq deg"></span>DEGRADED</span></td>
+            <td class="r"><span class="n-metric">4,747<span class="u">ev/h</span></span></td>
+            <td class="r">
+              <span class="n-spark">
+                <span style="height:70%"></span><span style="height:55%"></span><span style="height:40%"></span>
+                <span style="height:30%" class="err"></span><span style="height:25%" class="err"></span>
+                <span style="height:35%"></span><span style="height:20%" class="err"></span><span style="height:30%"></span>
+              </span>
+            </td>
+            <td class="r"><span class="n-earn">4.2% err</span></td>
+          </tr>
+
+          <!-- mill-eth-01 — SELECTED (inverted white) -->
+          <tr class="t-mill selected">
+            <td><span class="sel-arrow">&gt;</span></td>
+            <td class="n-name">mill-eth-01</td>
+            <td><span class="n-type t-mill">MILL</span></td>
+            <td><span class="n-status rbl"><span class="sq rbl"></span>REBAL</span></td>
+            <td class="r"><span class="n-metric">87.3<span class="u">%</span></span></td>
+            <td class="r">
+              <span class="n-spark">
+                <span style="height:60%"></span><span style="height:70%"></span><span style="height:75%"></span>
+                <span style="height:80%"></span><span style="height:85%" class="hi"></span>
+                <span style="height:90%" class="hi"></span><span style="height:95%" class="hi"></span><span style="height:92%" class="hi"></span>
+              </span>
+            </td>
+            <td class="r"><span class="n-earn">7,842<span class="u">sats</span></span></td>
+          </tr>
+
+          <!-- mill-base-01 -->
+          <tr class="t-mill">
+            <td></td>
+            <td class="n-name">mill-base-01</td>
+            <td><span class="n-type t-mill">MILL</span></td>
+            <td><span class="n-status ok"><span class="sq ok" style="background:var(--mill)"></span>OK</span></td>
+            <td class="r"><span class="n-metric">62.1<span class="u">%</span></span></td>
+            <td class="r">
+              <span class="n-spark">
+                <span style="height:45%"></span><span style="height:50%"></span><span style="height:55%"></span>
+                <span style="height:60%"></span><span style="height:65%"></span><span style="height:70%" class="hi"></span>
+                <span style="height:68%"></span><span style="height:72%"></span>
+              </span>
+            </td>
+            <td class="r"><span class="n-earn">3,366<span class="u">sats</span></span></td>
+          </tr>
+
+          <!-- dvm-whisper-01 -->
+          <tr class="t-dvm">
+            <td></td>
+            <td class="n-name">dvm-whisper-01</td>
+            <td><span class="n-type t-dvm">DVM</span></td>
+            <td><span class="n-status ok"><span class="sq ok" style="background:var(--dvm)"></span>OK</span></td>
+            <td class="r"><span class="n-metric">4<span class="u">q</span> / 2.8<span class="u">s</span></span></td>
+            <td class="r">
+              <span class="n-spark">
+                <span style="height:20%"></span><span style="height:35%"></span><span style="height:25%"></span>
+                <span style="height:50%"></span><span style="height:40%"></span><span style="height:60%" class="hi"></span>
+                <span style="height:45%"></span><span style="height:70%" class="hi"></span>
+              </span>
+            </td>
+            <td class="r"><span class="n-earn">3,241<span class="u">sats</span></span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="padding:14px 18px;color:var(--ink-dim);font-size:11px;border-top:1px solid var(--rule);">
+        <span style="color:var(--ink-hi)">/</span> filter &nbsp;
+        <kbd style="font-family:var(--mono);padding:1px 5px;border:1px solid var(--rule-hi);color:var(--ink-hi);font-size:10px">j/k</kbd> move &nbsp;
+        <kbd style="font-family:var(--mono);padding:1px 5px;border:1px solid var(--rule-hi);color:var(--ink-hi);font-size:10px">enter</kbd> select &nbsp;
+        <kbd style="font-family:var(--mono);padding:1px 5px;border:1px solid var(--rule-hi);color:var(--ink-hi);font-size:10px">r</kbd> restart &nbsp;
+        <kbd style="font-family:var(--mono);padding:1px 5px;border:1px solid var(--rule-hi);color:var(--ink-hi);font-size:10px">l</kbd> logs
+      </div>
+    </section>
+
+    <!-- RIGHT: DETAIL PANEL -->
+    <section class="panel right">
+      <header class="panel-head">
+        <div class="t">DETAIL · mill-eth-01</div>
+        <div class="meta">
+          <span>uptime <b>42d 18h</b></span>
+          <span style="color:var(--mill)"><b style="color:var(--mill)">LIVE</b></span>
+        </div>
+      </header>
+
+      <div class="detail">
+
+        <div class="d-head">
+          <div class="d-title">
+            <div class="id">mill-eth-01</div>
+            <div class="sub"><b>ETHEREUM</b> <span class="arr">&lt;-&gt;</span> <b>BASE</b> · pair-id <code style="color:var(--ink-dim)">0x4a7f...3c21</code></div>
+          </div>
+          <div></div>
+          <div class="d-status"><span class="blk"></span>REBALANCING</div>
+        </div>
+
+        <!-- LIQUIDITY — ascii blocks -->
+        <div class="liquidity">
+          <div class="s-lbl">
+            <span>LIQUIDITY · BY DISPOSITION</span>
+            <span class="r">24.3<span class="u">ETH</span></span>
+          </div>
+          <div class="liq-ascii" aria-label="allocated 12.4 ETH, in-swap 3.2 ETH, available 8.7 ETH">
+            <span class="a">████████████</span><span class="b">████</span><span class="c">████████</span>
+          </div>
+          <div class="liq-legend">
+            <div class="item"><span class="sw a">█</span> allocated <b>12.4 ETH</b></div>
+            <div class="item"><span class="sw b">█</span> in-swap <b>3.2 ETH</b></div>
+            <div class="item"><span class="sw c">█</span> available <b>8.7 ETH</b></div>
+          </div>
+        </div>
+
+        <!-- FEE -->
+        <div class="fee">
+          <div class="cur">
+            <div class="s-lbl"><span>CURRENT FEE</span></div>
+            <div class="v">0.25<span class="u">%</span></div>
+          </div>
+          <div class="est">
+            <div class="s-lbl"><span>EST. DAILY</span></div>
+            <div class="v">247,000<span class="u">sats</span></div>
+            <div class="sub">at 24h average volume</div>
+          </div>
+          <div class="slider">
+            <div class="track">
+              <span class="fill">████████</span><span class="thumb">█</span><span>████████████████████</span>
+            </div>
+            <div class="labels">
+              <span>0.05%</span>
+              <span class="on">0.25%</span>
+              <span>0.50%</span>
+              <span>1.00%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- PROFIT CHART -->
+        <div class="chart">
+          <div class="s-lbl">
+            <span>PROFIT · 7D</span>
+            <span class="r">7-day <b style="color:var(--s-ok);font-weight:600">++14.8%</b></span>
+          </div>
+          <div class="chart-grid">
+            <div class="chart-col"><div class="bar" style="height:45%"></div></div>
+            <div class="chart-col"><div class="bar" style="height:62%"></div></div>
+            <div class="chart-col"><div class="bar" style="height:55%"></div></div>
+            <div class="chart-col"><div class="bar" style="height:70%"></div></div>
+            <div class="chart-col"><div class="bar" style="height:52%"></div></div>
+            <div class="chart-col"><div class="bar" style="height:78%"></div></div>
+            <div class="chart-col"><div class="bar hi" style="height:92%"></div></div>
+          </div>
+          <div class="chart-x">
+            <span>W</span><span>T</span><span>F</span><span>S</span><span>S</span><span>M</span><span class="today">[TODAY]</span>
+          </div>
+          <div class="chart-foot">
+            <span>total <b>1,428,921 sats</b></span>
+            <span class="up">++14.8% vs prev week</span>
+          </div>
+        </div>
+
+        <!-- EVENTS -->
+        <div class="events">
+          <div class="s-lbl"><span>RECENT SWAPS · LIVE</span><span class="r" style="color:var(--s-ok);font-size:11px">stream: open</span></div>
+
+          <div class="evt-row">
+            <span class="t">02:13:48</span>
+            <span class="d"><b>0.42 ETH</b> <span class="arr">-&gt;</span> <b>0.42 ETH</b> <em>BASE</em></span>
+            <span class="amt">312<span class="u">sats</span></span>
+          </div>
+          <div class="evt-row">
+            <span class="t">02:13:21</span>
+            <span class="d"><b>1.80 ETH</b> <span class="arr">-&gt;</span> <b>1.80 ETH</b> <em>BASE</em></span>
+            <span class="amt">1,340<span class="u">sats</span></span>
+          </div>
+          <div class="evt-row">
+            <span class="t">02:12:55</span>
+            <span class="d"><b>0.08 ETH</b> <span class="arr">-&gt;</span> <b>0.08 ETH</b> <em>BASE</em></span>
+            <span class="amt">62<span class="u">sats</span></span>
+          </div>
+          <div class="evt-row">
+            <span class="t">02:12:14</span>
+            <span class="d"><b>3.20 ETH</b> <span class="arr">-&gt;</span> <b>3.20 ETH</b> <em>[internal rebal]</em></span>
+            <span class="amt pale">—</span>
+          </div>
+          <div class="evt-row">
+            <span class="t">02:11:09</span>
+            <span class="d"><b>0.25 ETH</b> <span class="arr">-&gt;</span> <b>0.25 ETH</b> <em>BASE</em></span>
+            <span class="amt">190<span class="u">sats</span></span>
+          </div>
+          <div class="evt-row">
+            <span class="t">02:09:37</span>
+            <span class="d"><b>0.76 ETH</b> <span class="arr">-&gt;</span> <b>0.76 ETH</b> <em>BASE</em></span>
+            <span class="amt">568<span class="u">sats</span></span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ══════════ STATES REFERENCE ══════════ -->
+  <section class="states">
+    <div class="state loading">
+      <span class="lbl">LOADING</span>
+      <div class="skel">
+        <div class="l w1"></div>
+        <div class="l w2"></div>
+        <div class="l w3"></div>
+      </div>
+      <div class="cap">fetching nodes...</div>
+    </div>
+    <div class="state empty">
+      <span class="lbl">EMPTY</span>
+      <div class="msg">
+        <b>NO NODES</b>
+        no configuration found in ~/.townhouse/nodes.toml
+      </div>
+      <div class="prompt">townhouse init</div>
+    </div>
+    <div class="state error">
+      <span class="lbl">ERROR</span>
+      <div class="msg">
+        <b>DAEMON UNREACHABLE</b>
+        operator action required. check daemon process and reconnect.
+      </div>
+      <div class="code">ERR DAEMON_UNREACHABLE · 127.0.0.1:9911</div>
+    </div>
+  </section>
+
+  <!-- ══════════ STATUS LINE (vim-style) ══════════ -->
+  <div class="statusline">
+    <div class="mode">-- NORMAL --</div>
+    <div class="note"><span class="warn">!</span> town-03 needs attention — filed 02:11:42</div>
+    <div class="tally">nodes <b>06</b> · ok <b>05</b> · deg <b>01</b></div>
+    <div>utf-8 · 24h · 02:14</div>
+  </div>
+
+  <!-- ══════════ COMMAND LINE ══════════ -->
+  <div class="cmdline">
+    <span class="prompt">townhouse&gt;</span>
+    <span class="input"></span>
+    <span class="caret"></span>
+  </div>
+
+  <div class="keys">
+    <span><kbd>?</kbd>help</span>
+    <span><kbd>n</kbd>nodes</span>
+    <span><kbd>w</kbd>wallet</span>
+    <span><kbd>l</kbd>logs</span>
+    <span><kbd>:</kbd>command</span>
+    <span><kbd>/</kbd>filter</span>
+    <span><kbd>q</kbd>quit</span>
+  </div>
+
+</div>
+
+</body>
+</html>

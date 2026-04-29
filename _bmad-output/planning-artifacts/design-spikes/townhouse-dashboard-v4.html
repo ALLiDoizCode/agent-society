@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOWNHOUSE :: /dev/console [design-direction-spike v4 · dep-graph]</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/*
+  ════════════════════════════════════════════════════════════════════════════════
+  DESIGN DIRECTION — "TERMINAL-BRUTALIST · DEPENDENCY GRAPH"  (v4)
+  ════════════════════════════════════════════════════════════════════════════════
+  v3 extended to the real taxonomy: a "node" is any managed object — hosts,
+  services, dependencies, identity. Four peer columns show the fleet in layers.
+  The FOCUS panel renders a live dependency neighborhood as a true ASCII
+  diagram — box-drawing characters doing structural work, not decoration.
+
+  SCENARIO          — town-03 degraded. edge-sgp host OK. connector daemon OK.
+                      ATOR OK. Therefore the problem is local to town-03.
+                      The diagram makes that answer visible.
+
+  PRIMITIVES        — Node, FleetColumn, TreeRow, AsciiGraph, Diagnosis, ActionBar
+  TYPE              — Fira Code only, ligatures on
+  MOTION            — (1) amber inverse heartbeat on the degraded row/box
+                      (2) block-cursor blink at the command line
+                      (3) a single traveling caret on the one active edge
+                          (the "uses" arrow from mill-eth-01 to rpc-base-01
+                          during rebalance) — everything else holds still.
+  ════════════════════════════════════════════════════════════════════════════════
+*/
+
+:root {
+  --bg:         #000000;
+  --bg-alt:     #0A0A0A;
+  --bg-panel:   #070707;
+
+  --ink-hi:     #FFFFFF;
+  --ink:        #E6E6E6;
+  --ink-mid:    #A0A0A0;
+  --ink-dim:    #606060;
+  --ink-mute:   #333333;
+
+  --rule:       #2A2A2A;
+  --rule-hi:    #505050;
+
+  /* identity */
+  --town:       #F5B93A;
+  --mill:       #3FDB63;
+  --dvm:        #5E9CFF;
+  --host:       #C8C8C8;
+  --dep:        #B8A5E8;   /* soft violet for dep-tier services */
+  --wallet:     #E8C26F;   /* warm — wallet/identity */
+
+  /* status */
+  --s-ok:       #3FDB63;
+  --s-deg:      #F5B93A;
+  --s-down:     #FF4747;
+  --s-pend:     #A0A0A0;
+  --s-unknown:  #8077B0;
+
+  --mono:       'Fira Code', ui-monospace, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.5;
+  font-variant-ligatures: contextual;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "calt" 1, "tnum" 1, "zero" 1;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0, transparent 3px,
+    rgba(255,255,255,.012) 3px, rgba(255,255,255,.012) 4px);
+}
+
+.console {
+  position: relative;
+  z-index: 2;
+  max-width: 1620px;
+  margin: 0 auto;
+  padding: 20px 24px 0;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   TOP BAR + HERO (from v3, preserved for continuity)
+   ════════════════════════════════════════════════════════════════════════════ */
+.topbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--ink-hi);
+  border-bottom: none;
+}
+.topbar > * {
+  padding: 12px 18px;
+  border-right: 1px solid var(--ink-hi);
+  display: flex;
+  align-items: center;
+}
+.topbar > *:last-child { border-right: none; }
+
+.tb-mark {
+  font-weight: 700; font-size: 14px; letter-spacing: .08em;
+  background: var(--ink-hi); color: var(--bg);
+  padding: 14px 20px;
+}
+.tb-mark .ver { opacity: .5; font-weight: 400; margin-left: 12px; font-size: 11px; }
+
+.tb-op { color: var(--ink); font-size: 12px; }
+.tb-op .at { color: var(--ink-dim); }
+.tb-op b { color: var(--ink-hi); font-weight: 500; }
+
+.tb-wallet { font-size: 12px; color: var(--ink-mid); display: flex; align-items: baseline; gap: 10px; }
+.tb-wallet .lbl { color: var(--ink-dim); font-size: 11px; }
+.tb-wallet .v { color: var(--ink-hi); font-weight: 600; font-size: 14px; }
+.tb-wallet .u { color: var(--ink-dim); font-size: 10px; }
+
+.tb-ator { font-size: 11px; color: var(--ink); display: flex; align-items: center; gap: 10px; }
+.tb-ator .blk { width: 10px; height: 10px; background: var(--s-ok); }
+.tb-ator b { color: var(--ink-hi); }
+.tb-ator .hops { color: var(--ink-dim); }
+
+.tb-clock { font-size: 14px; font-weight: 500; color: var(--ink-hi); display: flex; align-items: baseline; gap: 10px; }
+.tb-clock .z { color: var(--ink-dim); font-size: 10px; font-weight: 400; }
+
+.hero {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto auto;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--ink-hi);
+}
+.hero > * {
+  padding: 14px 18px;
+  border-right: 1px solid var(--ink-hi);
+  display: flex; align-items: baseline; gap: 10px;
+}
+.hero > *:last-child { border-right: none; }
+.hero .h-lbl { font-size: 11px; color: var(--ink-dim); letter-spacing: .14em; }
+.hero .h-big { font-size: 24px; font-weight: 600; color: var(--ink-hi); letter-spacing: -.01em; }
+.hero .h-big .u { font-size: 11px; color: var(--ink-mid); font-weight: 400; margin-left: 4px; }
+.hero .h-delta { font-size: 12px; color: var(--s-ok); font-weight: 500; }
+.hero .h-delta::before { content: '++'; margin-right: 4px; opacity: .7; }
+.hero .h-type { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--ink-mid); }
+.hero .h-type .k {
+  padding: 2px 6px; font-weight: 700; font-size: 11px;
+  letter-spacing: .12em; color: var(--bg); background: var(--accent);
+}
+.hero .h-type.t-town { --accent: var(--town); }
+.hero .h-type.t-mill { --accent: var(--mill); }
+.hero .h-type.t-dvm  { --accent: var(--dvm); }
+.hero .h-type .v { color: var(--ink-hi); font-weight: 500; font-size: 14px; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   FLEET — four-column taxonomy view
+   ════════════════════════════════════════════════════════════════════════════ */
+.fleet {
+  border: 1px solid var(--ink-hi);
+  border-top: none;
+}
+.fleet-head {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--ink-hi);
+  background: var(--bg-alt);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.fleet-head .t {
+  font-weight: 600; color: var(--ink-hi);
+  font-size: 12px; letter-spacing: .1em;
+}
+.fleet-head .t::before {
+  content: '>>'; color: var(--ink-dim); margin-right: 10px; font-weight: 400;
+}
+.fleet-head .meta {
+  font-size: 11px; color: var(--ink-dim);
+  display: flex; gap: 18px;
+}
+.fleet-head .meta b { color: var(--ink-hi); font-weight: 500; }
+.fleet-head .meta .warn { color: var(--s-deg); }
+
+.fleet-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1.4fr 1.4fr 1fr;
+}
+.fleet-grid > .col {
+  padding: 14px 18px 18px;
+  border-right: 1px solid var(--ink-hi);
+}
+.fleet-grid > .col:last-child { border-right: none; }
+
+.col-title {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.col-title .k {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  color: var(--ink-hi);
+}
+.col-title .count { color: var(--ink-dim); font-size: 11px; }
+.col-title .count b { color: var(--ink-hi); font-weight: 500; }
+
+/* TREE rows — fleet content */
+.tree {
+  font-size: 12px;
+  line-height: 1.8;
+  white-space: nowrap;
+}
+.tree .branch, .tree .leaf {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 1px 0;
+}
+.tree .branch .arr {
+  color: var(--ink-hi);
+  font-weight: 600;
+  width: 12px;
+  display: inline-block;
+}
+.tree .branch.attn .arr { color: var(--s-deg); }
+.tree .branch .name {
+  color: var(--ink-hi);
+  font-weight: 600;
+}
+.tree .branch .meta {
+  color: var(--ink-dim);
+  font-size: 11px;
+  letter-spacing: .02em;
+}
+.tree .branch .meta .warn { color: var(--s-deg); }
+
+.tree .leaf {
+  padding-left: 4px;
+}
+.tree .leaf .pfx {
+  color: var(--ink-mute);
+  letter-spacing: 0;
+  font-weight: 400;
+  width: 28px;
+  display: inline-block;
+}
+.tree .leaf .name {
+  color: var(--ink);
+  font-weight: 500;
+}
+.tree .leaf .tag {
+  display: inline-block;
+  padding: 0 5px;
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: var(--bg);
+  background: var(--accent, var(--ink-mid));
+  transform: translateY(-1px);
+}
+.tree .leaf.t-town  .tag { background: var(--town); }
+.tree .leaf.t-mill  .tag { background: var(--mill); }
+.tree .leaf.t-dvm   .tag { background: var(--dvm); }
+.tree .leaf.t-dep   .tag { background: var(--dep); }
+.tree .leaf.t-host  .tag { background: var(--host); }
+
+.tree .leaf .st {
+  font-size: 10px;
+  letter-spacing: .1em;
+  font-weight: 600;
+  color: var(--s-ok);
+}
+.tree .leaf .st.deg { color: var(--s-deg); }
+.tree .leaf .st.rbl { color: var(--mill); }
+.tree .leaf .st.idle { color: var(--ink-dim); }
+.tree .leaf .st.unk { color: var(--s-unknown); }
+
+.tree .leaf.highlight {
+  background: var(--town);
+  color: var(--bg);
+  margin: 0 -18px;
+  padding-left: 22px;
+  padding-right: 18px;
+  animation: inv-heartbeat 3s ease-in-out infinite;
+}
+.tree .leaf.highlight .pfx,
+.tree .leaf.highlight .name,
+.tree .leaf.highlight .st { color: var(--bg) !important; }
+.tree .leaf.highlight .tag {
+  background: var(--bg); color: var(--town);
+}
+
+@keyframes inv-heartbeat {
+  0%, 100% { background: var(--town); }
+  50%      { background: color-mix(in oklab, var(--town) 80%, white); }
+}
+
+.tree .leaf.focused {
+  background: var(--ink-hi);
+  margin: 0 -18px;
+  padding-left: 22px;
+  padding-right: 18px;
+  color: var(--bg);
+}
+.tree .leaf.focused .pfx,
+.tree .leaf.focused .name,
+.tree .leaf.focused .st { color: var(--bg) !important; }
+.tree .leaf.focused .tag { background: var(--bg); color: var(--ink-hi); }
+
+.group-gap { height: 10px; }
+
+/* wallet column */
+.wallet-hd {
+  padding: 8px 10px;
+  border: 1px solid var(--rule-hi);
+  margin-bottom: 14px;
+}
+.wallet-hd .k {
+  font-size: 10px; color: var(--ink-dim); letter-spacing: .14em;
+  margin-bottom: 4px;
+}
+.wallet-hd .v {
+  font-size: 14px; color: var(--ink-hi); font-weight: 600;
+  letter-spacing: 0;
+}
+.wallet-hd .v .u { font-size: 10px; color: var(--ink-dim); margin-left: 3px; font-weight: 400; }
+
+.wallet-paths {
+  font-size: 12px;
+  line-height: 1.9;
+}
+.wallet-paths .p { color: var(--ink); }
+.wallet-paths .p .px { color: var(--ink-mute); }
+.wallet-paths .p .lbl { color: var(--wallet); font-weight: 500; }
+.wallet-paths .p .path { color: var(--ink-dim); font-size: 11px; margin-left: 6px; }
+
+.wallet-actions {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--rule);
+  display: flex; flex-direction: column; gap: 8px;
+  font-size: 11px;
+}
+.wallet-actions .a {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px;
+  border: 1px solid var(--rule-hi);
+  color: var(--ink);
+}
+.wallet-actions .a:hover { background: var(--bg-alt); border-color: var(--ink-hi); color: var(--ink-hi); cursor: pointer; }
+.wallet-actions .a kbd {
+  font-family: var(--mono);
+  padding: 0 5px;
+  border: 1px solid var(--rule-hi);
+  color: var(--ink-hi);
+  font-size: 10px;
+  font-weight: 600;
+}
+.wallet-actions .a.urgent {
+  border-color: var(--s-deg);
+  color: var(--s-deg);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   FOCUS — the ASCII dependency neighborhood graph
+   ════════════════════════════════════════════════════════════════════════════ */
+.focus-wrap {
+  border: 1px solid var(--ink-hi);
+  border-top: none;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+}
+
+.focus {
+  padding: 0;
+  border-right: 1px solid var(--ink-hi);
+}
+.focus-head {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--ink-hi);
+  background: var(--bg-alt);
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 20px;
+}
+.focus-head .t {
+  font-weight: 600; color: var(--ink-hi);
+  font-size: 12px; letter-spacing: .1em;
+}
+.focus-head .t::before {
+  content: 'FOCUS ::'; color: var(--ink-dim); margin-right: 10px; font-weight: 400; letter-spacing: .14em;
+}
+.focus-head .selected {
+  color: var(--s-deg);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: .04em;
+}
+.focus-head .selected::before { content: '['; color: var(--ink-dim); margin-right: 2px; font-weight: 400; }
+.focus-head .selected::after { content: ']'; color: var(--ink-dim); margin-left: 2px; font-weight: 400; }
+
+.focus-head .status-chip {
+  padding: 3px 10px;
+  background: var(--s-deg);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  margin-left: auto;
+}
+.focus-head .actions {
+  display: flex; gap: 8px;
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+.focus-head .actions kbd {
+  font-family: var(--mono);
+  padding: 1px 5px;
+  border: 1px solid var(--rule-hi);
+  color: var(--ink-hi);
+  font-size: 10px;
+  font-weight: 600;
+  margin-right: 3px;
+}
+
+/* THE ASCII GRAPH — pre block with perfect char alignment */
+.ascii-graph {
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.25;
+  font-weight: 400;
+  color: var(--ink);
+  padding: 26px 24px 14px;
+  white-space: pre;
+  overflow-x: auto;
+  letter-spacing: 0;
+  font-variant-ligatures: none;  /* disable ligatures inside ASCII art — box chars must be atomic */
+  font-feature-settings: "calt" 0, "tnum" 1;
+}
+
+/* colorized spans inside the ascii graph */
+.ascii-graph .host-ok  { color: var(--host); }
+.ascii-graph .svc-ok   { color: var(--s-ok); }
+.ascii-graph .svc-rbl  { color: var(--mill); }
+.ascii-graph .svc-deg  { color: var(--s-deg); font-weight: 700; }
+.ascii-graph .dep-ok   { color: var(--dep); }
+.ascii-graph .dep-net  { color: var(--s-unknown); }
+.ascii-graph .edge     { color: var(--ink-mid); }
+.ascii-graph .edge-deg { color: var(--s-deg); font-weight: 500; }
+.ascii-graph .edge-live{ color: var(--mill); font-weight: 500; position: relative; }
+.ascii-graph .label    { color: var(--ink-dim); font-size: 11px; font-style: normal; }
+.ascii-graph .suspect  { color: var(--s-deg); font-weight: 700; }
+.ascii-graph .inv-deg {
+  background: var(--s-deg);
+  color: var(--bg) !important;
+  padding: 0 2px;
+  font-weight: 700;
+  animation: inv-heartbeat 3s ease-in-out infinite;
+}
+.ascii-graph .inv-sel {
+  background: var(--ink-hi);
+  color: var(--bg) !important;
+  padding: 0 2px;
+  font-weight: 700;
+}
+
+/* diagnosis panel */
+.diagnosis {
+  padding: 20px 24px 22px;
+  border-top: 1px solid var(--rule);
+  background: var(--bg-panel);
+}
+.diagnosis .dg-head {
+  font-size: 11px;
+  letter-spacing: .2em;
+  color: var(--ink-dim);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--rule);
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.diagnosis .dg-head .conf {
+  color: var(--s-deg); font-weight: 600; letter-spacing: .1em; font-size: 11px;
+}
+.diagnosis .dg-body {
+  font-size: 13px; color: var(--ink);
+  line-height: 1.55;
+}
+.diagnosis .dg-body b { color: var(--ink-hi); font-weight: 600; }
+.diagnosis .dg-body .ok { color: var(--s-ok); }
+.diagnosis .dg-body .deg { color: var(--s-deg); font-weight: 600; }
+.diagnosis .dg-body .n { color: var(--ink-hi); font-weight: 500; }
+.diagnosis .dg-body p + p { margin-top: 8px; }
+.diagnosis .dg-conclusion {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-left: 3px solid var(--s-deg);
+  font-size: 13px;
+  color: var(--ink-hi);
+}
+.diagnosis .dg-conclusion::before {
+  content: 'LIKELY CAUSE :: ';
+  color: var(--s-deg);
+  font-weight: 700;
+  letter-spacing: .12em;
+  font-size: 11px;
+}
+
+.action-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--ink-hi);
+}
+.action-bar .ab {
+  padding: 14px 16px;
+  border-right: 1px solid var(--ink-hi);
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.action-bar .ab:last-child { border-right: none; }
+.action-bar .ab:hover { background: var(--ink-hi); color: var(--bg); }
+.action-bar .ab:hover kbd { background: var(--bg); color: var(--ink-hi); border-color: var(--bg); }
+.action-bar .ab kbd {
+  font-family: var(--mono);
+  padding: 2px 7px;
+  border: 1px solid var(--ink-hi);
+  color: var(--ink-hi);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.action-bar .ab.primary {
+  background: var(--s-deg); color: var(--bg);
+}
+.action-bar .ab.primary kbd { background: var(--bg); color: var(--s-deg); border-color: var(--bg); }
+.action-bar .ab.primary:hover { background: var(--ink-hi); color: var(--bg); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CONTEXT — secondary panel (live deps + error timeline)
+   ════════════════════════════════════════════════════════════════════════════ */
+.context {
+  padding: 0;
+}
+.context-head {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--ink-hi);
+  background: var(--bg-alt);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-hi);
+  letter-spacing: .1em;
+}
+.context-head::before {
+  content: '>>'; color: var(--ink-dim); margin-right: 10px; font-weight: 400;
+}
+
+.ctx-section {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--rule);
+}
+.ctx-section:last-child { border-bottom: none; }
+.ctx-section .lbl {
+  font-size: 10px;
+  letter-spacing: .2em;
+  color: var(--ink-dim);
+  font-weight: 600;
+  margin-bottom: 10px;
+  display: flex; justify-content: space-between;
+}
+.ctx-section .lbl .r { color: var(--ink-hi); font-weight: 500; letter-spacing: 0; font-size: 12px; }
+
+/* error rate timeline */
+.err-timeline {
+  display: flex; align-items: flex-end; gap: 2px;
+  height: 48px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 2px;
+}
+.err-timeline span {
+  flex: 1;
+  background: var(--s-deg);
+  min-height: 2px;
+  opacity: .55;
+}
+.err-timeline span.low { opacity: .15; background: var(--ink-mid); }
+.err-timeline span.spike { opacity: 1; }
+.err-scale {
+  display: flex; justify-content: space-between;
+  margin-top: 4px;
+  font-size: 10px; color: var(--ink-dim);
+}
+
+/* dep status list */
+.dep-list {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 12px;
+}
+.dep-list .row {
+  display: grid;
+  grid-template-columns: 12px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px dotted var(--rule);
+}
+.dep-list .row:last-child { border-bottom: none; }
+.dep-list .row .sq {
+  width: 8px; height: 8px;
+  background: var(--s-ok);
+}
+.dep-list .row .sq.unk { background: var(--s-unknown); }
+.dep-list .name { color: var(--ink-hi); font-weight: 500; }
+.dep-list .kind {
+  font-size: 10px; letter-spacing: .14em;
+  color: var(--ink-dim);
+}
+.dep-list .st {
+  font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  color: var(--s-ok);
+}
+.dep-list .st.unk { color: var(--s-unknown); }
+
+/* action log tail */
+.log {
+  font-size: 11px; line-height: 1.65;
+  color: var(--ink-mid);
+  max-height: 160px;
+  overflow: hidden;
+}
+.log .ln {
+  padding: 2px 0;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+.log .ln:last-child { border-bottom: none; }
+.log .ln .t { color: var(--ink-dim); font-size: 10px; }
+.log .ln .lv {
+  font-size: 10px; font-weight: 700;
+  padding: 0 4px; letter-spacing: .08em;
+  color: var(--bg);
+}
+.log .ln .lv.err { background: var(--s-deg); }
+.log .ln .lv.warn { background: var(--dep); }
+.log .ln .lv.info { background: var(--ink-mid); }
+.log .ln .msg { color: var(--ink); }
+.log .ln .msg b { color: var(--ink-hi); font-weight: 500; }
+.log .ln .msg em { color: var(--ink-dim); font-style: normal; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   STATUS LINE + COMMAND LINE
+   ════════════════════════════════════════════════════════════════════════════ */
+.statusline {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0;
+  background: var(--ink-hi);
+  color: var(--bg);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+.statusline > * {
+  padding: 8px 16px;
+  border-right: 1px solid var(--bg);
+}
+.statusline > *:last-child { border-right: none; }
+.statusline .mode {
+  background: var(--bg); color: var(--ink-hi); font-weight: 700;
+  border-right: 1px solid var(--ink-hi);
+}
+.statusline .note { display: flex; align-items: center; gap: 8px; }
+.statusline .note .warn {
+  color: var(--s-down);
+  background: var(--bg);
+  padding: 1px 6px;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.cmdline {
+  padding: 12px 18px;
+  font-size: 13px;
+  color: var(--ink);
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--ink-hi);
+  border-top: none;
+}
+.cmdline .prompt { color: var(--mill); font-weight: 600; }
+.cmdline .input { color: var(--ink); }
+.cmdline .caret {
+  display: inline-block;
+  width: 9px; height: 15px;
+  background: var(--ink-hi);
+  animation: blink 1s steps(2, start) infinite;
+  vertical-align: text-bottom;
+}
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+
+.keys {
+  display: flex; flex-wrap: wrap; gap: 18px;
+  padding: 12px 18px;
+  border: 1px solid var(--ink-hi);
+  border-top: none;
+  font-size: 11px;
+  color: var(--ink-dim);
+  margin-bottom: 32px;
+}
+.keys kbd {
+  font-family: var(--mono);
+  padding: 1px 6px;
+  border: 1px solid var(--ink-mute);
+  background: var(--bg);
+  color: var(--ink-hi);
+  font-weight: 600;
+  margin-right: 4px;
+  font-size: 11px;
+}
+</style>
+</head>
+<body>
+
+<div class="console">
+
+  <!-- ══════════ TOP BAR ══════════ -->
+  <header class="topbar">
+    <div class="tb-mark">TOWNHOUSE<span class="ver">v0.21.0</span></div>
+    <div class="tb-op">operator <b>jonathan</b> <span class="at">@</span> tower-01.local</div>
+    <div class="tb-wallet"><span class="lbl">WALLET</span><span class="v">1,248,392</span><span class="u">SATS</span></div>
+    <div class="tb-ator"><span class="blk"></span>ATOR <b>CONNECTED</b> <span class="hops">[3 HOPS]</span></div>
+    <div class="tb-clock">02:14<span class="z">LOCAL</span></div>
+  </header>
+
+  <!-- ══════════ HERO ══════════ -->
+  <section class="hero">
+    <div><span class="h-lbl">TODAY</span></div>
+    <div><span class="h-big">42,891<span class="u">SATS</span></span><span class="h-delta">12.4%</span></div>
+    <div></div>
+    <div class="h-type t-town"><span class="k">TOWN</span><span class="v">28,442</span></div>
+    <div class="h-type t-mill"><span class="k">MILL</span><span class="v">11,208</span></div>
+    <div class="h-type t-dvm"><span class="k">DVM</span><span class="v">3,241</span></div>
+  </section>
+
+  <!-- ══════════ FLEET — 4-column taxonomy ══════════ -->
+  <section class="fleet">
+    <header class="fleet-head">
+      <div class="t">FLEET / all managed objects</div>
+      <div class="meta">
+        <span>hosts <b>04</b></span>
+        <span>services <b>06</b></span>
+        <span>deps <b>05</b></span>
+        <span>identity <b>01</b></span>
+        <span class="warn">attention <b style="color:var(--s-deg)">01</b></span>
+      </div>
+    </header>
+
+    <div class="fleet-grid">
+
+      <!-- ── HOSTS ── -->
+      <div class="col">
+        <div class="col-title">
+          <span class="k">HOSTS</span>
+          <span class="count"><b>04</b> machines</span>
+        </div>
+        <div class="tree">
+
+          <div class="branch">
+            <span class="arr">▸</span>
+            <span class="name">tower-01</span>
+            <span class="meta">4 svcs · local</span>
+          </div>
+          <div class="leaf t-host"><span class="pfx">├─</span><span class="name">town-01</span></div>
+          <div class="leaf t-host"><span class="pfx">├─</span><span class="name">mill-eth-01</span></div>
+          <div class="leaf t-host"><span class="pfx">├─</span><span class="name">mill-base-01</span></div>
+          <div class="leaf t-host"><span class="pfx">└─</span><span class="name">connector-01</span></div>
+
+          <div class="group-gap"></div>
+
+          <div class="branch">
+            <span class="arr">▸</span>
+            <span class="name">edge-hel</span>
+            <span class="meta">1 svc · remote</span>
+          </div>
+          <div class="leaf t-host"><span class="pfx">└─</span><span class="name">town-02</span></div>
+
+          <div class="group-gap"></div>
+
+          <div class="branch attn">
+            <span class="arr">▸</span>
+            <span class="name">edge-sgp</span>
+            <span class="meta"><span class="warn">1 svc · needs attention</span></span>
+          </div>
+          <div class="leaf t-host highlight"><span class="pfx">└─</span><span class="name">town-03 · DEGRADED</span></div>
+
+          <div class="group-gap"></div>
+
+          <div class="branch">
+            <span class="arr">▸</span>
+            <span class="name">gpu-01</span>
+            <span class="meta">1 svc · remote</span>
+          </div>
+          <div class="leaf t-host"><span class="pfx">└─</span><span class="name">dvm-whisper-01</span></div>
+
+        </div>
+      </div>
+
+      <!-- ── SERVICES ── -->
+      <div class="col">
+        <div class="col-title">
+          <span class="k">SERVICES</span>
+          <span class="count"><b>06</b> earning</span>
+        </div>
+        <div class="tree">
+
+          <div class="leaf t-town">
+            <span class="pfx">•</span><span class="name">town-01<span class="tag">TOWN</span></span><span class="st">OK</span>
+          </div>
+          <div class="leaf t-town">
+            <span class="pfx">•</span><span class="name">town-02<span class="tag">TOWN</span></span><span class="st">OK</span>
+          </div>
+          <div class="leaf t-town highlight">
+            <span class="pfx">!</span><span class="name">town-03<span class="tag">TOWN</span></span><span class="st deg">DEGRADED</span>
+          </div>
+          <div class="leaf t-mill">
+            <span class="pfx">•</span><span class="name">mill-eth-01<span class="tag">MILL</span></span><span class="st rbl">REBAL</span>
+          </div>
+          <div class="leaf t-mill">
+            <span class="pfx">•</span><span class="name">mill-base-01<span class="tag">MILL</span></span><span class="st">OK</span>
+          </div>
+          <div class="leaf t-dvm">
+            <span class="pfx">•</span><span class="name">dvm-whisper-01<span class="tag">DVM</span></span><span class="st">OK</span>
+          </div>
+
+          <div class="group-gap"></div>
+
+          <div style="border-top:1px dashed var(--rule);padding-top:10px;margin-top:6px;">
+            <div style="font-size:10px;letter-spacing:.18em;color:var(--ink-dim);margin-bottom:8px">SERVICE EARNINGS · TODAY</div>
+            <div class="leaf"><span class="pfx">town-01</span><span></span><span class="st" style="color:var(--ink-hi);font-weight:500">12,884 <span style="color:var(--ink-dim);font-weight:400">sats</span></span></div>
+            <div class="leaf"><span class="pfx">town-02</span><span></span><span class="st" style="color:var(--ink-hi);font-weight:500">11,208 <span style="color:var(--ink-dim);font-weight:400">sats</span></span></div>
+            <div class="leaf"><span class="pfx">town-03</span><span></span><span class="st deg" style="font-weight:500">4,350 <span style="color:var(--ink-dim);font-weight:400">sats</span></span></div>
+            <div class="leaf"><span class="pfx">mill-eth-01</span><span></span><span class="st" style="color:var(--ink-hi);font-weight:500">7,842 <span style="color:var(--ink-dim);font-weight:400">sats</span></span></div>
+            <div class="leaf"><span class="pfx">mill-base-01</span><span></span><span class="st" style="color:var(--ink-hi);font-weight:500">3,366 <span style="color:var(--ink-dim);font-weight:400">sats</span></span></div>
+            <div class="leaf"><span class="pfx">dvm-whisper</span><span></span><span class="st" style="color:var(--ink-hi);font-weight:500">3,241 <span style="color:var(--ink-dim);font-weight:400">sats</span></span></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── DEPENDENCIES ── -->
+      <div class="col">
+        <div class="col-title">
+          <span class="k">DEPENDENCIES</span>
+          <span class="count"><b>05</b> upstream</span>
+        </div>
+        <div class="tree">
+
+          <div class="leaf t-dep">
+            <span class="pfx">•</span><span class="name">connector-01<span class="tag">DAEMON</span></span><span class="st">OK</span>
+          </div>
+          <div class="leaf">
+            <span class="pfx" style="padding-left:12px;">consumers</span>
+            <span></span>
+            <span style="color:var(--ink-dim);font-size:11px">6 <span style="font-style:italic">svcs</span></span>
+          </div>
+
+          <div class="group-gap"></div>
+
+          <div class="leaf t-dep">
+            <span class="pfx">•</span><span class="name">rpc-eth-01<span class="tag">RPC</span></span><span class="st">OK</span>
+          </div>
+          <div class="leaf">
+            <span class="pfx" style="padding-left:12px;">chain</span><span></span>
+            <span style="color:var(--ink-mid);font-size:11px">ethereum · block 19,482,118</span>
+          </div>
+
+          <div class="leaf t-dep">
+            <span class="pfx">•</span><span class="name">rpc-base-01<span class="tag">RPC</span></span><span class="st rbl">ACTIVE</span>
+          </div>
+          <div class="leaf">
+            <span class="pfx" style="padding-left:12px;">chain</span><span></span>
+            <span style="color:var(--ink-mid);font-size:11px">base · block 12,094,228</span>
+          </div>
+
+          <div class="leaf t-dep">
+            <span class="pfx">•</span><span class="name">rpc-op-01<span class="tag">RPC</span></span><span class="st idle">IDLE</span>
+          </div>
+          <div class="leaf">
+            <span class="pfx" style="padding-left:12px;">chain</span><span></span>
+            <span style="color:var(--ink-mid);font-size:11px">optimism · no active mills</span>
+          </div>
+
+          <div class="group-gap"></div>
+
+          <div class="leaf t-dep">
+            <span class="pfx">•</span><span class="name">ator-circuit<span class="tag">NET</span></span><span class="st">OK</span>
+          </div>
+          <div class="leaf">
+            <span class="pfx" style="padding-left:12px;">hops</span><span></span>
+            <span style="color:var(--ink-mid);font-size:11px">3 · circuit-age 4h 12m</span>
+          </div>
+
+          <div class="group-gap"></div>
+
+          <div style="border-top:1px dashed var(--rule);padding-top:10px;margin-top:6px;">
+            <div style="font-size:10px;letter-spacing:.18em;color:var(--ink-dim);margin-bottom:8px">UPSTREAM · UNMANAGED</div>
+            <div class="leaf t-dep" style="opacity:.8">
+              <span class="pfx">?</span><span class="name" style="color:var(--s-unknown)">nostr-peers-sgp<span class="tag" style="background:var(--s-unknown)">EXT</span></span><span class="st unk">UNKNOWN</span>
+            </div>
+            <div class="leaf"><span class="pfx" style="padding-left:12px;">last probe</span><span></span><span style="color:var(--ink-dim);font-size:11px">&gt; 5m ago</span></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── WALLET / IDENTITY ── -->
+      <div class="col">
+        <div class="col-title">
+          <span class="k">IDENTITY</span>
+          <span class="count"><b>01</b> HD root</span>
+        </div>
+
+        <div class="wallet-hd">
+          <div class="k">WALLET · AGGREGATE</div>
+          <div class="v">1,248,392<span class="u">SATS</span></div>
+        </div>
+
+        <div class="wallet-paths">
+          <div class="p"><span class="px">└─</span><span class="lbl">root</span><span class="path">m / 44' / 1337'</span></div>
+          <div class="p"><span class="px">&nbsp;&nbsp;&nbsp;├─</span><span class="lbl">towns</span><span class="path">/ 0'  (3 keys)</span></div>
+          <div class="p"><span class="px">&nbsp;&nbsp;&nbsp;├─</span><span class="lbl">mills</span><span class="path">/ 1'  (2 keys)</span></div>
+          <div class="p"><span class="px">&nbsp;&nbsp;&nbsp;└─</span><span class="lbl">dvms</span><span class="path">&nbsp;/ 2'  (1 key)</span></div>
+        </div>
+
+        <div class="wallet-actions">
+          <div class="a"><span>deposit addrs</span><span><kbd>w</kbd><kbd>d</kbd></span></div>
+          <div class="a"><span>withdraw</span><span><kbd>w</kbd><kbd>x</kbd></span></div>
+          <div class="a urgent">
+            <span>seed backup</span>
+            <span style="color:var(--s-deg);font-size:10px;letter-spacing:.14em;font-weight:700">OVERDUE · 47d</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ FOCUS : DEPENDENCY NEIGHBORHOOD ══════════ -->
+  <section class="focus-wrap">
+
+    <div class="focus">
+      <header class="focus-head">
+        <div class="t">dependency neighborhood</div>
+        <div class="selected">town-03</div>
+        <div class="status-chip">DEGRADED</div>
+        <div class="actions"><kbd>Tab</kbd>next <kbd>Esc</kbd>fleet</div>
+      </header>
+
+      <!-- THE ASCII GRAPH — hand-aligned -->
+      <pre class="ascii-graph">                  <span class="label">┌─ upstream ────────────┐</span>          <span class="label">┌─ provided-by ─────────┐</span>
+                  <span class="label">│</span>                        <span class="label">│</span>          <span class="label">│</span>                        <span class="label">│</span>
+   <span class="host-ok">┌───────────┐</span>   <span class="edge-deg">│</span>    <span class="dep-net">┌──────────────┐</span>  <span class="label">│</span>          <span class="label">│</span>    <span class="dep-ok">┌──────────────┐</span>  <span class="label">│</span>
+   <span class="host-ok">│  edge-sgp │</span>   <span class="edge-deg">│</span>    <span class="dep-net">│ nostr-peers  │</span>  <span class="label">│</span>          <span class="label">│</span>    <span class="dep-ok">│ connector-01 │</span>  <span class="label">│</span>
+   <span class="host-ok">│    OK     │</span>   <span class="edge-deg">│</span>    <span class="dep-net">│  [UNKNOWN]   │</span>  <span class="label">│</span>          <span class="label">│</span>    <span class="dep-ok">│     OK       │</span>  <span class="label">│</span>
+   <span class="host-ok">└─────┬─────┘</span>   <span class="edge-deg">│</span>    <span class="dep-net">└──────┬───────┘</span>  <span class="label">│</span>          <span class="label">│</span>    <span class="dep-ok">└──────┬───────┘</span>  <span class="label">│</span>
+         <span class="edge">│</span>               <span class="edge-deg">│</span>            <span class="edge-deg">│</span>          <span class="label">│</span>          <span class="label">│</span>           <span class="edge">│</span>          <span class="label">│</span>
+  <span class="edge">runs-on</span>              <span class="edge-deg">peers-with</span>         <span class="label">│</span>          <span class="label">│</span>          <span class="edge">uses</span>        <span class="label">│</span>
+         <span class="edge">│</span>               <span class="edge-deg">│</span>            <span class="edge-deg">│</span>          <span class="label">│</span>          <span class="label">│</span>           <span class="edge">│</span>          <span class="label">│</span>
+         <span class="edge">▼</span>               <span class="edge-deg">▼</span>            <span class="edge-deg">▼</span>          <span class="label">│</span>          <span class="label">│</span>           <span class="edge">▼</span>          <span class="label">│</span>
+   ┌─────────────────────────────────────────┐    <span class="label">│</span>          <span class="label">│</span>    <span class="dep-ok">┌──────────────┐</span>  <span class="label">│</span>
+   │            <span class="inv-deg"> town-03 </span>                    │    <span class="label">│</span>          <span class="label">│</span>    <span class="dep-ok">│ ator-circuit │</span>  <span class="label">│</span>
+   │          <span class="svc-deg">TOWN · DEGRADED</span>                │    <span class="label">│</span>          <span class="label">│</span>    <span class="dep-ok">│     OK       │</span>  <span class="label">│</span>
+   │     <span class="label">events/hr</span>  <span class="svc-deg">4,747</span> <span class="label">(of ~13,000 norm)</span>   │    <span class="label">│</span>          <span class="label">│</span>    <span class="dep-ok">└──────────────┘</span>  <span class="label">│</span>
+   │     <span class="label">err-rate</span>   <span class="svc-deg">4.2%</span>  <span class="label">(of &lt;0.1% norm)</span>     │    <span class="label">│</span>          <span class="label">│</span>                        <span class="label">│</span>
+   │     <span class="label">last-err</span>   <span class="svc-deg">02:11:42</span>                  │    <span class="label">│</span>          <span class="label">│</span>                        <span class="label">│</span>
+   └─────────────────────────────────────────┘    <span class="label">│</span>          <span class="label">│</span>                        <span class="label">│</span>
+                  <span class="label">│</span>                              <span class="label">│</span>          <span class="label">│</span>                        <span class="label">│</span>
+                  <span class="edge">└──────── settles-via ────────┘</span>          <span class="label">│</span>                        <span class="label">│</span>
+                  <span class="label">│</span>                              <span class="label">│</span>          <span class="label">└────── routes-through ──┘</span>
+                  <span class="label">└──────── publishes-to ───────┘</span>
+
+   <span class="label">DIRECT DEPENDENCIES:</span>  <span class="dep-ok">connector-01 [OK]</span>   <span class="dep-ok">ator-circuit [OK]</span>   <span class="host-ok">edge-sgp [OK]</span>
+   <span class="label">SUSPECT PATH:</span>         <span class="suspect">town-03 ──▶ nostr-peers-sgp (upstream · unmanaged · UNKNOWN)</span></pre>
+
+      <!-- diagnosis -->
+      <section class="diagnosis">
+        <header class="dg-head">
+          <span>DIAGNOSIS · automated</span>
+          <span class="conf">CONFIDENCE 78%</span>
+        </header>
+        <div class="dg-body">
+          <p>All three <b>direct dependencies</b> of <b>town-03</b> report healthy: <span class="ok">connector-01</span>, <span class="ok">ator-circuit</span>, and host <span class="ok">edge-sgp</span>. The connector daemon is serving five other services from the same host without incident.</p>
+          <p>The error pattern on town-03 is <b>periodic</b> (spikes at <span class="n">~90s</span> intervals) rather than monotonic, which rules out resource exhaustion. Events-per-hour has fallen to <span class="n">4,747</span> from a baseline of <span class="n">~13,000</span>, with connections holding at <span class="n">88</span>.</p>
+          <p>The only <b>unmanaged upstream</b> in this neighborhood is the <b>nostr-peers-sgp</b> set — external relays this Town peers with. Last successful probe was <span class="deg">&gt; 5 minutes ago</span>.</p>
+        </div>
+        <div class="dg-conclusion">
+          Upstream Nostr peer network (Singapore region) is the most likely source. Run <b>probe peers</b> to confirm.
+        </div>
+      </section>
+
+      <!-- actions -->
+      <div class="action-bar">
+        <div class="ab primary"><kbd>P</kbd>probe peers</div>
+        <div class="ab"><kbd>L</kbd>tail logs</div>
+        <div class="ab"><kbd>R</kbd>restart svc</div>
+        <div class="ab"><kbd>D</kbd>details</div>
+      </div>
+    </div>
+
+    <!-- ── CONTEXT ── -->
+    <aside class="context">
+      <header class="context-head">CONTEXT · town-03</header>
+
+      <section class="ctx-section">
+        <div class="lbl">
+          <span>ERROR RATE · LAST 60M</span>
+          <span class="r">peak <span style="color:var(--s-deg);font-weight:600">4.2%</span></span>
+        </div>
+        <div class="err-timeline">
+          <span class="low" style="height:8%"></span><span class="low" style="height:6%"></span>
+          <span class="low" style="height:10%"></span><span class="low" style="height:8%"></span>
+          <span class="low" style="height:12%"></span><span class="low" style="height:10%"></span>
+          <span style="height:25%"></span><span style="height:35%"></span>
+          <span class="spike" style="height:55%"></span><span style="height:40%"></span>
+          <span class="spike" style="height:65%"></span><span style="height:50%"></span>
+          <span class="spike" style="height:75%"></span><span style="height:60%"></span>
+          <span class="spike" style="height:85%"></span><span style="height:70%"></span>
+          <span class="spike" style="height:95%"></span><span style="height:80%"></span>
+          <span class="spike" style="height:88%"></span><span style="height:72%"></span>
+        </div>
+        <div class="err-scale">
+          <span>&minus;60m</span><span>&minus;30m</span><span>now</span>
+        </div>
+      </section>
+
+      <section class="ctx-section">
+        <div class="lbl"><span>LIVE DEPENDENCY STATUS</span><span class="r">5 checked · 02:14:00</span></div>
+        <div class="dep-list">
+          <div class="row">
+            <span class="sq"></span>
+            <span><span class="name">connector-01</span> <span class="kind">DAEMON</span></span>
+            <span style="color:var(--ink-dim);font-size:11px">2ms</span>
+            <span class="st">OK</span>
+          </div>
+          <div class="row">
+            <span class="sq"></span>
+            <span><span class="name">ator-circuit</span> <span class="kind">NETWORK · 3-hop</span></span>
+            <span style="color:var(--ink-dim);font-size:11px">184ms</span>
+            <span class="st">OK</span>
+          </div>
+          <div class="row">
+            <span class="sq"></span>
+            <span><span class="name">edge-sgp</span> <span class="kind">HOST · remote</span></span>
+            <span style="color:var(--ink-dim);font-size:11px">12ms</span>
+            <span class="st">OK</span>
+          </div>
+          <div class="row">
+            <span class="sq unk"></span>
+            <span><span class="name">nostr-peers-sgp</span> <span class="kind">EXTERNAL · 14 peers</span></span>
+            <span style="color:var(--ink-dim);font-size:11px">—</span>
+            <span class="st unk">UNKN</span>
+          </div>
+          <div class="row">
+            <span class="sq"></span>
+            <span><span class="name">disk · /var/townhouse</span> <span class="kind">LOCAL</span></span>
+            <span style="color:var(--ink-dim);font-size:11px">62% used</span>
+            <span class="st">OK</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="ctx-section">
+        <div class="lbl"><span>LOG · tail</span><span class="r" style="color:var(--mill)">streaming</span></div>
+        <div class="log">
+          <div class="ln"><span class="t">02:13:58</span><span class="lv err">ERR</span><span class="msg">peer <b>relay-sgp-04</b> handshake timeout <em>(6000ms)</em></span></div>
+          <div class="ln"><span class="t">02:13:51</span><span class="lv warn">WRN</span><span class="msg">peer probe returning <b>degraded</b> response codes</span></div>
+          <div class="ln"><span class="t">02:13:42</span><span class="lv err">ERR</span><span class="msg">peer <b>relay-sgp-01</b> closed connection <em>(code 1006)</em></span></div>
+          <div class="ln"><span class="t">02:13:30</span><span class="lv info">INF</span><span class="msg">connector-01 settlement confirmed <em>[312 sats]</em></span></div>
+          <div class="ln"><span class="t">02:13:18</span><span class="lv warn">WRN</span><span class="msg">event throughput dropped below <b>5000/h</b> threshold</span></div>
+          <div class="ln"><span class="t">02:12:55</span><span class="lv err">ERR</span><span class="msg">peer <b>relay-sgp-07</b> sent NIP-42 auth failure</span></div>
+          <div class="ln"><span class="t">02:12:30</span><span class="lv info">INF</span><span class="msg">ator-circuit rotated <em>[new 3-hop path]</em></span></div>
+        </div>
+      </section>
+    </aside>
+
+  </section>
+
+  <!-- ══════════ STATUS LINE ══════════ -->
+  <div class="statusline">
+    <div class="mode">-- FOCUS --</div>
+    <div class="note"><span class="warn">!</span> town-03 · upstream peers suspected · diagnose to confirm</div>
+    <div>14 objects · 1 attn</div>
+    <div>utf-8 · 24h · 02:14</div>
+  </div>
+
+  <!-- ══════════ COMMAND LINE ══════════ -->
+  <div class="cmdline">
+    <span class="prompt">townhouse:town-03&gt;</span>
+    <span class="input"></span>
+    <span class="caret"></span>
+  </div>
+
+  <div class="keys">
+    <span><kbd>?</kbd>help</span>
+    <span><kbd>Esc</kbd>fleet</span>
+    <span><kbd>Tab</kbd>next</span>
+    <span><kbd>P</kbd>probe</span>
+    <span><kbd>L</kbd>logs</span>
+    <span><kbd>R</kbd>restart</span>
+    <span><kbd>:</kbd>command</span>
+    <span><kbd>/</kbd>filter</span>
+    <span><kbd>q</kbd>quit</span>
+  </div>
+
+</div>
+
+</body>
+</html>

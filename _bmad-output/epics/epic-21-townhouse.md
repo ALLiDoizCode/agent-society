@@ -21,7 +21,7 @@ Provide a simple, beautiful way for node providers to spin up and manage one or 
 
 **D21-002: Standalone connector, not embedded.** A single shared connector instance (pulled from `ghcr.io/toon-protocol/connector`) handles all ILP routing for all nodes. Benefits: single routing table, shared ATOR transport, unified balance tracking, resource efficiency, cleaner separation of concerns. Each node registers as a peer with the standalone connector over the Docker network. Fee enforcement happens at the connector's routing layer.
 
-**D21-003: Connector image is pre-built.** Townhouse pulls `ghcr.io/toon-protocol/connector:latest` — no custom connector Dockerfile needed. Updates are trivial: `docker pull` + restart.
+**D21-003: Connector image is pre-built.** Townhouse pulls `ghcr.io/toon-protocol/connector:3.3.0` — no custom connector Dockerfile needed. Updates are trivial: `docker pull` + restart.
 
 **D21-004: ATOR is a config option, not a container.** Nodes connect to the public Anyone/ATOR SOCKS5 proxy network via the `ator-transport` layer from Epic 12. No ATOR proxy container to build or manage. Operators choose ATOR (privacy) or Direct (speed) in setup.
 
@@ -30,6 +30,10 @@ Provide a simple, beautiful way for node providers to spin up and manage one or 
 **D21-006: Unified transaction ledger via standalone connector.** All ILP packets flow through one connector, providing a single source of truth for earnings breakdowns by node type (relay writes, swaps, DVM jobs).
 
 **D21-007: Docker Compose profiles for selective node activation.** `townhouse up --town --mill` starts only the connector + Town + Mill. Profiles keep the compose file unified while allowing any combination.
+
+**D21-008: Dashboard design system is Vercel/Geist-inspired (updated 2026-04-21).** Near-white canvas (`#ffffff`), `#171717` ink, shadow-as-border (`box-shadow: 0 0 0 1px rgba(0,0,0,0.08)`), Geist Sans with aggressive negative tracking (-2.4px at 48px), Geist Mono for technical labels. Node identity maps to Vercel workflow accents: Town → Develop Blue (`#0a72ef`), Mill → Preview Pink (`#de1d8d`), DVM → Ship Red (`#ff5b4f`). Three weights (400/500/600), three named keyframe animations, no gradients, no traditional CSS borders, no dark theme at launch. Full spec in Story 21.8.5. Supersedes the earlier v1–v6 design spike directions (Ink Terminal / IBM Plex Mono / dark-native) preserved in `_bmad-output/planning-artifacts/design-spikes/` for reference only.
+
+**D21-009: Dashboard stories (21.9–21.13) are developed against a Townhouse-shaped Docker dev stack — never mocks, never SDK E2E.** Per the project CLAUDE.md rule ("ALWAYS USE DOCKER — NEVER USE MOCKS"), every dashboard view story runs against `docker-compose-townhouse-dev.yml` via `./scripts/townhouse-dev-infra.sh up`. This stack mirrors the production Townhouse topology (D21-002) — standalone connector + Town/Mill/DVM child peers — so the dashboard consumes the exact data shape it will see in production (packet log from the shared connector, type-separated node identities, real cross-chain swap flows), not the embedded-connector shape of SDK E2E. The stack includes 2 Town nodes, 2 Mill nodes, 1 DVM node, the standalone connector image, and the three chain devnets (Anvil + Solana + Mina) so settlement and wallet balances are real. Story 21.8.5 ships `pnpm --filter @toon-protocol/townhouse-web dev:docker` as the canonical dev loop. Storybook may use fixtures for isolated primitive preview; the product dev server must not. PRs for 21.9–21.13 include a screenshot sourced from live Docker data, and degraded/rebalancing states are exercised via `docker pause` / real swap triggers, not simulated flags.
 
 **D21-008: HD wallet with per-node key derivation.** Single BIP-39 mnemonic, deterministic HD derivation per node type (following the existing `WalletSeedManager` pattern from the connector). One seed to back up, all keys recoverable.
 
@@ -217,15 +221,18 @@ DVM          toon:dvm (built from packages/sdk)    Profile
 **As a** node operator, **I want** a dashboard home screen **so that** I can see all node health and earnings at a glance.
 
 **Acceptance Criteria:**
-- [ ] Vite + React SPA at `web/` directory
-- [ ] Built using `frontend-design` skill for distinctive, polished UI
-- [ ] Dark theme default (operators check 24/7)
-- [ ] Node cards for each active node: health status, uptime, key metric, earnings
-- [ ] Color-coded by type: Town (amber), Mill (green), DVM (blue)
-- [ ] Unified earnings ticker ("Today: X ETH across N nodes")
-- [ ] ATOR connection status indicator (green/amber/red)
-- [ ] Live activity feed (recent events from all nodes)
-- [ ] Responsive layout (desktop + mobile)
+- [ ] Vite + React SPA at `packages/townhouse/web/` scaffolded by Story 21.8.5
+- [ ] Uses design-system primitives from Story 21.8.5 (`Shell`, `NodeCard`, `StatusDot`, `TypeChip`, `Sparkline`, `BreakdownPill`, `StateShell`, `Button`) — no reimplementation, no ad-hoc styling
+- [ ] Imports tokens from `@/theme/tokens`; no inline hex, no arbitrary Tailwind colors, no raw `border:` declarations (shadow-as-border only)
+- [ ] Light Vercel/Geist-inspired theme per D21-008 (NOT dark — reversal from earlier epic direction)
+- [ ] Node cards for each active node: health status, uptime, key metric, earnings — color-coded by type via `TypeChip` (Town → Develop Blue, Mill → Preview Pink, DVM → Ship Red)
+- [ ] Unified earnings ticker using `BreakdownPill` ("Today: X ETH across N nodes")
+- [ ] ATOR connection status indicator via `StatusDot` (ok/degraded/down)
+- [ ] Live activity feed (recent events from all nodes) using `StateShell` for empty/loading/error
+- [ ] Typography uses the token tracking scale; no positive letter-spacing on Geist (CI-enforced)
+- [ ] Responsive layout per Section 8 breakpoints (400/600/768/1024/1200/1400)
+- [ ] **Developed against `pnpm --filter @toon-protocol/townhouse-web dev:docker` with the Townhouse dev stack up (`./scripts/townhouse-dev-infra.sh up`). PR screenshot sourced from live Docker data with all 5 child nodes visible (2 Town + 2 Mill + 1 DVM).**
+- [ ] Axe-core passes at WCAG 2.1 AA
 
 ---
 
@@ -234,12 +241,15 @@ DVM          toon:dvm (built from packages/sdk)    Profile
 **As a** Town node operator, **I want** a relay management view **so that** I can monitor relay activity and configure write fees.
 
 **Acceptance Criteria:**
-- [ ] Live event stream (filterable by kind)
-- [ ] Connected clients count
-- [ ] Write-fee configuration with slider/input
-- [ ] Events relayed per hour/day chart
+- [ ] Uses design-system primitives from Story 21.8.5; no reimplementation, no inline colors, no raw borders
+- [ ] Live event stream (filterable by kind) using `StateShell` for empty/loading/error
+- [ ] Connected clients count rendered as `MetricBlock`
+- [ ] Write-fee configuration with slider/input wrapped in shadow-bordered card
+- [ ] Events relayed per hour/day chart using token palette; chart library is the epic-wide choice locked in Story 21.9
 - [ ] Bandwidth usage display
 - [ ] Apply config changes via API (triggers connector restart)
+- [ ] **Developed against `pnpm dev:docker` with live Town peer telemetry from `townhouse-dev-town-01` and `townhouse-dev-town-02` (per D21-009). Event-stream view verified against real relay traffic; degraded-state rendering verified via `docker pause townhouse-dev-town-02`.**
+- [ ] Axe-core passes at WCAG 2.1 AA
 
 ---
 
@@ -248,12 +258,15 @@ DVM          toon:dvm (built from packages/sdk)    Profile
 **As a** Mill node operator, **I want** a liquidity management view **so that** I can visualize profits and manage swap operations.
 
 **Acceptance Criteria:**
-- [ ] Liquidity pool visualization (allocated, in active swaps, available)
-- [ ] Fee percentage configuration with earning estimate preview
-- [ ] Profit chart over time (daily/weekly/monthly)
-- [ ] Supported swap pairs display and configuration
+- [ ] Uses design-system primitives; `LiquidityBar` for pool viz, `PairChip` + `ChainIcon`/`TokenIcon` for swap pairs; no reimplementation
+- [ ] Liquidity pool visualization (allocated, in active swaps, available) via `LiquidityBar`; `rebal-pulse` animates only during active rebalance
+- [ ] Fee percentage configuration with earning estimate preview in shadow-bordered card
+- [ ] Profit chart over time (daily/weekly/monthly) using token palette
+- [ ] Supported swap pairs display using `PairChip`
 - [ ] "Add Funds" flow with deposit address and balance detection
-- [ ] Active swaps count and volume
+- [ ] Active swaps count and volume as `MetricBlock`s
+- [ ] **Developed against `pnpm dev:docker` with live Mill peer telemetry from `townhouse-dev-mill-01` (EVM↔Solana pair) and `townhouse-dev-mill-02` (EVM↔Mina pair), per D21-009. `rebal-pulse` exercised by triggering a real cross-chain swap via `packages/mill` CLI, not a simulated flag.**
+- [ ] Axe-core passes at WCAG 2.1 AA
 
 ---
 
@@ -262,11 +275,14 @@ DVM          toon:dvm (built from packages/sdk)    Profile
 **As a** DVM node operator, **I want** a compute management view **so that** I can monitor jobs and set pricing.
 
 **Acceptance Criteria:**
-- [ ] Job queue visualization (pending, in-progress, completed)
-- [ ] Pricing configuration per job type
-- [ ] Jobs processed chart over time
-- [ ] Storage costs vs. revenue breakdown
-- [ ] Earnings from DVM compute display
+- [ ] Uses design-system primitives; no reimplementation, no inline colors, no raw borders
+- [ ] Job queue visualization (pending, in-progress, completed) using `StateShell` for empty queue
+- [ ] Pricing configuration per job type in shadow-bordered cards
+- [ ] Jobs processed chart over time using token palette
+- [ ] Storage costs vs. revenue breakdown via `BreakdownPill`
+- [ ] Earnings from DVM compute displayed via `MetricBlock`
+- [ ] **Developed against `pnpm dev:docker` with live DVM peer telemetry from `townhouse-dev-dvm-01` (per D21-009). Job queue lifecycle (pending → in-progress → completed) verified against real jobs submitted through the connector.**
+- [ ] Axe-core passes at WCAG 2.1 AA
 
 ---
 
@@ -275,12 +291,15 @@ DVM          toon:dvm (built from packages/sdk)    Profile
 **As a** node operator, **I want** a wallet management view **so that** I can see all my keys, balances, and manage funds.
 
 **Acceptance Criteria:**
-- [ ] All keypairs listed with node type association
-- [ ] Fund balances per chain (ETH, USDC, etc.)
-- [ ] Deposit addresses with QR codes
-- [ ] Withdraw/transfer functionality
+- [ ] Uses design-system primitives; wallet rows render as shadow-bordered cards, NOT a traditional bordered table
+- [ ] All keypairs listed with node type association via `TypeChip`
+- [ ] Fund balances per chain (ETH, USDC, etc.) using `ChainIcon` + `TokenIcon` + `MetricBlock` with `tnum` enabled
+- [ ] Deposit addresses with QR codes inside shadow-bordered cards
+- [ ] Withdraw/transfer functionality using `Button` primary variant
 - [ ] Seed phrase backup prompt and export
-- [ ] Visual derivation path display (which key belongs to which node)
+- [ ] Visual derivation path display (which key belongs to which node) using Geist Mono caption style
+- [ ] **Developed against `pnpm dev:docker` with real wallet balances read from `townhouse-dev-anvil` (EVM), `townhouse-dev-solana`, and `townhouse-dev-mina` (per D21-009). Per-node-type key derivation verified against the five child-node Nostr secret keys in the compose file.**
+- [ ] Axe-core passes at WCAG 2.1 AA
 
 ---
 
