@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-04-29 (story 21.8.0 → done — code review applied 10 patches, secret-key plumbing fixed)
+# last_updated: 2026-04-29 (story 21.8.5 → done — code review applied 24 patches across primitives, lint rules, tokens sidecar, dev orchestration)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -439,7 +439,7 @@ development_status:
   21-7-5-connector-version-sweep-and-contract-canary: done
   21-8-fastify-rest-websocket-metrics-api: done
   21-8-0-townhouse-dev-infrastructure: done
-  21-8-5-dashboard-design-system-foundation: backlog
+  21-8-5-dashboard-design-system-foundation: done
   21-9-dashboard-spa-home-view: backlog
   21-10-dashboard-town-management-view: backlog
   21-11-dashboard-mill-management-view: backlog
