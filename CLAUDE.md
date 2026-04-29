@@ -110,7 +110,29 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 **Port conflicts:** See `_bmad-output/project-context.md` section "Deployment" for full port allocation table. Key ranges:
 
 - SDK E2E: Anvil 18545, Peer1 19000/19100/19700, Peer2 19010/19110/19710
+- Townhouse Dev Stack: 28xxx range (see table below)
 - Oyster CVM attestation server: 1300
+
+### Townhouse Dev Stack (28xxx)
+
+All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Contributor docs: `packages/townhouse/README.md`.
+
+| Host Port | Container Port | Service |
+|-----------|---------------|---------|
+| 28080 | 9401 | Connector admin (`/health`, `/admin/*`) |
+| 28050 | 1080 | SOCKS5 proxy (ATOR transport testing, story 21.15) |
+| 28100 | 3100 | town-01 BLS health |
+| 28110 | 3100 | town-02 BLS health |
+| 28200 | 3200 | mill-01 BLS health (EVM↔Solana) |
+| 28210 | 3200 | mill-02 BLS health (EVM↔Mina) |
+| 28400 | 3400 | dvm-01 BLS health |
+| 28700 | 7100 | town-01 Nostr relay WebSocket |
+| 28710 | 7100 | town-02 Nostr relay WebSocket |
+| 28545 | 8545 | Anvil JSON-RPC (chain-id 31337) |
+| 28899 | 8899 | Solana test-validator RPC |
+| 28900 | 8900 | Solana test-validator WebSocket |
+| 28085 | 3101 | Mina lightnet GraphQL |
+| 28181 | 8181 | Mina lightnet accounts manager |
 
 ---
 
@@ -156,6 +178,9 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 | Dev Signal template (for Drew) | `_bmad-output/dev-signals/_template.md` |
 | Dev Signal archive | `_bmad-output/dev-signals/` |
 | Dev Signal command | `.claude/commands/dev-signal.md` (invoke via `/dev-signal`) |
+| **Townhouse dev stack** | `scripts/townhouse-dev-infra.sh` + `docker-compose-townhouse-dev.yml` |
+| Townhouse dev stack docs | `packages/townhouse/README.md` § "Local Dev Loop" |
+| Townhouse dev stack fixtures | `docker/dev-fixtures/` (Mill JSON configs + README) |
 
 ## Browser Verification
 
