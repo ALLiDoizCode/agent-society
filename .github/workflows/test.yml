@@ -193,7 +193,11 @@ jobs:
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          # Intentionally no `cache: 'pnpm'` — this job relies on the
+          # `build-${{ github.sha }}` cache below for node_modules. On a
+          # build-cache hit we skip `pnpm install`, so pnpm's store directory
+          # never gets populated and the setup-node post-step would error
+          # ("Path Validation Error") trying to save a nonexistent path.
 
       - name: Restore build artifacts
         id: build-cache
