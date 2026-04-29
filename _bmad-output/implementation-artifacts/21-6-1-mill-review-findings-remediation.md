@@ -1,6 +1,6 @@
 # Story 21.6.1: Mill Review Findings Remediation
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -107,6 +107,16 @@ The remediation work in this story is constrained by what is actually outstandin
   - [x] 7.2 `docker build -f docker/Dockerfile.mill -t toon:mill .` — must succeed.
   - [x] 7.3 `docker run --rm toon:mill node -e "console.log('ok')"` — basic image-runs smoke test (no Mill startup needed; just confirm the image isn't broken).
   - [x] 7.4 `docker inspect toon:mill --format '{{json .Config.Labels}}'` — non-null object, three labels present.
+
+### Review Findings
+
+- [x] [Review][Patch] MILL_CONFIG_JSON not deleted when JSON.parse succeeds with null/falsy payload — `delete` is placed after the `if (!rawConfig) throw` guard, so `JSON.parse('null')` succeeds but the guard fires first, skipping the delete and leaving the env var alive [docker/src/entrypoint-mill.ts:~190-195]
+- [x] [Review][Defer] Shutdown test yields one `setImmediate` tick for async `stop()` — sufficient with trivial mock, brittle if `stop()` ever does real async work [docker/src/entrypoint-mill.test.ts] — deferred, pre-existing test pattern
+- [x] [Review][Defer] `process.removeAllListeners` in `afterEach` is indiscriminate — silently removes any Vitest or plugin signal handlers registered on the worker [docker/src/entrypoint-mill.test.ts] — deferred, pre-existing
+- [x] [Review][Defer] `applyEnvOverlay` regression sanity test uses `as never` cast, suppressing compile-time type-checking on the stub input [docker/src/entrypoint-mill.test.ts] — deferred, pre-existing
+- [x] [Review][Defer] `Dockerfile.mill` `LABEL version="1.0.0"` is a hardcoded literal, not parameterized via `--build-arg` [docker/Dockerfile.mill] — deferred, pre-existing, out of scope
+- [x] [Review][Defer] `MILL_CONFIG_PATH` file containing the string `"null"` bypasses the empty-file guard and produces a raw `TypeError` from `parseRawConfig` [docker/src/entrypoint-mill.ts] — deferred, pre-existing behavior in file-path branch
+- [x] [Review][Defer] AC-5 line citations drifted ~6 lines after prettier pass (`b161cd4`) — `delete` cited at `:188-189`, actual `:195`; `SIGQUIT` cited at `:335`, actual `:354` [_bmad-output/implementation-artifacts/21-6-mill-node-dockerfile-review-findings.md] — deferred, doc artifact, citations remain navigably close
 
 ## Dev Notes
 
