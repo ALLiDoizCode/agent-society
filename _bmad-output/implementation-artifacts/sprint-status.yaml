@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-04-29 (story 21.6.1 → done)
+# last_updated: 2026-04-29 (story 21.7.5 → done — connector contract realigned to source-of-truth)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -436,7 +436,7 @@ development_status:
   21-6-mill-node-dockerfile: done
   21-6-1-mill-review-findings-remediation: done
   21-7-dvm-node-dockerfile: done
-  21-7-5-connector-version-sweep-and-contract-canary: backlog
+  21-7-5-connector-version-sweep-and-contract-canary: done
   21-8-fastify-rest-websocket-metrics-api: done
   21-8-0-townhouse-dev-infrastructure: backlog
   21-8-5-dashboard-design-system-foundation: backlog
