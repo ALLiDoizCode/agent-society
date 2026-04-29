@@ -1,6 +1,6 @@
 # Story 21.6.1: Mill Review Findings Remediation
 
-Status: backlog
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
