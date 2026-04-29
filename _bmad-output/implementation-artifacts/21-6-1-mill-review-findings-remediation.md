@@ -1,6 +1,6 @@
 # Story 21.6.1: Mill Review Findings Remediation
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -68,45 +68,45 @@ The remediation work in this story is constrained by what is actually outstandin
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Audit + reconcile tracking doc (AC: #5 part 1)
-  - [ ] 1.1 Re-verify each of the 13 "FIXED" findings against the current `entrypoint-mill.ts` and `Dockerfile.mill` line numbers cited above. If any has regressed, demote it from FIXED to OPEN before starting code work.
-  - [ ] 1.2 Update `21-6-mill-node-dockerfile-review-findings.md`: flip the 13 FIXED boxes to `[x]` with line-range annotations. Leave the 4 OPEN boxes unchecked until later tasks land.
-  - [ ] 1.3 Commit the tracking-doc reconciliation as its own commit so the audit is reviewable independent of code changes.
+- [x] Task 1: Audit + reconcile tracking doc (AC: #5 part 1)
+  - [x] 1.1 Re-verify each of the 13 "FIXED" findings against the current `entrypoint-mill.ts` and `Dockerfile.mill` line numbers cited above. If any has regressed, demote it from FIXED to OPEN before starting code work.
+  - [x] 1.2 Update `21-6-mill-node-dockerfile-review-findings.md`: flip the 13 FIXED boxes to `[x]` with line-range annotations. Leave the 4 OPEN boxes unchecked until later tasks land.
+  - [x] 1.3 Commit the tracking-doc reconciliation as its own commit so the audit is reviewable independent of code changes.
 
-- [ ] Task 2: Finding #10 — MILL_CONFIG_JSON cleanup (AC: #1)
-  - [ ] 2.1 In `entrypoint-mill.ts` `loadMillConfig()`, after `JSON.parse(env['MILL_CONFIG_JSON'])` succeeds (line ~153), `delete process.env['MILL_CONFIG_JSON']` before returning.
-  - [ ] 2.2 Add unit test in `docker/src/entrypoint-mill.test.ts` (create file if absent — mirror `entrypoint-town.test.ts` pattern from Story 21.5) asserting `process.env['MILL_CONFIG_JSON']` is `undefined` after a successful `loadMillConfig()` call. Also assert it remains untouched on a parse failure (early throw).
-  - [ ] 2.3 Verify `MILL_CONFIG_PATH` is intentionally NOT cleaned (path is not secret) — document this in a one-line comment near the cleanup call.
+- [x] Task 2: Finding #10 — MILL_CONFIG_JSON cleanup (AC: #1)
+  - [x] 2.1 In `entrypoint-mill.ts` `loadMillConfig()`, after `JSON.parse(env['MILL_CONFIG_JSON'])` succeeds (line ~153), `delete process.env['MILL_CONFIG_JSON']` before returning.
+  - [x] 2.2 Add unit test in `docker/src/entrypoint-mill.test.ts` (create file if absent — mirror `entrypoint-town.test.ts` pattern from Story 21.5) asserting `process.env['MILL_CONFIG_JSON']` is `undefined` after a successful `loadMillConfig()` call. Also assert it remains untouched on a parse failure (early throw).
+  - [x] 2.3 Verify `MILL_CONFIG_PATH` is intentionally NOT cleaned (path is not secret) — document this in a one-line comment near the cleanup call.
 
-- [ ] Task 3: Finding #11 — Dockerfile LABELs in runtime stage (AC: #2)
-  - [ ] 3.1 In `docker/Dockerfile.mill`, delete the three `LABEL` lines at `:17-19`.
-  - [ ] 3.2 Re-add them immediately after `FROM node:20-alpine` at `:101` (the runtime stage).
-  - [ ] 3.3 Build the image: `docker build -f docker/Dockerfile.mill -t toon:mill .`. Run `docker inspect toon:mill --format '{{json .Config.Labels}}'`. Confirm non-null object containing `maintainer`, `version`, `description`.
-  - [ ] 3.4 Update the existing static-analysis Dockerfile test (`packages/townhouse/src/docker/mill-dockerfile.test.ts`) to assert LABELs appear after the runtime `FROM`, not before the builder `FROM`.
+- [x] Task 3: Finding #11 — Dockerfile LABELs in runtime stage (AC: #2)
+  - [x] 3.1 In `docker/Dockerfile.mill`, delete the three `LABEL` lines at `:17-19`.
+  - [x] 3.2 Re-add them immediately after `FROM node:20-alpine` at `:101` (the runtime stage).
+  - [x] 3.3 Build the image: `docker build -f docker/Dockerfile.mill -t toon:mill .`. Run `docker inspect toon:mill --format '{{json .Config.Labels}}'`. Confirm non-null object containing `maintainer`, `version`, `description`.
+  - [x] 3.4 Update the existing static-analysis Dockerfile test (`packages/townhouse/src/docker/mill-dockerfile.test.ts`) to assert LABELs appear after the runtime `FROM`, not before the builder `FROM`.
 
-- [ ] Task 4: Finding #12 — Structured logging (AC: #3)
-  - [ ] 4.1 In `entrypoint-mill.ts`, add a small `logJson(level: 'info'\|'error', msg: string, fields?: Record<string, unknown>): void` helper near the top (after imports). Output: `JSON.stringify({ ts: Date.now(), level, scope: 'mill-entrypoint', msg, ...fields })` followed by `\n`. Route to `process.stdout.write` for `info`, `process.stderr.write` for `error`.
-  - [ ] 4.2 Migrate every `console.log`/`console.error` call in the file:
+- [x] Task 4: Finding #12 — Structured logging (AC: #3)
+  - [x] 4.1 In `entrypoint-mill.ts`, add a small `logJson(level: 'info'\|'error', msg: string, fields?: Record<string, unknown>): void` helper near the top (after imports). Output: `JSON.stringify({ ts: Date.now(), level, scope: 'mill-entrypoint', msg, ...fields })` followed by `\n`. Route to `process.stdout.write` for `info`, `process.stderr.write` for `error`.
+  - [x] 4.2 Migrate every `console.log`/`console.error` call in the file:
     - `[Mill Entrypoint] Starting Mill node...` → `logJson('info', 'starting')`
     - The `Mill Ready` banner → `logJson('info', 'mill_ready', { pubkey, evmAddress, blsPort, swapPairCount: config.swapPairs.length })`
     - Shutdown logs → `logJson('info', 'shutdown_received', { signal })` and `logJson('info', 'shutdown_complete')`
     - Shutdown error → `logJson('error', 'shutdown_error', { err: String(err) })`
     - Fatal error → `logJson('error', 'fatal', { err: String(err), stack })`
-  - [ ] 4.3 Tests in `entrypoint-mill.test.ts`: capture stdout via `vi.spyOn(process.stdout, 'write')`, run a successful startup path (with `startMill` stubbed), assert each captured line is `JSON.parse`-able and contains the expected `msg` and fields.
+  - [x] 4.3 Tests in `entrypoint-mill.test.ts`: capture stdout via `vi.spyOn(process.stdout, 'write')`, run a successful startup path (with `startMill` stubbed), assert each captured line is `JSON.parse`-able and contains the expected `msg` and fields.
 
-- [ ] Task 5: Finding #13 — SIGQUIT handling (AC: #4)
-  - [ ] 5.1 In `entrypoint-mill.ts`, after the existing `process.on('SIGTERM', ...)` and `process.on('SIGINT', ...)` registrations (`:302-303`), add `process.on('SIGQUIT', () => shutdown('SIGQUIT'))`.
-  - [ ] 5.2 Tests in `entrypoint-mill.test.ts`: with `startMill` stubbed to return a stub `MillInstance`, register the handlers via `main()`, then `process.emit('SIGQUIT')`, assert `instance.stop()` was called exactly once. Repeat for SIGTERM and SIGINT to confirm no regression.
+- [x] Task 5: Finding #13 — SIGQUIT handling (AC: #4)
+  - [x] 5.1 In `entrypoint-mill.ts`, after the existing `process.on('SIGTERM', ...)` and `process.on('SIGINT', ...)` registrations (`:302-303`), add `process.on('SIGQUIT', () => shutdown('SIGQUIT'))`.
+  - [x] 5.2 Tests in `entrypoint-mill.test.ts`: with `startMill` stubbed to return a stub `MillInstance`, register the handlers via `main()`, then `process.emit('SIGQUIT')`, assert `instance.stop()` was called exactly once. Repeat for SIGTERM and SIGINT to confirm no regression.
 
-- [ ] Task 6: Tracking doc final reconciliation + Resolution block (AC: #5 part 2)
-  - [ ] 6.1 Flip the four OPEN boxes (`#10`, `#11`, `#12`, `#13`) to `[x]` in `21-6-mill-node-dockerfile-review-findings.md` with line-range annotations citing the new code.
-  - [ ] 6.2 Append a `## Resolution (Story 21.6.1, <today's date>)` section: 13 fixed-on-merge items, 4 closed-here items, 0 dismissed-as-stale items. Link to the commit hashes that resolve each.
+- [x] Task 6: Tracking doc final reconciliation + Resolution block (AC: #5 part 2)
+  - [x] 6.1 Flip the four OPEN boxes (`#10`, `#11`, `#12`, `#13`) to `[x]` in `21-6-mill-node-dockerfile-review-findings.md` with line-range annotations citing the new code.
+  - [x] 6.2 Append a `## Resolution (Story 21.6.1, <today's date>)` section: 13 fixed-on-merge items, 4 closed-here items, 0 dismissed-as-stale items. Link to the commit hashes that resolve each.
 
-- [ ] Task 7: Regression sweep (AC: #6, #7)
-  - [ ] 7.1 `pnpm --filter @toon-protocol/townhouse test` — must pass; the 21.6.1 additions take the count above 414.
-  - [ ] 7.2 `docker build -f docker/Dockerfile.mill -t toon:mill .` — must succeed.
-  - [ ] 7.3 `docker run --rm toon:mill node -e "console.log('ok')"` — basic image-runs smoke test (no Mill startup needed; just confirm the image isn't broken).
-  - [ ] 7.4 `docker inspect toon:mill --format '{{json .Config.Labels}}'` — non-null object, three labels present.
+- [x] Task 7: Regression sweep (AC: #6, #7)
+  - [x] 7.1 `pnpm --filter @toon-protocol/townhouse test` — must pass; the 21.6.1 additions take the count above 414.
+  - [x] 7.2 `docker build -f docker/Dockerfile.mill -t toon:mill .` — must succeed.
+  - [x] 7.3 `docker run --rm toon:mill node -e "console.log('ok')"` — basic image-runs smoke test (no Mill startup needed; just confirm the image isn't broken).
+  - [x] 7.4 `docker inspect toon:mill --format '{{json .Config.Labels}}'` — non-null object, three labels present.
 
 ## Dev Notes
 
@@ -137,3 +137,55 @@ Most container runtimes send SIGTERM on `docker stop`. SIGQUIT is sent by `kill 
 - Does not modify `docker-compose-townhouse.yml`.
 - Does not touch Town or DVM Dockerfiles or entrypoints — those have their own review trails.
 - Does not bump the connector image tag (that is Story 21.7.5's scope).
+
+## File List
+
+**Modified:**
+
+- `docker/src/entrypoint-mill.ts` — added `logJson` helper, migrated all `console.*` calls to structured JSON, added `delete process.env['MILL_CONFIG_JSON']` (fail-closed) inside `loadMillConfig`, added `SIGQUIT` handler, exported `loadMillConfig`/`applyEnvOverlay`/`logJson`/`main` for testability, gated the bottom-of-file IIFE on `!process.env['VITEST']`.
+- `docker/Dockerfile.mill` — moved three `LABEL` directives from before the builder `FROM` (where Docker silently dropped them) into the runtime stage at `:104-106` (after `FROM node:20-alpine` at `:100`). Replaced the pre-builder block with a comment explaining why.
+- `packages/townhouse/src/docker/mill-dockerfile.test.ts` — added LABEL-placement assertions (4 cases), updated startup-logging assertions to match the structured `mill_ready` event (replaces the old "Mill Ready" banner regex), added SIGQUIT registration assertion, added `MILL_CONFIG_JSON` cleanup assertion.
+- `_bmad-output/implementation-artifacts/21-6-mill-node-dockerfile-review-findings.md` — flipped 13 fixed-on-merge boxes (commit `ae5cfb2`) + 4 closed-here boxes (commit `0912c88`) to `[x]` with line-range annotations; appended `## Resolution (Story 21.6.1, 2026-04-29)` block.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — `21-6-1-mill-review-findings-remediation` flipped `backlog` → `in-progress` → `review`; `last_updated` bumped to 2026-04-29.
+
+**Added:**
+
+- `docker/src/entrypoint-mill.test.ts` — 12 new vitest cases covering AC-1 (env-var cleanup, including the parse-failure no-touch invariant), AC-3 (`logJson` per-line JSON to stdout/stderr; `main()` end-to-end log shape), AC-4 (SIGTERM/SIGINT/SIGQUIT all invoke `instance.stop()` once and `main()` registers a fresh listener for each).
+
+## Dev Agent Record
+
+### Implementation Plan (executed)
+
+1. **Task 1 (audit, commit `ae5cfb2`)** — Cross-checked the 13 "FIXED" findings against `epic-21` tip line numbers. All 13 confirmed addressed; flipped to `[x]` in the tracking doc with line-range annotations. Committed independently for reviewable audit trail (per Task 1.3 / Dev Notes § "Tracking-doc reconciliation rationale").
+2. **Tasks 2–5 (code, commit `0912c88`)** — Implemented red-green-refactor for each finding:
+   - Refactored `entrypoint-mill.ts` to export the helpers needed for direct testing (`loadMillConfig`, `applyEnvOverlay`, `logJson`, `main`).
+   - Gated the bottom-of-file IIFE on `!process.env['VITEST']` so the test file can import without spinning up a real Mill.
+   - Authored `docker/src/entrypoint-mill.test.ts` covering all three new ACs; this required `vi.hoisted` for the `@toon-protocol/mill` mock (a top-level `vi.fn()` would have been hoisted above its declaration and crashed the test loader).
+   - Added `LABEL` placement assertions and structured-log assertions in `mill-dockerfile.test.ts`. The pre-existing `[P2] Mill Ready` test was rewritten in-place to assert the structured `mill_ready` event instead.
+3. **Task 6 (Resolution block, commit `eacda23`)** — Closed remaining 4 boxes with line citations referencing commit `0912c88`; appended the Resolution block (13 fixed-on-merge / 4 closed-here / 0 dismissed-as-stale).
+4. **Task 7 (verification)** —
+   - `pnpm --filter @toon-protocol/townhouse test`: **422 passed** (was 414 in 21.6).
+   - `pnpm --filter @toon-protocol/docker test`: **69 passed** (45 existing + 12 new entrypoint-mill cases + 12 attestation-server cases).
+   - `docker build -f docker/Dockerfile.mill -t toon:mill .`: **succeeded** (multi-stage, all build steps green).
+   - `docker run --rm toon:mill node -e "console.log('ok')"`: **`ok`** — runtime image not broken.
+   - `docker inspect toon:mill --format '{{json .Config.Labels}}'`: returns `{"description":"TOON Mill Node - Multi-chain swap peer with embedded connector","maintainer":"toon-protocol","version":"1.0.0"}` — confirms AC-2 (LABELs reach the produced image, which they did NOT in 21.6's broken placement).
+5. **Format pass (commit `b161cd4`)** — `pnpm exec prettier --write` on the three TS files; tests still 422 / 69. No behavioral changes.
+
+### Completion Notes
+
+- All 7 ACs satisfied. AC-1 verified by both unit test (env-var deletion observable) and code review (cleanup placed *before* `parseRawConfig`, fail-closed against later throws). AC-2 verified by both static-analysis test (LABEL placement assertions) and live `docker inspect` (labels actually on the produced image — the bug existed in 21.6 because the LABELs were dropped silently, with no warning at build time). AC-3 verified by JSON-parse-and-shape assertions on captured stdout. AC-4 verified by signal-emission tests with `process.emit('SIGQUIT'|'SIGTERM'|'SIGINT')`.
+- Story 21.6 ACs (#1–#7) all remain green: image builds, peers via embedded connector on `townhouse-mill:3000`, `/health` endpoint via BLS port, env-var config (`MILL_CONFIG_JSON`/`MILL_CONFIG_PATH`/`FEE_BASIS_POINTS`/`MILL_RELAYS`/`NODE_NOSTR_SECRET_KEY`/`BLS_PORT`) all preserved, multi-stage minimal runtime intact, non-root `toon` user preserved.
+- The `vi.hoisted` pattern is the correct vitest idiom for mock factories that close over named mocks; documented inline so future maintainers don't trip over the same hoisting issue I did on the first run.
+- The IIFE gate (`!process.env['VITEST']`) is the lightest way to make the entrypoint testable without restructuring main() — `VITEST` is set automatically by vitest, so production Docker behavior is unchanged.
+- 4 commits on top of `epic-21` tip: `ae5cfb2` (audit) → `0912c88` (4 fixes + tests) → `eacda23` (Resolution block) → `b161cd4` (prettier).
+
+## Change Log
+
+| Date       | Author              | Description                                                                                              |
+| ---------- | ------------------- | -------------------------------------------------------------------------------------------------------- |
+| 2026-04-29 | Amelia (BMAD dev)   | Story created (re-entry resequence — closes review debt for Story 21.6 before Phase 2 dashboard work).   |
+| 2026-04-29 | Amelia (BMAD dev)   | Status `backlog` → `in-progress`; sprint-status updated; tracking doc reconciled (commit `ae5cfb2`).     |
+| 2026-04-29 | Amelia (BMAD dev)   | 4 open Mill review findings closed: env hygiene, LABEL placement, JSON logs, SIGQUIT (commit `0912c88`). |
+| 2026-04-29 | Amelia (BMAD dev)   | Tracking-doc Resolution block appended; remaining 4 boxes flipped (commit `eacda23`).                    |
+| 2026-04-29 | Amelia (BMAD dev)   | Prettier formatting pass on touched TS files (commit `b161cd4`).                                         |
+| 2026-04-29 | Amelia (BMAD dev)   | Status `in-progress` → `review`; tests 422 (townhouse) + 69 (docker); image build + inspect green.       |

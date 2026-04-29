@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-04-29 (story 21.6.1 → in-progress)
+# last_updated: 2026-04-29 (story 21.6.1 → review)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -434,7 +434,7 @@ development_status:
   21-4-hd-wallet-management-and-key-derivation: done
   21-5-town-node-dockerfile: done
   21-6-mill-node-dockerfile: done
-  21-6-1-mill-review-findings-remediation: in-progress
+  21-6-1-mill-review-findings-remediation: review
   21-7-dvm-node-dockerfile: done
   21-7-5-connector-version-sweep-and-contract-canary: backlog
   21-8-fastify-rest-websocket-metrics-api: done
