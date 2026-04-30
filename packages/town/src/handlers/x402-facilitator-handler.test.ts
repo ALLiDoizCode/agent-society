@@ -16,6 +16,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
+import type { WalletClient } from 'viem';
 import { createX402FacilitatorHandler } from './x402-facilitator-handler.js';
 import type { X402FacilitatorHandlerConfig } from './x402-facilitator-handler.js';
 import type {
@@ -219,7 +220,7 @@ describe('POST /verify', () => {
 
 describe('POST /settle', () => {
   it('returns success: true with txHash on happy path', async () => {
-    const app = makeApp(makeConfig({ walletClient: {} as unknown as import('viem').WalletClient }));
+    const app = makeApp(makeConfig({ walletClient: {} as unknown as WalletClient }));
     const res = await post(app, '/settle', makeRequest());
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -239,7 +240,7 @@ describe('POST /settle', () => {
 
   it('returns success: false when verifyEip3009Auth fails (re-verify before settle)', async () => {
     mockVerify.mockResolvedValue({ valid: false, invalidReason: 'nonce-freshness', checksPerformed: ['eip3009-signature', 'usdc-balance', 'nonce-freshness'] });
-    const app = makeApp(makeConfig({ walletClient: {} as unknown as import('viem').WalletClient }));
+    const app = makeApp(makeConfig({ walletClient: {} as unknown as WalletClient }));
     const res = await post(app, '/settle', makeRequest());
     const body = await res.json();
     expect(body.success).toBe(false);
@@ -250,7 +251,7 @@ describe('POST /settle', () => {
 
   it('returns success: false when settlement fails on-chain', async () => {
     mockSettle.mockResolvedValue({ success: false, error: 'Transaction reverted on-chain' });
-    const app = makeApp(makeConfig({ walletClient: {} as unknown as import('viem').WalletClient }));
+    const app = makeApp(makeConfig({ walletClient: {} as unknown as WalletClient }));
     const res = await post(app, '/settle', makeRequest());
     const body = await res.json();
     expect(body.success).toBe(false);

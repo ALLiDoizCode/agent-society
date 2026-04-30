@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import type * as Viem from 'viem';
+import type { PublicClient } from 'viem';
 import type { Eip3009Authorization } from './x402-types.js';
 
 const mockAuth: Eip3009Authorization = {
@@ -24,7 +26,7 @@ const mockChainConfig = {
 
 // Mock viem so verifyTypedData is controllable across all tests
 vi.mock('viem', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('viem')>();
+  const actual = await importOriginal<typeof Viem>();
   return { ...actual, verifyTypedData: vi.fn() };
 });
 
@@ -62,7 +64,7 @@ describe('verifyEip3009Auth', () => {
         if (functionName === 'authorizationState') return Promise.resolve(false);
         return Promise.resolve(null);
       }),
-    } as unknown as import('viem').PublicClient;
+    } as unknown as PublicClient;
 
     const { verifyEip3009Auth } = await import('./x402-preflight.js');
     const result = await verifyEip3009Auth(mockAuth, mockChainConfig, mockPublicClient);
@@ -82,7 +84,7 @@ describe('verifyEip3009Auth', () => {
         if (functionName === 'authorizationState') return Promise.resolve(true);
         return Promise.resolve(null);
       }),
-    } as unknown as import('viem').PublicClient;
+    } as unknown as PublicClient;
 
     const { verifyEip3009Auth } = await import('./x402-preflight.js');
     const result = await verifyEip3009Auth(mockAuth, mockChainConfig, mockPublicClient);
