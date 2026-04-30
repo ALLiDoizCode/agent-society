@@ -47,14 +47,9 @@ services:
     ports:
       - '127.0.0.1:28080:9401'
     environment:
-      CONNECTOR_ADMIN_PORT: '9401'
-      CONNECTOR_ILP_ADDRESS: g.townhouse.dev
-      # nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket -- Docker-internal BTP URLs
-      # Town and Mill use embedded BTP on port 3000 (child-side BTP server)
-      # DVM uses standalone HTTP on port 3300 (Docker-internal)
-      CONNECTOR_PEERS: '[{"id":"town-01","relation":"child","btpUrl":"btp+ws://townhouse-dev-town-01:3000","assetCode":"USD","assetScale":6},{"id":"town-02","relation":"child","btpUrl":"btp+ws://townhouse-dev-town-02:3000","assetCode":"USD","assetScale":6},{"id":"mill-01","relation":"child","btpUrl":"btp+ws://townhouse-dev-mill-01:3000","assetCode":"USD","assetScale":6},{"id":"mill-02","relation":"child","btpUrl":"btp+ws://townhouse-dev-mill-02:3000","assetCode":"USD","assetScale":6},{"id":"dvm-01","relation":"child","httpUrl":"http://townhouse-dev-dvm-01:3300","assetCode":"USD","assetScale":6}]'
-      TRANSPORT_MODE: direct
+      CONFIG_FILE: /config/connector.yaml
     volumes:
+      - ./docker/configs/townhouse-dev-connector.yaml:/config/connector.yaml:ro
       - townhouse-dev-connector-data:/data
     restart: unless-stopped
     healthcheck:
@@ -223,6 +218,7 @@ services:
     environment:
       # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
       CONNECTOR_URL: ws://townhouse-dev-connector:3000
+      CONNECTOR_ADMIN_URL: http://townhouse-dev-connector:9401
       FEE_PER_EVENT: '0'
       NODE_NOSTR_PUBKEY: ''
       NODE_EVM_ADDRESS: ''
@@ -259,6 +255,7 @@ services:
     environment:
       # nosemgrep: detect-insecure-websocket -- Docker-internal, TLS unnecessary
       CONNECTOR_URL: ws://townhouse-dev-connector:3000
+      CONNECTOR_ADMIN_URL: http://townhouse-dev-connector:9401
       FEE_PER_EVENT: '0'
       NODE_NOSTR_PUBKEY: ''
       NODE_EVM_ADDRESS: ''
