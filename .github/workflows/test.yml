@@ -3,17 +3,17 @@
 # Philosophy: No mocks — real crypto, real TOON codec, real local infra
 #
 # Triggers:
-#   PR / push to main  → lint, build, unit tests, format check
-#   Nightly (2 AM UTC) → full suite including E2E (requires genesis node)
-#   Manual dispatch     → selectable test level
+#   PR / push to main or development  → lint, build, unit tests, format check
+#   Nightly (2 AM UTC)                → full suite including E2E (requires genesis node)
+#   Manual dispatch                   → selectable test level
 
 name: Test Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [main, development]
   pull_request:
-    branches: [main]
+    branches: [main, development]
   schedule:
     # Nightly E2E at 2 AM UTC
     - cron: '0 2 * * *'
