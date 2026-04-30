@@ -275,11 +275,11 @@ cmd_up() {
 
   # Poll each child health endpoint (30 attempts × 2s = 60s timeout per node)
   log_info "Waiting for child nodes to become healthy..."
-  wait_for_health "http://localhost:28100/health" "town-01" 30
-  wait_for_health "http://localhost:28110/health" "town-02" 30
-  wait_for_health "http://localhost:28200/health" "mill-01" 30
-  wait_for_health "http://localhost:28210/health" "mill-02" 30
-  wait_for_health "http://localhost:28400/health" "dvm-01"  30
+  wait_for_health "http://localhost:28100/health" "town-01" 30 || exit 1
+  wait_for_health "http://localhost:28110/health" "town-02" 30 || exit 1
+  wait_for_health "http://localhost:28200/health" "mill-01" 30 || exit 1
+  wait_for_health "http://localhost:28210/health" "mill-02" 30 || exit 1
+  wait_for_health "http://localhost:28400/health" "dvm-01"  30 || exit 1
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # Write .env.townhouse-dev for host-side consumption

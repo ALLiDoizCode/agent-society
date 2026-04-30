@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-04-30 (story 21.11 → done — code review patches applied, multi-instance refactor)
+# last_updated: 2026-04-30 (story 21.12 → done — code review patches applied: 26 fixes incl. shallow-merge kindPricing, BLS close() promisification, key validation, refetch-on-PATCH, em-dash collapse, averageVolume earnings)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -443,7 +443,7 @@ development_status:
   21-9-dashboard-spa-home-view: done
   21-10-dashboard-town-management-view: done
   21-11-dashboard-mill-management-view: done
-  21-12-dashboard-dvm-management-view: backlog
+  21-12-dashboard-dvm-management-view: done
   21-13-dashboard-wallet-and-keys-view: backlog
   21-14-first-run-setup-wizard: backlog
   21-15-ator-privacy-transport-and-connectivity-status: backlog
