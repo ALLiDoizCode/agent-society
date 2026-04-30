@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-04-30 (story 21.10 → done — code review complete, 9 patches applied)
+# last_updated: 2026-04-30 (story 21.11 → done — code review patches applied, multi-instance refactor)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -442,7 +442,7 @@ development_status:
   21-8-5-dashboard-design-system-foundation: done
   21-9-dashboard-spa-home-view: done
   21-10-dashboard-town-management-view: done
-  21-11-dashboard-mill-management-view: backlog
+  21-11-dashboard-mill-management-view: done
   21-12-dashboard-dvm-management-view: backlog
   21-13-dashboard-wallet-and-keys-view: backlog
   21-14-first-run-setup-wizard: backlog

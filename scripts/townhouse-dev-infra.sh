@@ -86,6 +86,13 @@ export MILL_01_SECRET_KEY="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 export MILL_02_SECRET_KEY="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa04"
 export DVM_01_SECRET_KEY="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa05"
 
+# ── Dev BIP-39 mnemonics for Mill nodes — DEV ONLY, NOT FOR PRODUCTION ────────
+# Mill containers require a mnemonic for BIP-32 swap key derivation (AC-1/21.11).
+# Using BIP-39 test vectors 0 and 1 respectively; known derivation paths give
+# deterministic pubkeys that match the connector peer config.
+export MILL_01_MNEMONIC="abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+export MILL_02_MNEMONIC="legal winner thank year wave sausage worth useful legal winner thank yellow"
+
 # ── cmd_up ────────────────────────────────────────────────────────────────────
 cmd_up() {
   log_info "Starting Townhouse dev infrastructure..."

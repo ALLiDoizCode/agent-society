@@ -297,7 +297,10 @@ services:
       FEE_BASIS_POINTS: '0'
       NODE_NOSTR_PUBKEY: ''
       NODE_EVM_ADDRESS: ''
-      # Interpolated from MILL_01_SECRET_KEY exported by townhouse-dev-infra.sh.
+      # MILL_MNEMONIC takes priority over NODE_NOSTR_SECRET_KEY for BIP-32 swap key derivation.
+      # Interpolated from MILL_01_MNEMONIC exported by townhouse-dev-infra.sh.
+      MILL_MNEMONIC: '${MILL_01_MNEMONIC:-}'
+      # Kept for backward-compat; ignored when MILL_MNEMONIC is set.
       NODE_NOSTR_SECRET_KEY: '${MILL_01_SECRET_KEY:-}'
       MILL_CONFIG_PATH: /config/mill.config.json
       MILL_RELAYS: ws://townhouse-dev-town-01:7100,ws://townhouse-dev-town-02:7100
@@ -338,7 +341,10 @@ services:
       FEE_BASIS_POINTS: '0'
       NODE_NOSTR_PUBKEY: ''
       NODE_EVM_ADDRESS: ''
-      # Interpolated from MILL_02_SECRET_KEY exported by townhouse-dev-infra.sh.
+      # MILL_MNEMONIC takes priority over NODE_NOSTR_SECRET_KEY for BIP-32 swap key derivation.
+      # Interpolated from MILL_02_MNEMONIC exported by townhouse-dev-infra.sh.
+      MILL_MNEMONIC: '${MILL_02_MNEMONIC:-}'
+      # Kept for backward-compat; ignored when MILL_MNEMONIC is set.
       NODE_NOSTR_SECRET_KEY: '${MILL_02_SECRET_KEY:-}'
       MILL_CONFIG_PATH: /config/mill.config.json
       MILL_RELAYS: ws://townhouse-dev-town-01:7100,ws://townhouse-dev-town-02:7100
