@@ -82,9 +82,18 @@ export async function verifyEip3009Auth(
       },
       signature: encodeSignature(authorization),
     });
-    if (!valid) return { valid: false, invalidReason: 'eip3009-signature', checksPerformed };
+    if (!valid)
+      return {
+        valid: false,
+        invalidReason: 'eip3009-signature',
+        checksPerformed,
+      };
   } catch {
-    return { valid: false, invalidReason: 'eip3009-signature', checksPerformed };
+    return {
+      valid: false,
+      invalidReason: 'eip3009-signature',
+      checksPerformed,
+    };
   }
 
   // Check 2: USDC balance check (read-only eth_call, ~50ms)
@@ -118,9 +127,18 @@ export async function verifyEip3009Auth(
           authorization.nonce as `0x${string}`,
         ],
       });
-      if (used) return { valid: false, invalidReason: 'nonce-freshness', checksPerformed };
+      if (used)
+        return {
+          valid: false,
+          invalidReason: 'nonce-freshness',
+          checksPerformed,
+        };
     } catch {
-      return { valid: false, invalidReason: 'nonce-freshness', checksPerformed };
+      return {
+        valid: false,
+        invalidReason: 'nonce-freshness',
+        checksPerformed,
+      };
     }
   }
 

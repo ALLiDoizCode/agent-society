@@ -36,7 +36,11 @@ describe('verifyEip3009Auth', () => {
     vi.mocked(verifyTypedData).mockResolvedValueOnce(false);
 
     const { verifyEip3009Auth } = await import('./x402-preflight.js');
-    const result = await verifyEip3009Auth(mockAuth, mockChainConfig, undefined);
+    const result = await verifyEip3009Auth(
+      mockAuth,
+      mockChainConfig,
+      undefined
+    );
     expect(result.valid).toBe(false);
     expect(result.invalidReason).toBe('eip3009-signature');
     expect(result.checksPerformed).toEqual(['eip3009-signature']);
@@ -48,7 +52,11 @@ describe('verifyEip3009Auth', () => {
 
     const { verifyEip3009Auth } = await import('./x402-preflight.js');
     // With no publicClient, balance and nonce checks are skipped (no eth_call)
-    const result = await verifyEip3009Auth(mockAuth, mockChainConfig, undefined);
+    const result = await verifyEip3009Auth(
+      mockAuth,
+      mockChainConfig,
+      undefined
+    );
     // Signature passed, no client checks — should pass
     expect(result.valid).toBe(true);
     expect(result.checksPerformed).toEqual(['eip3009-signature']);
@@ -59,15 +67,22 @@ describe('verifyEip3009Auth', () => {
     vi.mocked(verifyTypedData).mockResolvedValueOnce(true);
 
     const mockPublicClient = {
-      readContract: vi.fn().mockImplementation(({ functionName }: { functionName: string }) => {
-        if (functionName === 'balanceOf') return Promise.resolve(0n);
-        if (functionName === 'authorizationState') return Promise.resolve(false);
-        return Promise.resolve(null);
-      }),
+      readContract: vi
+        .fn()
+        .mockImplementation(({ functionName }: { functionName: string }) => {
+          if (functionName === 'balanceOf') return Promise.resolve(0n);
+          if (functionName === 'authorizationState')
+            return Promise.resolve(false);
+          return Promise.resolve(null);
+        }),
     } as unknown as PublicClient;
 
     const { verifyEip3009Auth } = await import('./x402-preflight.js');
-    const result = await verifyEip3009Auth(mockAuth, mockChainConfig, mockPublicClient);
+    const result = await verifyEip3009Auth(
+      mockAuth,
+      mockChainConfig,
+      mockPublicClient
+    );
     expect(result.valid).toBe(false);
     expect(result.invalidReason).toBe('usdc-balance');
     expect(result.checksPerformed).toContain('eip3009-signature');
@@ -79,15 +94,22 @@ describe('verifyEip3009Auth', () => {
     vi.mocked(verifyTypedData).mockResolvedValueOnce(true);
 
     const mockPublicClient = {
-      readContract: vi.fn().mockImplementation(({ functionName }: { functionName: string }) => {
-        if (functionName === 'balanceOf') return Promise.resolve(1000000n);
-        if (functionName === 'authorizationState') return Promise.resolve(true);
-        return Promise.resolve(null);
-      }),
+      readContract: vi
+        .fn()
+        .mockImplementation(({ functionName }: { functionName: string }) => {
+          if (functionName === 'balanceOf') return Promise.resolve(1000000n);
+          if (functionName === 'authorizationState')
+            return Promise.resolve(true);
+          return Promise.resolve(null);
+        }),
     } as unknown as PublicClient;
 
     const { verifyEip3009Auth } = await import('./x402-preflight.js');
-    const result = await verifyEip3009Auth(mockAuth, mockChainConfig, mockPublicClient);
+    const result = await verifyEip3009Auth(
+      mockAuth,
+      mockChainConfig,
+      mockPublicClient
+    );
     expect(result.valid).toBe(false);
     expect(result.invalidReason).toBe('nonce-freshness');
     expect(result.checksPerformed).toContain('eip3009-signature');

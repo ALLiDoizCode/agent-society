@@ -59,28 +59,41 @@ export function createX402FacilitatorHandler(
       try {
         body = (await c.req.json()) as X402FacilitatorRequest;
       } catch {
-        return c.json(
-          { isValid: false, invalidReason: 'Invalid request body', payer: null } satisfies X402VerifyResponse
-        );
+        return c.json({
+          isValid: false,
+          invalidReason: 'Invalid request body',
+          payer: null,
+        } satisfies X402VerifyResponse);
       }
 
-      const requirementsError = validateRequirements(body.paymentRequirements, config);
+      const requirementsError = validateRequirements(
+        body.paymentRequirements,
+        config
+      );
       if (requirementsError) {
-        return c.json(
-          { isValid: false, invalidReason: requirementsError, payer: null } satisfies X402VerifyResponse
-        );
+        return c.json({
+          isValid: false,
+          invalidReason: requirementsError,
+          payer: null,
+        } satisfies X402VerifyResponse);
       }
 
       let auth: Eip3009Authorization;
       try {
         auth = decodePaymentPayload(body.paymentPayload);
       } catch {
-        return c.json(
-          { isValid: false, invalidReason: 'Invalid paymentPayload', payer: null } satisfies X402VerifyResponse
-        );
+        return c.json({
+          isValid: false,
+          invalidReason: 'Invalid paymentPayload',
+          payer: null,
+        } satisfies X402VerifyResponse);
       }
 
-      const result = await verifyEip3009Auth(auth, config.chainConfig, config.publicClient);
+      const result = await verifyEip3009Auth(
+        auth,
+        config.chainConfig,
+        config.publicClient
+      );
 
       return c.json({
         isValid: result.valid,
@@ -111,7 +124,10 @@ export function createX402FacilitatorHandler(
 
       const network = body.paymentRequirements?.network ?? null;
 
-      const requirementsError = validateRequirements(body.paymentRequirements, config);
+      const requirementsError = validateRequirements(
+        body.paymentRequirements,
+        config
+      );
       if (requirementsError) {
         return c.json({
           success: false,
@@ -134,7 +150,11 @@ export function createX402FacilitatorHandler(
       }
 
       // Re-verify before settling — never trust that /verify was called first.
-      const verifyResult = await verifyEip3009Auth(auth, config.chainConfig, config.publicClient);
+      const verifyResult = await verifyEip3009Auth(
+        auth,
+        config.chainConfig,
+        config.publicClient
+      );
       if (!verifyResult.valid) {
         return c.json({
           success: false,
@@ -145,7 +165,9 @@ export function createX402FacilitatorHandler(
       }
 
       if (!config.walletClient) {
-        console.error('[x402-facilitator] Settlement attempted but walletClient not configured');
+        console.error(
+          '[x402-facilitator] Settlement attempted but walletClient not configured'
+        );
         return c.json(
           {
             success: false,
@@ -187,10 +209,17 @@ function validateRequirements(
   if (requirements.scheme !== 'exact') {
     return `Unsupported scheme "${requirements.scheme}": only "exact" is supported`;
   }
-  if (!requirements.payTo || requirements.payTo.toLowerCase() !== config.facilitatorAddress.toLowerCase()) {
+  if (
+    !requirements.payTo ||
+    requirements.payTo.toLowerCase() !== config.facilitatorAddress.toLowerCase()
+  ) {
     return 'payTo address does not match this facilitator address';
   }
-  if (!requirements.asset || requirements.asset.toLowerCase() !== config.chainConfig.usdcAddress.toLowerCase()) {
+  if (
+    !requirements.asset ||
+    requirements.asset.toLowerCase() !==
+      config.chainConfig.usdcAddress.toLowerCase()
+  ) {
     return 'asset does not match USDC address for this chain';
   }
   return null;
@@ -212,7 +241,9 @@ function decodePaymentPayload(paymentPayload: string): Eip3009Authorization {
   // Signature is 65 bytes: r (32 bytes = 64 hex) + s (32 bytes = 64 hex) + v (1 byte = 2 hex)
   const sig = signature.startsWith('0x') ? signature.slice(2) : signature;
   if (sig.length !== 130) {
-    throw new Error(`Invalid signature length: expected 130 hex chars, got ${sig.length}`);
+    throw new Error(
+      `Invalid signature length: expected 130 hex chars, got ${sig.length}`
+    );
   }
   if (!/^[0-9a-fA-F]{130}$/.test(sig)) {
     throw new Error('Invalid signature: expected 130 hex characters');

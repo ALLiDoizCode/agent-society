@@ -42,7 +42,9 @@ const mockChainConfig = {
   tokenNetworkAddress: '',
 };
 
-function makeSignedPayload(overrides: Partial<X402SignedPaymentPayload['payload']> = {}): string {
+function makeSignedPayload(
+  overrides: Partial<X402SignedPaymentPayload['payload']> = {}
+): string {
   const payload: X402SignedPaymentPayload = {
     x402Version: 1,
     scheme: 'exact',
@@ -64,7 +66,9 @@ function makeSignedPayload(overrides: Partial<X402SignedPaymentPayload['payload'
   return Buffer.from(JSON.stringify(payload)).toString('base64');
 }
 
-function makeRequirements(overrides: Partial<X402PaymentRequirements> = {}): X402PaymentRequirements {
+function makeRequirements(
+  overrides: Partial<X402PaymentRequirements> = {}
+): X402PaymentRequirements {
   return {
     scheme: 'exact',
     network: 'base-sepolia',
@@ -91,7 +95,9 @@ function makeRequest(
 // Test Setup
 // ============================================================================
 
-function makeConfig(overrides: Partial<X402FacilitatorHandlerConfig> = {}): X402FacilitatorHandlerConfig {
+function makeConfig(
+  overrides: Partial<X402FacilitatorHandlerConfig> = {}
+): X402FacilitatorHandlerConfig {
   return {
     x402Enabled: true,
     chainConfig: mockChainConfig,
@@ -137,7 +143,10 @@ const mockSettle = vi.mocked(settleEip3009);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockVerify.mockResolvedValue({ valid: true, checksPerformed: ['eip3009-signature', 'usdc-balance', 'nonce-freshness'] });
+  mockVerify.mockResolvedValue({
+    valid: true,
+    checksPerformed: ['eip3009-signature', 'usdc-balance', 'nonce-freshness'],
+  });
   mockSettle.mockResolvedValue({ success: true, txHash: '0xdeadbeef' });
 });
 
@@ -165,7 +174,11 @@ describe('POST /verify', () => {
   });
 
   it('returns isValid: false when verifyEip3009Auth fails (bad signature)', async () => {
-    mockVerify.mockResolvedValue({ valid: false, invalidReason: 'eip3009-signature', checksPerformed: ['eip3009-signature'] });
+    mockVerify.mockResolvedValue({
+      valid: false,
+      invalidReason: 'eip3009-signature',
+      checksPerformed: ['eip3009-signature'],
+    });
     const app = makeApp(makeConfig());
     const res = await post(app, '/verify', makeRequest());
     expect(res.status).toBe(200);
@@ -179,7 +192,11 @@ describe('POST /verify', () => {
 
   it('returns isValid: false when payTo does not match facilitator address', async () => {
     const app = makeApp(makeConfig());
-    const res = await post(app, '/verify', makeRequest(undefined, { payTo: '0x' + '1'.repeat(40) }));
+    const res = await post(
+      app,
+      '/verify',
+      makeRequest(undefined, { payTo: '0x' + '1'.repeat(40) })
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.isValid).toBe(false);
@@ -190,7 +207,11 @@ describe('POST /verify', () => {
 
   it('returns isValid: false when asset does not match USDC address', async () => {
     const app = makeApp(makeConfig());
-    const res = await post(app, '/verify', makeRequest(undefined, { asset: '0x' + '9'.repeat(40) }));
+    const res = await post(
+      app,
+      '/verify',
+      makeRequest(undefined, { asset: '0x' + '9'.repeat(40) })
+    );
     const body = await res.json();
     expect(body.isValid).toBe(false);
     expect(body.invalidReason).toMatch(/asset/);
@@ -198,7 +219,11 @@ describe('POST /verify', () => {
 
   it('returns isValid: false on unsupported scheme', async () => {
     const app = makeApp(makeConfig());
-    const res = await post(app, '/verify', makeRequest(undefined, { scheme: 'streaming' }));
+    const res = await post(
+      app,
+      '/verify',
+      makeRequest(undefined, { scheme: 'streaming' })
+    );
     const body = await res.json();
     expect(body.isValid).toBe(false);
     expect(body.invalidReason).toMatch(/scheme/);
@@ -220,7 +245,9 @@ describe('POST /verify', () => {
 
 describe('POST /settle', () => {
   it('returns success: true with txHash on happy path', async () => {
-    const app = makeApp(makeConfig({ walletClient: {} as unknown as WalletClient }));
+    const app = makeApp(
+      makeConfig({ walletClient: {} as unknown as WalletClient })
+    );
     const res = await post(app, '/settle', makeRequest());
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -239,8 +266,14 @@ describe('POST /settle', () => {
   });
 
   it('returns success: false when verifyEip3009Auth fails (re-verify before settle)', async () => {
-    mockVerify.mockResolvedValue({ valid: false, invalidReason: 'nonce-freshness', checksPerformed: ['eip3009-signature', 'usdc-balance', 'nonce-freshness'] });
-    const app = makeApp(makeConfig({ walletClient: {} as unknown as WalletClient }));
+    mockVerify.mockResolvedValue({
+      valid: false,
+      invalidReason: 'nonce-freshness',
+      checksPerformed: ['eip3009-signature', 'usdc-balance', 'nonce-freshness'],
+    });
+    const app = makeApp(
+      makeConfig({ walletClient: {} as unknown as WalletClient })
+    );
     const res = await post(app, '/settle', makeRequest());
     const body = await res.json();
     expect(body.success).toBe(false);
@@ -250,8 +283,13 @@ describe('POST /settle', () => {
   });
 
   it('returns success: false when settlement fails on-chain', async () => {
-    mockSettle.mockResolvedValue({ success: false, error: 'Transaction reverted on-chain' });
-    const app = makeApp(makeConfig({ walletClient: {} as unknown as WalletClient }));
+    mockSettle.mockResolvedValue({
+      success: false,
+      error: 'Transaction reverted on-chain',
+    });
+    const app = makeApp(
+      makeConfig({ walletClient: {} as unknown as WalletClient })
+    );
     const res = await post(app, '/settle', makeRequest());
     const body = await res.json();
     expect(body.success).toBe(false);
