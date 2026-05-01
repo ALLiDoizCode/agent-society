@@ -132,3 +132,12 @@
 - AC-3 hook surface keying differs from spec (`useNodeStatusStream` returns `statesByName: Record<string, string>` rather than `Map<NodeType, NodeState>`). Documented in Dev Notes "Implementation Plan" #2 as deliberate. Revisit if a stricter type contract is needed for richer view stories.
 - AC-5 transport-status indicator is static (reflects configured `transport.mode` only, not live ATOR proxy reachability). Gated behind story 21.15 per spec's plumbing-decision clause; TODO comment in `Home.tsx:866-869`.
 - AC-9 (live-Docker screenshot) and AC-10 (`docker pause townhouse-dev-town-02` degraded demo) — explicit PR-review gate per spec. Dev Agent flagged that the dev-stack container-name caveat may block AC-10 until 21.14 fixtures land or the orchestrator is wired to dev fixtures.
+
+## Deferred from: code review of 21-14-first-run-setup-wizard (2026-05-01)
+
+- AC-13 `<WizardHeader>` component / left-aligned breadcrumb missing — inline progress indicator satisfies the user-facing requirement; resolution depends on Decision-needed item in story file (extract component or amend AC).
+- Per-step component test files absent (`WizardStepNodes.test.tsx`, `WizardStepWallet.test.tsx`, `WizardStepPrivacy.test.tsx`, `WizardStepFees.test.tsx`, `WizardStepLaunch.test.tsx`) — `Wizard.test.tsx` covers basic flows; per-step coverage of regenerate confirm-discard, password-mismatch caption, slider bounds, summary card, error-code mapping, axe assertions left for a follow-up test-coverage story.
+- `cli/browser-opener.test.ts` not in diff — cross-platform spawn-arg shape coverage (`open` / `xdg-open` / `cmd /c start` per Dev Notes) absent; defer to a follow-up.
+- `useWizardState` polls every 2s forever (even after `containers_running: true`) — wasted requests on idle Home view; bounded by SPA tab lifetime; consider stopping the poll once normal mode is stable.
+- Mnemonic internal-multi-space + ZWSP/Unicode-invisible normalization on import — current `\s+` split handles common whitespace; uncommon paste paths fall through to a generic "Invalid BIP-39" error.
+- AC-4 validation cascade order in impl differs slightly from spec list order (length before mismatch); both still produce a 400 with a `code`; tests don't pin ordering — align spec or impl in a future polish pass.
