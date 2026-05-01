@@ -71,3 +71,5 @@ docker-compose-peer*.yml
 genesis.env
 .playwright-cli/
 wallet-*.yaml
+
+packages/rig/test-results/
