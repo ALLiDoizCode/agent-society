@@ -24,6 +24,7 @@ import type {
   X402PaymentRequirements,
   X402VerifyResponse,
   X402SettleResponse,
+  X402SupportedResponse,
 } from './x402-types.js';
 import type { ChainPreset } from '@toon-protocol/core';
 import type { PublicClient, WalletClient } from 'viem';
@@ -44,7 +45,30 @@ export interface X402FacilitatorHandlerConfig {
 export interface X402FacilitatorHandler {
   handleVerify: (c: Context) => Promise<Response>;
   handleSettle: (c: Context) => Promise<Response>;
+  handleSupported: (c: Context) => Response;
 }
+
+/**
+ * Map of x402 spec network identifiers to EVM chain IDs.
+ *
+ * Used by `validateRequirements` to check that an incoming
+ * `paymentRequirements.network` resolves to the same chain this facilitator
+ * is configured for. Includes both x402 spec names ('base', 'base-sepolia',
+ * 'avalanche', etc.) and TOON's own chain preset names ('anvil',
+ * 'arbitrum-one', 'arbitrum-sepolia') so a request from either ecosystem
+ * is recognized.
+ */
+const KNOWN_X402_NETWORKS: Record<string, number> = {
+  // TOON chain preset names
+  anvil: 31337,
+  'arbitrum-one': 42161,
+  'arbitrum-sepolia': 421614,
+  // x402 spec networks (Coinbase facilitator)
+  base: 8453,
+  'base-sepolia': 84532,
+  avalanche: 43114,
+  'avalanche-fuji': 43113,
+};
 
 export function createX402FacilitatorHandler(
   config: X402FacilitatorHandlerConfig
@@ -194,6 +218,26 @@ export function createX402FacilitatorHandler(
         errorReason: result.error ?? null,
       } satisfies X402SettleResponse);
     },
+
+    handleSupported(c: Context): Response {
+      if (!config.x402Enabled) {
+        return c.json({ error: 'x402 not enabled' }, 404);
+      }
+
+      // This facilitator handles exactly one (scheme, network) pair: the
+      // chain it's deployed against. `chainConfig.name` is the canonical
+      // network identifier (e.g., 'anvil', 'arbitrum-sepolia'); it's also
+      // a key in KNOWN_X402_NETWORKS, so /verify and /settle accept it.
+      return c.json({
+        kinds: [
+          {
+            x402Version: 1,
+            scheme: 'exact',
+            network: config.chainConfig.name,
+          },
+        ],
+      } satisfies X402SupportedResponse);
+    },
   };
 }
 
@@ -221,6 +265,20 @@ function validateRequirements(
       config.chainConfig.usdcAddress.toLowerCase()
   ) {
     return 'asset does not match USDC address for this chain';
+  }
+  // Validate network against the configured chainId. Without this, a client
+  // sending `network: "polygon"` to an Anvil-configured Town would silently
+  // accept and proceed; the request would only fail later (or worse, succeed
+  // and produce confusing on-chain behavior).
+  if (!requirements.network) {
+    return 'Missing network';
+  }
+  const networkChainId = KNOWN_X402_NETWORKS[requirements.network];
+  if (networkChainId === undefined) {
+    return `Unsupported network "${requirements.network}"`;
+  }
+  if (networkChainId !== config.chainConfig.chainId) {
+    return `network mismatch: "${requirements.network}" resolves to chainId ${networkChainId}, but this facilitator is configured for chainId ${config.chainConfig.chainId}`;
   }
   return null;
 }

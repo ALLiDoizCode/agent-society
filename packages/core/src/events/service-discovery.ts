@@ -75,12 +75,18 @@ export interface ServiceDiscoveryContent {
     enabled: boolean;
     /** HTTP endpoint path (e.g., '/publish'). */
     endpoint?: string;
-    /** Facilitator endpoint paths for verify and settle operations. */
+    /** Facilitator endpoint paths for verify, settle, and supported operations. */
     facilitatorEndpoints?: {
       /** HTTP path for the /verify endpoint. */
       verify: string;
       /** HTTP path for the /settle endpoint. */
       settle: string;
+      /**
+       * HTTP path for the GET /supported endpoint (Coinbase x402 spec
+       * facilitator discovery). Optional for backward compatibility with
+       * older nodes that only advertised verify/settle.
+       */
+      supported?: string;
     };
   };
   /** Nostr event kinds this node accepts for storage. */
@@ -238,7 +244,14 @@ export function parseServiceDiscovery(
       const verify = feRecord['verify'];
       const settle = feRecord['settle'];
       if (typeof verify !== 'string' || typeof settle !== 'string') return null;
-      x402Result.facilitatorEndpoints = { verify, settle };
+      const supported = feRecord['supported'];
+      // `supported` is optional (backward compat with older nodes), but
+      // if present it must be a string — otherwise the whole event is invalid.
+      if (supported !== undefined && typeof supported !== 'string') return null;
+      x402Result.facilitatorEndpoints =
+        supported !== undefined
+          ? { verify, settle, supported }
+          : { verify, settle };
     }
 
     result.x402 = x402Result;

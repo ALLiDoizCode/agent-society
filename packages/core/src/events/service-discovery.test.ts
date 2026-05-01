@@ -1186,6 +1186,75 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       expect(result).toBeNull();
     });
 
+    it('parses facilitatorEndpoints.supported when present (optional field)', () => {
+      // Arrange: x402 with all three facilitator endpoints including the
+      // newly-added /supported per the Coinbase x402 spec.
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.toon.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay', 'x402'],
+          chain: 'anvil',
+          version: '0.1.0',
+          x402: {
+            enabled: true,
+            endpoint: '/publish',
+            facilitatorEndpoints: {
+              verify: '/verify',
+              settle: '/settle',
+              supported: '/supported',
+            },
+          },
+        }),
+        tags: [['d', 'toon-service-discovery']],
+        created_at: Math.floor(Date.now() / 1000),
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+
+      expect(result).not.toBeNull();
+      expect(result!.x402!.facilitatorEndpoints).toBeDefined();
+      expect(result!.x402!.facilitatorEndpoints!.supported).toBe('/supported');
+    });
+
+    it('returns null when facilitatorEndpoints.supported is not a string', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.toon.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay', 'x402'],
+          chain: 'anvil',
+          version: '0.1.0',
+          x402: {
+            enabled: true,
+            endpoint: '/publish',
+            facilitatorEndpoints: {
+              verify: '/verify',
+              settle: '/settle',
+              supported: 42,
+            },
+          },
+        }),
+        tags: [['d', 'toon-service-discovery']],
+        created_at: Math.floor(Date.now() / 1000),
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
     it('parses fine when facilitatorEndpoints is absent (field is optional)', () => {
       // Arrange: x402 with endpoint but no facilitatorEndpoints
       const event = {

@@ -48,7 +48,8 @@ function makeSignedPayload(
   const payload: X402SignedPaymentPayload = {
     x402Version: 1,
     scheme: 'exact',
-    network: 'base-sepolia',
+    // Matches mockChainConfig.chainId (31337) per KNOWN_X402_NETWORKS map.
+    network: 'anvil',
     payload: {
       // 65-byte signature: r(32) + s(32) + v(1) = 64+64+2 = 130 hex chars
       signature: '0x' + 'd'.repeat(64) + 'e'.repeat(64) + '1b',
@@ -71,7 +72,8 @@ function makeRequirements(
 ): X402PaymentRequirements {
   return {
     scheme: 'exact',
-    network: 'base-sepolia',
+    // Matches mockChainConfig.chainId (31337) per KNOWN_X402_NETWORKS map.
+    network: 'anvil',
     maxAmountRequired: '1000000',
     resource: 'https://ar.io/some-file',
     payTo: FACILITATOR_ADDRESS,
@@ -229,6 +231,34 @@ describe('POST /verify', () => {
     expect(body.invalidReason).toMatch(/scheme/);
   });
 
+  it('returns isValid: false when network is unknown', async () => {
+    const app = makeApp(makeConfig());
+    const res = await post(
+      app,
+      '/verify',
+      makeRequest(undefined, { network: 'mars-mainnet' })
+    );
+    const body = await res.json();
+    expect(body.isValid).toBe(false);
+    expect(body.invalidReason).toMatch(/network/i);
+    // Settlement-side checks should NOT run for an unknown network.
+    expect(mockVerify).not.toHaveBeenCalled();
+  });
+
+  it('returns isValid: false when network resolves to a chainId that does not match this facilitator', async () => {
+    // 'base-sepolia' (84532) sent to a facilitator configured for chainId 31337
+    const app = makeApp(makeConfig());
+    const res = await post(
+      app,
+      '/verify',
+      makeRequest(undefined, { network: 'base-sepolia' })
+    );
+    const body = await res.json();
+    expect(body.isValid).toBe(false);
+    expect(body.invalidReason).toMatch(/network|chainId/i);
+    expect(mockVerify).not.toHaveBeenCalled();
+  });
+
   it('returns isValid: false on invalid base64 paymentPayload', async () => {
     const app = makeApp(makeConfig());
     const req = { ...makeRequest(), paymentPayload: '!!!notbase64!!!' };
@@ -254,7 +284,7 @@ describe('POST /settle', () => {
     expect(body).toMatchObject({
       success: true,
       txHash: '0xdeadbeef',
-      networkId: 'base-sepolia',
+      networkId: 'anvil',
       errorReason: null,
     });
   });
@@ -263,6 +293,22 @@ describe('POST /settle', () => {
     const app = makeApp(makeConfig({ x402Enabled: false }));
     const res = await post(app, '/settle', makeRequest());
     expect(res.status).toBe(404);
+  });
+
+  it('returns success: false on network/chainId mismatch (no settlement attempted)', async () => {
+    const app = makeApp(
+      makeConfig({ walletClient: {} as unknown as WalletClient })
+    );
+    const res = await post(
+      app,
+      '/settle',
+      makeRequest(undefined, { network: 'base-sepolia' })
+    );
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.errorReason).toMatch(/network|chainId/i);
+    expect(mockVerify).not.toHaveBeenCalled();
+    expect(mockSettle).not.toHaveBeenCalled();
   });
 
   it('returns success: false when verifyEip3009Auth fails (re-verify before settle)', async () => {
@@ -302,5 +348,46 @@ describe('POST /settle', () => {
     const app = makeApp(makeConfig()); // no walletClient
     const res = await post(app, '/settle', makeRequest());
     expect(res.status).toBe(500);
+  });
+});
+
+// ============================================================================
+// GET /supported tests
+// ============================================================================
+
+function makeAppWithSupported(config: X402FacilitatorHandlerConfig) {
+  const app = new Hono();
+  const handler = createX402FacilitatorHandler(config);
+  app.post('/verify', (c) => handler.handleVerify(c));
+  app.post('/settle', (c) => handler.handleSettle(c));
+  app.get('/supported', (c) => handler.handleSupported(c));
+  return app;
+}
+
+describe('GET /supported', () => {
+  it('returns the configured (scheme, network) pair when x402Enabled', async () => {
+    const app = makeAppWithSupported(makeConfig());
+    const res = await app.fetch(
+      new Request('http://localhost/supported', { method: 'GET' })
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      kinds: [
+        {
+          x402Version: 1,
+          scheme: 'exact',
+          network: 'anvil',
+        },
+      ],
+    });
+  });
+
+  it('returns 404 when x402Enabled is false', async () => {
+    const app = makeAppWithSupported(makeConfig({ x402Enabled: false }));
+    const res = await app.fetch(
+      new Request('http://localhost/supported', { method: 'GET' })
+    );
+    expect(res.status).toBe(404);
   });
 });
