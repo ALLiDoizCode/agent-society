@@ -851,11 +851,17 @@ describe('startTown() x402 facilitator wiring -- static analysis', () => {
     expect(source).toMatch(/app\.post\s*\(\s*['"]\/settle['"]/);
   });
 
+  it('town.ts wires facilitatorHandler.handleSupported to a GET route', () => {
+    expect(source).toContain('facilitatorHandler.handleSupported');
+    expect(source).toMatch(/app\.get\s*\(\s*['"]\/supported['"]/);
+  });
+
   it('town.ts includes facilitatorEndpoints in the service discovery block', () => {
     expect(source).toContain('facilitatorEndpoints');
-    // verify and settle paths appear inside the facilitatorEndpoints block
+    // verify, settle, and supported paths all appear in the block
     expect(source).toMatch(/facilitatorEndpoints\s*:\s*\{[^}]*verify\s*:/s);
     expect(source).toMatch(/facilitatorEndpoints\s*:\s*\{[^}]*settle\s*:/s);
+    expect(source).toMatch(/facilitatorEndpoints\s*:\s*\{[^}]*supported\s*:/s);
   });
 });
 

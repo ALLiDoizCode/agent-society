@@ -246,3 +246,25 @@ export interface X402SettleResponse {
   networkId: string | null;
   errorReason: string | null;
 }
+
+/**
+ * One (scheme, network) pair this facilitator supports, as returned by
+ * GET /supported per the Coinbase x402 facilitator spec. `extra` is
+ * reserved for scheme-specific metadata.
+ */
+export interface X402SupportedKind {
+  x402Version: number;
+  scheme: string;
+  network: string;
+  extra?: Record<string, unknown>;
+}
+
+/**
+ * Response body for GET /supported (Coinbase x402 facilitator spec).
+ *
+ * Allows x402 clients to discover which (scheme, network) combinations
+ * a facilitator handles before attempting /verify or /settle.
+ */
+export interface X402SupportedResponse {
+  kinds: X402SupportedKind[];
+}

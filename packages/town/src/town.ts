@@ -962,6 +962,7 @@ export async function startTown(config: TownConfig): Promise<TownInstance> {
 
   app.post('/verify', (c: Context) => facilitatorHandler.handleVerify(c));
   app.post('/settle', (c: Context) => facilitatorHandler.handleSettle(c));
+  app.get('/supported', (c: Context) => facilitatorHandler.handleSupported(c));
 
   const blsServer: ServerType = serve({
     fetch: app.fetch,
@@ -1187,6 +1188,7 @@ export async function startTown(config: TownConfig): Promise<TownInstance> {
           facilitatorEndpoints: {
             verify: '/verify',
             settle: '/settle',
+            supported: '/supported',
           },
         };
       }
