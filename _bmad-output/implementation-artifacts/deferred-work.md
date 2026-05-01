@@ -1,4 +1,18 @@
 
+## Deferred from: code review of 21-13-dashboard-wallet-and-keys-view (2026-04-30)
+
+- Multi-chain RPC mapping (per-`nodeType` RPC URL) for non-EVM withdrawal — story is EVM-only single-RPC v1 per Dev Notes § Withdrawal scope; revisit when Solana/Mina send-side lands. [packages/townhouse/src/api/routes/wallet-withdraw.ts]
+- Burn-address (`0x0000…0000`) confirm step in WithdrawModal — devtool scope, not blocking. [packages/townhouse-web/src/components/WithdrawModal.tsx step 3]
+- Self-send warning when `recipient === wallet address` — not in spec. [packages/townhouse-web/src/components/WithdrawModal.tsx step 3]
+- Cache key including `rpcUrl` for multi-RPC environments — single-RPC v1. [packages/townhouse/src/api/routes/wallet-balances.ts]
+- Mnemonic JS-string secure-zero (true buffer wipe) — JS string immutability; spec's "zero out from React state" is met. Future hardening would need a `Uint8Array` shape end-to-end (route → JSON → React). [packages/townhouse-web/src/components/RevealSeedModal.tsx]
+- `formatDerivationPath` hard-codes account-index at split-slot 3 — works for current BIP-44 schemas (EVM/Nostr/Solana/Mina). Future-proof if a non-standard path is added. [packages/townhouse-web/src/components/AddressBlock.tsx]
+- `keyInfo.solanaAddress`/`minaAddress` for non-mill nodeTypes silently ignored — current spec only Mill exposes those chains. [packages/townhouse/src/api/routes/wallet-balances.ts task generation]
+- Reveal endpoint rate-limit / brute-force backoff — Threat model § acknowledges localhost-only mitigation; needed if remote bind becomes supported. [packages/townhouse/src/api/routes/wallet-reveal.ts]
+- Solana/Mina RPC hung-task wedge — 3 s per-fetch timeout already; aggregate circuit-breaker is future hardening. [packages/townhouse/src/chain/{solana-rpc,mina-graphql}.ts]
+- AddressBlock `<details>` `aria-expanded` mirroring — browser handles natively today; revisit if assistive-tech reports gaps. [packages/townhouse-web/src/components/AddressBlock.tsx]
+- USDC-capture script `tail -n1 | sed` parsing brittleness — works with current `deploy-mock-usdc.sh` output format. Harden if the deploy script signature changes. [scripts/townhouse-dev-infra.sh:160-176]
+
 ## Deferred from: code review of 21-12-dashboard-dvm-management-view (2026-04-30)
 
 - PATCH `/api/nodes/dvm/config` is type-level not instance-level — slider on `dev-dvm-01` card applies to all DVM nodes. `void nodeId` comment in the diff acknowledges. The 21.11 multi-instance refactor scoped health/swaps/deposit-addresses by `:nodeId` but did not refactor PATCH. Promote to per-instance scope in a future story. [packages/townhouse-web/src/views/Dvm.tsx handleApplyKindFee, packages/townhouse/src/api/routes/nodes-patch.ts]

@@ -158,14 +158,25 @@ cmd_up() {
   # Deploy Mock USDC (reuse existing script)
   # NOTE: The Anvil compose entrypoint also deploys USDC via DeployLocal.s.sol.
   # This call is a redundant fallback; deploy-mock-usdc.sh reads RPC_URL.
+  local usdc_address=""
   if [ -f "$REPO_ROOT/scripts/deploy-mock-usdc.sh" ]; then
     log_info "Deploying Mock USDC to Anvil..."
-    RPC_URL="http://localhost:28545" \
-      bash "$REPO_ROOT/scripts/deploy-mock-usdc.sh" 2>/dev/null || \
-      log_warning "Mock USDC deploy failed (non-fatal — check Anvil logs)"
+    local usdc_output
+    usdc_output=$(RPC_URL="http://localhost:28545" \
+      bash "$REPO_ROOT/scripts/deploy-mock-usdc.sh" 2>/dev/null) || true
+    # Last line printed by deploy-mock-usdc.sh is: "  TOON_USDC_ADDRESS=0x..."
+    local captured
+    captured=$(echo "$usdc_output" | grep 'TOON_USDC_ADDRESS=' | tail -n1 | sed 's/.*TOON_USDC_ADDRESS=//' | tr -d '[:space:]')
+    if echo "$captured" | grep -qE '^0x[0-9a-fA-F]{40}$'; then
+      usdc_address="$captured"
+      log_success "Mock USDC deployed at $usdc_address"
+    else
+      log_warning "Mock USDC address capture failed (non-fatal — wallet USDC balance will show unavailable)"
+    fi
   else
     log_warning "scripts/deploy-mock-usdc.sh not found — skipping Mock USDC deploy"
   fi
+  export TOON_USDC_ADDRESS="${usdc_address}"
 
   # Wait for Solana
   wait_for_health "http://localhost:28899/health" "Solana validator" 30
@@ -316,6 +327,12 @@ TOWNHOUSE_DEV_SOCKS5=socks5://127.0.0.1:28050
 # Chain contract addresses
 SOLANA_PROGRAM_ID=${solana_program_id}
 MINA_ZKAPP_ADDRESS=${mina_zkapp_address}
+TOON_USDC_ADDRESS=${usdc_address}
+
+# Dev wallet — BIP-39 test-vector-zero phrase; PUBLICLY KNOWN — DEV ONLY
+# Used by the dev API loop (api-server.mjs) to auto-initialize WalletManager
+# without requiring `townhouse init`. NEVER set this in production.
+TOWNHOUSE_DEV_WALLET_MNEMONIC='abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
 
 # Node pubkeys (derived from deterministic dev keys — DEV ONLY)
 TOWNHOUSE_DEV_TOWN_01_PUBKEY=${town01_pubkey}
@@ -363,6 +380,9 @@ EOF
   fi
   if [ -n "$mina_zkapp_address" ]; then
     echo "  Mina zkApp:        $mina_zkapp_address"
+  fi
+  if [ -n "$usdc_address" ]; then
+    echo "  Mock USDC:         $usdc_address"
   fi
   echo ""
   echo "  Smoke test: pnpm --filter @toon-protocol/townhouse test:integration -- dev-stack-smoke"
