@@ -1,4 +1,17 @@
 
+## Deferred from: code review of 21-15-ator-privacy-transport-and-connectivity-status (2026-05-01)
+
+- AC-5 validateConfig round-trip failure path untested — implementation is correct, only the assertion is missing. [packages/townhouse/src/api/routes/transport.ts:146-161]
+- AC-3 rollback test asserts mock `saveConfig` call count, not actual on-disk reversion — true integration test would need a temp filesystem. [packages/townhouse/src/api/routes/transport.test.ts:278-297]
+- No-op detection runs before mutex acquire (AC-3 ordering deviation) — no mutation occurs and AC accepts either ordering operationally. [packages/townhouse/src/api/routes/transport.ts:120-131]
+- Concurrent GET during PATCH torn read — single-machine sub-Hz operation; consequence is one stale poll. [packages/townhouse/src/api/routes/transport.ts]
+- PATCH allows `activeNodes === []` (connector restart with no peers) — pre-existing pattern shared with nodes-patch.ts. [packages/townhouse/src/api/routes/transport.ts:167-169]
+- Module-level mutex potential dual-import (esm/cjs) — pure-ESM monorepo; only manifests under future bundler change. [packages/townhouse/src/api/config-mutex.ts]
+- `<TransportStatusPanel>` `lastProbedAt > 24 h ago` renders as "500 hr ago" — only manifests if probe is broken (its own surfaced state). [packages/townhouse-web/src/components/TransportStatusPanel.tsx:7-14]
+- `<SettingsView>` no-op success has no user feedback — Save button disable handles the practical case. [packages/townhouse-web/src/views/Settings.tsx]
+- AC-20 SPA-side `import.meta.env.DEV` guard absent — server-side hook in dev API server is equivalent (script never ships in production builds). [packages/townhouse-web/scripts/api-server.mjs]
+- Massive prettier reformatting drift across 60+ files — required by Dev Notes "Lint/format after every set of file edits"; no semantic changes detected in sampled files.
+
 ## Deferred from: code review of 21-13-dashboard-wallet-and-keys-view (2026-04-30)
 
 - Multi-chain RPC mapping (per-`nodeType` RPC URL) for non-EVM withdrawal — story is EVM-only single-RPC v1 per Dev Notes § Withdrawal scope; revisit when Solana/Mina send-side lands. [packages/townhouse/src/api/routes/wallet-withdraw.ts]

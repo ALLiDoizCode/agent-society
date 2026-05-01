@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-01 (story 21.14 → done — first-run setup wizard reviewed: 34 patches applied, 6 deferred, 16 dismissed; 616 townhouse + 348 townhouse-web tests green)
+# last_updated: 2026-05-01 (story 21.15 → done — ATOR privacy transport + connectivity status; code review applied 44 patches and resolved 6 decisions)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -446,7 +446,7 @@ development_status:
   21-12-dashboard-dvm-management-view: done
   21-13-dashboard-wallet-and-keys-view: done
   21-14-first-run-setup-wizard: done
-  21-15-ator-privacy-transport-and-connectivity-status: backlog
+  21-15-ator-privacy-transport-and-connectivity-status: done
   21-16-e2e-integration-tests: backlog
   21-17-publish-package: backlog
   epic-21-retrospective: optional
