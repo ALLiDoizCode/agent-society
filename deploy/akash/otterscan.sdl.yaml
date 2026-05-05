@@ -1,0 +1,61 @@
+---
+# Otterscan — purpose-built EVM block explorer for Anvil dev chains.
+#
+# Replaces Blockscout (which proved unsuitable for our all-in-one
+# deployment — modern blockscout/blockscout:latest is built for a
+# multi-service split). Otterscan ships as a single static React frontend
+# served by nginx; it talks to our Anvil RPC directly via fetch.
+#
+# Image: otterscan/otterscan:latest (Docker Hub, public, ~50MB)
+# Config:
+#   ERIGON_URL — RPC endpoint (Anvil supports the JSON-RPC subset Otterscan
+#                expects, including debug_traceTransaction)
+#   CHAIN_ID, CHAIN_NAME — display labels for the chain selector
+#
+# The frontend uses hash-router URLs:
+#   <host>/#/                        — landing
+#   <host>/#/tx/<hash>               — tx detail
+#   <host>/#/address/<addr>          — address page
+#   <host>/#/block/<number>          — block detail
+#
+# Prerequisite: anvil.sdl.yaml must be deployed first.
+# scripts/akash-deploy.sh templates ANVIL_RPC_URL into the env at deploy time.
+
+version: "2.0"
+
+services:
+  otterscan:
+    image: otterscan/otterscan:latest
+    env:
+      - ERIGON_URL=$ANVIL_RPC_URL
+      - BEACON_API_URL=
+      - ASSETS_URL=https://assets.otterscan.io
+    expose:
+      - port: 80
+        as: 80
+        proto: tcp
+        to:
+          - global: true
+
+profiles:
+  compute:
+    otterscan:
+      resources:
+        cpu:
+          units: 0.25
+        memory:
+          size: 256Mi
+        storage:
+          size: 1Gi
+  placement:
+    dcloud:
+      pricing:
+        otterscan:
+          denom: uakt
+          amount: 1000
+
+deployment:
+  otterscan:
+    dcloud:
+      profile: otterscan
+      count: 1

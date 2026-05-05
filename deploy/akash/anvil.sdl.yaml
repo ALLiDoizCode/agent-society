@@ -1,0 +1,68 @@
+---
+# Town EVM Devnet — Anvil on Akash Network
+#
+# Deploys a Foundry Anvil node with TOON's EVM contracts pre-deployed and
+# test accounts pre-funded with Mock USDC. Chain-id 31338 (separated from
+# local dev 31337 to avoid collision in mill configs).
+#
+# Image: ghcr.io/toon-protocol/akash-anvil:demo
+#   Built from docker/Dockerfile.akash-anvil — bakes contracts/evm + foundry.
+#   See scripts/akash-deploy.sh for build + push commands.
+#
+# State: anvil writes --state /data/state.json to the container's writable
+# layer (no persistent volume). Restart/redeploy = fresh chain; entrypoint
+# redeploys contracts on first boot when state.json is absent.
+# Persistent storage was dropped because the `class: beta2` requirement
+# narrowed bidding to a single provider whose ingress later 502'd.
+#
+# Pricing: 1500 uakt per block (~$3-5/mo at typical AKT prices).
+
+version: "2.0"
+
+services:
+  anvil:
+    image: ghcr.io/toon-protocol/akash-anvil:demo
+    env:
+      # Chain-id 31337 matches the `anvil` preset in
+      # packages/core/src/chain/chain-config.ts so mills connecting via
+      # TOON_RPC_URL=<this-lease's URL> resolve the correct chain config
+      # without needing a TOON_CHAIN_ID override.
+      - CHAIN_ID=31337
+      - ANVIL_HOST=0.0.0.0
+      - ANVIL_PORT=8545
+      - ANVIL_ACCOUNTS=10
+      - ANVIL_BALANCE=10000
+      - ANVIL_BLOCK_TIME=2
+    expose:
+      # `as: 80` triggers Akash's L7 HTTP ingress — provider issues a
+      # *.ingress.<provider> hostname with automatic Let's Encrypt TLS,
+      # which is required so HTTPS dashboards (Otterscan) can fetch us
+      # without browser mixed-content blocking.
+      - port: 8545
+        as: 80
+        proto: tcp
+        to:
+          - global: true
+
+profiles:
+  compute:
+    anvil:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 1Gi
+        storage:
+          - size: 2Gi
+  placement:
+    dcloud:
+      pricing:
+        anvil:
+          denom: uakt
+          amount: 1500
+
+deployment:
+  anvil:
+    dcloud:
+      profile: anvil
+      count: 1

@@ -1,0 +1,29 @@
+{
+  "anvil": {
+    "dseq": "26688662",
+    "provider": "akash1k94uya5rhrtj9rfw850az9aq2d6vdpjmtnlgd0",
+    "host": "2va0r02e1d8hf95o9ph9icopkc.ingress.boogle.cloud",
+    "port": 443,
+    "url": "https://2va0r02e1d8hf95o9ph9icopkc.ingress.boogle.cloud",
+    "image_digest": "sha256:af3208f87cfd468af8ed9a5d1263b05c37d6ec92d61283f2de64c4e95b975abc",
+    "deployed_at": "2026-05-05T14:07:42Z"
+  },
+  "solana": {
+    "dseq": "26688675",
+    "provider": "akash15ksejj7g4su7ljufsg0a8eglvkje94z8qsh68a",
+    "host": "v5ta99r8p18apc98gn7huedu88.ingress.akash-palmito.org",
+    "port": 443,
+    "url": "https://v5ta99r8p18apc98gn7huedu88.ingress.akash-palmito.org",
+    "image_digest": "sha256:764f57d8390e184e0013795502ada32c886b3abcbecc399668861e59f28d83a1",
+    "deployed_at": "2026-05-05T14:09:11Z"
+  },
+  "otterscan": {
+    "dseq": "26688687",
+    "provider": "akash175llqyjvxfle9qwt740vm46772dzaznpzgm576",
+    "host": "qq180gekkh8ur2f2ja0vidjjl0.ingress.cpu.aesservices.net",
+    "port": 443,
+    "url": "https://qq180gekkh8ur2f2ja0vidjjl0.ingress.cpu.aesservices.net",
+    "image_digest": "",
+    "deployed_at": "2026-05-05T14:10:23Z"
+  }
+}

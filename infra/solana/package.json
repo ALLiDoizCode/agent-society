@@ -1,0 +1,10 @@
+{
+  "name": "@toon-protocol/solana-bootstrap",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Mock USDC bootstrap for Akash Solana test-validator. Not a workspace package — bundled directly into docker/Dockerfile.akash-solana via npm install at image build.",
+  "type": "module",
+  "dependencies": {
+    "@noble/curves": "^1.8.0"
+  }
+}

@@ -1,0 +1,70 @@
+---
+# Town SOL Devnet — Solana test-validator on Akash Network
+#
+# Deploys a solana-test-validator with TOON's SPL programs loaded at genesis
+# and pre-funded keypairs. RPC + WebSocket exposed globally.
+#
+# Image: ghcr.io/toon-protocol/akash-solana:demo
+#   Built from docker/Dockerfile.akash-solana — bakes infra/solana/entrypoint.sh
+#   + contracts/solana/*.so + solana-test-validator binary.
+#   See scripts/akash-deploy.sh for build + push commands.
+#
+# State: ledger lives in the container's writable layer (no persistent
+# volume). entrypoint.sh runs `solana-test-validator --reset` regardless,
+# so persistence is moot — every restart is a fresh chain. The bootstrap
+# step (infra/solana/bootstrap-usdc.mjs) recreates the Mock USDC mint +
+# faucet treasury idempotently after each ready signal.
+# Persistent storage was dropped because the `class: beta2` requirement
+# narrowed bidding to the single provider whose ingress later wedged
+# (matching the same fix applied to anvil.sdl.yaml).
+#
+# Pricing: 5000 uakt per block (~$10-15/mo) — solana-test-validator is heavier
+# than Anvil (more CPU, memory, ledger growth).
+
+version: "2.0"
+
+services:
+  solana:
+    image: ghcr.io/toon-protocol/akash-solana:demo
+    env:
+      - SOLANA_RPC_PORT=8899
+      - SOLANA_WS_PORT=8900
+      - SOLANA_LEDGER=/data/test-ledger
+      - SOLANA_LIMIT_LEDGER_SIZE=50000000
+    expose:
+      # `as: 80` triggers Akash's L7 HTTP ingress (HTTPS via Let's Encrypt).
+      # Required so an HTTPS dashboard / explorer can fetch from us without
+      # browser mixed-content blocking. Each `as: 80` expose on the same
+      # service gets a distinct ingress hostname.
+      - port: 8899
+        as: 80
+        proto: tcp
+        to:
+          - global: true
+      - port: 8900
+        as: 80
+        proto: tcp
+        to:
+          - global: true
+profiles:
+  compute:
+    solana:
+      resources:
+        cpu:
+          units: 2
+        memory:
+          size: 4Gi
+        storage:
+          - size: 16Gi
+  placement:
+    dcloud:
+      pricing:
+        solana:
+          denom: uakt
+          amount: 5000
+
+deployment:
+  solana:
+    dcloud:
+      profile: solana
+      count: 1
