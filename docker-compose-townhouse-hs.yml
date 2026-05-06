@@ -281,7 +281,14 @@ services:
       - '127.0.0.1:3100:3100'
     environment:
       # nosemgrep: detect-insecure-websocket -- Docker-internal
+      # CONNECTOR_URL is the parent connector's BTP endpoint. Town's embedded
+      # ConnectorNode dials it as a child peer and installs a self-route on
+      # ILP_ADDRESS so packets land in the in-process relay handler with zero
+      # fees on the local hop.
       CONNECTOR_URL: ws://townhouse-hs-connector:3000
+      ILP_ADDRESS: g.townhouse.town
+      NODE_ID: town
+      PARENT_PEER_ID: apex
       FEE_PER_EVENT: '0'
       NODE_NOSTR_PUBKEY: ''
       NODE_EVM_ADDRESS: ''
