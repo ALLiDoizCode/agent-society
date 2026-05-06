@@ -87,7 +87,7 @@ services:
   # (managed=false in the YAML) and uses an explicit externalUrl that was
   # rendered into the YAML before base64-encoding.
   connector:
-    image: ghcr.io/toon-protocol/connector:3.3.3
+    image: ghcr.io/toon-protocol/connector:3.4.0
     env:
       - CONFIG_FILE=/config/connector.yaml
       - CONNECTOR_ADMIN_PORT=9401
