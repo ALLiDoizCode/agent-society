@@ -41,6 +41,11 @@ DEPOSIT_ANVIL=5
 DEPOSIT_SOLANA=10
 DEPOSIT_BLOCKSCOUT=15
 DEPOSIT_SOLANA_EXPLORER=5
+# ATOR probe is a short-lived derisking deploy (~hour, not month). Min deposit.
+DEPOSIT_ATOR_PROBE=5
+# Townhouse — full operator stack (apex connector + town + mill + dvm + faucet)
+# behind a .anyone hidden service. 5 services × ~30d at SDL prices ≈ $10.
+DEPOSIT_TOWNHOUSE=10
 
 # Compute build SHAs from inputs the image actually depends on.
 ANVIL_SHA="$(
@@ -54,6 +59,16 @@ SOLANA_SHA="$(
   | sha256sum | head -c 12
 )"
 SOLANA_EXPLORER_SHA="$(sha256sum "$ROOT/docker/Dockerfile.akash-solana-explorer" 2>/dev/null | head -c 12 || echo unknown)"
+# ATOR probe SHA covers the Dockerfile + entrypoint + checksums (the .deb itself
+# is content-addressed by the checksum file, so a checksum bump = new image).
+ATOR_PROBE_SHA="$(
+  cat \
+    "$ROOT/docker/akash-ator-probe/Dockerfile" \
+    "$ROOT/docker/akash-ator-probe/entrypoint.sh" \
+    "$ROOT/docker/akash-ator-probe/checksums.txt" \
+    2>/dev/null \
+  | sha256sum | head -c 12
+)"
 
 ANVIL_IMAGE_TAGGED="ghcr.io/toon-protocol/akash-anvil:sha-$ANVIL_SHA"
 ANVIL_IMAGE_DEMO="ghcr.io/toon-protocol/akash-anvil:demo"
@@ -61,6 +76,8 @@ SOLANA_IMAGE_TAGGED="ghcr.io/toon-protocol/akash-solana:sha-$SOLANA_SHA"
 SOLANA_IMAGE_DEMO="ghcr.io/toon-protocol/akash-solana:demo"
 SOLANA_EXPLORER_IMAGE_TAGGED="ghcr.io/toon-protocol/akash-solana-explorer:sha-$SOLANA_EXPLORER_SHA"
 SOLANA_EXPLORER_IMAGE_DEMO="ghcr.io/toon-protocol/akash-solana-explorer:demo"
+ATOR_PROBE_IMAGE_TAGGED="ghcr.io/toon-protocol/akash-ator-probe:sha-$ATOR_PROBE_SHA"
+ATOR_PROBE_IMAGE_DEMO="ghcr.io/toon-protocol/akash-ator-probe:demo"
 
 require_env() {
   for v in "$@"; do
@@ -184,10 +201,23 @@ probe_otterscan() {
 }
 
 probe_http_200() {
+  # -k tolerates self-signed certs. Some Akash providers issue them on the
+  # ingress; we don't care about chain trust for liveness probes — we only
+  # care that *something* is responding 200 on the configured port. The
+  # round-trip security model relies on Tor / Anyone, not the lease URL.
   local code
-  code="$(curl -sf -m 5 -o /dev/null -w '%{http_code}' "$1" 2>/dev/null || echo 000)"
+  code="$(curl -sf -k -m 5 -o /dev/null -w '%{http_code}' "$1" 2>/dev/null || echo 000)"
   [ "$code" = "200" ]
 }
+
+# ator-probe has no public ingress (no `expose:` in its SDL), so there's
+# nothing to HTTP-probe. cmd_ator_probe handles its own readiness signal
+# directly (lease state == active + the round-trip test through SOCKS5).
+# Connector .anon vs .anyone hostname-suffix discrepancy: connector source in
+# packages/connector/src/config/ uses `.anon` everywhere, but live anon
+# v0.4.10.0-beta emits `.anyone`. This means the connector's log-redaction
+# logic in config-loader.ts will silently fail to redact real hostnames —
+# worth a connector-side fix before townhouse wires server-side ATOR.
 
 cmd_build() {
   require_cli docker
@@ -213,6 +243,23 @@ cmd_build() {
     docker push "$SOLANA_EXPLORER_IMAGE_TAGGED"
     docker push "$SOLANA_EXPLORER_IMAGE_DEMO"
   fi
+}
+
+# Build (and push) the ATOR probe image only. Kept separate from cmd_build so
+# the chain images aren't rebuilt unnecessarily during ATOR derisking.
+cmd_build_ator_probe() {
+  require_cli docker
+  echo "Building $ATOR_PROBE_IMAGE_TAGGED + :demo..."
+  # Build context is docker/akash-ator-probe/ — the image only needs that dir's
+  # contents (Dockerfile, checksums.txt, entrypoint.sh).
+  docker build \
+    -f "$ROOT/docker/akash-ator-probe/Dockerfile" \
+    -t "$ATOR_PROBE_IMAGE_TAGGED" \
+    -t "$ATOR_PROBE_IMAGE_DEMO" \
+    "$ROOT/docker/akash-ator-probe"
+  echo "Pushing ator-probe image (both tags)..."
+  docker push "$ATOR_PROBE_IMAGE_TAGGED"
+  docker push "$ATOR_PROBE_IMAGE_DEMO"
 }
 
 image_digest() {
@@ -375,6 +422,19 @@ cmd_resume() {
     blockscout) service=blockscout; port=4000; probe_fn=probe_blockscout ;;
     otterscan) service=otterscan; port=80; probe_fn=probe_otterscan ;;
     solana-explorer) service=solana-explorer; port=3000; probe_fn=probe_http_200; image_digest="$(image_digest "$SOLANA_EXPLORER_IMAGE_DEMO" 2>/dev/null || true)" ;;
+    ator-probe)
+      # `resume` doesn't apply: cmd_ator_probe owns its own deploy flow
+      # (no-ingress, no HTTP poll). Re-run cmd_ator_probe to redeploy with
+      # the cached keypair, or pass --reuse-dseq to attach to an in-flight
+      # deployment (not yet implemented).
+      echo "ator-probe doesn't support 'resume' — re-run 'scripts/akash-deploy.sh ator-probe' instead." >&2
+      exit 1 ;;
+    townhouse)
+      # Same shape as ator-probe: cmd_townhouse owns its own deploy flow
+      # (renders SDL with templated chain URLs + HS keypair). Re-run
+      # cmd_townhouse — the cached keypair preserves the .anyone hostname.
+      echo "townhouse doesn't support 'resume' — re-run 'scripts/akash-deploy.sh townhouse' instead." >&2
+      exit 1 ;;
     *) echo "Unknown service: $name" >&2; exit 1 ;;
   esac
 
@@ -398,6 +458,261 @@ cmd_resume() {
 
   echo "[$name] Resuming dseq=$dseq provider=$provider"
   await_lease_ready "$name" "$dseq" "$provider" "$service" "$port" "$probe_fn" "$image_digest"
+}
+
+# Generate (or reuse) the v3 hidden-service keypair used by the probe. Keys
+# live under deploy/akash/ator-probe-keys/hs/ — gitignored, never committed.
+# The .anyone hostname is deterministic across redeploys as long as this
+# directory is preserved.
+#
+# We DON'T bind-mount the host dir into the container because anon refuses
+# to load /var/lib/anon when its ownership disagrees with the running user
+# (root vs host's uid 1000) — it logs "free(): invalid size" and segfaults.
+# Instead, we let anon write keys to the container's own filesystem and pull
+# them out via `docker cp` after the hostname file appears.
+ensure_ator_probe_keys() {
+  require_cli docker
+  local keys_dir="$SDL_DIR/ator-probe-keys"
+  if [ -s "$keys_dir/hs/hostname" ] && [ -s "$keys_dir/hs/hs_ed25519_secret_key" ]; then
+    return 0
+  fi
+  echo "[ator-probe] generating fresh v3 keypair..."
+  rm -rf "$keys_dir"
+  mkdir -p "$keys_dir"
+  # No --rm: we need the container alive long enough to docker-cp out of it.
+  # No volume mount: anon writes to its container-internal /var/lib/anon
+  # which has correct root ownership (set in Dockerfile).
+  local cid
+  cid="$(docker run -d --name ator-probe-keygen "$ATOR_PROBE_IMAGE_DEMO")"
+  local waited=0
+  while [ "$waited" -lt 15 ]; do
+    if docker exec "$cid" test -s /var/lib/anon/hs/hostname 2>/dev/null; then
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if ! docker exec "$cid" test -s /var/lib/anon/hs/hostname 2>/dev/null; then
+    echo "[ator-probe] ERROR: keypair generation failed in container after ${waited}s" >&2
+    echo "[ator-probe] container logs (last 20 lines):" >&2
+    docker logs "$cid" 2>&1 | tail -20 >&2
+    docker rm -f "$cid" >/dev/null 2>&1 || true
+    exit 1
+  fi
+  # Copy the full hs/ tree out — preserves the secret key + hostname + pub key.
+  docker cp "$cid:/var/lib/anon/hs" "$keys_dir/hs"
+  docker rm -f "$cid" >/dev/null 2>&1 || true
+  echo "[ator-probe] generated .anyone hostname: $(cat "$keys_dir/hs/hostname")"
+}
+
+# Render the probe SDL with HS_SECRET_KEY_B64 substituted for the placeholder.
+# Output goes to stdout so the caller can pipe to the API.
+render_ator_probe_sdl() {
+  local keys_dir="$SDL_DIR/ator-probe-keys"
+  local sdl_template="$SDL_DIR/ator-probe.sdl.yaml"
+  local secret_b64
+  secret_b64="$(base64 -w0 "$keys_dir/hs/hs_ed25519_secret_key")"
+  # `sed` with a delimiter unlikely to appear in base64 (`|`) — base64 only
+  # contains [A-Za-z0-9+/=].
+  sed "s|__HS_SECRET_KEY_B64__|$secret_b64|" "$sdl_template"
+}
+
+cmd_ator_probe() {
+  require_env AKASH_CONSOLE_API_KEY
+  require_cli curl jq docker
+
+  ensure_ator_probe_keys
+
+  local keys_dir="$SDL_DIR/ator-probe-keys"
+  local hostname digest
+  hostname="$(cat "$keys_dir/hs/hostname")"
+  digest="$(image_digest "$ATOR_PROBE_IMAGE_DEMO")"
+
+  echo "[ator-probe] target .anyone: $hostname"
+
+  # Render the SDL template (substitute HS_SECRET_KEY_B64) into a temp file
+  # so deploy_sdl can `cat` it like every other SDL. The temp file is wiped
+  # on script exit — the secret never persists outside the keys dir.
+  local rendered_sdl
+  rendered_sdl="$(mktemp --suffix=.sdl.yaml)"
+  # `${var-}` expansion guards against `set -u` firing on the trap if the
+  # function exits via a different path before $rendered_sdl is in scope.
+  trap 'rm -f "${rendered_sdl-}"' EXIT
+  render_ator_probe_sdl > "$rendered_sdl"
+
+  # Reuse the standard deploy_sdl flow. The container's port 8080 hosts a
+  # tiny socat HTTP responder (200 OK) just so Akash's manifest validator
+  # accepts the deployment and the kubelet readiness probe passes — it's
+  # NOT the operational access path. The hidden service is.
+  deploy_sdl ator-probe "$rendered_sdl" ator-probe 8080 probe_http_200 "$DEPOSIT_ATOR_PROBE" "$digest"
+
+  # Annotate the lease entry with the .anyone hostname (deploy_sdl wrote
+  # URL/host/port but doesn't know about the HS).
+  ensure_leases_file
+  local tmp
+  tmp="$(mktemp)"
+  jq --arg o "$hostname" '."ator-probe".onion = $o' "$LEASES_FILE" > "$tmp"
+  mv "$tmp" "$LEASES_FILE"
+
+  echo
+  echo "[ator-probe] Deployed."
+  echo "  .anyone: $hostname"
+  echo
+  echo "  Wait ~60-120s for the HS descriptor to publish, then run:"
+  echo "    scripts/townhouse-dev-infra.sh up   # if not already running"
+  echo "    scripts/akash-ator-probe-test.sh --socks 127.0.0.1:28050"
+}
+
+# Generate (or reuse) the v3 hidden-service keypair for the townhouse apex
+# connector. Keys live under deploy/akash/townhouse-keys/hs/ — gitignored.
+# The .anyone hostname is deterministic across redeploys as long as this
+# directory is preserved.
+#
+# Same pattern as ensure_ator_probe_keys: anon's strict ownership check on
+# /var/lib/anon means a host bind-mount segfaults (root-vs-uid-1000); we let
+# anon write to the container's own filesystem and `docker cp` the keypair
+# out. Reuses the ator-probe image since it carries the right anon binary
+# version and a known-working keygen path.
+ensure_townhouse_keys() {
+  require_cli docker
+  local keys_dir="$SDL_DIR/townhouse-keys"
+  if [ -s "$keys_dir/hs/hostname" ] && [ -s "$keys_dir/hs/hs_ed25519_secret_key" ]; then
+    return 0
+  fi
+  echo "[townhouse] generating fresh v3 keypair..."
+  rm -rf "$keys_dir"
+  mkdir -p "$keys_dir"
+  local cid
+  cid="$(docker run -d --name townhouse-keygen "$ATOR_PROBE_IMAGE_DEMO")"
+  local waited=0
+  while [ "$waited" -lt 15 ]; do
+    if docker exec "$cid" test -s /var/lib/anon/hs/hostname 2>/dev/null; then
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if ! docker exec "$cid" test -s /var/lib/anon/hs/hostname 2>/dev/null; then
+    echo "[townhouse] ERROR: keypair generation failed in container after ${waited}s" >&2
+    echo "[townhouse] container logs (last 20 lines):" >&2
+    docker logs "$cid" 2>&1 | tail -20 >&2
+    docker rm -f "$cid" >/dev/null 2>&1 || true
+    exit 1
+  fi
+  docker cp "$cid:/var/lib/anon/hs" "$keys_dir/hs"
+  docker rm -f "$cid" >/dev/null 2>&1 || true
+  echo "[townhouse] generated .anyone hostname: $(cat "$keys_dir/hs/hostname")"
+}
+
+# Render the townhouse SDL by substituting all 7 template tokens. Output goes
+# to stdout. Chain endpoints are resolved with a fallback chain:
+#   1. env vars from $ROOT/.env.townhouse-hs (if file exists)
+#   2. leases.json (.anvil.url, .solana.url) — Akash devnet profile
+#   3. localnet defaults (http://anvil:8545 etc.)
+#
+# Mock USDC defaults match the addresses baked into the akash-anvil and
+# akash-solana images (same as the laptop-compose localnet profile).
+render_townhouse_sdl() {
+  local keys_dir="$SDL_DIR/townhouse-keys"
+  local sdl_template="$SDL_DIR/townhouse.sdl.yaml"
+  local connector_yaml="$ROOT/docker/configs/townhouse-hs-connector.yaml"
+
+  # Source operator env file if present (gitignored — operator-managed).
+  if [ -f "$ROOT/.env.townhouse-hs" ]; then
+    # shellcheck disable=SC1091
+    set -a
+    . "$ROOT/.env.townhouse-hs"
+    set +a
+  fi
+
+  # Resolve chain endpoints with the documented fallback chain.
+  local evm_rpc evm_chain_id evm_usdc sol_rpc sol_usdc
+  evm_rpc="${EVM_RPC_URL:-$(jq -r '.anvil.url // empty' "$LEASES_FILE" 2>/dev/null || true)}"
+  evm_rpc="${evm_rpc:-http://localhost:8545}"
+  evm_chain_id="${EVM_CHAIN_ID:-31337}"
+  evm_usdc="${EVM_USDC_ADDRESS:-0x5FbDB2315678afecb367f032d93F642f64180aa3}"
+  sol_rpc="${SOLANA_RPC_URL:-$(jq -r '.solana.url // empty' "$LEASES_FILE" 2>/dev/null || true)}"
+  sol_rpc="${sol_rpc:-http://localhost:8899}"
+  sol_usdc="${SOLANA_USDC_MINT:-6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q}"
+
+  # Resolve the .anyone hostname from the local keypair and build the
+  # externalUrl. Phase 4 sidecar pattern: the connector YAML's externalUrl
+  # is rendered up-front (no runtime `auto` resolution — the SDK that does
+  # that is broken at v1.1.3). The same secret key gets seeded into the
+  # sidecar's HS dir so the published .anyone matches what the connector
+  # advertises to peers.
+  local hs_hostname external_url
+  hs_hostname="$(cat "$keys_dir/hs/hostname" | tr -d '\n')"
+  external_url="wss://${hs_hostname}/btp"
+
+  # Render the connector YAML template with the concrete externalUrl, THEN
+  # base64-encode. The SDL injects the encoded blob via CONNECTOR_CONFIG_YAML_B64.
+  local rendered_connector_yaml
+  rendered_connector_yaml="$(mktemp --suffix=.yaml)"
+  # shellcheck disable=SC2064
+  trap "rm -f '$rendered_connector_yaml'" RETURN
+  sed -e "s|__TOWNHOUSE_EXTERNAL_URL__|$external_url|g" \
+    "$connector_yaml" \
+    > "$rendered_connector_yaml"
+
+  # Base64-encode the rendered connector yaml + the HS secret key.
+  local connector_b64 secret_b64
+  connector_b64="$(base64 -w0 "$rendered_connector_yaml")"
+  secret_b64="$(base64 -w0 "$keys_dir/hs/hs_ed25519_secret_key")"
+
+  # `sed` with `|` delimiter — base64 only contains [A-Za-z0-9+/=], URLs may
+  # contain `/` so chain URLs can't use a `/` delimiter either.
+  sed \
+    -e "s|__CONNECTOR_CONFIG_YAML_B64__|$connector_b64|" \
+    -e "s|__HS_SECRET_KEY_B64__|$secret_b64|" \
+    -e "s|__EVM_RPC_URL__|$evm_rpc|g" \
+    -e "s|__EVM_CHAIN_ID__|$evm_chain_id|g" \
+    -e "s|__EVM_USDC_ADDRESS__|$evm_usdc|g" \
+    -e "s|__SOLANA_RPC_URL__|$sol_rpc|g" \
+    -e "s|__SOLANA_USDC_MINT__|$sol_usdc|g" \
+    "$sdl_template"
+}
+
+cmd_townhouse() {
+  require_env AKASH_CONSOLE_API_KEY
+  require_cli curl jq docker base64
+
+  ensure_leases_file
+  ensure_townhouse_keys
+
+  local keys_dir="$SDL_DIR/townhouse-keys"
+  local hostname
+  hostname="$(cat "$keys_dir/hs/hostname")"
+
+  echo "[townhouse] target .anyone: $hostname"
+
+  # Render the SDL template into a temp file so deploy_sdl can `cat` it like
+  # every other SDL. The temp file is wiped on exit — neither the secret key
+  # nor the operator's env vars persist outside the keys dir / .env file.
+  local rendered_sdl
+  rendered_sdl="$(mktemp --suffix=.sdl.yaml)"
+  trap 'rm -f "${rendered_sdl-}"' EXIT
+  render_townhouse_sdl > "$rendered_sdl"
+
+  # Readiness probing happens via the faucet service on port 3500 (the only
+  # exposed service per SDL — the connector is HS-only). probe_http_200 is
+  # sufficient since the faucet's UI returns 200 from its root path.
+  deploy_sdl townhouse "$rendered_sdl" faucet 3500 probe_http_200 "$DEPOSIT_TOWNHOUSE" ""
+
+  # Annotate the lease entry with the .anyone hostname (deploy_sdl wrote
+  # URL/host/port for the faucet but doesn't know about the HS).
+  local tmp
+  tmp="$(mktemp)"
+  jq --arg o "$hostname" '."townhouse".onion = $o' "$LEASES_FILE" > "$tmp"
+  mv "$tmp" "$LEASES_FILE"
+
+  echo
+  echo "[townhouse] Deployed."
+  echo "  .anyone:    $hostname"
+  echo "  faucet UI:  $(jq -r '.townhouse.url // "(pending)"' "$LEASES_FILE")"
+  echo
+  echo "  Wait ~60-120s for the HS descriptor to publish, then dial:"
+  echo "    btp+wss://$hostname:3000   # via anon SOCKS5"
 }
 
 cmd_anvil() {
@@ -620,6 +935,8 @@ cmd_redeploy() {
     blockscout) cmd_blockscout ;;
     otterscan) cmd_otterscan ;;
     solana-explorer) cmd_solana_explorer ;;
+    ator-probe) cmd_ator_probe ;;
+    townhouse) cmd_townhouse ;;
     *) echo "Unknown service: $name" >&2; exit 1 ;;
   esac
 }
@@ -704,11 +1021,14 @@ cmd_redeploy_all() {
 
 case "${1:-}" in
   build) cmd_build ;;
+  build-ator-probe) cmd_build_ator_probe ;;
   anvil) cmd_anvil ;;
   solana) cmd_solana ;;
   blockscout) cmd_blockscout ;;
   otterscan) cmd_otterscan ;;
   solana-explorer) cmd_solana_explorer ;;
+  ator-probe) cmd_ator_probe ;;
+  townhouse) cmd_townhouse ;;
   all) cmd_all ;;
   close) shift; cmd_close "$@" ;;
   redeploy) shift; cmd_redeploy "$@" ;;
@@ -721,6 +1041,7 @@ Usage: $0 <command>
 
 Commands:
   build              Build + push images (SHA-pinned + :demo tags)
+  build-ator-probe   Build + push the ATOR-probe image only
   anvil              Deploy anvil.sdl.yaml — writes leases.json
   solana             Deploy solana.sdl.yaml — writes leases.json (RPC + WS)
   otterscan          Deploy otterscan.sdl.yaml — EVM explorer (anvil must be up)
@@ -728,6 +1049,17 @@ Commands:
                      (Otterscan is the recommended replacement; this remains
                      for cases where the historical Blockscout config is preferred)
   solana-explorer    Deploy solana-explorer.sdl.yaml (solana must be up)
+  ator-probe         Deploy ator-probe.sdl.yaml — derisks anon-on-Akash by
+                     publishing a hidden service descriptor and exposing the
+                     .anon hostname at <lease>/hostname. Once deployed, run
+                     scripts/akash-ator-probe-test.sh for the round-trip test.
+  townhouse          Deploy townhouse.sdl.yaml — full operator stack (apex
+                     connector + town + mill + dvm + faucet) behind a .anyone
+                     hidden service. Reads chain endpoints from
+                     .env.townhouse-hs (or falls back to leases.json + local
+                     defaults). Generates / reuses an HS keypair under
+                     deploy/akash/townhouse-keys/ — gitignored, deterministic
+                     across redeploys.
   all                build + anvil + solana + otterscan + solana-explorer
   close <name>       Close a lease (DELETE /v1/deployments/{dseq})
   redeploy <name>    Close + redeploy, denylist prior provider

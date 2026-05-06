@@ -1,0 +1,412 @@
+# Townhouse — Hidden Service mode (laptop / operator stack, Phase 4 sidecar)
+#
+# Architecture: apex connector + child nodes (town/mill/dvm) + ator-sidecar
+# that publishes a `.anyone` hidden service forwarding to the apex connector's
+# BTP server. The connector treats the sidecar as an external SOCKS5 proxy
+# (managed=false) — bypasses the upstream @anyone-protocol/anyone-client SDK
+# v1.1.3 which doesn't yet support in-process HS publication.
+#
+# Operator workflow (one-time setup):
+#   1. Build the sidecar image:
+#        docker build -f docker/townhouse-ator-sidecar/Dockerfile \
+#          -t toon:townhouse-ator-sidecar docker/townhouse-ator-sidecar
+#   2. Generate keypair + render config:
+#        scripts/townhouse-hs-init.sh
+#      Writes:
+#        - infra/townhouse-hs-keys/hs/  (gitignored — the .anyone identity)
+#        - .env.townhouse-hs.local      (gitignored — HS_SECRET_KEY_B64 + URL)
+#        - docker/configs/townhouse-hs-connector.local.yaml (rendered)
+#   3. Boot:
+#        docker compose --env-file .env.townhouse-hs.local \
+#          -f docker-compose-townhouse-hs.yml \
+#          --profile localnet --profile town --profile mill --profile faucet up -d
+#
+# Chain configuration:
+#   The mill + faucet read RPC URLs and Mock USDC contract addresses from
+#   env vars. See `.env.townhouse-hs.example` for the four supported profiles
+#   (localnet / Akash devnet / Sepolia+Solana devnet / mainnet). Defaults
+#   below resolve to the bundled `localnet` profile.
+#
+# Usage:
+#   # ── localnet (default — uses bundled anvil + solana) ──
+#   docker compose -f docker-compose-townhouse.yml --profile town --profile mill --profile dvm build
+#   docker compose -f docker-compose-townhouse-hs.yml \
+#     --profile localnet --profile town --profile mill --profile dvm --profile faucet up
+#
+#   # ── real testnet/mainnet (skip bundled chains) ──
+#   cp .env.example .env  # edit to point EVM_RPC_URL / SOLANA_RPC_URL at real RPCs
+#   docker compose -f docker-compose-townhouse-hs.yml \
+#     --profile town --profile mill --profile dvm --profile faucet up
+#     # NB: omitting `--profile localnet` skips anvil + solana
+#
+# Operator flow after boot:
+#   # Read your published .anyone address (~30-90s after first boot)
+#   docker compose -f docker-compose-townhouse-hs.yml exec connector \
+#     cat /var/lib/anon/hs/hostname
+#
+#   # Open the EVM faucet UI (drips ETH + Mock USDC)
+#   open http://127.0.0.1:3500
+#
+#   # Solana faucet (drips SOL + Mock USDC):
+#   #   - Via dashboard: pnpm --filter @toon-protocol/townhouse-web dev
+#   #     then visit the Faucet panel (talks to townhouse host API)
+#   #   - Via script: scripts/faucet-sol-usdc.mjs <recipient>
+#
+# Persistence:
+#   `townhouse-hs-anon` named volume keeps `hs_ed25519_secret_key` across
+#   `docker compose down` cycles. Delete it (`docker volume rm`) to rotate
+#   the .anyone address.
+#
+# Akash deployment of the same stack: deploy/akash/townhouse.sdl.yaml.
+
+networks:
+  townhouse-hs-net:
+    driver: bridge
+
+volumes:
+  # The .anyone keypair lives on the host at infra/townhouse-hs-keys/ —
+  # bind-mounted into the sidecar (read-only). No named volume needed.
+  townhouse-hs-town-data:
+  townhouse-hs-mill-data:
+  townhouse-hs-dvm-data:
+
+services:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Anvil — local Ethereum devnet (profile: localnet)
+  # Skip this profile when EVM_RPC_URL points at a real testnet/mainnet.
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    container_name: townhouse-hs-anvil
+    profiles: [localnet]
+    entrypoint: []
+    command:
+      - sh
+      - -c
+      - |
+        anvil --host 0.0.0.0 --port 8545 --chain-id 31337 --accounts 10 --balance 10000 &
+        ANVIL_PID=$$!
+        until cast client --rpc-url http://localhost:8545 2>/dev/null | grep -q 'anvil'; do sleep 1; done
+        cd /contracts
+        forge script script/DeployLocal.s.sol:DeployLocalScript --rpc-url http://localhost:8545 --broadcast --skip-simulation || true
+        wait $$ANVIL_PID
+    volumes:
+      - ./contracts/evm:/contracts:ro
+    ports:
+      - '127.0.0.1:8545:8545'
+    networks:
+      - townhouse-hs-net
+    healthcheck:
+      test: ['CMD-SHELL', "cast client --rpc-url http://localhost:8545 2>&1 | grep -q 'anvil' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Solana test validator (profile: localnet)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  solana:
+    image: ghcr.io/beeman/solana-test-validator:latest
+    container_name: townhouse-hs-solana
+    profiles: [localnet]
+    entrypoint: []
+    command: [sh, /entrypoint.sh]
+    volumes:
+      - ./infra/solana/entrypoint.sh:/entrypoint.sh:ro
+      - ./contracts/solana:/programs:ro
+    tmpfs:
+      - /tmp/test-ledger
+    ports:
+      - '127.0.0.1:8899:8899'
+      - '127.0.0.1:8900:8900'
+    networks:
+      - townhouse-hs-net
+    # io_uring_setup blocked by default Docker seccomp — well-known Solana
+    # validator landmine. See scripts/akash-deploy.sh notes.
+    security_opt:
+      - seccomp=unconfined
+    healthcheck:
+      test: ['CMD-SHELL', 'solana cluster-version --url http://localhost:8899 >/dev/null 2>&1']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # ATOR sidecar — runs anon directly, publishes the .anyone HS
+  #
+  # Sibling of the apex connector. Uses Docker DNS (the connector's
+  # hostname) to forward inbound HS traffic into the connector's BTP server.
+  # Bypasses the @anyone-protocol/anyone-client v1.1.3 SDK gap (the SDK
+  # ignores HS opts and never publishes a service when run in-process).
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ator-sidecar:
+    image: toon:townhouse-ator-sidecar
+    container_name: ator-sidecar
+    # Docker DNS hostname must match what the connector references in
+    # transport.socksProxy (socks5h://ator-sidecar:9050). The container_name
+    # above provides this DNS entry on the network.
+    hostname: ator-sidecar
+    networks:
+      - townhouse-hs-net
+    environment:
+      # Pre-generated by scripts/townhouse-hs-init.sh. The .anyone hostname
+      # is deterministic from this secret. Sourced from .env.townhouse-hs.local
+      # via `docker compose --env-file`.
+      HS_SECRET_KEY_B64: ${HS_SECRET_KEY_B64:?HS_SECRET_KEY_B64 unset — run scripts/townhouse-hs-init.sh first}
+      HS_PORT: '3000'
+      # Forward inbound HS traffic to the connector's BTP server. The
+      # connector container's hostname on this network is `connector`
+      # (set explicitly via container hostname below).
+      HS_TARGET_HOST: connector
+      HS_TARGET_PORT: '3000'
+      SOCKS_PORT: '9050'
+      NICKNAME: townhouse-hs
+    healthcheck:
+      # Healthy = the SOCKS5 port is bound. Connector depends_on this with
+      # service_healthy, so it doesn't try to dial socks5h://ator-sidecar:9050
+      # until anon has actually opened the listener (~5-15s after start).
+      test: ['CMD', 'nc', '-z', '127.0.0.1', '9050']
+      interval: 3s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Apex connector — terminates inbound BTP from the .anyone HS
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  connector:
+    # Image must match DEFAULT_CONNECTOR_IMAGE in packages/townhouse/src/constants.ts
+    image: ghcr.io/toon-protocol/connector:3.3.3
+    container_name: townhouse-hs-connector
+    # `connector` DNS name (matches HS_TARGET_HOST in the sidecar) — the
+    # sidecar's HiddenServicePort directive forwards to connector:3000.
+    hostname: connector
+    networks:
+      - townhouse-hs-net
+    ports:
+      # Admin API on host loopback only — operator uses for status, NEVER
+      # expose publicly (no auth in the demo profile).
+      - '127.0.0.1:9401:9401'
+    volumes:
+      # The RENDERED connector YAML, written by scripts/townhouse-hs-init.sh
+      # with the concrete externalUrl (wss://<.anyone>/btp). Falls back to
+      # the gitignored .local file the init script produces.
+      - ./docker/configs/townhouse-hs-connector.local.yaml:/config/connector.yaml:ro
+    # NB: no depends_on for ator-sidecar. The sidecar resolves the
+    # connector's DNS at startup (to write the HiddenServicePort target);
+    # making the connector wait for sidecar-healthy creates a deadlock —
+    # sidecar can't resolve `connector` until the container is created,
+    # and the container isn't created if it's blocked on sidecar-healthy.
+    # Both start in parallel; the connector restart-on-failure handles
+    # the brief window before sidecar's SOCKS port opens.
+    environment:
+      CONFIG_FILE: /config/connector.yaml
+      CONNECTOR_ILP_ADDRESS: g.townhouse
+      CONNECTOR_ADMIN_PORT: '9401'
+      # Children peer URLs — the apex dials these on the Docker network.
+      # nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket -- Docker-internal
+      CONNECTOR_PEERS: '[{"id":"town","relation":"child","btpUrl":"btp+ws://townhouse-hs-town:3000","assetCode":"USD","assetScale":6},{"id":"mill","relation":"child","btpUrl":"btp+ws://townhouse-hs-mill:3000","assetCode":"USD","assetScale":6},{"id":"dvm","relation":"child","httpUrl":"http://townhouse-hs-dvm:3300","assetCode":"USD","assetScale":6}]'
+    healthcheck:
+      # nosemgrep: trailofbits.generic.wget-unencrypted-url.wget-unencrypted-url -- container-internal probe
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:9401/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Town — Nostr relay node (profile: town)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  town:
+    image: toon:town
+    container_name: townhouse-hs-town
+    profiles: [town]
+    networks:
+      - townhouse-hs-net
+    depends_on:
+      connector:
+        condition: service_healthy
+    expose: ['3000']
+    ports:
+      - '127.0.0.1:7100:7100'
+      - '127.0.0.1:3100:3100'
+    environment:
+      # nosemgrep: detect-insecure-websocket -- Docker-internal
+      CONNECTOR_URL: ws://townhouse-hs-connector:3000
+      FEE_PER_EVENT: '0'
+      NODE_NOSTR_PUBKEY: ''
+      NODE_EVM_ADDRESS: ''
+      # DEV-ONLY deterministic Nostr secret. Same key the dev-infra stack uses
+      # (TOWN_01_SECRET_KEY in scripts/townhouse-dev-infra.sh) so the derived
+      # pubkey is consistent across dev + HS modes. Operators running in
+      # production override by setting TOWN_SECRET_KEY in .env.townhouse-hs.local.
+      NODE_NOSTR_SECRET_KEY: '${TOWN_SECRET_KEY:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01}'
+    volumes:
+      - townhouse-hs-town-data:/data
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3100/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Mill — multi-chain swap node (profile: mill)
+  #
+  # Chain endpoints come from .env (or shell env). Defaults below resolve to
+  # the bundled `localnet` profile services. Override for testnet/mainnet:
+  #   EVM_RPC_URL=https://sepolia.infura.io/v3/<KEY>
+  #   EVM_CHAIN_ID=11155111
+  #   EVM_USDC_ADDRESS=0x... (real chain USDC)
+  #   SOLANA_RPC_URL=https://api.devnet.solana.com
+  #   SOLANA_USDC_MINT=... (real chain USDC mint)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  mill:
+    image: toon:mill
+    container_name: townhouse-hs-mill
+    profiles: [mill]
+    networks:
+      - townhouse-hs-net
+    depends_on:
+      connector:
+        condition: service_healthy
+    expose: ['3000']
+    ports:
+      - '127.0.0.1:3200:3200'
+    environment:
+      # nosemgrep: detect-insecure-websocket -- Docker-internal
+      CONNECTOR_URL: ws://townhouse-hs-connector:3000
+      FEE_BASIS_POINTS: '0'
+      # ── Chain endpoints (env-overridable) ──
+      SETTLEMENT_RPC_URL: ${EVM_RPC_URL:-http://anvil:8545}
+      SETTLEMENT_CHAIN_ID: ${EVM_CHAIN_ID:-31337}
+      SETTLEMENT_TOKEN_ADDRESS: ${EVM_USDC_ADDRESS:-0x5FbDB2315678afecb367f032d93F642f64180aa3}
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-http://solana:8899}
+      SOLANA_USDC_MINT: ${SOLANA_USDC_MINT:-6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q}
+      NODE_NOSTR_PUBKEY: ''
+      NODE_EVM_ADDRESS: ''
+      # DEV-ONLY BIP-39 mnemonic for BIP-32 swap key derivation. Same mnemonic
+      # as MILL_01_MNEMONIC in scripts/townhouse-dev-infra.sh — public BIP-39
+      # test vector zero. Operators running in production override by setting
+      # MILL_MNEMONIC in .env.townhouse-hs.local. MILL_MNEMONIC takes priority
+      # over NODE_NOSTR_SECRET_KEY when both are set.
+      MILL_MNEMONIC: '${MILL_MNEMONIC:-abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about}'
+      # DEV-ONLY fallback Nostr secret (kept for backward-compat; ignored when
+      # MILL_MNEMONIC is set). Matches MILL_01_SECRET_KEY in dev-infra.
+      NODE_NOSTR_SECRET_KEY: '${MILL_SECRET_KEY:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa03}'
+      # Mill swap config — bind-mounted JSON fixture below. Required by the
+      # mill entrypoint; without this the container restart-loops with
+      # "MILL_CONFIG_JSON or MILL_CONFIG_PATH must be provided".
+      MILL_CONFIG_PATH: /config/mill.config.json
+      # Direct relay URL alongside the JSON config — mirrors how dev-infra
+      # wires MILL_RELAYS so the mill can reach the relay over the Docker
+      # network without going through the apex connector.
+      # nosemgrep: detect-insecure-websocket -- Docker-internal
+      MILL_RELAYS: ws://townhouse-hs-town:7100
+    volumes:
+      - ./docker/dev-fixtures/townhouse-hs-mill.config.json:/config/mill.config.json:ro
+      - townhouse-hs-mill-data:/data
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3200/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # DVM — Arweave upload DVM (profile: dvm)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  dvm:
+    image: toon:dvm
+    container_name: townhouse-hs-dvm
+    profiles: [dvm]
+    networks:
+      - townhouse-hs-net
+    depends_on:
+      connector:
+        condition: service_healthy
+    expose: ['3300']
+    ports:
+      - '127.0.0.1:3400:3400'
+    environment:
+      # nosemgrep: detect-insecure-websocket -- Docker-internal
+      CONNECTOR_URL: ws://townhouse-hs-connector:3000
+      FEE_PER_JOB: '0'
+      DVM_KIND: '5094'
+      NODE_NOSTR_PUBKEY: ''
+      NODE_EVM_ADDRESS: ''
+      NODE_NOSTR_SECRET_KEY: ''
+      # Free-tier ArDrive Turbo (<100 KiB) requires no token. Set TURBO_TOKEN
+      # only when the operator wants paid uploads.
+      TURBO_TOKEN: ${TURBO_TOKEN:-}
+    volumes:
+      - townhouse-hs-dvm-data:/data
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3400/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Faucet — dual-chain (EVM ETH+USDC, Solana SOL+USDC) drips, UI on :3500
+  #
+  # Operator pastes a wallet address, picks EVM or Solana, and gets gas +
+  # Mock USDC. Per-address rate-limited (1 req / hour by default per chain).
+  #
+  # The faucet's signing keys are well-known dev defaults (Anvil account
+  # for EVM, faucet-authority keypair under infra/solana/keys/ for Solana).
+  # Safe against localnet / Akash devnet (Mock USDC has no real value);
+  # transactions will simply fail against real testnets/mainnets.
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  faucet:
+    build:
+      context: ./packages/faucet
+    container_name: townhouse-hs-faucet
+    profiles: [faucet]
+    networks:
+      - townhouse-hs-net
+    ports:
+      # Operator opens http://127.0.0.1:3500 — chain toggle + address input.
+      - '127.0.0.1:3500:3500'
+    volumes:
+      # Mount the Mock USDC faucet authority keypair (public dev key, like
+      # Anvil account[0] — see infra/solana/keys/README.md). Without this
+      # the SOL drip endpoint returns 503 "solana faucet not configured".
+      - ./infra/solana/keys/faucet-authority.json:/etc/faucet/sol-authority.json:ro
+    environment:
+      PORT: '3500'
+      # ── EVM endpoint ──
+      RPC_URL: ${EVM_RPC_URL:-http://anvil:8545}
+      TOKEN_ADDRESS: ${EVM_USDC_ADDRESS:-0x5FbDB2315678afecb367f032d93F642f64180aa3}
+      # ── Solana endpoint ──
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-http://solana:8899}
+      SOLANA_USDC_MINT: ${SOLANA_USDC_MINT:-6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q}
+      SOLANA_FAUCET_AUTHORITY_KEYPAIR_PATH: /etc/faucet/sol-authority.json
+      # ── Drip amounts (per request, per chain) ──
+      ETH_AMOUNT: ${FAUCET_ETH_AMOUNT:-100}
+      TOKEN_AMOUNT: ${FAUCET_TOKEN_AMOUNT:-10000}
+      SOL_USDC_AMOUNT: ${FAUCET_SOL_USDC_AMOUNT:-100}
+      RATE_LIMIT_HOURS: ${FAUCET_RATE_LIMIT_HOURS:-1}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3500/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped

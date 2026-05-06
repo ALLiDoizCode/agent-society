@@ -57,6 +57,10 @@ nix build .#docker-image && docker load < result
 - Docker & Docker Compose
 - Node.js >=20, pnpm 8.15.0 (`corepack enable && corepack prepare pnpm@8.15.0 --activate`)
 - Connector contracts repo cloned at `../connector` (required for Anvil contract deployment in SDK E2E)
+- memvid sibling repo cloned at `../memvid` (required for `docker/Dockerfile.dvm` build — `packages/memvid-node` depends on the `memvid-core` Rust crate via `path = "../../../memvid"`):
+  ```
+  git clone https://github.com/ALLiDoizCode/memvid ../memvid
+  ```
 - (Optional) Nix package manager for reproducible builds
 
 See `_bmad-output/project-context.md` section "Technology Stack & Versions" for exact version constraints and compiler options.
@@ -116,6 +120,10 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 ### Townhouse Dev Stack (28xxx)
 
 All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Contributor docs: `packages/townhouse/README.md`.
+
+**Two separate scripts — different missions:**
+- `scripts/townhouse-dev-infra.sh` — contributor dev loop (multi-peer, deterministic keys, 28xxx ports, SOCKS5, chain devnets). Use for dashboard development.
+- `scripts/townhouse-test-infra.sh` — real-CLI E2E gate (warms image cache only; tests run the real `townhouse init`+`townhouse up` CLI against fresh config dirs). Use for pre-publish validation. Ports: 9400 (Fastify API), 9401 (connector admin). See `packages/townhouse/README.md` § "Running E2E Tests".
 
 | Host Port | Container Port | Service |
 |-----------|---------------|---------|
@@ -181,6 +189,8 @@ All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Con
 | **Townhouse dev stack** | `scripts/townhouse-dev-infra.sh` + `docker-compose-townhouse-dev.yml` |
 | Townhouse dev stack docs | `packages/townhouse/README.md` § "Local Dev Loop" |
 | Townhouse dev stack fixtures | `docker/dev-fixtures/` (Mill JSON configs + README) |
+| **Townhouse real-CLI E2E** | `scripts/townhouse-test-infra.sh` (Story 21.16) |
+| Townhouse real-CLI E2E docs | `packages/townhouse/README.md` § "Running E2E Tests" |
 
 ## Browser Verification
 
