@@ -343,7 +343,11 @@ services:
       DVM_KIND: '5094'
       NODE_NOSTR_PUBKEY: ''
       NODE_EVM_ADDRESS: ''
-      NODE_NOSTR_SECRET_KEY: ''
+      # DEV-ONLY deterministic Nostr secret key — matches DVM_01_SECRET_KEY
+      # in scripts/townhouse-dev-infra.sh so derived pubkeys are stable across
+      # the dev infra and HS stacks. Operator overrides via DVM_SECRET_KEY in
+      # .env.townhouse-hs.local.
+      NODE_NOSTR_SECRET_KEY: '${DVM_SECRET_KEY:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa05}'
       # Free-tier ArDrive Turbo (<100 KiB) requires no token. Set TURBO_TOKEN
       # only when the operator wants paid uploads.
       TURBO_TOKEN: ${TURBO_TOKEN:-}
