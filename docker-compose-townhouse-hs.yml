@@ -91,7 +91,12 @@ services:
         forge script script/DeployLocal.s.sol:DeployLocalScript --rpc-url http://localhost:8545 --broadcast --skip-simulation || true
         wait $$ANVIL_PID
     volumes:
-      - ./contracts/evm:/contracts:ro
+      # Writable (no `:ro`) because `forge script` writes its compile cache
+      # to /contracts/cache/. With :ro the deploy step fails silently — the
+      # entrypoint's trailing `|| true` swallows the error and contracts
+      # never land on chain. Failure mode under :ro:
+      #   Error: "/contracts/cache/solidity-files-cache.json": Read-only file system
+      - ./contracts/evm:/contracts
     ports:
       - '127.0.0.1:8545:8545'
     networks:
