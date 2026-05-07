@@ -17,8 +17,15 @@ export const NODE_BTP_PORT = 3000;
  * To bump: update this constant, run `pnpm --filter @toon-protocol/townhouse test contract-canary`,
  * then `pnpm --filter @toon-protocol/townhouse test:canary`. See packages/sdk/CONNECTOR_MIGRATION.md
  * for the full checklist and breaking-changes history.
+ *
+ * Story 44.1 (2026-05-07): bumped to v3.5.0 to consume `GET /admin/hs-hostname`
+ * (connector#58 / PR #59). The :3.5.0 tag was published cleanly only after
+ * connector PR #60 fixed a docker-release tag-resolution bug — earlier semver
+ * tags on GHCR are shifted by one release (see connector#61). Pinning by
+ * digest is preferable until Story 45.2's image-manifest.json formalizes it:
+ *   ghcr.io/toon-protocol/connector@sha256:e8322ab06e6ded0bf2c9c6a7a59e22b22426277dc09fb8d1cb1951995f1c8309
  */
-export const DEFAULT_CONNECTOR_IMAGE = 'ghcr.io/toon-protocol/connector:3.4.1';
+export const DEFAULT_CONNECTOR_IMAGE = 'ghcr.io/toon-protocol/connector:3.5.0';
 
 /**
  * HD wallet account indices per node type (Story 21.4, D21-008).

@@ -134,8 +134,9 @@ Pass the appropriate base URL to `ConnectorAdminClient` for each call.
 | `getPeers()`        | `GET {adminApi.port}/admin/peers`        | Wrapped envelope `{ nodeId, peerCount, connectedCount, peers: [{ id, connected, ilpAddresses, routeCount, settlement? }] }` — client returns the unwrapped `peers` array.                                            |
 | `getMetrics()`      | `GET {adminApi.port}/admin/metrics.json` | `AdminMetricsJsonResponse` — `{ uptimeSeconds, aggregate: { packetsForwarded, packetsRejected, bytesSent }, peers: [{ peerId, connected, packetsForwarded, packetsRejected, bytesSent, lastPacketAt }], timestamp }` |
 | `getPacketLog(filter)` | `GET {adminApi.port}/packets?ilpAddress=<>&since=<>&limit=<>` | `PacketLogEntry[]` — `[{ ts: number, ilpAddressFrom: string, ilpAddressTo: string, amount: string, result: 'fulfill'\|'reject'\|'timeout' }]`. Throws with `code='ConnectorEndpointNotFound'` on 404. **Note:** `PacketLogEntry` does not carry an event `kind` field. Townhouse's `GET /api/nodes/:nodeId/jobs/recent` feature-detects `entry.kind`; if absent, packets are grouped under bucket `kind: 0` ("unattributed") and the canonical `byKind` is sourced from the DVM container's in-memory health counter instead. To enable per-kind attribution from the connector side, add `kind?: number` to `PacketLogEntry` (populated from the ILP packet's TOON-decoded event kind). |
+| _not yet wrapped_ — `GET /admin/hs-hostname` | `GET {adminApi.port}/admin/hs-hostname` | Available in connector v3.5.0+. Response: `{ hostname: string \| null, publishedAt: string \| null }`. 503 `{ error: 'anon-disabled' }` when anon not configured. The SDK admin client has not yet exposed this — story TH-21.17.5 (`townhouse hs up`) wires the wrap and the canary together when consumed. |
 
-> **Status of `getPacketLog` (added story 21.10):** The connector image at `DEFAULT_CONNECTOR_IMAGE` (ghcr.io/toon-protocol/connector:3.3.3) does **not** yet expose `GET /packets`. Until the connector exposes this endpoint, `GET /api/nodes/:type/packets/timeseries` returns 503 with `error: 'connector_endpoint_not_found'`. The contract canary asserts the path and shape so any future connector bump that adds it will also be validated. To unblock: add `GET /packets` to the connector's admin HTTP server and update this table.
+> **Status of `getPacketLog` (added story 21.10):** The connector image at `DEFAULT_CONNECTOR_IMAGE` does **not** yet expose `GET /packets` as of v3.5.0. Until the connector exposes this endpoint, `GET /api/nodes/:type/packets/timeseries` returns 503 with `error: 'connector_endpoint_not_found'`. The contract canary asserts the path and shape so any future connector bump that adds it will also be validated. To unblock: add `GET /packets` to the connector's admin HTTP server and update this table.
 
 ### Seam 2 — Container config contract
 
@@ -215,3 +216,17 @@ The Townhouse canary commands:
 pnpm --filter @toon-protocol/townhouse test contract-canary       # stub, <500ms
 pnpm --filter @toon-protocol/townhouse test:canary                # real image, ~5s
 ```
+
+---
+
+## Connector Image — Bump History
+
+`DEFAULT_CONNECTOR_IMAGE` lives at `packages/townhouse/src/constants.ts`.
+Compose files mirror the constant manually.
+
+| Date       | Pinned to                                          | Reason                                                                                                                                                                                                                                                                                                                                  |
+| ---------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-05-07 | `ghcr.io/toon-protocol/connector:3.5.0`            | Story 44.1 — consume `GET /admin/hs-hostname` (connector#58 / PR #59). The `:3.5.0` tag is the first cleanly-mapped semver tag after connector PR #60 fixed a docker-release tag-resolution bug. Earlier semver tags (`:3.4.x`, `:3.3.x`) are shifted by one release on GHCR — see connector#61. Pin by digest if forensic equivalence with the git tag commit matters: `@sha256:e8322ab06e6ded0bf2c9c6a7a59e22b22426277dc09fb8d1cb1951995f1c8309`. |
+
+Earlier bumps were not tracked here — back-fill on the next bump if you need
+the trail.
