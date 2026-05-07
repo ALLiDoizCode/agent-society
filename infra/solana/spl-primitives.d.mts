@@ -16,11 +16,11 @@ export interface AccountInfo {
   owner: string;
 }
 
-export type Rpc = (method: string, params?: unknown[]) => Promise<any>;
+export type Rpc = (method: string, params?: unknown[]) => Promise<unknown>;
 
 export interface InstructionInput {
   programId: string;
-  keys: Array<{ pubkey: string; isSigner: boolean; isWritable: boolean }>;
+  keys: { pubkey: string; isSigner: boolean; isWritable: boolean }[];
   data: Uint8Array;
 }
 
