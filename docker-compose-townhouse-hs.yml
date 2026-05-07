@@ -315,6 +315,19 @@ services:
       # internally to forward HS traffic. We pass the external URL via the
       # TOON_EXTERNAL_RELAY_URL CLI env var (see packages/town/src/cli.ts).
       TOON_EXTERNAL_RELAY_URL: ${TOWNHOUSE_RELAY_EXTERNAL_URL:?TOWNHOUSE_RELAY_EXTERNAL_URL unset — run scripts/townhouse-hs-init.sh first}
+      # DEV-ONLY: town's embedded ConnectorNode signs ClaimReceiver claims
+      # with this EVM key. Defaults to Anvil acct[4] privkey — different from
+      # the Nostr identity, must hold ETH/USDC for settlement. Mirror in
+      # docker/configs/townhouse-hs-connector.yaml peers[town].evmAddress.
+      SETTLEMENT_PRIVATE_KEY: '${TOWN_SETTLEMENT_PRIVATE_KEY:-0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a}'
+      # Apex EVM treasury — town advertises this as its peer entry's
+      # evmAddress to the parent connector (apex acct[3] in the localnet
+      # profile). The apex's PerPacketClaimService uses it for channel-open.
+      PARENT_EVM_ADDRESS: '${APEX_EVM_ADDRESS:-0x90F79bf6EB2c4f870365E785982E1f101E93b906}'
+      # Embedded-ConnectorNode pino log level. Defaults to 'warn' (matches
+      # legacy behaviour). Flip to 'info' to surface settlement-monitor /
+      # claim-receiver / channel-open lifecycle events when debugging.
+      TOON_CONNECTOR_LOG_LEVEL: '${TOON_CONNECTOR_LOG_LEVEL:-warn}'
     volumes:
       - townhouse-hs-town-data:/data
     healthcheck:
@@ -378,6 +391,18 @@ services:
       # network without going through the apex connector.
       # nosemgrep: detect-insecure-websocket -- Docker-internal
       MILL_RELAYS: ws://townhouse-hs-town:7100
+      # DEV-ONLY: mill's embedded ConnectorNode signs ClaimReceiver claims
+      # with this EVM key. Defaults to Anvil acct[5] privkey — different from
+      # the Nostr identity, must hold ETH/USDC for settlement. Mirrors
+      # docker/configs/townhouse-hs-connector.yaml peers[mill].evmAddress.
+      SETTLEMENT_PRIVATE_KEY: '${MILL_SETTLEMENT_PRIVATE_KEY:-0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba}'
+      # Apex EVM treasury — mill advertises this as its peer entry's
+      # evmAddress to the parent connector (apex acct[3] in the localnet
+      # profile). Same value as the town child uses.
+      PARENT_EVM_ADDRESS: '${APEX_EVM_ADDRESS:-0x90F79bf6EB2c4f870365E785982E1f101E93b906}'
+      # Embedded-ConnectorNode pino log level. Same purpose as the
+      # equivalent var on the town service.
+      TOON_CONNECTOR_LOG_LEVEL: '${TOON_CONNECTOR_LOG_LEVEL:-warn}'
     volumes:
       - ./docker/dev-fixtures/townhouse-hs-mill.config.json:/config/mill.config.json:ro
       - townhouse-hs-mill-data:/data
