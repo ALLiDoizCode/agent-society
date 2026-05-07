@@ -290,6 +290,12 @@ services:
       NODE_ID: town
       PARENT_PEER_ID: apex
       FEE_PER_EVENT: '0'
+      # Override the 'anvil' chain preset's localhost rpcUrl. Inside the
+      # town container, localhost = town itself, not the Anvil container.
+      # Anvil is reachable via Docker service DNS as `anvil:8545`. Without
+      # this override, the embedded connector's chainProviders init fails
+      # with "JsonRpcProvider failed to detect network".
+      TOON_RPC_URL: http://anvil:8545
       NODE_NOSTR_PUBKEY: ''
       NODE_EVM_ADDRESS: ''
       # DEV-ONLY deterministic Nostr secret. Same key the dev-infra stack uses
