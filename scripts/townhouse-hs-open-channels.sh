@@ -37,6 +37,17 @@ fi
 # `client` is the test peer used by packages/client/scripts/social-flow-hs-e2e.ts
 # (Anvil acct[6]) — opening a channel to it lets the test send signed
 # balance-proof claims through the apex.
+#
+# DIRECTIONALITY: This script opens APEX→CLIENT channels (apex is the
+# depositor / participant1). That channel funds apex *outflows* — claims the
+# apex owes the client (none, in the social-flow test).
+#
+# The social-flow test ALSO opens a SEPARATE CLIENT→APEX channel via
+# `OnChainChannelClient` (viem path) at runtime. That second channel is the
+# one the apex uses to settle the test client's signed claims via
+# `claimFromChannel()`. Both directions are needed because TokenNetwork
+# channels are deterministic per (participant1, participant2, settlementTimeout)
+# and a single channel only carries balance proofs in one direction.
 declare -A PEER_ADDRS=(
   [town]='0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65'
   [mill]='0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc'
