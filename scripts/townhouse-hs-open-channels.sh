@@ -34,9 +34,13 @@ else
 fi
 
 # Map peer-id -> child EVM treasury (apex's view of the child).
+# `client` is the test peer used by packages/client/scripts/social-flow-hs-e2e.ts
+# (Anvil acct[6]) — opening a channel to it lets the test send signed
+# balance-proof claims through the apex.
 declare -A PEER_ADDRS=(
   [town]='0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65'
   [mill]='0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc'
+  [client]='0x976EA74026E726554dB657fA54763abd0C3a0aa9'
 )
 
 # Localnet defaults (override via env). chain-id 31337 matches the apex
@@ -101,7 +105,7 @@ fi
 # apex's PaymentChannelSDK shares a single signer and back-to-back tx submits
 # from the same nonce hit `nonce has already been used`. Per-iteration sleep
 # gives the previous tx time to land (Anvil ~50ms, real chains ~12s).
-PEER_ORDER=(town mill)
+PEER_ORDER=(town mill client)
 INTER_PEER_SLEEP=${INTER_PEER_SLEEP:-3}
 
 first=1
