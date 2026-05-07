@@ -18,7 +18,9 @@ services:
   # Connector — always runs (no profile restriction)
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   connector:
-    image: ghcr.io/toon-protocol/connector:3.3.0
+    # Image tag must match DEFAULT_CONNECTOR_IMAGE in packages/townhouse/src/constants.ts
+    # Compose cannot import a TS constant — keep both in sync when bumping the connector.
+    image: ghcr.io/toon-protocol/connector:3.4.1
     container_name: townhouse-connector
     networks:
       - townhouse-net

@@ -57,6 +57,10 @@ nix build .#docker-image && docker load < result
 - Docker & Docker Compose
 - Node.js >=20, pnpm 8.15.0 (`corepack enable && corepack prepare pnpm@8.15.0 --activate`)
 - Connector contracts repo cloned at `../connector` (required for Anvil contract deployment in SDK E2E)
+- memvid sibling repo cloned at `../memvid` (required for `docker/Dockerfile.dvm` build — `packages/memvid-node` depends on the `memvid-core` Rust crate via `path = "../../../memvid"`):
+  ```
+  git clone https://github.com/ALLiDoizCode/memvid ../memvid
+  ```
 - (Optional) Nix package manager for reproducible builds
 
 See `_bmad-output/project-context.md` section "Technology Stack & Versions" for exact version constraints and compiler options.
@@ -110,7 +114,33 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 **Port conflicts:** See `_bmad-output/project-context.md` section "Deployment" for full port allocation table. Key ranges:
 
 - SDK E2E: Anvil 18545, Peer1 19000/19100/19700, Peer2 19010/19110/19710
+- Townhouse Dev Stack: 28xxx range (see table below)
 - Oyster CVM attestation server: 1300
+
+### Townhouse Dev Stack (28xxx)
+
+All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Contributor docs: `packages/townhouse/README.md`.
+
+**Two separate scripts — different missions:**
+- `scripts/townhouse-dev-infra.sh` — contributor dev loop (multi-peer, deterministic keys, 28xxx ports, SOCKS5, chain devnets). Use for dashboard development.
+- `scripts/townhouse-test-infra.sh` — real-CLI E2E gate (warms image cache only; tests run the real `townhouse init`+`townhouse up` CLI against fresh config dirs). Use for pre-publish validation. Ports: 9400 (Fastify API), 9401 (connector admin). See `packages/townhouse/README.md` § "Running E2E Tests".
+
+| Host Port | Container Port | Service |
+|-----------|---------------|---------|
+| 28080 | 9401 | Connector admin (`/health`, `/admin/*`) |
+| 28050 | 1080 | SOCKS5 proxy (ATOR transport testing, story 21.15) |
+| 28100 | 3100 | town-01 BLS health |
+| 28110 | 3100 | town-02 BLS health |
+| 28200 | 3200 | mill-01 BLS health (EVM↔Solana) |
+| 28210 | 3200 | mill-02 BLS health (EVM↔Mina) |
+| 28400 | 3400 | dvm-01 BLS health |
+| 28700 | 7100 | town-01 Nostr relay WebSocket |
+| 28710 | 7100 | town-02 Nostr relay WebSocket |
+| 28545 | 8545 | Anvil JSON-RPC (chain-id 31337) |
+| 28899 | 8899 | Solana test-validator RPC |
+| 28900 | 8900 | Solana test-validator WebSocket |
+| 28085 | 3101 | Mina lightnet GraphQL |
+| 28181 | 8181 | Mina lightnet accounts manager |
 
 ---
 
@@ -156,6 +186,11 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 | Dev Signal template (for Drew) | `_bmad-output/dev-signals/_template.md` |
 | Dev Signal archive | `_bmad-output/dev-signals/` |
 | Dev Signal command | `.claude/commands/dev-signal.md` (invoke via `/dev-signal`) |
+| **Townhouse dev stack** | `scripts/townhouse-dev-infra.sh` + `docker-compose-townhouse-dev.yml` |
+| Townhouse dev stack docs | `packages/townhouse/README.md` § "Local Dev Loop" |
+| Townhouse dev stack fixtures | `docker/dev-fixtures/` (Mill JSON configs + README) |
+| **Townhouse real-CLI E2E** | `scripts/townhouse-test-infra.sh` (Story 21.16) |
+| Townhouse real-CLI E2E docs | `packages/townhouse/README.md` § "Running E2E Tests" |
 
 ## Browser Verification
 

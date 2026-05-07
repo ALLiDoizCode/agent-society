@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-04-28 (story 22.5 → done after code review)
+# last_updated: 2026-05-01 (story 21.15 → done — ATOR privacy transport + connectivity status; code review applied 44 patches and resolved 6 decisions)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -400,11 +400,29 @@ development_status:
   # ═══════════════════════════════════════════════════════════════
 
   # Epic 21: Townhouse — Node Provider Dashboard & Orchestrator
-  # 18 stories across 3 phases: Orchestrator Core, API + Dashboard, First-Run + Polish
+  # 21 stories across 3 phases: Orchestrator Core, API + Dashboard, First-Run + Polish
   # Story 21.8.5 inserted 2026-04-20 from design-direction spike work
   # (v1–v6 in _bmad-output/planning-artifacts/design-spikes/; superseded 2026-04-21)
   # Current direction: Vercel/Geist-inspired (near-white canvas, shadow-as-border,
   # Geist Sans with aggressive negative tracking, workflow-accent node identity).
+  #
+  # Re-entry resequence (party mode 2026-04-29, after epic-22 CI-restore merge):
+  # Three closeout/prereq stories inserted between Phase 1 done-work and 21.8.5 —
+  #   21.6.1 — Mill review findings remediation (closes 4 open patch findings;
+  #            reconciles tracking doc with code state; Phase 1 closeout)
+  #   21.7.5 — Connector v3.3.x sweep + Townhouse-side contract canary
+  #            (bumps DEFAULT_CONNECTOR_IMAGE 3.3.0 → workspace-canonical 3.3.x;
+  #             adds Townhouse-flavored canary covering admin API + env-var
+  #             contract that the SDK canary does not reach)
+  #   21.8.0 — Townhouse dev infrastructure
+  #            (D21-009 prereq: docker-compose-townhouse-dev.yml +
+  #             scripts/townhouse-dev-infra.sh up/down — required for 21.9-21.13)
+  # Story 21.14 (first-run wizard) is pulled forward to immediately after 21.8.5
+  # so the operator's "three minutes to first earnings" promise ships before
+  # views 21.9-21.13. View stories may be re-evaluated post-wizard-smoke-test.
+  # Story 21.8.5 expanded to 7 primitives (added MetricBlock) and locked
+  # shadcn/ui charts (https://ui.shadcn.com/charts) as the chart library.
+  #
   # Stories 21.9–21.13 MUST be developed against the Townhouse dev stack
   # (./scripts/townhouse-dev-infra.sh up  +  docker-compose-townhouse-dev.yml:
   #  standalone connector + 2 Town + 2 Mill + 1 DVM + Anvil + Solana + Mina +
@@ -416,16 +434,19 @@ development_status:
   21-4-hd-wallet-management-and-key-derivation: done
   21-5-town-node-dockerfile: done
   21-6-mill-node-dockerfile: done
+  21-6-1-mill-review-findings-remediation: done
   21-7-dvm-node-dockerfile: done
+  21-7-5-connector-version-sweep-and-contract-canary: done
   21-8-fastify-rest-websocket-metrics-api: done
-  21-8-5-dashboard-design-system-foundation: backlog
-  21-9-dashboard-spa-home-view: backlog
-  21-10-dashboard-town-management-view: backlog
-  21-11-dashboard-mill-management-view: backlog
-  21-12-dashboard-dvm-management-view: backlog
-  21-13-dashboard-wallet-and-keys-view: backlog
-  21-14-first-run-setup-wizard: backlog
-  21-15-ator-privacy-transport-and-connectivity-status: backlog
+  21-8-0-townhouse-dev-infrastructure: done
+  21-8-5-dashboard-design-system-foundation: done
+  21-9-dashboard-spa-home-view: done
+  21-10-dashboard-town-management-view: done
+  21-11-dashboard-mill-management-view: done
+  21-12-dashboard-dvm-management-view: done
+  21-13-dashboard-wallet-and-keys-view: done
+  21-14-first-run-setup-wizard: done
+  21-15-ator-privacy-transport-and-connectivity-status: done
   21-16-e2e-integration-tests: backlog
   21-17-publish-package: backlog
   epic-21-retrospective: optional

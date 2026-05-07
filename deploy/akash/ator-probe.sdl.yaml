@@ -1,0 +1,81 @@
+---
+# ATOR-on-Akash probe — no-ingress design.
+#
+# Validates that the @anyone-protocol `anon` binary bootstraps, joins the
+# public Anyone network, and publishes a hidden service descriptor when run
+# inside an Akash provider's container runtime — WITHOUT requiring any public
+# ingress. The .anyone address (pre-generated locally and seeded via env) IS
+# the access mechanism.
+#
+# Mission flow:
+#   1. Locally pre-generate v3 keypair (deploy/akash/ator-probe-keys/hs/)
+#   2. Substitute HS_SECRET_KEY_B64 into this SDL at deploy time
+#   3. Akash schedules the pod; container starts anon with seeded keypair
+#   4. After ~60-120s, the HS descriptor publishes to Anyone HSDirs
+#   5. From a local machine running anon (connector dev infra exposes one
+#      at 127.0.0.1:28050), curl through SOCKS5 to <hostname>.anyone:9000
+#   6. Expect "PROBE-OK\n" response → end-to-end validated
+#
+# Image: ghcr.io/toon-protocol/akash-ator-probe:demo
+#   Built from docker/akash-ator-probe/Dockerfile — debian + pinned anon .deb.
+#
+# State: no persistent storage requested. The keypair is supplied via env;
+# Akash redeploys keep the same .anyone as long as the same key is injected.
+# (For the production townhouse SDL we'll switch to a persistent volume
+# mounted at /var/lib/anon to avoid passing the secret key as an env var.)
+#
+# Pricing: 1500 uakt per block (~$3-5/mo at typical AKT prices).
+#
+# Template token: __HS_SECRET_KEY_B64__ is replaced by scripts/akash-deploy.sh
+# at deploy time with the base64-encoded contents of
+# deploy/akash/ator-probe-keys/hs/hs_ed25519_secret_key. The token itself
+# never reaches the Akash API — only the substituted value does.
+
+version: "2.0"
+
+services:
+  ator-probe:
+    image: ghcr.io/toon-protocol/akash-ator-probe:demo
+    env:
+      - NICKNAME=akash-probe
+      - TARGET_PORT=9000
+      - HS_SECRET_KEY_B64=__HS_SECRET_KEY_B64__
+    expose:
+      # Minimum-surface readiness responder. Akash Console API rejects
+      # manifests with "zero global services" — every deployment must expose
+      # at least one global port. Port 8080 inside the container is a tiny
+      # socat HTTP responder (200 OK).
+      #
+      # We use direct TCP forwarding (NO `as: 80`) instead of L7 ingress.
+      # The Akash L7 nginx ingress was returning 404 even when the pod's
+      # readiness probe passed (likely a Host-header / routing quirk for
+      # services with a single port and no path config). Plain TCP
+      # forwarding routes a public host:port directly to our container's
+      # 8080 without any HTTP-aware proxy in the middle.
+      - port: 8080
+        proto: tcp
+        to:
+          - global: true
+
+profiles:
+  compute:
+    ator-probe:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+  placement:
+    dcloud:
+      pricing:
+        ator-probe:
+          denom: uakt
+          amount: 1500
+
+deployment:
+  ator-probe:
+    dcloud:
+      profile: ator-probe
+      count: 1

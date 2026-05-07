@@ -1,0 +1,39 @@
+{
+  "ator-probe": {
+    "dseq": "26691521",
+    "provider": "akash1ggfvyhr9sar4uxjs4hth3p4kzrwk7lysnenj3g",
+    "host": "provider.cpu.phl.aes.akash.pub",
+    "port": 31261,
+    "url": "http://provider.cpu.phl.aes.akash.pub:31261",
+    "image_digest": "sha256:0280d5ae2941fe4ef74d26e14b92868bf0fd26d3c5253ede9ce173eee5db704a",
+    "deployed_at": "2026-05-05T18:48:36Z",
+    "onion": "oxgbrholi2a7orrxrui5cxu5qvbrme4cdmclmduozluqxuhkzm72gwid.anyone"
+  },
+  "anvil": {
+    "dseq": "26711267",
+    "provider": "akash10tgqesyq4ehchhzh224vy9h33c9mvpq7gws4at",
+    "host": "4c4sj003jtfhn2mguq8gcktgdo.ingress.akt.engineer",
+    "port": 443,
+    "url": "https://4c4sj003jtfhn2mguq8gcktgdo.ingress.akt.engineer",
+    "image_digest": "sha256:af3208f87cfd468af8ed9a5d1263b05c37d6ec92d61283f2de64c4e95b975abc",
+    "deployed_at": "2026-05-07T03:09:02Z"
+  },
+  "solana": {
+    "dseq": "26711287",
+    "provider": "akash1evr5r8r8zgxddvhru3t0l8q079a94ew8hcgwdd",
+    "host": "sup9lfbmdpa0lcg5fh6vuisp2c.ingress.videokiska.ru",
+    "port": 443,
+    "url": "https://sup9lfbmdpa0lcg5fh6vuisp2c.ingress.videokiska.ru",
+    "image_digest": "sha256:764f57d8390e184e0013795502ada32c886b3abcbecc399668861e59f28d83a1",
+    "deployed_at": "2026-05-07T03:11:07Z"
+  },
+  "otterscan": {
+    "dseq": "26711307",
+    "provider": "akash10tgqesyq4ehchhzh224vy9h33c9mvpq7gws4at",
+    "host": "bilatc3tapc9b0g8l2gju2bcqs.ingress.akt.engineer",
+    "port": 443,
+    "url": "https://bilatc3tapc9b0g8l2gju2bcqs.ingress.akt.engineer",
+    "image_digest": "",
+    "deployed_at": "2026-05-07T03:12:54Z"
+  }
+}
