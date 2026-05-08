@@ -1,6 +1,6 @@
 # Story 44.4: Connector — `CONNECTOR_RELEASE_CONTRACT.md` Cross-Repo Doc
 
-Status: review
+Status: done
 
 > **CROSS-REPO STORY (UPSTREAM + LOCAL).** This is the only Epic 44 story that touches BOTH repos. The doc body must be byte-identical at `connector/CONNECTOR_RELEASE_CONTRACT.md` AND `packages/sdk/CONNECTOR_RELEASE_CONTRACT.md`. The connector-side file already exists (Story 44.3 created the `## Supply-chain signing` section); this story EXTENDS it with the API stability discipline (the load-bearing piece Epic 44 was waiting on) and CREATES the town-side mirror. Two PRs land in lock-step: one in `toon-protocol/connector`, one in `toon-protocol/town`.
 
@@ -137,12 +137,9 @@ so that the team doesn't accidentally consume a breaking-change release between 
     ```
     Expected output: empty. Anything else is a drift defect — open a follow-up PR before marking the story done. (This matches the canonical drift-detection command published in `## Verification` item 3 of `CONNECTOR_RELEASE_CONTRACT.md` itself, modulo cwd convention — the published example assumes `cwd = connector repo root` with `town` cloned as `../town`; the absolute-path form above runs from anywhere.)
     **Pre-merge verification ran 2026-05-08 — diff returned empty. Re-run post-merge to confirm.**
-  - [ ] 5.2 Update `_bmad-output/implementation-artifacts/sprint-status.yaml`: `44-4-connector-release-contract-cross-repo-doc: backlog → done`. Trailing comment style mirrors 44.3: `# done: doc mirrored at packages/sdk/CONNECTOR_RELEASE_CONTRACT.md — connector#<connector-PR>, town#<town-PR>`.
-    **POST-MERGE: Sprint-status is currently `review` (connector#67, town#34 open). Flip to `done` after both PRs merge.**
-  - [ ] 5.3 Bump `last_updated` field at the top of `sprint-status.yaml` to the day both PRs merged.
-    **POST-MERGE: Deferred.**
-  - [ ] 5.4 Town commit: `chore(townhouse): mark Story 44.4 done — release contract mirrored to packages/sdk (connector#<PR>, town#<PR>)`.
-    **POST-MERGE: Deferred.**
+  - [x] 5.2 Updated `_bmad-output/implementation-artifacts/sprint-status.yaml`: `44-4-connector-release-contract-cross-repo-doc: review → done` with trailing comment `# done: doc mirrored at packages/sdk/CONNECTOR_RELEASE_CONTRACT.md — connector#67, town#34` (mirrors 44.3 style).
+  - [x] 5.3 Bumped `last_updated` to `2026-05-08 (Story 44.4 → done — connector release contract mirrored at packages/sdk; connector#67, town#34 merged)`.
+  - [x] 5.4 Close-out commit: `chore(townhouse): mark Story 44.4 done — release contract mirrored to packages/sdk (connector#67, town#34)` on branch `chore/44-4-close-out`.
   - [x] 5.5 Update this story file's `Status: ready-for-dev → review` (or `done` after self-review) and fill in the Dev Agent Record below.
 
 ## Dev Notes
@@ -328,6 +325,8 @@ claude-sonnet-4-6
 ### Change Log
 
 - 2026-05-08: Story 44.4 implemented — connector API stability contract codified, `## Staying current` section added, `pull/<num>` placeholders fixed, town-side mirror created at `packages/sdk/CONNECTOR_RELEASE_CONTRACT.md`, cross-links added to `CONNECTOR_MIGRATION.md` and `CLAUDE.md`. PRs: connector#67, town#34.
+- 2026-05-08: Code review (Blind Hunter + Edge Case Hunter + Acceptance Auditor) round 1 + 2; all 8 ACs pass; body-equivalence diff-clean. 6 cross-repo polish patches (P3–P7 + Q1) deferred to follow-up cycle (tracked in `deferred-work.md`).
+- 2026-05-08: Both PRs merged (connector#67 at 16:52 UTC, town#34 at 21:50 UTC); Tasks 5.2–5.4 close-out applied — sprint-status flipped `review → done`, `last_updated` bumped, close-out commit on `chore/44-4-close-out`. Story status `review → done`.
 
 ### Review Findings
 
