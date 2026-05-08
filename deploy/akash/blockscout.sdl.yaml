@@ -1,0 +1,142 @@
+---
+# Blockscout — EVM block explorer for Town EVM Devnet
+#
+# Deploys Blockscout + Postgres + Redis pointed at the Akash-hosted Anvil
+# RPC URL. Provides a credible verification surface for EVM txids in the
+# operator dashboard (https://<blockscout-host>/tx/<hash>).
+#
+# Prerequisite: anvil.sdl.yaml must be deployed first. Set ANVIL_RPC_URL to
+# the anvil lease's public URL before deploying this SDL — see
+# scripts/akash-deploy.sh which templates it automatically.
+#
+# Pricing: blockscout 2000 + postgres 1000 + redis 500 = 3500 uakt/block
+# (~$7-10/mo combined).
+
+version: "2.0"
+
+services:
+  postgres:
+    image: postgres:15
+    env:
+      - POSTGRES_USER=blockscout
+      - POSTGRES_PASSWORD=blockscout
+      - POSTGRES_DB=blockscout
+    expose:
+      - port: 5432
+        to:
+          - service: blockscout
+    params:
+      storage:
+        pgdata:
+          mount: /var/lib/postgresql/data
+          readOnly: false
+
+  redis:
+    image: redis:7-alpine
+    command:
+      - "redis-server"
+      - "--appendonly"
+      - "yes"
+    expose:
+      - port: 6379
+        to:
+          - service: blockscout
+
+  blockscout:
+    image: blockscout/blockscout:latest
+    env:
+      # Database
+      - DATABASE_URL=postgresql://blockscout:blockscout@postgres:5432/blockscout
+      - ECTO_USE_SSL=false
+      # Cache
+      - ACCOUNT_REDIS_URL=redis://redis:6379
+      # Chain — set by scripts/akash-deploy.sh after anvil lease is up.
+      # Variant must be one of Blockscout's recognized values (geth,
+      # nethermind, besu, erigon, ganache, parity, rsk, hyperledger_besu).
+      # `ganache` is closest to Anvil — both are dev chains with the same
+      # JSON-RPC dialect; using `anvil` here causes Blockscout to crash-loop.
+      - ETHEREUM_JSONRPC_VARIANT=ganache
+      - ETHEREUM_JSONRPC_HTTP_URL=$ANVIL_RPC_URL
+      - ETHEREUM_JSONRPC_TRACE_URL=$ANVIL_RPC_URL
+      - NETWORK=Town EVM Devnet
+      - SUBNETWORK=Akash
+      - CHAIN_ID=31338
+      - COIN=ETH
+      - COIN_NAME=Ether
+      # App
+      - SECRET_KEY_BASE=$BLOCKSCOUT_SECRET_KEY_BASE
+      - PORT=4000
+      - MIX_ENV=prod
+      - DISABLE_INDEXER=false
+      - DISABLE_WEBAPP=false
+    command:
+      - "sh"
+      - "-c"
+      # depends-on removed: Akash Console API rejects it. Blockscout retries
+      # the DB connection at boot, and Postgres comes up faster than
+      # Blockscout's migrations regardless.
+      - "bin/blockscout eval \"Elixir.Explorer.ReleaseTasks.create_and_migrate()\" && bin/blockscout start"
+    expose:
+      - port: 4000
+        as: 80
+        proto: tcp
+        to:
+          - global: true
+
+profiles:
+  compute:
+    postgres:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 1Gi
+        storage:
+          - size: 1Gi
+          - name: pgdata
+            size: 10Gi
+            attributes:
+              persistent: true
+              class: beta2
+    redis:
+      resources:
+        cpu:
+          units: 0.25
+        memory:
+          size: 256Mi
+        storage:
+          size: 512Mi
+    blockscout:
+      resources:
+        cpu:
+          units: 1
+        memory:
+          size: 2Gi
+        storage:
+          size: 2Gi
+  placement:
+    dcloud:
+      pricing:
+        postgres:
+          denom: uakt
+          amount: 1000
+        redis:
+          denom: uakt
+          amount: 500
+        blockscout:
+          denom: uakt
+          amount: 2000
+
+deployment:
+  postgres:
+    dcloud:
+      profile: postgres
+      count: 1
+  redis:
+    dcloud:
+      profile: redis
+      count: 1
+  blockscout:
+    dcloud:
+      profile: blockscout
+      count: 1

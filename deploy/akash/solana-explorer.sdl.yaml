@@ -1,0 +1,68 @@
+---
+# Town SOL Explorer — solana-labs/explorer self-hosted on Akash
+#
+# The official Solana Explorer (the source behind explorer.solana.com), built
+# as a Next.js production server pointed at our Akash-hosted Solana RPC.
+# Provides an EVM-Blockscout-equivalent verification surface for Solana txids
+# in the operator dashboard (https://<explorer-host>/tx/<sig>).
+#
+# Image: ghcr.io/toon-protocol/akash-solana-explorer:demo
+#   Built from docker/Dockerfile.akash-solana-explorer.
+#
+# Prerequisite: solana.sdl.yaml must be deployed first. scripts/akash-deploy.sh
+# templates SOLANA_RPC_URL + SOLANA_WS_URL into the env at deploy time.
+#
+# Pricing: 1500 uakt/block (~$3-5/mo) — Next.js prod server is light.
+#
+# Demo-day fallback (zero-infra): if this lease misbehaves, the dashboard can
+# emit links to the public explorer:
+#   https://explorer.solana.com/tx/<sig>?cluster=custom&customUrl=<solana-akash-url>
+# That works because the public explorer accepts a customUrl param.
+
+version: "2.0"
+
+services:
+  solana-explorer:
+    image: ghcr.io/toon-protocol/akash-solana-explorer:demo
+    env:
+      # Default cluster URL the explorer will use when no ?cluster= param is set.
+      - NEXT_PUBLIC_BACKEND_RPC_URL=$SOLANA_RPC_URL
+      - NEXT_PUBLIC_BACKEND_WS_URL=$SOLANA_WS_URL
+      - NEXT_PUBLIC_DEFAULT_CLUSTER=custom
+      - NEXT_PUBLIC_CLUSTER_NAME=Town SOL Devnet
+      - PORT=3000
+    expose:
+      - port: 3000
+        as: 80
+        proto: tcp
+        to:
+          - global: true
+
+profiles:
+  compute:
+    solana-explorer:
+      resources:
+        # Solana Explorer is a heavy Next.js app — pulls in @solana/web3.js,
+        # all the IDL parsers, and a few crypto libs with native bindings.
+        # Local container peaks ~600MB RSS at idle; 2Gi gives OOM headroom.
+        cpu:
+          units: 1
+        memory:
+          size: 2Gi
+        # Image unpacks to ~5.3GB on disk (Next.js + node_modules from upstream
+        # solana-labs/explorer; standalone build mode isn't enabled upstream so
+        # we ship the full /app). 8Gi gives headroom for /tmp scratch.
+        storage:
+          size: 8Gi
+  placement:
+    dcloud:
+      pricing:
+        solana-explorer:
+          denom: uakt
+          amount: 1500
+
+deployment:
+  solana-explorer:
+    dcloud:
+      profile: solana-explorer
+      count: 1

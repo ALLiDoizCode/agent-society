@@ -44,6 +44,32 @@ To stop the infrastructure:
 | Peer 2 BLS | http://localhost:19110 | ILP packet validation |
 | Peer 2 Relay | ws://localhost:19710 | Nostr WebSocket |
 
+## Akash Devnet
+
+Public, browser-reachable EVM + Solana dev chains (plus Otterscan)
+hosted on the [Akash Network](https://console.akash.network). Used by
+the operator dashboard, demos, and anyone who wants to test against
+TOON without standing up local infrastructure.
+
+```bash
+export AKASH_CONSOLE_API_KEY=ac.sk.production.…   # console.akash.network → API Keys
+
+./scripts/akash-status.sh                # health check every lease
+./scripts/akash-deploy.sh redeploy-all   # close + redeploy current set in dependency order
+./scripts/akash-deploy.sh redeploy-all --rebuild   # also rebuild + push images first
+./scripts/akash-deploy.sh all            # first-time deploy from empty leases.json
+```
+
+| Service | Notes |
+|---------|-------|
+| Anvil | EVM chain-id 31337, Mock USDC at `0x5FbDB2…` baked in |
+| Solana | `solana-test-validator`, Mock USDC SPL mint `6Gbdr…` bootstrapped on each fresh ledger |
+| Otterscan | EVM block explorer pointing at our Anvil |
+
+Current lease URLs live in `deploy/akash/leases.json` (committed). For
+service catalog, faucet usage, troubleshooting, and design decisions,
+see [`deploy/akash/README.md`](../deploy/akash/README.md).
+
 ## Town CLI
 
 Run a relay with one command (no Docker required):

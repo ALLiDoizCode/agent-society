@@ -46,6 +46,38 @@
         font-size: 1.1em;
       }
 
+      .chain-toggle {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 24px;
+        background: #f0f1f5;
+        border-radius: 10px;
+        padding: 4px;
+      }
+
+      .chain-toggle button {
+        flex: 1;
+        padding: 10px;
+        background: transparent;
+        color: #666;
+        border: none;
+        border-radius: 8px;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+      }
+
+      .chain-toggle button.active {
+        background: white;
+        color: #667eea;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      }
+
+      .chain-toggle button:hover:not(.active) {
+        color: #333;
+      }
+
       .info-box {
         background: #f8f9fa;
         border-radius: 10px;
@@ -58,6 +90,7 @@
         justify-content: space-between;
         margin-bottom: 10px;
         font-size: 0.95em;
+        gap: 12px;
       }
 
       .info-row:last-child {
@@ -67,11 +100,14 @@
       .info-label {
         color: #666;
         font-weight: 500;
+        flex-shrink: 0;
       }
 
       .info-value {
         color: #333;
         font-weight: 600;
+        text-align: right;
+        word-break: break-all;
       }
 
       .form-group {
@@ -98,6 +134,13 @@
       input:focus {
         outline: none;
         border-color: #667eea;
+      }
+
+      .hint {
+        margin-top: 6px;
+        font-size: 0.85em;
+        color: #999;
+        font-family: 'Courier New', monospace;
       }
 
       button {
@@ -128,6 +171,7 @@
         background: #ccc;
         cursor: not-allowed;
         transform: none;
+        box-shadow: none;
       }
 
       .message {
@@ -135,6 +179,7 @@
         border-radius: 8px;
         margin-top: 20px;
         display: none;
+        word-break: break-all;
       }
 
       .message.success {
@@ -210,27 +255,34 @@
     <div class="container">
       <h1>🚰 Token Faucet</h1>
       <p class="subtitle">
-        Get free ETH and USDC for local development
+        Get free dev tokens — EVM (ETH + USDC) or Solana (SOL + USDC)
       </p>
 
-      <div id="notReady" class="not-ready" style="display: none">
-        ⚠️ Waiting for token contract deployment...
+      <div class="chain-toggle" role="tablist">
+        <button id="chainEvm" class="active" type="button" data-chain="evm">
+          EVM
+        </button>
+        <button id="chainSol" type="button" data-chain="solana">
+          Solana
+        </button>
       </div>
+
+      <div id="notReady" class="not-ready" style="display: none"></div>
 
       <div class="info-box">
         <div class="info-row">
-          <span class="info-label">ETH per request:</span>
-          <span class="info-value" id="ethAmount">-</span>
+          <span class="info-label">Native per request:</span>
+          <span class="info-value" id="nativeAmount">-</span>
         </div>
         <div class="info-row">
-          <span class="info-label">Tokens per request:</span>
+          <span class="info-label">USDC per request:</span>
           <span class="info-value" id="tokenAmount">-</span>
         </div>
         <div class="info-row">
           <span class="info-label">Rate limit:</span>
           <span class="info-value" id="rateLimit">-</span>
         </div>
-        <div class="info-row">
+        <div class="info-row" id="evmContractRow">
           <span class="info-label">Token contract:</span>
           <span
             class="info-value"
@@ -239,21 +291,36 @@
             >-</span
           >
         </div>
+        <div class="info-row" id="solanaMintRow" style="display: none">
+          <span class="info-label">USDC mint:</span>
+          <span
+            class="info-value"
+            id="solanaMint"
+            style="font-size: 0.8em; font-family: monospace"
+            >-</span
+          >
+        </div>
       </div>
 
       <form id="faucetForm">
         <div class="form-group">
-          <label for="address">Your Ethereum Address</label>
+          <label for="address" id="addressLabel">Your Ethereum Address</label>
+          <input type="text" id="address" required />
+          <p class="hint" id="addressHint">Format: 0x followed by 40 hex chars</p>
+        </div>
+
+        <div class="form-group">
+          <label for="amount">USDC amount (optional)</label>
           <input
-            type="text"
-            id="address"
-            placeholder="0x..."
-            required
-            pattern="^0x[a-fA-F0-9]{40}$"
+            type="number"
+            id="amount"
+            min="1"
+            step="1"
+            placeholder="(use default)"
           />
         </div>
 
-        <button type="submit" id="submitBtn">Request Tokens 💧</button>
+        <button type="submit" id="submitBtn">Drip 💧</button>
       </form>
 
       <div class="loading" id="loading">
@@ -269,33 +336,108 @@
     <script>
       const form = document.getElementById('faucetForm');
       const addressInput = document.getElementById('address');
+      const amountInput = document.getElementById('amount');
       const submitBtn = document.getElementById('submitBtn');
       const message = document.getElementById('message');
       const loading = document.getElementById('loading');
       const notReady = document.getElementById('notReady');
+      const chainEvmBtn = document.getElementById('chainEvm');
+      const chainSolBtn = document.getElementById('chainSol');
+      const addressLabel = document.getElementById('addressLabel');
+      const addressHint = document.getElementById('addressHint');
+      const evmContractRow = document.getElementById('evmContractRow');
+      const solanaMintRow = document.getElementById('solanaMintRow');
 
-      // Load faucet info
-      async function loadInfo() {
-        try {
-          const response = await fetch('/api/info');
-          const data = await response.json();
+      const EVM_RE = /^0x[0-9a-fA-F]{40}$/;
+      const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-          document.getElementById('ethAmount').textContent =
-            `${data.ethAmount} ETH`;
+      let currentChain = 'evm';
+      let lastInfo = null;
+
+      function setChain(chain) {
+        currentChain = chain;
+        chainEvmBtn.classList.toggle('active', chain === 'evm');
+        chainSolBtn.classList.toggle('active', chain === 'solana');
+
+        if (chain === 'evm') {
+          addressLabel.textContent = 'Your Ethereum Address';
+          addressInput.placeholder = '0x...';
+          addressHint.textContent = 'Format: 0x followed by 40 hex chars';
+          evmContractRow.style.display = '';
+          solanaMintRow.style.display = 'none';
+        } else {
+          addressLabel.textContent = 'Your Solana Address';
+          addressInput.placeholder = 'Base58 pubkey...';
+          addressHint.textContent =
+            'Format: base58 pubkey (32-44 chars, no 0OIl)';
+          evmContractRow.style.display = 'none';
+          solanaMintRow.style.display = '';
+        }
+
+        addressInput.value = '';
+        amountInput.value = '';
+        hideMessage();
+        applyInfoToView();
+      }
+
+      chainEvmBtn.addEventListener('click', () => setChain('evm'));
+      chainSolBtn.addEventListener('click', () => setChain('solana'));
+
+      function applyInfoToView() {
+        if (!lastInfo) return;
+
+        document.getElementById('rateLimit').textContent =
+          `${lastInfo.rateLimitHours} hour(s)`;
+
+        if (currentChain === 'evm') {
+          document.getElementById('nativeAmount').textContent =
+            `${lastInfo.ethAmount} ETH`;
           document.getElementById('tokenAmount').textContent =
-            `${data.tokenAmount} ${data.tokenSymbol}`;
-          document.getElementById('rateLimit').textContent =
-            `${data.rateLimitHours} hour(s)`;
+            `${lastInfo.tokenAmount} ${lastInfo.tokenSymbol}`;
           document.getElementById('tokenAddress').textContent =
-            data.tokenAddress || 'Not deployed yet';
+            lastInfo.tokenAddress || 'Not deployed yet';
 
-          if (!data.ready) {
+          if (!lastInfo.ready) {
+            notReady.textContent =
+              '⚠️ Waiting for token contract deployment...';
             notReady.style.display = 'block';
             submitBtn.disabled = true;
           } else {
             notReady.style.display = 'none';
             submitBtn.disabled = false;
           }
+        } else {
+          const sol = lastInfo.solana || {};
+          document.getElementById('nativeAmount').textContent = '1 SOL';
+          document.getElementById('tokenAmount').textContent = sol.usdcAmount
+            ? `${sol.usdcAmount} USDC`
+            : '-';
+          document.getElementById('solanaMint').textContent =
+            sol.usdcMint || '-';
+
+          if (!sol.ready) {
+            notReady.textContent =
+              '⚠️ Solana faucet not configured (SOLANA_RPC_URL unset)';
+            notReady.style.display = 'block';
+            submitBtn.disabled = true;
+          } else if (!sol.faucetAuthority) {
+            notReady.textContent =
+              '⚠️ USDC drip disabled — faucet authority keypair missing. SOL airdrops still work.';
+            notReady.style.display = 'block';
+            submitBtn.disabled = false;
+          } else {
+            notReady.style.display = 'none';
+            submitBtn.disabled = false;
+          }
+        }
+      }
+
+      // Load faucet info
+      async function loadInfo() {
+        try {
+          const response = await fetch('/api/info');
+          lastInfo = await response.json();
+          applyInfoToView();
         } catch (error) {
           console.error('Failed to load faucet info:', error);
         }
@@ -303,7 +445,7 @@
 
       // Show message
       function showMessage(text, type) {
-        message.textContent = text;
+        message.innerHTML = text;
         message.className = `message ${type} show`;
       }
 
@@ -312,43 +454,93 @@
         message.className = 'message';
       }
 
+      function explorerLinkEvm(hash) {
+        // Local Anvil has no real explorer; render the hash as text.
+        return `<code>${hash}</code>`;
+      }
+
+      function explorerLinkSol(sig) {
+        // Same — local test-validator has no explorer. Render the sig.
+        return `<code>${sig}</code>`;
+      }
+
       // Handle form submission
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         hideMessage();
 
         const address = addressInput.value.trim();
-
-        // Validate address format
-        if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
-          showMessage('Invalid Ethereum address format', 'error');
+        const re = currentChain === 'evm' ? EVM_RE : SOL_RE;
+        if (!re.test(address)) {
+          showMessage(
+            currentChain === 'evm'
+              ? 'Invalid Ethereum address format'
+              : 'Invalid Solana address format (must be base58, 32-44 chars)',
+            'error'
+          );
           return;
         }
+
+        const amountRaw = amountInput.value.trim();
+        const amount = amountRaw ? parseInt(amountRaw, 10) : undefined;
 
         // Disable form and show loading
         submitBtn.disabled = true;
         loading.style.display = 'block';
 
         try {
-          const response = await fetch('/api/request', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ address }),
-          });
-
-          const data = await response.json();
-
-          if (response.ok) {
-            const ethTxLink = `<a href="http://localhost:8545" class="tx-link" target="_blank">View TX</a>`;
-            showMessage(
-              `✅ Success! Sent ${data.transactions.eth.amount} ETH and ${data.transactions.token.amount} ${data.transactions.token.symbol} to ${address}`,
-              'success'
-            );
-            addressInput.value = '';
+          if (currentChain === 'evm') {
+            const response = await fetch('/api/evm/request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ address }),
+            });
+            const data = await response.json();
+            if (response.ok) {
+              showMessage(
+                `✅ Sent ${data.transactions.eth.amount} ETH (${explorerLinkEvm(data.transactions.eth.hash)}) and ${data.transactions.token.amount} ${data.transactions.token.symbol} (${explorerLinkEvm(data.transactions.token.hash)}) to ${address}`,
+                'success'
+              );
+              addressInput.value = '';
+              amountInput.value = '';
+            } else {
+              showMessage(
+                `❌ ${data.error}${data.message ? ': ' + data.message : ''}`,
+                'error'
+              );
+            }
           } else {
-            showMessage(`❌ ${data.error}: ${data.message}`, 'error');
+            const body = { recipient: address };
+            if (typeof amount === 'number' && !Number.isNaN(amount))
+              body.amount = amount;
+            const response = await fetch('/api/sol/request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            const data = await response.json();
+            if (response.ok) {
+              const usdcLine = data.usdcSig
+                ? ` and USDC (${explorerLinkSol(data.usdcSig)})`
+                : ' (USDC drip skipped — mint not found or authority unavailable)';
+              showMessage(
+                `✅ Airdropped 1 SOL (${explorerLinkSol(data.airdropSig)})${usdcLine} to ${address}`,
+                'success'
+              );
+              addressInput.value = '';
+              amountInput.value = '';
+            } else if (data.airdropSig) {
+              // Soft fail: SOL went out, USDC didn't.
+              showMessage(
+                `⚠️ ${data.error}: ${data.message}<br>SOL airdrop succeeded: ${explorerLinkSol(data.airdropSig)}`,
+                'error'
+              );
+            } else {
+              showMessage(
+                `❌ ${data.error}${data.message ? ': ' + data.message : ''}`,
+                'error'
+              );
+            }
           }
         } catch (error) {
           showMessage(`❌ Request failed: ${error.message}`, 'error');
