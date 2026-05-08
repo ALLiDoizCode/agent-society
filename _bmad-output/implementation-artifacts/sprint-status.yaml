@@ -470,3 +470,89 @@ development_status:
   22-4-solana-settlement-e2e: done
   22-5-connector-contract-smoke-test: done
   epic-22-retrospective: optional
+  # ═══════════════════════════════════════════════════════════════
+  # Townhouse HS-Mode v1 — Epics 44–49 (added 2026-05-07)
+  # Source: _bmad-output/planning-artifacts/epics-townhouse-hs-v1.md
+  # Plan:   _bmad-output/planning-artifacts/townhouse-hs-v1-plan-2026-05-07.md
+  # Persona: Drew (homelab DePIN-tinkerer); USDC-denominated; Ink TUI surface.
+  # 27 stories total. Critical path: 44.1 → 45.1 → 45.2 → 45.4 → 46.1 → 47.1 → 48.1.
+  # Telemetry stack (49.x) MUST land before pilot recruitment fires
+  # (~2026-05-25 per Mary's calendar). Validation gate fires day-30 of pilot.
+  # ═══════════════════════════════════════════════════════════════
+
+  # Epic 44: Connector Cross-Repo Surface
+  # All 4 stories ship as PRs in `toon-protocol/connector` (separate repo).
+  # Story 44.1 contract was resolved via connector#58 review on 2026-05-07
+  # (https://github.com/toon-protocol/connector/issues/58) — `ready` field
+  # dropped, SIGHUP re-read dropped, version target v3.5.0 (post-#57),
+  # ~150 LOC. Story 44.1 unblocks Epic 45.
+  epic-44: in-progress
+  44-1-connector-admin-hs-hostname-endpoint: done  # connector v3.5.0 published 2026-05-07 (#59); townhouse pin bumped via this commit; pin-by-tag now safe after connector PR #60 fixed docker-release tag-resolution; see connector#61 for historical tag corruption
+  44-2-connector-verify-multi-arch-image-build: done  # verified v3.5.1 amd64+arm64 manifest + arm64 OK smoke test + sidecar v0.4.10.0-beta; connector#63 #64 #65
+  44-3-connector-cosign-keyless-oidc-image-signing: done  # done: cosign verify green at v3.6.0 — connector#66
+  44-4-connector-release-contract-cross-repo-doc: review  # review: doc mirrored at packages/sdk/CONNECTOR_RELEASE_CONTRACT.md — connector#67 merged, town#34 open
+  epic-44-retrospective: optional
+
+  # Epic 45: One-Command Apex Install
+  # Drew runs `npx @toon-protocol/townhouse hs up` and gets a payable
+  # `.anyone` identity in <5 minutes. Apex-only boot (no peer nodes by default).
+  # Depends on Epic 44 Story 44.1 for clean hostname surfacing.
+  epic-45: backlog
+  45-1-multi-arch-townhouse-image-publish-ci: backlog  # CRITICAL PATH; sized L; arm64+cosign+matrix complexity
+  45-2-embed-compose-templates-and-image-manifest-in-npm-tarball: backlog  # CRITICAL PATH
+  45-3-docker-orchestrator-profile-param: backlog
+  45-4-townhouse-hs-up-subcommand-apex-only-boot: backlog  # CRITICAL PATH; depends on 44.1
+  epic-45-retrospective: optional
+
+  # Epic 46: Lazy Peer Node Provisioning
+  # `townhouse node add <town|mill|dvm>` provisions on-demand: derive HD key →
+  # pull image → write nodes.yaml → start container → /health → register.
+  # nodes.yaml is operator-managed source of truth; default = Town only.
+  epic-46: backlog
+  46-1-nodes-yaml-schema-and-boot-reconciler-and-peer-type-resolver: backlog  # CRITICAL PATH
+  46-2-post-and-delete-api-nodes-host-api: backlog
+  46-3-townhouse-node-add-remove-list-cli: backlog
+  epic-46-retrospective: optional
+
+  # Epic 47: Earnings Data Plane
+  # Connector is single source of truth for earnings (children stay /health-only).
+  # Townhouse owns its own time-series via hourly snapshots in
+  # ~/.townhouse/earnings-snapshots.jsonl. API-only — power users can curl
+  # GET /api/earnings before any TUI ships.
+  epic-47: backlog
+  47-1-sdk-get-earnings-wrap-and-contract-canary: backlog  # CRITICAL PATH
+  47-2-aggregator-earnings-surgery: backlog  # deletes the packet-volume proxy
+  47-3-hourly-earnings-snapshot-writer: backlog  # property-based tests required (DST/year boundaries/corruption)
+  47-4-get-api-earnings-two-bucket-endpoint: backlog
+  epic-47-retrospective: optional
+
+  # Epic 48: Operator Dashboard (Ink TUI)
+  # Hero metric: MONTH $X.XX USDC. Two-bucket display (apex routing fees +
+  # per-peer table). "You're early" badge when lifetime <$1 OR uptime <7d.
+  # MERGE GATE on Story 48.1: PR cannot merge without
+  # _bmad-output/design/empty-state-copy.md populated + Sally sign-off
+  # (UX-DR2 enforced as AC; NFR19).
+  epic-48: backlog
+  48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation: backlog  # CRITICAL PATH; sized L; merge gate on empty-state copy library
+  48-2-two-bucket-earnings-display: backlog
+  48-3-youre-early-badge: backlog
+  48-4-activity-ticker-footer-and-activity-overlay: backlog
+  48-5-drill-subcommands: backlog  # townhouse channels/metrics/logs/peer/health
+  48-6-sats-power-user-flag: backlog  # undocumented --units=sats power-user flag
+  epic-48-retrospective: optional
+
+  # Epic 49: Telemetry & Validation Gate
+  # Pilot operators opt in to anonymous earnings telemetry; weekly pings
+  # (jittered ±6h) feed the validation-gate dataset that decides v1.0
+  # marketing copy at $1.00 / $0.10 / <$0.10 weekly-USDC thresholds.
+  # Branches from Epic 47 (needs earnings data); independent of Epic 48
+  # (TUI not required for telemetry).
+  # MUST land before pilot recruitment fires (~2026-05-25 per Mary's calendar).
+  epic-49: backlog
+  49-1-telemetry-payload-schema-and-zod-validator: backlog
+  49-2-opt-in-flow-and-disclosure-copy-and-state-file: backlog
+  49-3-telemetry-http-client-and-retry-buffer: backlog
+  49-4-townhouse-telemetry-cli: backlog
+  49-5-telemetry-receiver-server-and-cloudflare-and-grafana-dashboard: backlog  # BLOCKED: pending owner assignment for telemetry.toon-protocol.dev (Cloudflare account, domain, Grafana hosting)
+  49-6-pilot-day-30-decision-artifact: backlog
+  epic-49-retrospective: optional
