@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-01 (story 21.15 → done — ATOR privacy transport + connectivity status; code review applied 44 patches and resolved 6 decisions)
+# last_updated: 2026-05-08 (Story 44.4 → done — connector release contract mirrored at packages/sdk; connector#67, town#34 merged)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -490,7 +490,7 @@ development_status:
   44-1-connector-admin-hs-hostname-endpoint: done  # connector v3.5.0 published 2026-05-07 (#59); townhouse pin bumped via this commit; pin-by-tag now safe after connector PR #60 fixed docker-release tag-resolution; see connector#61 for historical tag corruption
   44-2-connector-verify-multi-arch-image-build: done  # verified v3.5.1 amd64+arm64 manifest + arm64 OK smoke test + sidecar v0.4.10.0-beta; connector#63 #64 #65
   44-3-connector-cosign-keyless-oidc-image-signing: done  # done: cosign verify green at v3.6.0 — connector#66
-  44-4-connector-release-contract-cross-repo-doc: review  # review: doc mirrored at packages/sdk/CONNECTOR_RELEASE_CONTRACT.md — connector#67 merged, town#34 open
+  44-4-connector-release-contract-cross-repo-doc: done  # done: doc mirrored at packages/sdk/CONNECTOR_RELEASE_CONTRACT.md — connector#67, town#34
   epic-44-retrospective: optional
 
   # Epic 45: One-Command Apex Install
