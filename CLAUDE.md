@@ -119,6 +119,7 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 | Topic | Location |
 | --- | --- |
 | **All coding rules, patterns, conventions** | `_bmad-output/project-context.md` |
+| Connector release contract (semver discipline) | `packages/sdk/CONNECTOR_RELEASE_CONTRACT.md` |
 | Connector API contract + migration history | `packages/sdk/CONNECTOR_MIGRATION.md` |
 | Connector contract canary test | `packages/sdk/tests/integration/connector-contract.test.ts` |
 | HyperBEAM integration strategy & R&D phases | `_bmad-output/planning-artifacts/research/toon-hyperbeam-integration-strategy.md` |
