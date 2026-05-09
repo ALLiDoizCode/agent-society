@@ -28,6 +28,15 @@ import type Docker from 'dockerode';
 import { DEFAULT_CONNECTOR_IMAGE } from '../constants.js';
 import { ConnectorAdminClient } from '../connector/admin-client.js';
 
+/** Parse a Docker image reference into its name, optional tag, and optional digest. */
+function parseConnectorImage(ref: string): { name: string; tag?: string; digest?: string } {
+  const digestMatch = ref.match(/^(.+)@(sha256:[a-f0-9]+)$/);
+  if (digestMatch) return { name: digestMatch[1]!, digest: digestMatch[2] };
+  const tagMatch = ref.match(/^(.+):([^:]+)$/);
+  if (tagMatch) return { name: tagMatch[1]!, tag: tagMatch[2] };
+  throw new Error(`unparseable image ref: ${ref}`);
+}
+
 // ── Port allocation for this test ─────────────────────────────────────────────
 // We bind two internal ports to ephemeral host ports so this test can run
 // alongside other integration tests without port conflicts.
@@ -61,9 +70,15 @@ describe.skipIf(isTruthyEnv(process.env['SKIP_DOCKER']))(
 
       // ── Pull image if not already present ──────────────────────────────
       const images = await docker.listImages();
-      const alreadyPulled = images.some((img) =>
-        (img.RepoTags ?? []).includes(DEFAULT_CONNECTOR_IMAGE)
-      );
+      // Support both tag form (RepoTags) and digest form (RepoDigests).
+      // Digest refs appear in RepoDigests as "name@sha256:<hex>", not in RepoTags.
+      const parsedRef = parseConnectorImage(DEFAULT_CONNECTOR_IMAGE);
+      const alreadyPulled = images.some((img) => {
+        if (parsedRef.digest) {
+          return (img.RepoDigests ?? []).some((d) => d.includes(parsedRef.digest!));
+        }
+        return (img.RepoTags ?? []).includes(DEFAULT_CONNECTOR_IMAGE);
+      });
 
       if (!alreadyPulled) {
         await new Promise<void>((resolve, reject) => {

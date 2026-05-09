@@ -18,9 +18,9 @@ services:
   # Connector — always runs (no profile restriction)
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   connector:
-    # Image tag must match DEFAULT_CONNECTOR_IMAGE in packages/townhouse/src/constants.ts
-    # Compose cannot import a TS constant — keep both in sync when bumping the connector.
-    image: ghcr.io/toon-protocol/connector:3.4.1
+    # Image digest must match DEFAULT_CONNECTOR_IMAGE in packages/townhouse/src/constants.ts
+    # Story 45.2: flipped from tag form to digest form per CONNECTOR_RELEASE_CONTRACT.md.
+    image: ghcr.io/toon-protocol/connector@sha256:4a24ccb0997d7b025997e670546032f6a84cd18a77c490509016b85e181a344e
     container_name: townhouse-connector
     networks:
       - townhouse-net

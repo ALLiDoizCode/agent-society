@@ -159,6 +159,66 @@ pnpm --filter @toon-protocol/townhouse-web e2e
 TOWNHOUSE_E2E_REAL_STACK=1 pnpm --filter @toon-protocol/townhouse-web e2e:real
 ```
 
+## Compose Templates (npm tarball, Story 45.2)
+
+The published `@toon-protocol/townhouse` package ships two Docker Compose templates:
+
+| Profile | File in tarball | Purpose |
+|---------|-----------------|---------|
+| `hs`  | `dist/compose/townhouse-hs.yml` | Operator-facing apex boot — digest-pinned GHCR images |
+| `dev` | `dist/compose/townhouse-dev.yml` | Contributor dev stack — local `toon:*` build images |
+
+### API
+
+```typescript
+import { loadComposeTemplate, materializeComposeTemplate } from '@toon-protocol/townhouse';
+
+// Read the rendered YAML for a profile (read-only, returns a string).
+const yaml = loadComposeTemplate('hs');
+
+// Write the compose file + image-manifest.json to ~/.townhouse/ (side-effecting).
+// Both output files are written with mode 0o600 (NFR8 — operator-secret).
+const { composePath, manifestPath } = materializeComposeTemplate('hs');
+// composePath → ~/.townhouse/compose/townhouse-hs.yml
+// manifestPath → ~/.townhouse/image-manifest.json
+```
+
+Both functions accept an optional `options` object:
+
+```typescript
+interface ComposeLoaderOptions {
+  townhouseHome?: string;  // Override ~/.townhouse/ write target (useful in tests)
+  distDir?: string;        // Override dist/ read root (useful in tests)
+}
+```
+
+### `image-manifest.json` schema
+
+The manifest pinning every image to a content-addressed `sha256:` digest:
+
+```json
+{
+  "schemaVersion": 1,
+  "townhouseVersion": "0.1.0",
+  "builtAt": "<ISO timestamp>",
+  "images": {
+    "townhouse-api": { "name": "ghcr.io/toon-protocol/townhouse-api", "tag": "0.1.0", "digest": "sha256:..." },
+    "town":          { "name": "ghcr.io/toon-protocol/town",          "tag": "0.1.0", "digest": "sha256:..." },
+    "mill":          { "name": "ghcr.io/toon-protocol/mill",          "tag": "0.1.0", "digest": "sha256:..." },
+    "dvm":           { "name": "ghcr.io/toon-protocol/dvm",           "tag": "0.1.0", "digest": "sha256:..." },
+    "connector":     { "name": "ghcr.io/toon-protocol/connector",     "tag": "3.4.1", "digest": "sha256:..." }
+  }
+}
+```
+
+Full schema source: `scripts/build-image-manifest.mjs` (lines 44–67).
+
+### Dev stack compose (canonical source)
+
+The package-local `packages/townhouse/compose/townhouse-dev.yml` is the canonical source of the dev template. It is shipped verbatim in the npm tarball (no digest substitution — uses local `toon:*` image tags).
+
+For backward compatibility, `docker-compose-townhouse-dev.yml` at the repo root is preserved and continues to be used by `scripts/townhouse-dev-infra.sh`. A follow-up story will route the script through the package-local copy.
+
 ## Running the townhouse as a hidden service (laptop)
 
 `docker-compose-townhouse-hs.yml` brings up the full operator stack —

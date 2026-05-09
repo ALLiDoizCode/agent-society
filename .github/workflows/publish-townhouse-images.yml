@@ -3,9 +3,9 @@
 # Trigger scenarios and expected behaviour:
 #   - Push of tag v*           → builds 4 townhouse images (townhouse-api, town, mill, dvm),
 #                                 pushes versioned + :latest tags, signs, writes manifest,
-#                                 then npm-publishes @toon-protocol/townhouse.
+#                                 renders compose templates, then npm-publishes @toon-protocol/townhouse.
 #   - workflow_dispatch        → builds + pushes versioned tag only (NO :latest), signs,
-#                                 writes manifest. Does NOT npm-publish (smoke-test path).
+#                                 writes manifest, renders templates (dry-run only; NO npm-publish).
 #
 # Connector image is NOT built or pushed here — it is published upstream by
 # toon-protocol/connector's own workflow (Stories 44.2/44.3). Townhouse consumes
@@ -23,9 +23,13 @@
 #       --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 #   done
 #
-# NOTE: npm-publish step runs in --dry-run mode pending Story 45.2
-# (dist/compose/townhouse-hs.yml must ship in the tarball before live publish).
-# Flip to live publish when Story 45.2 lands.
+# Staged delivery history:
+#   v0.1.0 (Story 45.1): images + signatures + manifest published; npm publish in --dry-run
+#     pending Story 45.2 (tarball must ship compose templates + manifest before live publish).
+#   v0.1.0+ (Story 45.2): live npm publish flipped on; tarball ships
+#     dist/compose/{townhouse-hs,townhouse-dev}.yml + dist/image-manifest.json.
+#     Build sequence in npm-publish job: pnpm build → download-artifact (manifest)
+#     → render-compose-template → verify tarball → pnpm publish (live).
 
 name: Publish Townhouse Images
 
@@ -40,7 +44,7 @@ on:
         required: true
         type: string
       connector_version:
-        description: 'Connector image tag to record in image-manifest.json (default: 3.4.1)'
+        description: 'Connector image tag to record in image-manifest.json (default: 3.4.1 = digest pinned in DEFAULT_CONNECTOR_IMAGE)'
         required: false
         type: string
         default: '3.4.1'
@@ -251,17 +255,47 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build @toon-protocol/townhouse
+        # clean: true in tsup config wipes dist/ at build start.
+        # The manifest must be placed AFTER this build step, not before.
         run: pnpm --filter @toon-protocol/townhouse build
 
       - name: Download image-manifest.json
+        # Placed into dist/ AFTER pnpm build so tsup's clean: true doesn't wipe it.
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
           name: image-manifest
           path: packages/townhouse/dist
 
+      - name: Render HS compose template against pinned digests
+        # Re-runs the placeholder substitution now that dist/image-manifest.json
+        # is present. tsup's onSuccess hook ran without the manifest (clean build),
+        # so this step produces the authoritative digest-substituted HS template.
+        run: node scripts/render-compose-template.mjs
+
+      - name: Verify tarball contents
+        # Gate: ensure the three required artifacts are present in the tarball
+        # and the HS YAML has no unsubstituted placeholders before publishing.
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pack-out /tmp/pack-extracted
+          pnpm --filter @toon-protocol/townhouse pack --pack-destination /tmp/pack-out/
+          TGZ=$(ls /tmp/pack-out/toon-protocol-townhouse-*.tgz | head -1)
+          tar -tzf "$TGZ" > /tmp/pack-listing.txt
+          for path in \
+            package/dist/compose/townhouse-hs.yml \
+            package/dist/compose/townhouse-dev.yml \
+            package/dist/image-manifest.json; do
+            grep -qF "$path" /tmp/pack-listing.txt \
+              || { echo "MISSING from tarball: $path"; exit 1; }
+          done
+          tar -xzf "$TGZ" -C /tmp/pack-extracted/
+          if grep -E '\$\{TOON_[A-Z_]+_DIGEST\}' \
+              /tmp/pack-extracted/package/dist/compose/townhouse-hs.yml; then
+            echo "FAIL: unsubstituted placeholders in tarball HS YAML"; exit 1
+          fi
+          echo "✅ Tarball contains all required artifacts with no unsubstituted placeholders"
+
       - name: Publish to npm
-        # NOTE: --dry-run is set pending Story 45.2 (dist/compose/townhouse-hs.yml
-        # must ship in the tarball before live publish). Flip to live when 45.2 lands.
-        run: pnpm --filter @toon-protocol/townhouse publish --access public --no-git-checks --dry-run
+        run: pnpm --filter @toon-protocol/townhouse publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
