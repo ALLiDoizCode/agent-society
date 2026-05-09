@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-08 (Story 44.4 → done — connector release contract mirrored at packages/sdk; connector#67, town#34 merged)
+# last_updated: 2026-05-08 (Story 45.1 → in-progress — starting multi-arch townhouse image publish CI implementation)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -497,8 +497,8 @@ development_status:
   # Drew runs `npx @toon-protocol/townhouse hs up` and gets a payable
   # `.anyone` identity in <5 minutes. Apex-only boot (no peer nodes by default).
   # Depends on Epic 44 Story 44.1 for clean hostname surfacing.
-  epic-45: backlog
-  45-1-multi-arch-townhouse-image-publish-ci: backlog  # CRITICAL PATH; sized L; arm64+cosign+matrix complexity
+  epic-45: in-progress
+  45-1-multi-arch-townhouse-image-publish-ci: in-progress  # CRITICAL PATH; sized L; arm64+cosign+matrix complexity
   45-2-embed-compose-templates-and-image-manifest-in-npm-tarball: backlog  # CRITICAL PATH
   45-3-docker-orchestrator-profile-param: backlog
   45-4-townhouse-hs-up-subcommand-apex-only-boot: backlog  # CRITICAL PATH; depends on 44.1
