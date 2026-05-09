@@ -254,10 +254,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build @toon-protocol/townhouse
+      - name: Build @toon-protocol/townhouse (and workspace dependencies)
+        # `--filter @toon-protocol/townhouse...` (trailing `...`) builds
+        # townhouse AND its workspace deps (core, bls, sdk, mill) — required
+        # because tsup's `dts: true` step resolves `@toon-protocol/mill` etc.
+        # from `wallet/manager.ts` and needs each dep's dist/ + types present.
+        # Without `...`, mill's dist/ is missing and `tsup` errors with
+        # `TS2307: Cannot find module '@toon-protocol/mill'`.
         # clean: true in tsup config wipes dist/ at build start.
         # The manifest must be placed AFTER this build step, not before.
-        run: pnpm --filter @toon-protocol/townhouse build
+        run: pnpm --filter "@toon-protocol/townhouse..." build
 
       - name: Download image-manifest.json
         # Placed into dist/ AFTER pnpm build so tsup's clean: true doesn't wipe it.
