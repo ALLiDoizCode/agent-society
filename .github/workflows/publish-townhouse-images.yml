@@ -61,6 +61,9 @@ jobs:
   # ---------------------------------------------------------------------------
   build-publish-sign:
     runs-on: ubuntu-latest
+    # arm64 QEMU emulation of the Solana dep chain takes 5.5-6 hrs on cold cache;
+    # extend beyond the 6hr GHA default to accommodate first-run cold-cache builds.
+    timeout-minutes: 420
     strategy:
       matrix:
         image: [townhouse-api, town, mill, dvm]
