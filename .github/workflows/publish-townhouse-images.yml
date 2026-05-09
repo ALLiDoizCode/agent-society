@@ -1,0 +1,256 @@
+# Publish Townhouse Images to GHCR (multi-arch + cosign keyless OIDC)
+#
+# Trigger scenarios and expected behaviour:
+#   - Push of tag v*           → builds 4 townhouse images (townhouse-api, town, mill, dvm),
+#                                 pushes versioned + :latest tags, signs, writes manifest,
+#                                 then npm-publishes @toon-protocol/townhouse.
+#   - workflow_dispatch        → builds + pushes versioned tag only (NO :latest), signs,
+#                                 writes manifest. Does NOT npm-publish (smoke-test path).
+#
+# Connector image is NOT built or pushed here — it is published upstream by
+# toon-protocol/connector's own workflow (Stories 44.2/44.3). Townhouse consumes
+# it by digest via image-manifest.json. Republishing it here would create two
+# cosign signatures from different OIDC identities and risk tag namespace
+# collision on ghcr.io/toon-protocol/connector:latest. See Dev Notes §"Why
+# EXACTLY four images".
+#
+# Cosign verify (post-publish runbook):
+#   for img in townhouse-api town mill dvm; do
+#     digest=$(docker buildx imagetools inspect ghcr.io/toon-protocol/$img:latest \
+#       --format '{{.Manifest.Digest}}')
+#     cosign verify ghcr.io/toon-protocol/$img@$digest \
+#       --certificate-identity-regexp '^https://github.com/toon-protocol/town/' \
+#       --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
+#   done
+#
+# NOTE: npm-publish step runs in --dry-run mode pending Story 45.2
+# (dist/compose/townhouse-hs.yml must ship in the tarball before live publish).
+# Flip to live publish when Story 45.2 lands.
+
+name: Publish Townhouse Images
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag for images (e.g. 0.1.0-rc1). Required for workflow_dispatch.'
+        required: true
+        type: string
+      connector_version:
+        description: 'Connector image tag to record in image-manifest.json (default: 3.4.1)'
+        required: false
+        type: string
+        default: '3.4.1'
+
+concurrency:
+  group: '${{ github.workflow }}-${{ github.ref }}'
+  # cancel-in-progress: false — never abort an in-flight publish that may already be signing images
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write  # required for cosign keyless OIDC token
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: build-publish-sign (matrix across 4 townhouse-owned images)
+  # ---------------------------------------------------------------------------
+  build-publish-sign:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [townhouse-api, town, mill, dvm]
+      # fail-fast: false — one image's transient sigstore flake should not abort the others
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up QEMU (cross-arch emulation for linux/arm64 on amd64 runners)
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130  # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
+        with:
+          images: ghcr.io/toon-protocol/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
+            type=match,pattern=v(.*),group=1
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+            type=sha,prefix=sha-
+
+      - name: Build and push multi-arch image
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: .
+          file: docker/Dockerfile.${{ matrix.image }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3.9.1
+
+      - name: Sign image digest via keyless OIDC
+        # Sign the immutable content digest, NOT the tag (tags are mutable —
+        # re-pointing a tag invalidates the signature binding to the old content).
+        # The id-token: write permission granted at job level supplies the OIDC token.
+        env:
+          COSIGN_YES: 'true'
+        run: |
+          cosign sign \
+            ghcr.io/toon-protocol/${{ matrix.image }}@${{ steps.build.outputs.digest }}
+
+      - name: Verify multi-arch manifest (amd64 + arm64 both present)
+        # Use docker buildx imagetools inspect with the digest-form ref — more
+        # reliable than docker manifest inspect under parallel publishes because
+        # tag → digest resolution is racy during concurrent matrix jobs.
+        run: |
+          docker buildx imagetools inspect \
+            ghcr.io/toon-protocol/${{ matrix.image }}@${{ steps.build.outputs.digest }} \
+            --format '{{json .Manifest}}' \
+            | jq -e '.manifests | map(.platform.architecture) | sort | contains(["amd64", "arm64"])' \
+            || { echo "FAIL: ${{ matrix.image }} missing amd64 or arm64 in manifest list"; exit 1; }
+
+      - name: Write digest file for artifact upload
+        run: |
+          echo "${{ steps.build.outputs.digest }}" > /tmp/digest-${{ matrix.image }}.txt
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: digest-${{ matrix.image }}
+          path: /tmp/digest-${{ matrix.image }}.txt
+          if-no-files-found: error
+          overwrite: true
+
+  # ---------------------------------------------------------------------------
+  # Job 2: build-image-manifest (collect digests → write manifest.json)
+  # ---------------------------------------------------------------------------
+  build-image-manifest:
+    runs-on: ubuntu-latest
+    needs: [build-publish-sign]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: '20'
+
+      - name: Download digest artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          pattern: digest-*
+          merge-multiple: false
+          path: /tmp/digests
+
+      - name: Log in to GHCR (needed for docker manifest inspect to resolve connector digest)
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve version string
+        id: version
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build image-manifest.json
+        run: |
+          set -euo pipefail
+          TOWNHOUSE_API_DIGEST=$(cat /tmp/digests/digest-townhouse-api/digest-townhouse-api.txt)
+          TOWN_DIGEST=$(cat /tmp/digests/digest-town/digest-town.txt)
+          MILL_DIGEST=$(cat /tmp/digests/digest-mill/digest-mill.txt)
+          DVM_DIGEST=$(cat /tmp/digests/digest-dvm/digest-dvm.txt)
+
+          # Install zod for manifest schema validation (used by the script)
+          npm install --no-save zod@3
+
+          node scripts/build-image-manifest.mjs \
+            --townhouse-version "${{ steps.version.outputs.version }}" \
+            --connector-tag "${{ inputs.connector_version || '3.4.1' }}" \
+            --townhouse-api-digest "$TOWNHOUSE_API_DIGEST" \
+            --town-digest "$TOWN_DIGEST" \
+            --mill-digest "$MILL_DIGEST" \
+            --dvm-digest "$DVM_DIGEST"
+
+      - name: Upload image-manifest.json artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: image-manifest
+          path: packages/townhouse/dist/image-manifest.json
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Job 3: publish-npm (gated: tag pushes only, after all images signed)
+  # ---------------------------------------------------------------------------
+  publish-npm:
+    runs-on: ubuntu-latest
+    needs: [build-publish-sign, build-image-manifest]
+    # Only npm-publish on real v* tag pushes — never on workflow_dispatch smoke runs
+    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1  # v4
+        with:
+          version: 8.15.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @toon-protocol/townhouse
+        run: pnpm --filter @toon-protocol/townhouse build
+
+      - name: Download image-manifest.json
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: image-manifest
+          path: packages/townhouse/dist
+
+      - name: Publish to npm
+        # NOTE: --dry-run is set pending Story 45.2 (dist/compose/townhouse-hs.yml
+        # must ship in the tarball before live publish). Flip to live when 45.2 lands.
+        run: pnpm --filter @toon-protocol/townhouse publish --access public --no-git-checks --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
