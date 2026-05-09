@@ -20,7 +20,13 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  mkdtempSync,
+  rmSync,
+  readdirSync,
+} from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -48,10 +54,10 @@ describe.skipIf(skipPackTest)('tarball-contents', () => {
     if (!existsSync(DIST_COMPOSE_HS) || !existsSync(DIST_COMPOSE_DEV)) {
       throw new Error(
         `tarball-contents test requires built dist/compose/. Missing:\n` +
-        `  ${DIST_COMPOSE_HS} ${existsSync(DIST_COMPOSE_HS) ? '✓' : '✗'}\n` +
-        `  ${DIST_COMPOSE_DEV} ${existsSync(DIST_COMPOSE_DEV) ? '✓' : '✗'}\n` +
-        `Run 'pnpm --filter @toon-protocol/townhouse build' first ` +
-        `(or set SKIP_PACK_TEST=1 to skip this test).`
+          `  ${DIST_COMPOSE_HS} ${existsSync(DIST_COMPOSE_HS) ? '✓' : '✗'}\n` +
+          `  ${DIST_COMPOSE_DEV} ${existsSync(DIST_COMPOSE_DEV) ? '✓' : '✗'}\n` +
+          `Run 'pnpm --filter @toon-protocol/townhouse build' first ` +
+          `(or set SKIP_PACK_TEST=1 to skip this test).`
       );
     }
 
@@ -61,18 +67,22 @@ describe.skipIf(skipPackTest)('tarball-contents', () => {
     // Run pnpm pack from the package directory. We do NOT parse pnpm's stdout
     // for the tgz path — output format varies across pnpm versions. The tmpdir
     // is created fresh by mkdtempSync, so readdirSync is the authoritative source.
-    execFileSync(
-      'pnpm',
-      ['pack', '--pack-destination', packOutDir],
-      { cwd: PKG_DIR, encoding: 'utf-8', timeout: 60_000 }
-    );
+    execFileSync('pnpm', ['pack', '--pack-destination', packOutDir], {
+      cwd: PKG_DIR,
+      encoding: 'utf-8',
+      timeout: 60_000,
+    });
 
     const files = readdirSync(packOutDir).filter((f) => f.endsWith('.tgz'));
-    expect(files.length, 'expected exactly one .tgz in pack output dir').toBe(1);
+    expect(files.length, 'expected exactly one .tgz in pack output dir').toBe(
+      1
+    );
     tgzPath = join(packOutDir, files[0]!);
 
     // Extract the tarball
-    execFileSync('tar', ['-xzf', tgzPath, '-C', extractDir], { timeout: 30_000 });
+    execFileSync('tar', ['-xzf', tgzPath, '-C', extractDir], {
+      timeout: 30_000,
+    });
   }, 90_000);
 
   afterAll(() => {
@@ -81,44 +91,84 @@ describe.skipIf(skipPackTest)('tarball-contents', () => {
   });
 
   it('tarball contains package/dist/compose/townhouse-hs.yml', () => {
-    const hsPath = join(extractDir, 'package', 'dist', 'compose', 'townhouse-hs.yml');
-    expect(existsSync(hsPath), `expected ${hsPath} to exist in tarball`).toBe(true);
+    const hsPath = join(
+      extractDir,
+      'package',
+      'dist',
+      'compose',
+      'townhouse-hs.yml'
+    );
+    expect(existsSync(hsPath), `expected ${hsPath} to exist in tarball`).toBe(
+      true
+    );
   });
 
   it('tarball contains package/dist/compose/townhouse-dev.yml', () => {
-    const devPath = join(extractDir, 'package', 'dist', 'compose', 'townhouse-dev.yml');
-    expect(existsSync(devPath), `expected ${devPath} to exist in tarball`).toBe(true);
+    const devPath = join(
+      extractDir,
+      'package',
+      'dist',
+      'compose',
+      'townhouse-dev.yml'
+    );
+    expect(existsSync(devPath), `expected ${devPath} to exist in tarball`).toBe(
+      true
+    );
   });
 
   it.skipIf(!manifestPresent)(
     'tarball contains package/dist/image-manifest.json (skipped when manifest absent locally)',
     () => {
-      const manifestInTarball = join(extractDir, 'package', 'dist', 'image-manifest.json');
-      expect(existsSync(manifestInTarball), `expected ${manifestInTarball} to exist in tarball`).toBe(true);
+      const manifestInTarball = join(
+        extractDir,
+        'package',
+        'dist',
+        'image-manifest.json'
+      );
+      expect(
+        existsSync(manifestInTarball),
+        `expected ${manifestInTarball} to exist in tarball`
+      ).toBe(true);
     }
   );
 
   it('tarball HS YAML has no unsubstituted placeholders', () => {
-    const hsPath = join(extractDir, 'package', 'dist', 'compose', 'townhouse-hs.yml');
+    const hsPath = join(
+      extractDir,
+      'package',
+      'dist',
+      'compose',
+      'townhouse-hs.yml'
+    );
     if (!existsSync(hsPath)) return; // covered by previous test
     const content = readFileSync(hsPath, 'utf-8');
-    expect(content, 'HS YAML in tarball must not contain unsubstituted placeholders').not.toMatch(
-      /\$\{TOON_[A-Z_]+_DIGEST\}/
-    );
+    expect(
+      content,
+      'HS YAML in tarball must not contain unsubstituted placeholders'
+    ).not.toMatch(/\$\{TOON_[A-Z_]+_DIGEST\}/);
   });
 
   it.skipIf(!manifestPresent)(
     'tarball HS YAML has @sha256: digest form for every image: line (skipped when manifest absent)',
     () => {
-      const hsPath = join(extractDir, 'package', 'dist', 'compose', 'townhouse-hs.yml');
+      const hsPath = join(
+        extractDir,
+        'package',
+        'dist',
+        'compose',
+        'townhouse-hs.yml'
+      );
       if (!existsSync(hsPath)) return;
       const content = readFileSync(hsPath, 'utf-8');
-      const imageLines = content.split('\n').filter((l) => /^\s+image:\s/.test(l));
+      const imageLines = content
+        .split('\n')
+        .filter((l) => /^\s+image:\s/.test(l));
       expect(imageLines.length).toBeGreaterThan(0);
       for (const line of imageLines) {
-        expect(line, `image line must use @sha256: form: ${line.trim()}`).toMatch(
-          /@sha256:[a-f0-9]{64}/
-        );
+        expect(
+          line,
+          `image line must use @sha256: form: ${line.trim()}`
+        ).toMatch(/@sha256:[a-f0-9]{64}/);
       }
     }
   );

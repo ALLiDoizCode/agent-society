@@ -36,7 +36,10 @@ function isDockerAvailable(): boolean {
   if (process.env['DOCKER_AVAILABLE'] === '1') return true;
   // Auto-detect: check if docker binary exists and responds
   try {
-    execSync('docker info --format "{{.ID}}"', { stdio: 'ignore', timeout: 5000 });
+    execSync('docker info --format "{{.ID}}"', {
+      stdio: 'ignore',
+      timeout: 5000,
+    });
     return true;
   } catch {
     return false;
@@ -66,9 +69,10 @@ describe.skipIf(!renderedHsExists)(
         .filter((line) => /^\s+image:\s/.test(line));
       expect(imageLines.length).toBeGreaterThan(0);
       for (const line of imageLines) {
-        expect(line, `image line should use @sha256: form: ${line.trim()}`).toMatch(
-          /@sha256:[a-f0-9]{64}/
-        );
+        expect(
+          line,
+          `image line should use @sha256: form: ${line.trim()}`
+        ).toMatch(/@sha256:[a-f0-9]{64}/);
       }
     });
 
@@ -77,7 +81,9 @@ describe.skipIf(!renderedHsExists)(
       const nonCommentLines = renderedYaml
         .split('\n')
         .filter((line) => !line.trimStart().startsWith('#'));
-      const buildLines = nonCommentLines.filter((line) => /^\s+build:/.test(line));
+      const buildLines = nonCommentLines.filter((line) =>
+        /^\s+build:/.test(line)
+      );
       expect(buildLines).toHaveLength(0);
     });
 
@@ -85,12 +91,19 @@ describe.skipIf(!renderedHsExists)(
       // Explicit reject: no `0.0.0.0:` anywhere in the file (Task 2.7 / 8.2).
       // Catches stray non-port bindings (e.g. expose entries, long-form `host_ip`)
       // that the line-by-line port-mapping regex below would miss.
-      expect(renderedYaml, 'rendered HS template must not bind 0.0.0.0').not.toMatch(/\b0\.0\.0\.0:/);
+      expect(
+        renderedYaml,
+        'rendered HS template must not bind 0.0.0.0'
+      ).not.toMatch(/\b0\.0\.0\.0:/);
 
       // Then the structured per-line check on short-form `- 'host:container'` mappings.
       const allPortMappings = renderedYaml
         .split('\n')
-        .filter((line) => /^\s+-\s+['"]?\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:|^\s+-\s+['"]?\d+:\d+/.test(line));
+        .filter((line) =>
+          /^\s+-\s+['"]?\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:|^\s+-\s+['"]?\d+:\d+/.test(
+            line
+          )
+        );
 
       for (const line of allPortMappings) {
         const clean = line.trim().replace(/^-\s*/, '').replace(/['"]/g, '');
@@ -112,24 +125,47 @@ describe.skipIf(!renderedHsExists)(
         try {
           // Use --profile flags so profiled services (town, mill, dvm) appear in config output.
           // Docker Compose v5+ requires explicit --profile to include profile-restricted services.
-          stdout = execFileSync('docker', [
-            'compose', '-f', RENDERED_HS_PATH,
-            '--profile', 'town', '--profile', 'mill', '--profile', 'dvm',
-            'config',
-          ], {
-            encoding: 'utf-8',
-            timeout: 30_000,
-            env: { ...process.env, TOWNHOUSE_WALLET_PASSWORD: 'compose-config-validation-only' },
-          });
+          stdout = execFileSync(
+            'docker',
+            [
+              'compose',
+              '-f',
+              RENDERED_HS_PATH,
+              '--profile',
+              'town',
+              '--profile',
+              'mill',
+              '--profile',
+              'dvm',
+              'config',
+            ],
+            {
+              encoding: 'utf-8',
+              timeout: 30_000,
+              env: {
+                ...process.env,
+                TOWNHOUSE_WALLET_PASSWORD: 'compose-config-validation-only',
+              },
+            }
+          );
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           throw new Error(`docker compose config failed: ${msg}`);
         }
 
         // All five services should appear in the validated config
-        const expectedServices = ['connector', 'townhouse-api', 'town', 'mill', 'dvm'];
+        const expectedServices = [
+          'connector',
+          'townhouse-api',
+          'town',
+          'mill',
+          'dvm',
+        ];
         for (const svc of expectedServices) {
-          expect(stdout, `service '${svc}' should be in docker compose config output`).toContain(svc);
+          expect(
+            stdout,
+            `service '${svc}' should be in docker compose config output`
+          ).toContain(svc);
         }
       },
       30_000
@@ -138,15 +174,29 @@ describe.skipIf(!renderedHsExists)(
     it.skipIf(!dockerAvailable)(
       'docker compose config output has no build: directives for any service',
       () => {
-        const stdout = execFileSync('docker', [
-          'compose', '-f', RENDERED_HS_PATH,
-          '--profile', 'town', '--profile', 'mill', '--profile', 'dvm',
-          'config',
-        ], {
-          encoding: 'utf-8',
-          timeout: 30_000,
-          env: { ...process.env, TOWNHOUSE_WALLET_PASSWORD: 'compose-config-validation-only' },
-        });
+        const stdout = execFileSync(
+          'docker',
+          [
+            'compose',
+            '-f',
+            RENDERED_HS_PATH,
+            '--profile',
+            'town',
+            '--profile',
+            'mill',
+            '--profile',
+            'dvm',
+            'config',
+          ],
+          {
+            encoding: 'utf-8',
+            timeout: 30_000,
+            env: {
+              ...process.env,
+              TOWNHOUSE_WALLET_PASSWORD: 'compose-config-validation-only',
+            },
+          }
+        );
         // In the resolved config output, no service should have a build key
         expect(stdout).not.toMatch(/^\s+build:/m);
       },
@@ -163,13 +213,18 @@ describe.skipIf(!renderedHsExists)(
         delete env['TOWNHOUSE_WALLET_PASSWORD'];
         let exitCode = 0;
         try {
-          execFileSync('docker', [
-            'compose', '-f', RENDERED_HS_PATH, 'config',
-          ], { encoding: 'utf-8', timeout: 30_000, env });
+          execFileSync(
+            'docker',
+            ['compose', '-f', RENDERED_HS_PATH, 'config'],
+            { encoding: 'utf-8', timeout: 30_000, env }
+          );
         } catch (err) {
           exitCode = (err as { status?: number }).status ?? 1;
         }
-        expect(exitCode, 'compose config must fail when password is unset').not.toBe(0);
+        expect(
+          exitCode,
+          'compose config must fail when password is unset'
+        ).not.toBe(0);
       },
       30_000
     );

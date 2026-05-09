@@ -19,7 +19,13 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import {
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+} from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
@@ -30,7 +36,11 @@ import { DEFAULT_CONNECTOR_IMAGE } from '../constants.js';
 import { ConnectorAdminClient } from '../connector/admin-client.js';
 
 /** Parse a Docker image reference into its name, optional tag, and optional digest. */
-function parseConnectorImage(ref: string): { name: string; tag?: string; digest?: string } {
+function parseConnectorImage(ref: string): {
+  name: string;
+  tag?: string;
+  digest?: string;
+} {
   const digestMatch = ref.match(/^(.+)@(sha256:[a-f0-9]+)$/);
   if (digestMatch) return { name: digestMatch[1]!, digest: digestMatch[2] };
   const tagMatch = ref.match(/^(.+):([^:]+)$/);
@@ -52,7 +62,13 @@ function parseConnectorImage(ref: string): { name: string; tag?: string; digest?
 // R2-MAJOR fix: the previous skip-when-absent semantics defeated the
 // drift-detection purpose in the very scenario the test was meant to police.
 const __filename = fileURLToPath(import.meta.url);
-const MANIFEST_PATH = join(dirname(__filename), '..', '..', 'dist', 'image-manifest.json');
+const MANIFEST_PATH = join(
+  dirname(__filename),
+  '..',
+  '..',
+  'dist',
+  'image-manifest.json'
+);
 const isCI = process.env['CI'] === 'true' || process.env['CI'] === '1';
 const manifestExists = existsSync(MANIFEST_PATH);
 
@@ -61,9 +77,9 @@ describe('DEFAULT_CONNECTOR_IMAGE manifest alignment', () => {
     it('CI invariant: dist/image-manifest.json must be present (place via download-artifact before running canary)', () => {
       throw new Error(
         `Manifest missing at ${MANIFEST_PATH}. In CI the publish workflow ` +
-        `must place this artifact via actions/download-artifact BEFORE the ` +
-        `canary runs. If you are running this locally, set CI=0 or copy the ` +
-        `manifest from a Story 45.1 publish workflow run.`
+          `must place this artifact via actions/download-artifact BEFORE the ` +
+          `canary runs. If you are running this locally, set CI=0 or copy the ` +
+          `manifest from a Story 45.1 publish workflow run.`
       );
     });
     return;
@@ -73,7 +89,10 @@ describe('DEFAULT_CONNECTOR_IMAGE manifest alignment', () => {
       images: { connector: { digest: string } };
     };
     const parsed = parseConnectorImage(DEFAULT_CONNECTOR_IMAGE);
-    expect(parsed.digest, 'DEFAULT_CONNECTOR_IMAGE must be in digest form').toBeTruthy();
+    expect(
+      parsed.digest,
+      'DEFAULT_CONNECTOR_IMAGE must be in digest form'
+    ).toBeTruthy();
     expect(parsed.digest).toBe(manifest.images.connector.digest);
   });
 });
@@ -116,7 +135,9 @@ describe.skipIf(isTruthyEnv(process.env['SKIP_DOCKER']))(
       const parsedRef = parseConnectorImage(DEFAULT_CONNECTOR_IMAGE);
       const alreadyPulled = images.some((img) => {
         if (parsedRef.digest) {
-          return (img.RepoDigests ?? []).some((d) => d.includes(parsedRef.digest!));
+          return (img.RepoDigests ?? []).some((d) =>
+            d.includes(parsedRef.digest!)
+          );
         }
         return (img.RepoTags ?? []).includes(DEFAULT_CONNECTOR_IMAGE);
       });

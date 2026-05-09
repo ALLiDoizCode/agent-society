@@ -1,10 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, statSync, rmSync, mkdirSync, copyFileSync, readFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  statSync,
+  rmSync,
+  mkdirSync,
+  copyFileSync,
+  readFileSync,
+} from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-import { loadComposeTemplate, materializeComposeTemplate, ComposeLoaderError } from './compose-loader.js';
+import {
+  loadComposeTemplate,
+  materializeComposeTemplate,
+  ComposeLoaderError,
+} from './compose-loader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -32,8 +43,9 @@ describe('loadComposeTemplate', () => {
 
   it('throws ComposeLoaderError when template file is missing', () => {
     const missingDir = join(tmpdir(), 'nonexistent-fixture-dir-' + Date.now());
-    expect(() => loadComposeTemplate('hs', { distDir: missingDir }))
-      .toThrowError(ComposeLoaderError);
+    expect(() =>
+      loadComposeTemplate('hs', { distDir: missingDir })
+    ).toThrowError(ComposeLoaderError);
   });
 
   it('thrown ComposeLoaderError contains the missing path', () => {

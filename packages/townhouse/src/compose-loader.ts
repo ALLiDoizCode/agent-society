@@ -1,4 +1,12 @@
-import { readFileSync, writeFileSync, mkdirSync, chmodSync, statSync, lstatSync, existsSync } from 'node:fs';
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  chmodSync,
+  statSync,
+  lstatSync,
+  existsSync,
+} from 'node:fs';
 import { dirname, join, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -32,7 +40,9 @@ function defaultDistDir(): string {
   return resolve(here, '..', 'dist');
 }
 
-function assertValidProfile(profile: string): asserts profile is ComposeProfile {
+function assertValidProfile(
+  profile: string
+): asserts profile is ComposeProfile {
   if (!(VALID_PROFILES as readonly string[]).includes(profile)) {
     throw new ComposeLoaderError(
       `invalid compose profile: '${profile}'. Must be one of: ${VALID_PROFILES.join(', ')}.`
@@ -47,8 +57,17 @@ function assertValidProfile(profile: string): asserts profile is ComposeProfile 
 // belt-and-suspenders defense — it doesn't replace caller validation, but it
 // turns a silent privilege escalation into a loud error.
 const SYSTEM_PATH_PREFIXES = [
-  '/etc', '/usr', '/bin', '/sbin', '/lib', '/lib64',
-  '/proc', '/sys', '/dev', '/boot', '/root',
+  '/etc',
+  '/usr',
+  '/bin',
+  '/sbin',
+  '/lib',
+  '/lib64',
+  '/proc',
+  '/sys',
+  '/dev',
+  '/boot',
+  '/root',
 ] as const;
 
 function assertValidTownhouseHome(home: string): void {
@@ -65,14 +84,14 @@ function assertValidTownhouseHome(home: string): void {
   if (home === '/' || home === '\\') {
     throw new ComposeLoaderError(
       `townhouseHome must not be the filesystem root; got '${home}'. ` +
-      `This usually means $HOME is unset and homedir() returned '/'.`
+        `This usually means $HOME is unset and homedir() returned '/'.`
     );
   }
   for (const prefix of SYSTEM_PATH_PREFIXES) {
     if (home === prefix || home.startsWith(prefix + '/')) {
       throw new ComposeLoaderError(
         `townhouseHome must not target a system directory; got '${home}'. ` +
-        `Allowed paths: under $HOME, under tmpdir(), or any user-writable location.`
+          `Allowed paths: under $HOME, under tmpdir(), or any user-writable location.`
       );
     }
   }
@@ -86,7 +105,7 @@ function assertNotSymlink(filePath: string): void {
     if (lst.isSymbolicLink()) {
       throw new ComposeLoaderError(
         `${filePath} is a symlink; refusing to write through it. ` +
-        `If this is intentional, remove the symlink and re-run.`
+          `If this is intentional, remove the symlink and re-run.`
       );
     }
   } catch (err) {
@@ -112,7 +131,7 @@ export function loadComposeTemplate(
   if (!existsSync(composePath)) {
     throw new ComposeLoaderError(
       `compose template not found: ${composePath}. ` +
-      `Did you run 'pnpm --filter @toon-protocol/townhouse build' first?`
+        `Did you run 'pnpm --filter @toon-protocol/townhouse build' first?`
     );
   }
   return readFileSync(composePath, 'utf-8');
@@ -141,8 +160,8 @@ export function materializeComposeTemplate(
   if (profile === 'hs' && !existsSync(manifestSrc)) {
     throw new ComposeLoaderError(
       `image-manifest.json not found at ${manifestSrc}. ` +
-      `HS mode requires a digest-pinned image manifest. ` +
-      `Reinstall @toon-protocol/townhouse from npm to restore the manifest.`
+        `HS mode requires a digest-pinned image manifest. ` +
+        `Reinstall @toon-protocol/townhouse from npm to restore the manifest.`
     );
   }
   // loadComposeTemplate also throws ENOENT if the source is missing — surface
