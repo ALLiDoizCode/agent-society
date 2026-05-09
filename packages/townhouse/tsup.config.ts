@@ -57,7 +57,7 @@ export default defineConfig({
       const manifestRaw = await readFile(manifestPath, 'utf-8');
       const manifest = JSON.parse(manifestRaw); // throws SyntaxError on malformed JSON
 
-      const subs: Array<[string, string]> = [
+      const subs: [string, string][] = [
         ['${TOON_TOWNHOUSE_API_DIGEST}', `@${getImageDigest(manifest, 'townhouse-api')}`],
         ['${TOON_TOWN_DIGEST}',          `@${getImageDigest(manifest, 'town')}`],
         ['${TOON_MILL_DIGEST}',          `@${getImageDigest(manifest, 'mill')}`],
