@@ -8,7 +8,7 @@
  *   npx vitest run --config scripts/vitest.config.ts scripts/build-image-manifest.test.ts
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync, type SpawnSyncReturns } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
