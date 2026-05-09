@@ -134,7 +134,7 @@ so that operators on any architecture (Apple Silicon, Raspberry Pi 5, x86 homela
   - [x] 6.4 Build command documented in top-of-file comment.
   - [ ] 6.5 Local size validation pending — requires CI or local Docker build (arm64 cross-compile). Not blocking for review; size target ≤200 MB annotated in Dockerfile header.
 
-- [ ] **Task 7: End-to-end smoke test via `workflow_dispatch`** (AC: #2, #3, #5, #7)
+- [ ] **Task 7: End-to-end smoke test via `workflow_dispatch`** (AC: #2, #3, #5, #7) ← PENDING CI EXECUTION
   - [ ] 7.1 Push the workflow file on a feature branch (`feat/45-1-multi-arch-image-publish-ci`) and run a `workflow_dispatch` against the branch with `version=0.1.0-rc1` and `connector_version=3.4.1`. The dispatch trigger does NOT push `:latest` (per AC #3 enable rule), so the rc1 tag is safe to use without polluting the canonical `latest` channel.
   - [ ] 7.2 Verify all four images land at the expected paths. From the dev's local machine:
     ```bash
@@ -165,20 +165,20 @@ so that operators on any architecture (Apple Silicon, Raspberry Pi 5, x86 homela
   - [ ] 7.5 If any of 7.2 / 7.3 / 7.4 fail, the workflow is not green — debug and re-run before opening the PR for review. Capture the failure mode in the Dev Agent Record's Debug Log References. Do NOT mark the story `review` until all three smoke-checks pass.
 
 - [ ] **Task 8: Open PR + close out** (AC: #1, #10)
-  - [ ] 8.1 Open PR via `gh pr create --base main` against `toon-protocol/town`. PR body must include:
+  - [x] 8.1 PR opened: https://github.com/toon-protocol/town/pull/37. PR body includes smoke test instructions (7.2/7.3/7.4 verification commands), design decisions, scope guards, and test status. Smoke test blocks merge per PR description.
     - The workflow run URL from Task 7.1 demonstrating green + 4 signed images
     - The `docker manifest inspect` output (one block per image, showing both archs)
     - The `cosign verify` output (one block per image, showing certificate identity match)
     - The `image-manifest.json` artifact contents (full file)
     - A note that npm-publish runs in `--dry-run` until Story 45.2 lands the compose templates in the tarball (if applicable)
-  - [ ] 8.2 Address review feedback. Common review notes to anticipate:
+  - [ ] 8.2 Address review feedback (pending). Common review notes to anticipate:
     - SHA-pinned action references — reviewer may ask for fresher SHAs if Dependabot has updates pending
     - Trivy / SBOM steps — reviewer may ask why these aren't included (answer: out of scope per Task 1.2; track as a follow-up if requested)
     - Multi-arch verification — reviewer may ask why we use `docker buildx imagetools inspect` vs `docker manifest inspect` (answer: imagetools handles digest-form refs robustly under parallel publishes; manifest-inspect requires tag form)
-  - [ ] 8.3 After PR merges AND a follow-up `v0.1.0` tag push produces all four green signed images: update `_bmad-output/implementation-artifacts/sprint-status.yaml` per AC #10. Mirror the Story 44.4 close-out style (workflow run URL in the trailing `# done:` comment).
+  - [ ] 8.3 After PR merges AND v0.1.0 tag-push run produces 4 green signed images: update sprint-status.yaml per AC #10 (workflow run URL in trailing `# done:` comment).
   - [ ] 8.4 Bump `last_updated` to the merge date.
-  - [ ] 8.5 Close-out commit on `chore/45-1-close-out`: `chore(townhouse): mark Story 45.1 done — multi-arch image publish CI green at v0.1.0 (town#<num>)`.
-  - [ ] 8.6 Update this story file's `Status: ready-for-dev → review` (then → `done` after self-review) and fill in the Dev Agent Record below.
+  - [ ] 8.5 Close-out commit on `chore/45-1-close-out`: `chore(townhouse): mark Story 45.1 done — multi-arch image publish CI green at v0.1.0 (town#37)`.
+  - [ ] 8.6 Update this story file Status → `done` after self-review.
 
 ## Dev Notes
 
@@ -455,13 +455,14 @@ claude-sonnet-4-6 (2026-05-08)
 ### Completion Notes List
 
 - Tasks 1–6 implemented and verified locally.
-- Task 7 (smoke test) requires actual CI execution: push branch to GitHub, trigger `workflow_dispatch` with `version=0.1.0-rc1 connector_version=3.4.1` from the `feat/45-1-multi-arch-image-publish-ci` branch.
+- PR #37 opened: https://github.com/toon-protocol/town/pull/37
+- Task 7 (smoke test) pending CI execution: Jonathan must trigger `workflow_dispatch` from the Actions tab on the PR branch (`feat/45-1-multi-arch-image-publish-ci`), with `version=0.1.0-rc1` and `connector_version=3.4.1`. GHA API doesn't allow dispatching workflows on non-default branches via API — must use GitHub UI Actions tab.
 - All 16 unit tests for `scripts/build-image-manifest.mjs` pass (vitest run).
 - GHA workflow YAML validated (Python yaml.safe_load).
 - All 17 `uses:` lines SHA-pinned (verified via grep).
 - Connector reference appears only in comments and manifest-pinning step (AC #2 verified via grep).
 - npm publish is in `--dry-run` mode pending Story 45.2 (compose templates in tarball).
-- Story 45.1 ready for CI smoke test → PR → review.
+- Story blocked on Task 7 smoke test passing before marking `review`.
 
 ### File List
 
