@@ -196,12 +196,20 @@ jobs:
           MILL_DIGEST=$(cat /tmp/digests/digest-mill/digest-mill.txt)
           DVM_DIGEST=$(cat /tmp/digests/digest-dvm/digest-dvm.txt)
 
+          # Resolve connector digest via buildx imagetools (handles OCI image index
+          # correctly — docker manifest inspect doesn't expose the index digest directly)
+          CONNECTOR_TAG="${{ inputs.connector_version || '3.4.1' }}"
+          CONNECTOR_DIGEST=$(docker buildx imagetools inspect \
+            "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" \
+            --format '{{.Manifest.Digest}}')
+
           # Install zod for manifest schema validation (used by the script)
           npm install --no-save zod@3
 
           node scripts/build-image-manifest.mjs \
             --townhouse-version "${{ steps.version.outputs.version }}" \
-            --connector-tag "${{ inputs.connector_version || '3.4.1' }}" \
+            --connector-tag "${CONNECTOR_TAG}" \
+            --connector-digest "${CONNECTOR_DIGEST}" \
             --townhouse-api-digest "$TOWNHOUSE_API_DIGEST" \
             --town-digest "$TOWN_DIGEST" \
             --mill-digest "$MILL_DIGEST" \
