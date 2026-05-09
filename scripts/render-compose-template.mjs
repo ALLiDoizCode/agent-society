@@ -24,7 +24,7 @@ import { readFile, writeFile, cp, mkdir, access, chmod } from 'node:fs/promises'
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { getImageDigest } from './lib/image-manifest-digest.mjs';
+import { getImageDigest } from '../packages/townhouse/scripts/get-image-digest.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
