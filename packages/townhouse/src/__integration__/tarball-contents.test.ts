@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execFileSync, execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,6 +29,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const PKG_DIR = join(__dirname, '..', '..');
+const DIST_COMPOSE_HS = join(PKG_DIR, 'dist', 'compose', 'townhouse-hs.yml');
+const DIST_COMPOSE_DEV = join(PKG_DIR, 'dist', 'compose', 'townhouse-dev.yml');
 const MANIFEST_PATH = join(PKG_DIR, 'dist', 'image-manifest.json');
 
 const skipPackTest = process.env['SKIP_PACK_TEST'] === '1';
@@ -40,27 +42,34 @@ describe.skipIf(skipPackTest)('tarball-contents', () => {
   let tgzPath: string;
 
   beforeAll(() => {
+    // Precondition: dist/compose/ must already be built. `pnpm pack` packs
+    // whatever is in dist/, so a stale or missing build would silently produce
+    // a green-but-wrong result. Fail loudly with an actionable message.
+    if (!existsSync(DIST_COMPOSE_HS) || !existsSync(DIST_COMPOSE_DEV)) {
+      throw new Error(
+        `tarball-contents test requires built dist/compose/. Missing:\n` +
+        `  ${DIST_COMPOSE_HS} ${existsSync(DIST_COMPOSE_HS) ? '✓' : '✗'}\n` +
+        `  ${DIST_COMPOSE_DEV} ${existsSync(DIST_COMPOSE_DEV) ? '✓' : '✗'}\n` +
+        `Run 'pnpm --filter @toon-protocol/townhouse build' first ` +
+        `(or set SKIP_PACK_TEST=1 to skip this test).`
+      );
+    }
+
     packOutDir = mkdtempSync(join(tmpdir(), 'townhouse-pack-'));
     extractDir = mkdtempSync(join(tmpdir(), 'townhouse-extract-'));
 
-    // Run pnpm pack from the package directory
-    const result = execFileSync(
+    // Run pnpm pack from the package directory. We do NOT parse pnpm's stdout
+    // for the tgz path — output format varies across pnpm versions. The tmpdir
+    // is created fresh by mkdtempSync, so readdirSync is the authoritative source.
+    execFileSync(
       'pnpm',
       ['pack', '--pack-destination', packOutDir],
       { cwd: PKG_DIR, encoding: 'utf-8', timeout: 60_000 }
     );
 
-    // Find the produced .tgz
-    const tgzName = result.trim().split('\n').pop()?.trim();
-    // pnpm pack outputs the path to the tgz
-    if (tgzName && existsSync(tgzName)) {
-      tgzPath = tgzName;
-    } else {
-      // fallback: find in packOutDir
-      const files = readdirSync(packOutDir).filter((f) => f.endsWith('.tgz'));
-      expect(files.length, 'expected exactly one .tgz in pack output dir').toBe(1);
-      tgzPath = join(packOutDir, files[0]!);
-    }
+    const files = readdirSync(packOutDir).filter((f) => f.endsWith('.tgz'));
+    expect(files.length, 'expected exactly one .tgz in pack output dir').toBe(1);
+    tgzPath = join(packOutDir, files[0]!);
 
     // Extract the tarball
     execFileSync('tar', ['-xzf', tgzPath, '-C', extractDir], { timeout: 30_000 });

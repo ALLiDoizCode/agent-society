@@ -82,11 +82,12 @@ describe.skipIf(!renderedHsExists)(
     });
 
     it('every host-side port binding uses 127.0.0.1: prefix (NFR9)', () => {
-      // Find all ports lines with a numeric host-side port
-      const portLines = renderedYaml
-        .split('\n')
-        .filter((line) => /^\s+-\s+['"]?\d/.test(line) || /^\s+-\s+['"]?\d{2,5}:/.test(line));
-      // Simplified: find lines that look like port mappings with a host port
+      // Explicit reject: no `0.0.0.0:` anywhere in the file (Task 2.7 / 8.2).
+      // Catches stray non-port bindings (e.g. expose entries, long-form `host_ip`)
+      // that the line-by-line port-mapping regex below would miss.
+      expect(renderedYaml, 'rendered HS template must not bind 0.0.0.0').not.toMatch(/\b0\.0\.0\.0:/);
+
+      // Then the structured per-line check on short-form `- 'host:container'` mappings.
       const allPortMappings = renderedYaml
         .split('\n')
         .filter((line) => /^\s+-\s+['"]?\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:|^\s+-\s+['"]?\d+:\d+/.test(line));
@@ -118,6 +119,7 @@ describe.skipIf(!renderedHsExists)(
           ], {
             encoding: 'utf-8',
             timeout: 30_000,
+            env: { ...process.env, TOWNHOUSE_WALLET_PASSWORD: 'compose-config-validation-only' },
           });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -143,9 +145,31 @@ describe.skipIf(!renderedHsExists)(
         ], {
           encoding: 'utf-8',
           timeout: 30_000,
+          env: { ...process.env, TOWNHOUSE_WALLET_PASSWORD: 'compose-config-validation-only' },
         });
         // In the resolved config output, no service should have a build key
         expect(stdout).not.toMatch(/^\s+build:/m);
+      },
+      30_000
+    );
+
+    // R2-MINOR fix: negative-path test that locks in the `${VAR:?}` semantic.
+    // If a future patch silently changes ':?' to ':-', this test fails because
+    // the unset password no longer triggers a compose-config error.
+    it.skipIf(!dockerAvailable)(
+      'docker compose config FAILS when TOWNHOUSE_WALLET_PASSWORD is unset (locks in ${VAR:?} semantic)',
+      () => {
+        const env = { ...process.env };
+        delete env['TOWNHOUSE_WALLET_PASSWORD'];
+        let exitCode = 0;
+        try {
+          execFileSync('docker', [
+            'compose', '-f', RENDERED_HS_PATH, 'config',
+          ], { encoding: 'utf-8', timeout: 30_000, env });
+        } catch (err) {
+          exitCode = (err as { status?: number }).status ?? 1;
+        }
+        expect(exitCode, 'compose config must fail when password is unset').not.toBe(0);
       },
       30_000
     );
@@ -155,9 +179,12 @@ describe.skipIf(!renderedHsExists)(
 describe.skipIf(renderedHsExists)(
   'compose-template-validity (SKIPPED — dist/compose/townhouse-hs.yml not present)',
   () => {
-    it('skipped: run pnpm build + place image-manifest.json first', () => {
-      // This test group is intentionally skipped when the rendered file is absent.
-      // It exists to produce a visible skip entry in CI rather than silently passing.
+    // ctx.skip() emits a real "skipped" status in vitest reporters. An empty
+    // body would have been reported as "passed" (green) instead, hiding the
+    // missing-precondition signal in CI output.
+    it.skip('skipped: run pnpm build + place image-manifest.json first', () => {
+      // This block exists to surface a visible "skipped" entry in CI output
+      // when the rendered HS template hasn't been produced yet.
     });
   }
 );

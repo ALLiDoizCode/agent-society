@@ -1,6 +1,6 @@
 # Story 45.2: Embed Compose Templates + Image Manifest in npm Tarball
 
-Status: review
+Status: in-progress (post-review patches applied 2026-05-09; AC #12 close-out gated on tag-push + registry verify)
 
 > **CRITICAL PATH — second story of Epic 45 (One-Command Apex Install).** Sized M by the plan. Story 45.4 (`townhouse hs up` subcommand) cannot start until this story lands the embedded compose template and the `loadComposeTemplate()` API. This story is also what flips the `--dry-run` flag in the Story 45.1 publish workflow to live `npm publish` — without an `image-manifest.json` and a digest-resolved compose template inside the tarball, an operator running `npx @toon-protocol/townhouse hs up` has no compose file to feed `docker compose -f` against.
 
@@ -483,6 +483,8 @@ Files this story touches in `toon-protocol/town`:
 - `CLAUDE.md` (MODIFY — Task 9.2 "Where to Find Things" rows)
 - `packages/sdk/CONNECTOR_RELEASE_CONTRACT.md` (MODIFY — Task 9.3 implementation reference)
 - `.github/workflows/publish-townhouse-images.yml` (MODIFY — Task 7, remove `--dry-run`, add render + verify steps)
+- `docker-compose-townhouse.yml` (root) (MODIFY — connector image flipped to digest form so `package-structure.test.ts:109` (`connector.image === DEFAULT_CONNECTOR_IMAGE`) stays green; ratified retroactively in code-review 2026-05-09 D2 → Option 1, with a new manifest-alignment test in `connector-image-contract.test.ts` closing the third drift gap)
+- `packages/townhouse/src/docker/orchestrator.ts` (MODIFY — `pullImages` cache check matches `RepoDigests` in addition to `RepoTags` so digest-form `DEFAULT_CONNECTOR_IMAGE` is recognized as cached; ratified retroactively in code-review 2026-05-09 D2 patches)
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (MODIFY — Task 11.3)
 - This story file (Task 11.4)
 
@@ -494,7 +496,7 @@ Files this story does **NOT** touch (scope guards):
 - `scripts/build-image-manifest.test.ts` — Story 45.1 test; do not modify.
 - `docker/Dockerfile.townhouse-api` — Story 45.1 deliverable; the new HS template references the resulting image but does not modify the Dockerfile.
 - `docker/Dockerfile.town`, `docker/Dockerfile.mill`, `docker/Dockerfile.dvm` — pre-existing; the workflow consumes them as-is.
-- `packages/townhouse/src/docker/orchestrator.ts` — DockerOrchestrator changes are Story 45.3 territory (the `profile: 'dev' | 'hs'` parameter). This story's `loadComposeTemplate` API is what 45.3 will call from inside the orchestrator.
+- `packages/townhouse/src/docker/orchestrator.ts` — the `profile: 'dev' | 'hs'` parameter refactor is Story 45.3 territory. This story's `loadComposeTemplate` API is what 45.3 will call from inside the orchestrator. **EXCEPTION (ratified 2026-05-09 code-review D2):** `pullImages` cache check was extended from `RepoTags`-only to `RepoTags ∪ RepoDigests` so the digest-form `DEFAULT_CONNECTOR_IMAGE` is recognized as cached. That single-line change is the only orchestrator modification in scope.
 - `packages/townhouse/src/cli.ts` — the `townhouse hs up` subcommand is Story 45.4 territory; this story's loader is what the subcommand will call.
 - `packages/townhouse/src/api/` — host API changes are Story 45.4 territory.
 - `packages/townhouse/src/wallet/` — HD wallet code is Story 21.4 / 45.4 territory.
@@ -811,4 +813,94 @@ claude-sonnet-4-6
 
 ### Review Findings
 
-_To be filled in after code review_
+**Code review run: 2026-05-09 — Blind Hunter (22), Edge Case Hunter (16), Acceptance Auditor (6) → triaged into 3 decisions resolved (→ 3 patches), 16 original patches, 9 deferred, 4 dismissed. Total: 19 patches.**
+
+#### Decisions resolved (2026-05-09)
+
+- **D1 → Patch:** `townhouse-api` won't boot as written — resolved with **option 1**: add `environment:` block to the HS template setting `TOWNHOUSE_CONFIG=/.townhouse/config.yaml` and `TOWNHOUSE_WALLET_PASSWORD: ${TOWNHOUSE_WALLET_PASSWORD}` (host-env passthrough; operator sets it before `docker compose up`). Self-contained — does not depend on Story 45.4. [`packages/townhouse/compose/townhouse-hs.yml:95-118`]
+- **D2 → Patch:** `docker-compose-townhouse.yml` (root) modified outside scope — resolved with **option 1**: accept 3 sources of truth (`constants.ts`, root compose, rendered HS compose). Add a manifest-alignment test asserting `manifest.images.connector.digest === parseConnectorImage(DEFAULT_CONNECTOR_IMAGE).digest` in `connector-image-contract.test.ts` (reuse the existing parser at lines 32-39). Update the spec's "Files this story touches" list in Dev Notes to acknowledge `docker-compose-townhouse.yml`. Existing `package-structure.test.ts:109` continues catching constant↔root-file drift. [`docker-compose-townhouse.yml:1085-1091`, `packages/townhouse/src/__integration__/connector-image-contract.test.ts`]
+- **D3 → Documentation patch:** HS template port collisions with dev stack — resolved with **option 1**: accept by design. Document in the HS template's top comment block and in `packages/townhouse/README.md` that HS-mode and dev stack must not run concurrently on the same machine (HS uses canonical ports; dev stack uses 28xxx). No code change.
+
+#### Patch (unambiguous fixes) — ALL APPLIED 2026-05-09
+
+- [x] [Review][Patch] **D1: Add `environment:` block to `townhouse-api` service** with `TOWNHOUSE_CONFIG=/.townhouse/config.yaml` + `TOWNHOUSE_WALLET_PASSWORD: ${TOWNHOUSE_WALLET_PASSWORD:?...}` host-env passthrough [`packages/townhouse/compose/townhouse-hs.yml:95-118`]
+- [x] [Review][Patch] **D2: Add manifest-alignment test** asserting `manifest.images.connector.digest` matches the parsed `DEFAULT_CONNECTOR_IMAGE` digest; updated story Dev Notes touched-files list to include `docker-compose-townhouse.yml` and `orchestrator.ts` [`packages/townhouse/src/__integration__/connector-image-contract.test.ts`]
+- [x] [Review][Patch] **D3: Document HS-vs-dev-stack port collision** in HS template top comment + `packages/townhouse/README.md` [`packages/townhouse/compose/townhouse-hs.yml`, `packages/townhouse/README.md`]
+
+- [x] [Review][Patch] **`DockerOrchestrator.pullImages` cache-hit only checks `RepoTags`, never matches digest-form refs** [`packages/townhouse/src/docker/orchestrator.ts:486-501`]
+- [x] [Review][Patch] **`materializeComposeTemplate` writes compose BEFORE validating manifest — leaves torn state on missing manifest in HS profile** [`packages/townhouse/src/compose-loader.ts:74-86`]
+- [x] [Review][Patch] **`mkdirSync` missing spec-mandated `mode: 0o700` argument (Task 4.1 + AC #7)** [`packages/townhouse/src/compose-loader.ts:68`]
+- [x] [Review][Patch] **`chmodSync(home, 0o700)` unconditionally clobbers operator-managed `~/.townhouse/` mode + follows symlinks (no `lstatSync` check)** [`packages/townhouse/src/compose-loader.ts:71-72`]
+- [x] [Review][Patch] **`townhouseHome === ''` (empty string) and `homedir() === '/'` slip through `??` and target unsafe paths (CWD or filesystem root)** [`packages/townhouse/src/compose-loader.ts:65`]
+- [x] [Review][Patch] **Render scripts swallow ALL errors as "manifest absent" (JSON parse, missing image keys, empty digests)** [`packages/townhouse/tsup.config.ts:51-58`, `scripts/render-compose-template.mjs:64-72`]
+- [x] [Review][Patch] **No digest-format validation — empty/malformed digest produces orphaned `@` in image ref; CI verify regex misses it** [`scripts/render-compose-template.mjs:51-57`, `.github/workflows/publish-townhouse-images.yml:75-95`]
+- [x] [Review][Patch] **No build-time test that `DEFAULT_CONNECTOR_IMAGE` digest matches `image-manifest.json` (will silently drift on next bump)** [`packages/townhouse/src/__integration__/connector-image-contract.test.ts`]
+- [x] [Review][Patch] **`profile` parameter has no runtime validation — TS `'dev' | 'hs'` is erased at runtime; arbitrary input enables path traversal in `materializeComposeTemplate`** [`packages/townhouse/src/compose-loader.ts:74-79`]
+- [x] [Review][Patch] **dev compose template ships `${SECRET_VAR:-}` empty-string defaults — secrets-as-empty-string leak into containers** [`packages/townhouse/compose/townhouse-dev.yml`]
+- [x] [Review][Patch] **`tarball-contents.test.ts` doesn't run `pnpm build` first — passes against stale dist** [`packages/townhouse/src/__integration__/tarball-contents.test.ts:2096-2121`]
+- [x] [Review][Patch] **`compose-template-validity.test.ts` lacks AC-mandated explicit `'\b0\.0\.0\.0:'` grep (Task 2.7)** [`packages/townhouse/src/__integration__/compose-template-validity.test.ts:1930-1950`]
+- [x] [Review][Patch] **CI `Verify tarball contents` step uses non-`mktemp` `/tmp/pack-extracted` — workflow rerun on same runner sees stale state** [`.github/workflows/publish-townhouse-images.yml`]
+- [x] [Review][Patch] **CI verify uses `grep -qF "$path"` substring match — could false-positive against `*.bak` or partial-name files** [`.github/workflows/publish-townhouse-images.yml`]
+- [x] [Review][Patch] **`describe.skipIf` empty-`it` reports as PASSED (green) not SKIPPED in CI output — use `it.skip()` or `ctx.skip()`** [`packages/townhouse/src/__integration__/compose-template-validity.test.ts:2001-2009`]
+- [x] [Review][Patch] **`writeFileSync` mode comment misdiagnoses umask masking — `chmod` is needed for the "file already exists" case, not umask masking on `0o600`** [`packages/townhouse/src/compose-loader.ts:88-89`]
+
+#### Deferred (pre-existing or low-priority)
+
+- [x] [Review][Defer] Concurrent `materializeComposeTemplate` calls race — non-atomic write; no `tmp + rename` pattern
+- [x] [Review][Defer] `defaultDistDir()` `import.meta.url` resolution fragile under non-tsup bundlers (Story 45.4+ concern)
+- [x] [Review][Defer] No idempotency guard on `pnpm publish` rerun — npm 409 on duplicate version
+- [x] [Review][Defer] `tarball-contents.test.ts` stdout-parsing of `pnpm pack` brittle under future pnpm minor versions
+- [x] [Review][Defer] `DOCKER_AVAILABLE=1` env bypass skips real daemon probe — 30s timeout instead of clean skip when daemon dead
+- [x] [Review][Defer] Lifecycle-script asymmetry between `pnpm pack` (verify) and `pnpm publish` (live) — no `--ignore-scripts` guard
+- [x] [Review][Defer] Brief TOCTOU readability between `writeFileSync` and `chmodSync` for manifest copy
+- [x] [Review][Defer] `tsup` `onSuccess` + `render-compose-template.mjs` duplicate substitution arrays — drift risk when adding a 6th image
+- [x] [Review][Defer] `pnpm pack --pack-destination` requires pnpm ≥ 8.4 — workflow's `pnpm/action-setup` version not pinned in this diff
+
+#### Dismissed (noise / false positives)
+
+- tsup config `node:` prefix not type-checked — works fine; build is the validation
+- `tar -xzf` extraction without `--no-same-owner --no-same-permissions` — pnpm tarballs are trustworthy
+- `--tag latest` flag missing from publish — npm defaults to `latest` tag anyway; pre-existing
+- `docker compose config` regex matches synthetic all-`e`s digests in test fixtures — by design (parse-validation, not registry validation)
+
+### Review Findings — Round 2 (post-patches, 2026-05-09)
+
+**Re-review summary: 1 BLOCKER, 5 MAJOR, 5 MINOR, plus 9 NITs/defers and 1 dismissed. ALL 11 PATCHES APPLIED 2026-05-09.**
+
+The Round-1 patches mostly landed clean, but Round 2 caught one BLOCKER (a regex I introduced that fails 100% of the time) plus several incomplete fixes where the patch addressed one branch but missed a parallel branch on the same code path.
+
+#### BLOCKER
+
+- [x] [Review][Patch][R2-BLOCKER] **CI tarball-verify positive-digest-form regex matches 0 lines — every publish would fail** — `.github/workflows/publish-townhouse-images.yml:97-101` uses `grep -cE 'image:[^[:space:]]+@sha256:[a-f0-9]{64}$'` but YAML emits `    image: ghcr.io/...` (space after `image:`). The `[^[:space:]]+` class can never match the leading space, so `DIGEST_LINES=0` while `IMAGE_LINES=5`. Verified empirically against the rendered HS YAML. Fix: change to `'image:\s+\S+@sha256:[a-f0-9]{64}$'` and add a non-zero floor (`$IMAGE_LINES -gt 0`) so a structural refactor that drops all `image:` keys cannot pass the gate via `0===0`.
+
+#### MAJOR
+
+- [x] [Review][Patch][R2-MAJOR] **`writeFileSync` follows symlink at `composePath` and `manifestPath` — symlink guard only checks dirs, not file paths** — Patched dir-level lstat guard (`compose-loader.ts:123-141`) skips chmod when home/composeDir is a symlink, but `writeFileSync(composePath, ...)` and `writeFileSync(manifestPath, ...)` (lines 144, 154) follow file-level symlinks and write through them. Attacker who plants `~/.townhouse/compose/townhouse-hs.yml` as a symlink to `~/.bashrc` gets the rendered YAML written to `.bashrc`. Fix: `lstat` each file path before write; refuse to materialize if symlink, OR open with `O_NOFOLLOW`.
+- [x] [Review][Patch][R2-MAJOR] **Mode-narrowing logic widens tighter modes — `0o500` becomes `0o700`** — `compose-loader.ts:135-140`: comment says "operators who deliberately set 0o700 (or tighter, e.g. 0o500) keep their setting" but the check is `if (currentMode !== 0o700) chmod(dir, 0o700)`. `0o500 !== 0o700` → widened to `0o700`. Inverted from the documented promise. Fix: `if (currentMode > 0o700) chmod(dir, 0o700)` (only narrow; never widen).
+- [x] [Review][Patch][R2-MAJOR] **Manifest-alignment test skipped when manifest absent — defeats the drift-detection purpose** — `connector-image-contract.test.ts`: `describe.skipIf(!existsSync(MANIFEST_PATH))(...)` skips the alignment assertion in every CI scenario where `dist/image-manifest.json` hasn't been placed (which is most unit-test runs). The test only fires for a developer who manually copied the artifact into dist/ before running tests — i.e., never automatically in CI. Fix: in CI (env `CI=true`), require manifest presence; outside CI, skip with a visible warning. OR add the canary as an explicit step in the publish workflow after `download-artifact`.
+- [x] [Review][Patch][R2-MAJOR] **`distDir` / `townhouseHome` path traversal not blocked — `assertValidProfile` is theater** — `compose-loader.ts:46-58`: validates profile string and rejects empty/`/` townhouseHome, but `townhouseHome: '/etc'` passes validation (absolute, non-empty, not `/`). `distDir` has zero validation. Caller could materialize compose YAML into `/etc/compose/`. Fix: validate that townhouseHome resolves under a known-safe root (e.g., reject if `home` is not a descendant of `os.homedir()` unless an explicit override flag is set).
+- [x] [Review][Patch][R2-MAJOR] **`tsup.config.ts` and `render-compose-template.mjs` have drifted error contracts** — tsup uses non-null bang (`manifest.images['townhouse-api']!.digest`) which throws raw `TypeError: Cannot read properties of undefined (reading 'digest')` on missing keys; render-script throws explicit `manifest missing image entry: images.townhouse-api`. Same defect, two different error UX. Fix: extract a shared `getDigest(manifest, key)` helper into a single module imported by both. (This was Defer #8 in Round 1; the patch round actually made it worse by introducing the duplicate digest-validation logic.)
+
+#### MINOR
+
+- [x] [Review][Patch][R2-MINOR] **`docker compose config` integration test masks `${VAR:?}` failure mode** — `compose-template-validity.test.ts:122,151`: injects `TOWNHOUSE_WALLET_PASSWORD: 'compose-config-validation-only'` into the test env, so a future patch that silently changes `:?` to `:-` keeps the test green. Add a parallel negative test asserting `docker compose config` exits non-zero when the password is unset.
+- [x] [Review][Patch][R2-MINOR] **Idempotency test only checks path + mode equality — not content** — `compose-loader.test.ts:103-109`: a regression where the second call wrote different bytes (truncated, wrong template) would not be caught. Add `expect(readFileSync(second.composePath)).toEqual(readFileSync(first.composePath))`.
+- [x] [Review][Patch][R2-MINOR] **`scripts/render-compose-template.mjs` doesn't chmod the dist YAML** — `dist/compose/townhouse-hs.yml` lands at the user's umask (typically `0o644`). The README + spec are explicit that the materialized HS YAML is `0o600`, but the pre-tarball build artifact in `dist/` is world-readable. If a CI runner has another untrusted user, that user can read the rendered YAML between the render step and the pack step. Fix: `await chmod(...0o600)` after writing.
+- [x] [Review][Patch][R2-MINOR] **HS template profile-gated services still ship `${VAR:-}` empty-string defaults for secrets** — `townhouse-hs.yml`: `NODE_NOSTR_SECRET_KEY: '${TOWN_SECRET_KEY:-}'`, `SETTLEMENT_PRIVATE_KEY: '${TOWN_SETTLEMENT_PRIVATE_KEY:-}'`, mill secrets, `DVM_SECRET_KEY:-`. The patch round only hardened `townhouse-dev.yml`. Profile-gated services (town/mill/dvm) don't boot in this story (Story 45.4 only starts connector + townhouse-api at apex install), but Epic 46 will. Fix: same `${VAR:?msg}` pattern, OR explicitly defer with a TODO for Epic 46.
+- [x] [Review][Patch][R2-MINOR] **Story file: `orchestrator.ts` is in both the touched-files list AND the unchanged scope-guard list** — line 487 (touched) vs line 499 (scope-guarded as Story 45.3 territory). Self-contradiction introduced by the D2-Patch list update. Fix: amend the scope-guard line to "DockerOrchestrator profile-param refactor is Story 45.3 territory; this story's RepoDigests cache fix is the ONLY orchestrator change in scope".
+
+#### NIT / Defer
+
+- [x] [Review][Defer] D3-Patch port-collision documentation is technically incorrect — host ports `9401`, `28090`, `7100`, `3100`, `3200`, `3400` (HS) do not actually overlap with the dev stack's host bindings (28080, 28100, 28110, 28200, 28210, 28400, 28700, 28710). The "must not run concurrently" guidance is reasonable as a defensive default but the cited mechanism is wrong. — defer doc tidy-up
+- [x] [Review][Defer] `describe.skipIf` inverted-logic sibling pattern is structurally clever but only emits a visible "skipped" line in the file-missing case; in the normal case (file present), the sibling describe is silently absent. — defer
+- [x] [Review][Defer] TOCTOU between manifest existence check and copy in `materializeComposeTemplate` (race with concurrent `pnpm install --force`) — defer
+- [x] [Review][Defer] `loadComposeTemplate` ENOENT race propagates raw `fs.Error` instead of wrapped `ComposeLoaderError` — defer
+- [x] [Review][Defer] `compose-template-validity.test.ts` `0\.0\.0\.0:` reject misses YAML long-form `host_ip: 0.0.0.0\n` (no trailing colon) — defer
+- [x] [Review][Defer] Connector image cache check uses `includes(parsedRef.digest!)` — substring match where suffix would be safer — defer
+- [x] [Review][Defer] `tarball-contents.test.ts` afterAll cleanup deletes the tarball even on test failure — defer
+- [x] [Review][Defer] Manifest-alignment test path resolution via `import.meta.url + '../../dist/...'` is fragile under bundler reconfiguration — defer
+- [x] [Review][Defer] `tarball-contents.test.ts` "freshness precondition" only checks `existsSync` — stale dist passes the gate — defer
+
+#### Dismissed (Round 2 false positive)
+
+- ~~`townhouse-api` `volumes: [~/.townhouse:/.townhouse:rw]` literal `~`~~ — Blind Hunter R2 claimed Compose treats `~` as literal; verified empirically with `docker compose config` (v5.1.3) that `~` IS expanded to `$HOME` in volume bind-mount source paths. Output: `source: /home/jonathan/.townhouse_compose_test`. The mount works as intended.

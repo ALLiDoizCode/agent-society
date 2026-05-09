@@ -20,9 +20,11 @@
  *   node scripts/render-compose-template.mjs
  */
 
-import { readFile, writeFile, cp, mkdir, access } from 'node:fs/promises';
+import { readFile, writeFile, cp, mkdir, access, chmod } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { getImageDigest } from './lib/image-manifest-digest.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
@@ -43,28 +45,16 @@ async function run() {
   const hsTemplateRaw = await readFile(HS_TEMPLATE_PATH, 'utf-8');
   let hsRendered = hsTemplateRaw;
 
+  // Only ENOENT on the manifest is tolerated (warn + ship unsubstituted).
+  // JSON-parse errors, missing image keys, and malformed digests all fail
+  // hard — silent emission of an unsubstituted template under those
+  // conditions would mask real bugs.
+  let manifestPresent = false;
   try {
     await access(MANIFEST_PATH);
-    const manifestRaw = await readFile(MANIFEST_PATH, 'utf-8');
-    const manifest = JSON.parse(manifestRaw);
-
-    const subs = [
-      ['${TOON_TOWNHOUSE_API_DIGEST}', `@${manifest.images['townhouse-api'].digest}`],
-      ['${TOON_TOWN_DIGEST}',          `@${manifest.images.town.digest}`],
-      ['${TOON_MILL_DIGEST}',          `@${manifest.images.mill.digest}`],
-      ['${TOON_DVM_DIGEST}',           `@${manifest.images.dvm.digest}`],
-      ['${TOON_CONNECTOR_DIGEST}',     `@${manifest.images.connector.digest}`],
-    ];
-
-    for (const [placeholder, replacement] of subs) {
-      hsRendered = hsRendered.replaceAll(placeholder, replacement);
-    }
-
-    console.log('[render-compose-template] HS template rendered with 5 digest substitutions.');
+    manifestPresent = true;
   } catch (err) {
-    // Manifest absent — ship unsubstituted template with a loud warning.
-    // Acceptable for local dev; the tarball-content verification step in CI
-    // catches unsubstituted placeholders before pnpm publish runs.
+    if (err && err.code !== 'ENOENT') throw err;
     console.warn(
       '[render-compose-template] WARNING: dist/image-manifest.json not found — ' +
       'shipping unsubstituted townhouse-hs.yml. ' +
@@ -72,7 +62,33 @@ async function run() {
     );
   }
 
-  await writeFile(join(COMPOSE_DIST_DIR, 'townhouse-hs.yml'), hsRendered, 'utf-8');
+  if (manifestPresent) {
+    const manifestRaw = await readFile(MANIFEST_PATH, 'utf-8');
+    const manifest = JSON.parse(manifestRaw); // throws SyntaxError on malformed JSON
+
+    const subs = [
+      ['${TOON_TOWNHOUSE_API_DIGEST}', getImageDigest(manifest, 'townhouse-api')],
+      ['${TOON_TOWN_DIGEST}',          getImageDigest(manifest, 'town')],
+      ['${TOON_MILL_DIGEST}',          getImageDigest(manifest, 'mill')],
+      ['${TOON_DVM_DIGEST}',           getImageDigest(manifest, 'dvm')],
+      ['${TOON_CONNECTOR_DIGEST}',     getImageDigest(manifest, 'connector')],
+    ];
+
+    for (const [placeholder, digest] of subs) {
+      hsRendered = hsRendered.replaceAll(placeholder, `@${digest}`);
+    }
+
+    console.log('[render-compose-template] HS template rendered with 5 digest substitutions.');
+  }
+
+  const hsOutPath = join(COMPOSE_DIST_DIR, 'townhouse-hs.yml');
+  await writeFile(hsOutPath, hsRendered, 'utf-8');
+  // NFR8 — operator-secret file mode (the rendered HS YAML embeds env-var
+  // references that may include private keys at deploy time). The mode
+  // applies to the build artifact in dist/ as well as the materialized copy
+  // at ~/.townhouse/compose/, so an untrusted local user on the CI runner
+  // cannot read between render and pack.
+  await chmod(hsOutPath, 0o600);
   console.log('[render-compose-template] Done — dist/compose/{townhouse-hs,townhouse-dev}.yml written.');
 }
 

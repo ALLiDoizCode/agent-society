@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, statSync, rmSync, mkdirSync, copyFileSync } from 'node:fs';
+import { mkdtempSync, statSync, rmSync, mkdirSync, copyFileSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -100,13 +100,21 @@ describe('materializeComposeTemplate', () => {
     expect(mode).toBe(0o700);
   });
 
-  it('is idempotent — second call overwrites first, mode stays 0o600, no errors', () => {
+  it('is idempotent — second call overwrites first, mode stays 0o600, content matches, no errors', () => {
     const opts = { distDir: FIXTURE_DIR, townhouseHome: tmpHome };
     const first = materializeComposeTemplate('hs', opts);
+    const firstContent = readFileSync(first.composePath, 'utf-8');
+    const firstManifest = readFileSync(first.manifestPath, 'utf-8');
     const second = materializeComposeTemplate('hs', opts);
     expect(first.composePath).toBe(second.composePath);
+    expect(first.manifestPath).toBe(second.manifestPath);
     const mode = statSync(second.composePath).mode & 0o777;
     expect(mode).toBe(0o600);
+    // R2-MINOR fix: assert content equality, not just path equality.
+    // A regression that wrote different bytes (truncated, wrong template,
+    // mid-write garbage) would have passed the previous version of this test.
+    expect(readFileSync(second.composePath, 'utf-8')).toBe(firstContent);
+    expect(readFileSync(second.manifestPath, 'utf-8')).toBe(firstManifest);
   });
 
   it('throws ComposeLoaderError for hs profile when manifest is absent', () => {

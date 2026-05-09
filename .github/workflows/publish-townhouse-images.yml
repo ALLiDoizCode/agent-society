@@ -277,23 +277,45 @@ jobs:
         # and the HS YAML has no unsubstituted placeholders before publishing.
         run: |
           set -euo pipefail
-          mkdir -p /tmp/pack-out /tmp/pack-extracted
-          pnpm --filter @toon-protocol/townhouse pack --pack-destination /tmp/pack-out/
-          TGZ=$(ls /tmp/pack-out/toon-protocol-townhouse-*.tgz | head -1)
-          tar -tzf "$TGZ" > /tmp/pack-listing.txt
+          PACK_OUT=$(mktemp -d)
+          PACK_EXTRACT=$(mktemp -d)
+          pnpm --filter @toon-protocol/townhouse pack --pack-destination "$PACK_OUT"
+          # Globbing for the tgz is fine because $PACK_OUT is fresh from mktemp.
+          TGZ=$(ls "$PACK_OUT"/toon-protocol-townhouse-*.tgz | head -1)
+          [ -f "$TGZ" ] || { echo "FAIL: pnpm pack did not produce a tgz in $PACK_OUT"; exit 1; }
+          tar -tzf "$TGZ" > "$PACK_OUT/listing.txt"
           for path in \
             package/dist/compose/townhouse-hs.yml \
             package/dist/compose/townhouse-dev.yml \
             package/dist/image-manifest.json; do
-            grep -qF "$path" /tmp/pack-listing.txt \
+            # Anchor the match — a `*.bak` or partial-name file would otherwise
+            # satisfy a substring grep without the actual file existing.
+            grep -qE "^${path}\$" "$PACK_OUT/listing.txt" \
               || { echo "MISSING from tarball: $path"; exit 1; }
           done
-          tar -xzf "$TGZ" -C /tmp/pack-extracted/
-          if grep -E '\$\{TOON_[A-Z_]+_DIGEST\}' \
-              /tmp/pack-extracted/package/dist/compose/townhouse-hs.yml; then
+          tar -xzf "$TGZ" -C "$PACK_EXTRACT"
+          HS_YAML="$PACK_EXTRACT/package/dist/compose/townhouse-hs.yml"
+          # Negative: no unsubstituted placeholders.
+          if grep -E '\$\{TOON_[A-Z_]+_DIGEST\}' "$HS_YAML"; then
             echo "FAIL: unsubstituted placeholders in tarball HS YAML"; exit 1
           fi
-          echo "✅ Tarball contains all required artifacts with no unsubstituted placeholders"
+          # Positive: every services.<name>.image must use full digest form.
+          # Single regex enforces YAML shape ('  image: <ref>'), digest form
+          # (@sha256:<64hex>), and tolerates trailing CR / whitespace. Catches
+          # orphaned '@' (empty-digest substitution) and tag-form refs because
+          # neither matches the strict 64-hex tail. The IMAGE_LINES floor stops
+          # a structural refactor that drops all 'image:' keys from passing the
+          # gate via 0===0.
+          IMAGE_LINES=$(grep -cE '^[[:space:]]+image:[[:space:]]+' "$HS_YAML" || true)
+          DIGEST_LINES=$(grep -cE '^[[:space:]]+image:[[:space:]]+[^[:space:]]+@sha256:[a-f0-9]{64}[[:space:]]*$' "$HS_YAML" || true)
+          if [ "$IMAGE_LINES" -lt 1 ]; then
+            echo "FAIL: no image: lines found in $HS_YAML — structural defect in template"; exit 1
+          fi
+          if [ "$IMAGE_LINES" -ne "$DIGEST_LINES" ]; then
+            echo "FAIL: $IMAGE_LINES image: lines but only $DIGEST_LINES use @sha256:<64hex> digest form"
+            exit 1
+          fi
+          echo "✅ Tarball contains all required artifacts with no unsubstituted placeholders ($DIGEST_LINES digest-pinned images)"
 
       - name: Publish to npm
         run: pnpm --filter @toon-protocol/townhouse publish --access public --no-git-checks

@@ -168,6 +168,17 @@ The published `@toon-protocol/townhouse` package ships two Docker Compose templa
 | `hs`  | `dist/compose/townhouse-hs.yml` | Operator-facing apex boot — digest-pinned GHCR images |
 | `dev` | `dist/compose/townhouse-dev.yml` | Contributor dev stack — local `toon:*` build images |
 
+> **Port collision warning.** The HS template binds canonical ports
+> (`127.0.0.1:9401`, `:28090`, `:7100`, `:3100`, `:3200`, `:3400`); the
+> contributor dev stack binds 28xxx-namespaced equivalents (28080:9401,
+> 28100:3100, 28110:3100, 28200:3200, 28210:3200, 28400:3400, 28700:7100,
+> 28710:7100). HS-mode and the dev stack (`scripts/townhouse-dev-infra.sh`)
+> **must not run concurrently on the same machine** — host:9401, host:3100,
+> host:3200, host:3400, host:7100 will conflict. The HS template's
+> single-tenant defaults are intentional for the apex operator path
+> (Story 45.4 `townhouse hs up`); open an enhancement issue if multi-tenant
+> bindings become a real need.
+
 ### API
 
 ```typescript

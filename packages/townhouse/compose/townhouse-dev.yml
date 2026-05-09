@@ -231,7 +231,7 @@ services:
       NODE_NOSTR_PUBKEY: ''
       NODE_EVM_ADDRESS: ''
       # Interpolated from TOWN_01_SECRET_KEY exported by townhouse-dev-infra.sh.
-      NODE_NOSTR_SECRET_KEY: '${TOWN_01_SECRET_KEY:-}'
+      NODE_NOSTR_SECRET_KEY: '${TOWN_01_SECRET_KEY:?TOWN_01_SECRET_KEY required — source scripts/townhouse-dev-infra.sh first}'
     volumes:
       - townhouse-dev-town-01-data:/data
     healthcheck:
@@ -268,7 +268,7 @@ services:
       NODE_NOSTR_PUBKEY: ''
       NODE_EVM_ADDRESS: ''
       # Interpolated from TOWN_02_SECRET_KEY exported by townhouse-dev-infra.sh.
-      NODE_NOSTR_SECRET_KEY: '${TOWN_02_SECRET_KEY:-}'
+      NODE_NOSTR_SECRET_KEY: '${TOWN_02_SECRET_KEY:?TOWN_02_SECRET_KEY required — source scripts/townhouse-dev-infra.sh first}'
     volumes:
       - townhouse-dev-town-02-data:/data
     healthcheck:
@@ -307,9 +307,9 @@ services:
       NODE_EVM_ADDRESS: ''
       # MILL_MNEMONIC takes priority over NODE_NOSTR_SECRET_KEY for BIP-32 swap key derivation.
       # Interpolated from MILL_01_MNEMONIC exported by townhouse-dev-infra.sh.
-      MILL_MNEMONIC: '${MILL_01_MNEMONIC:-}'
+      MILL_MNEMONIC: '${MILL_01_MNEMONIC:?MILL_01_MNEMONIC required — source scripts/townhouse-dev-infra.sh first}'
       # Kept for backward-compat; ignored when MILL_MNEMONIC is set.
-      NODE_NOSTR_SECRET_KEY: '${MILL_01_SECRET_KEY:-}'
+      NODE_NOSTR_SECRET_KEY: '${MILL_01_SECRET_KEY:?MILL_01_SECRET_KEY required — source scripts/townhouse-dev-infra.sh first}'
       MILL_CONFIG_PATH: /config/mill.config.json
       MILL_RELAYS: ws://townhouse-dev-town-01:7100,ws://townhouse-dev-town-02:7100
     volumes:
@@ -351,9 +351,9 @@ services:
       NODE_EVM_ADDRESS: ''
       # MILL_MNEMONIC takes priority over NODE_NOSTR_SECRET_KEY for BIP-32 swap key derivation.
       # Interpolated from MILL_02_MNEMONIC exported by townhouse-dev-infra.sh.
-      MILL_MNEMONIC: '${MILL_02_MNEMONIC:-}'
+      MILL_MNEMONIC: '${MILL_02_MNEMONIC:?MILL_02_MNEMONIC required — source scripts/townhouse-dev-infra.sh first}'
       # Kept for backward-compat; ignored when MILL_MNEMONIC is set.
-      NODE_NOSTR_SECRET_KEY: '${MILL_02_SECRET_KEY:-}'
+      NODE_NOSTR_SECRET_KEY: '${MILL_02_SECRET_KEY:?MILL_02_SECRET_KEY required — source scripts/townhouse-dev-infra.sh first}'
       MILL_CONFIG_PATH: /config/mill.config.json
       MILL_RELAYS: ws://townhouse-dev-town-01:7100,ws://townhouse-dev-town-02:7100
     volumes:
@@ -391,7 +391,8 @@ services:
       NODE_NOSTR_PUBKEY: ''
       NODE_EVM_ADDRESS: ''
       # Interpolated from DVM_01_SECRET_KEY exported by townhouse-dev-infra.sh.
-      NODE_NOSTR_SECRET_KEY: '${DVM_01_SECRET_KEY:-}'
+      NODE_NOSTR_SECRET_KEY: '${DVM_01_SECRET_KEY:?DVM_01_SECRET_KEY required — source scripts/townhouse-dev-infra.sh first}'
+      # TURBO_TOKEN may legitimately be unset for non-Turbo dev paths — empty string is intended.
       TURBO_TOKEN: '${TURBO_TOKEN:-}'
     volumes:
       - townhouse-dev-dvm-01-data:/data

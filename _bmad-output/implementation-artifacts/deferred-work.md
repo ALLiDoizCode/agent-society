@@ -165,3 +165,27 @@ _Six cross-repo patches (P3, P4, P5, P6, P7, Q1) shipped in lock-step via [conne
 - `useWizardState` polls every 2s forever (even after `containers_running: true`) — wasted requests on idle Home view; bounded by SPA tab lifetime; consider stopping the poll once normal mode is stable.
 - Mnemonic internal-multi-space + ZWSP/Unicode-invisible normalization on import — current `\s+` split handles common whitespace; uncommon paste paths fall through to a generic "Invalid BIP-39" error.
 - AC-4 validation cascade order in impl differs slightly from spec list order (length before mismatch); both still produce a 400 with a `code`; tests don't pin ordering — align spec or impl in a future polish pass.
+
+## Deferred from: code review of 45-2-embed-compose-templates-and-image-manifest-in-npm-tarball (2026-05-09)
+
+- Concurrent `materializeComposeTemplate('hs')` calls race — `mkdirSync` + `chmodSync` + `writeFileSync` is non-atomic; no `tmp + rename` pattern. Low likelihood unless townhouse-api restarts during a CLI invocation.
+- `defaultDistDir()` `import.meta.url` resolution assumes tsup output layout — fragile under future bundlers (esbuild/vite/webpack inlining the source). Forward-looking concern for Story 45.4+ when bundled CLI imports the loader.
+- No idempotency guard on `pnpm publish` rerun — npm returns 409 if version already published. Workflow rerun on the same `v*` tag fails loudly but ungracefully. Add a pre-flight `npm view ... || pnpm publish ...` shim later.
+- `tarball-contents.test.ts` parses `pnpm pack` stdout (`result.trim().split('\n').pop()`) — brittle if pnpm 9+ changes output format or adds trailing summary lines. Fallback `readdirSync` saves it; tighten to readdir-only when convenient.
+- `DOCKER_AVAILABLE=1` env override skips real daemon probe in `compose-template-validity.test.ts` — when daemon is dead, test crashes after a 30s timeout instead of cleanly skipping. Add a pre-test `docker info --format '{{.ID}}'` probe.
+- Lifecycle-script asymmetry between `pnpm pack` (verify step) and `pnpm publish` (live step) — `prepublishOnly` runs only on publish. If a future PR adds `prepublishOnly: pnpm build`, `tsup`'s `clean: true` wipes the manifest and ships unsubstituted YAML undetected. Add `--ignore-scripts` to the live-publish step.
+- Brief TOCTOU readability between `writeFileSync(manifestPath, ..., { mode: 0o600 })` and the follow-up `chmodSync(manifestPath, 0o600)` — on filesystems where the mode option is umask-masked (WSL2), another local process can `open(O_RDONLY)` between the two calls. Marginal — manifest itself is not secret, but the same pattern is used for compose YAML which can carry env-injected secrets.
+- `tsup.config.ts onSuccess` and `scripts/render-compose-template.mjs` duplicate the placeholder-substitution arrays (5 entries each). Drift risk when adding a 6th image — refactor to a shared `renderComposeTemplate(distDir, srcDir)` module imported by both.
+- `pnpm pack --pack-destination` requires pnpm ≥ 8.4 (added in v7.18 actually — but `--filter` + `--pack-destination` interaction was solidified in 8.4). The workflow's `pnpm/action-setup` version is not visible in this diff — verify it's pinned to ≥ 8.4 to avoid silent flag-ignored failures.
+
+## Deferred from: code review of 45-2-embed-compose-templates-and-image-manifest-in-npm-tarball — Round 2 (2026-05-09)
+
+- D3-Patch port-collision documentation in HS template + README is technically incorrect — host ports HS/dev don't actually overlap. The "must not run concurrently" guidance is a reasonable defensive default but cite the right mechanism (canonical ports may collide with non-townhouse system services rather than each other).
+- `describe.skipIf` inverted-logic sibling pattern in compose-template-validity.test.ts only emits a visible "skipped" line in the file-missing case; in the normal case (file present), the sibling describe is silently absent. Refactor to emit a single skip from inside the main describe.
+- TOCTOU between manifest existence check and copy in `materializeComposeTemplate` (race with concurrent `pnpm install --force`). Low likelihood; consider switching to read-then-write pattern with single fs.readFile that throws on missing.
+- `loadComposeTemplate` ENOENT race between `existsSync` check and `readFileSync` propagates raw `fs.Error` instead of wrapped `ComposeLoaderError`. Caller `catch (e instanceof ComposeLoaderError)` mis-routes.
+- `compose-template-validity.test.ts` `0\.0\.0\.0:` reject misses YAML long-form `host_ip: 0.0.0.0\n` (no trailing colon).
+- Connector image cache check in `connector-image-contract.test.ts` uses `includes(parsedRef.digest!)` — substring match where `endsWith('@' + digest)` would be safer.
+- `tarball-contents.test.ts` afterAll cleanup deletes the tarball even on test failure, killing post-mortem inspection. Consider keeping the tarball when an assertion fails (vitest's task context exposes failure state).
+- Manifest-alignment test path resolution via `import.meta.url + '../../dist/...'` is fragile under bundler reconfiguration. Same pattern is acknowledged in compose-loader.ts:30.
+- `tarball-contents.test.ts` "freshness precondition" only checks `existsSync(DIST_COMPOSE_HS)` — stale dist (e.g., dev rebuilt last week, manifest changed since) passes the gate. Add mtime-vs-source comparison or a digest cross-check against current `image-manifest.json`.
