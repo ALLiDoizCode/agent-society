@@ -285,7 +285,10 @@ jobs:
           set -euo pipefail
           PACK_OUT=$(mktemp -d)
           PACK_EXTRACT=$(mktemp -d)
-          pnpm --filter @toon-protocol/townhouse pack --pack-destination "$PACK_OUT"
+          # `pnpm pack` doesn't support `--filter` (it interprets it as the
+          # recursive command modifier and errors "Unknown option: 'recursive'").
+          # chdir into the package and run pack directly instead.
+          (cd packages/townhouse && pnpm pack --pack-destination "$PACK_OUT")
           # Globbing for the tgz is fine because $PACK_OUT is fresh from mktemp.
           TGZ=$(ls "$PACK_OUT"/toon-protocol-townhouse-*.tgz | head -1)
           [ -f "$TGZ" ] || { echo "FAIL: pnpm pack did not produce a tgz in $PACK_OUT"; exit 1; }
