@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-09 (Story 45.1 → done — multi-arch image publish CI green; town#37 town#38 town#39 town#40 town#41)
+# last_updated: 2026-05-09 (Story 45.2 → in-progress — code-review patches applied: 19 patches across compose-loader hardening, render-script error handling, CI tarball-verify + digest validation, dev compose secret-handling, manifest-alignment test, orchestrator RepoDigests cache; AC #12 done-flip pending tag-push + registry verify)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -491,7 +491,7 @@ development_status:
   44-2-connector-verify-multi-arch-image-build: done  # verified v3.5.1 amd64+arm64 manifest + arm64 OK smoke test + sidecar v0.4.10.0-beta; connector#63 #64 #65
   44-3-connector-cosign-keyless-oidc-image-signing: done  # done: cosign verify green at v3.6.0 — connector#66
   44-4-connector-release-contract-cross-repo-doc: done  # done: doc mirrored at packages/sdk/CONNECTOR_RELEASE_CONTRACT.md — connector#67, town#34
-  epic-44-retrospective: optional
+  epic-44-retrospective: done
 
   # Epic 45: One-Command Apex Install
   # Drew runs `npx @toon-protocol/townhouse hs up` and gets a payable
@@ -499,7 +499,7 @@ development_status:
   # Depends on Epic 44 Story 44.1 for clean hostname surfacing.
   epic-45: in-progress
   45-1-multi-arch-townhouse-image-publish-ci: done  # done: workflow run https://github.com/toon-protocol/town/actions/runs/25603167091 produced 4 multi-arch + cosign-signed images and image-manifest.json — town#37 town#38 town#39 town#40 town#41
-  45-2-embed-compose-templates-and-image-manifest-in-npm-tarball: backlog  # CRITICAL PATH
+  45-2-embed-compose-templates-and-image-manifest-in-npm-tarball: in-progress  # CRITICAL PATH; code-review 2026-05-09 patched; AC #12 done-flip gated on tag-push + registry verify
   45-3-docker-orchestrator-profile-param: backlog
   45-4-townhouse-hs-up-subcommand-apex-only-boot: backlog  # CRITICAL PATH; depends on 44.1
   epic-45-retrospective: optional
