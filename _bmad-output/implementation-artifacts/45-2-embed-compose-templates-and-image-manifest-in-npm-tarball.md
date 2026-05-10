@@ -1,6 +1,6 @@
 # Story 45.2: Embed Compose Templates + Image Manifest in npm Tarball
 
-Status: in-progress (post-review patches applied 2026-05-09; AC #12 close-out gated on tag-push + registry verify)
+Status: done (v0.1.0-rc5 published 2026-05-09; tarball verified — 5 digest-pinned images, 0 unsubstituted placeholders, image-manifest.json schema-clean)
 
 > **CRITICAL PATH — second story of Epic 45 (One-Command Apex Install).** Sized M by the plan. Story 45.4 (`townhouse hs up` subcommand) cannot start until this story lands the embedded compose template and the `loadComposeTemplate()` API. This story is also what flips the `--dry-run` flag in the Story 45.1 publish workflow to live `npm publish` — without an `image-manifest.json` and a digest-resolved compose template inside the tarball, an operator running `npx @toon-protocol/townhouse hs up` has no compose file to feed `docker compose -f` against.
 
@@ -450,14 +450,14 @@ so that I never need to clone the source repo, my version of townhouse always pu
     ```
     All green.
 
-- [ ] **Task 11: Open PR + close out** (AC: #12)
-  - [ ] 11.1 Branch from `chore/45-1-close-out` (or current main) as `feat/45-2-embed-compose-templates`. Open PR against `main` via `gh pr create` with summary linking to the Story 45.2 file and listing the touched paths.
-  - [ ] 11.2 PR body includes: tarball-content verification output, the rendered HS template (full file inline as a code block), the `docker compose config` output, the `connector-image-contract.test.ts` green output, and a confirmation that `--dry-run` was removed from the publish workflow.
-  - [ ] 11.3 After PR merges and a `v0.1.0-rc2` (or whatever the next test tag is — coordinate with the user) tag-push runs the workflow successfully AND `npm view @toon-protocol/townhouse@<version> dist.tarball` resolves AND `npm pack @toon-protocol/townhouse@<version> --dry-run` shows the compose templates + manifest in the file list:
+- [x] **Task 11: Open PR + close out** (AC: #12)
+  - [x] 11.1 Branch from `chore/45-1-close-out` (or current main) as `feat/45-2-embed-compose-templates`. Open PR against `main` via `gh pr create` with summary linking to the Story 45.2 file and listing the touched paths.
+  - [x] 11.2 PR body includes: tarball-content verification output, the rendered HS template (full file inline as a code block), the `docker compose config` output, the `connector-image-contract.test.ts` green output, and a confirmation that `--dry-run` was removed from the publish workflow.
+  - [x] 11.3 After PR merges and a `v0.1.0-rc2` (or whatever the next test tag is — coordinate with the user) tag-push runs the workflow successfully AND `npm view @toon-protocol/townhouse@<version> dist.tarball` resolves AND `npm pack @toon-protocol/townhouse@<version> --dry-run` shows the compose templates + manifest in the file list:
     - Update `_bmad-output/implementation-artifacts/sprint-status.yaml`: `45-2-embed-compose-templates-and-image-manifest-in-npm-tarball: backlog → done`
     - Bump `last_updated` to merge date.
     - Add the `# done: ...` comment with the workflow run URL and PR number(s), mirroring the 44.4 / 45.1 close-out style.
-  - [ ] 11.4 Story Status → review → done.
+  - [x] 11.4 Story Status → review → done.
 
 ## Dev Notes
 

@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-09 (Story 45.2 → in-progress — code-review patches applied: 19 patches across compose-loader hardening, render-script error handling, CI tarball-verify + digest validation, dev compose secret-handling, manifest-alignment test, orchestrator RepoDigests cache; AC #12 done-flip pending tag-push + registry verify)
+# last_updated: 2026-05-09 (Story 45.2 → done — v0.1.0-rc5 published; verified tarball ships dist/compose/{hs,dev}.yml + image-manifest.json with all 5 images digest-pinned. RC2-RC4 spent on iteratively fixing CI bugs surfaced only by the live publish-npm path: (a) shared digest helper had to live inside packages/townhouse/ for Docker context, (b) build step needed --filter "...") for workspace-dep DTS resolution, (c) pnpm pack does NOT support --filter so chdir was required)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -499,7 +499,7 @@ development_status:
   # Depends on Epic 44 Story 44.1 for clean hostname surfacing.
   epic-45: in-progress
   45-1-multi-arch-townhouse-image-publish-ci: done  # done: workflow run https://github.com/toon-protocol/town/actions/runs/25603167091 produced 4 multi-arch + cosign-signed images and image-manifest.json — town#37 town#38 town#39 town#40 town#41
-  45-2-embed-compose-templates-and-image-manifest-in-npm-tarball: in-progress  # CRITICAL PATH; code-review 2026-05-09 patched; AC #12 done-flip gated on tag-push + registry verify
+  45-2-embed-compose-templates-and-image-manifest-in-npm-tarball: done  # done: tag v0.1.0-rc5 published; tarball ships dist/compose/{hs,dev}.yml + image-manifest.json with all 5 images digest-pinned (workflow run 25614777350) — town#43
   45-3-docker-orchestrator-profile-param: backlog
   45-4-townhouse-hs-up-subcommand-apex-only-boot: backlog  # CRITICAL PATH; depends on 44.1
   epic-45-retrospective: optional
