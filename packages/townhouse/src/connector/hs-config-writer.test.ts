@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, existsSync, statSync, writeFileSync, chmodSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  statSync,
+  writeFileSync,
+  chmodSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
@@ -36,7 +44,10 @@ describe('writeHsConnectorConfig', () => {
   it('written file contains anon.enabled: true (HS marker)', () => {
     const config = getDefaultConfig();
     const { yamlPath } = writeHsConnectorConfig(tmpDir, config);
-    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<string, unknown>;
+    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
     const anon = parsed['anon'] as Record<string, unknown> | undefined;
     expect(anon?.['enabled']).toBe(true);
   });
@@ -44,14 +55,20 @@ describe('writeHsConnectorConfig', () => {
   it('parsed YAML has anon.enabled: true field', () => {
     const config = getDefaultConfig();
     const { yamlPath } = writeHsConnectorConfig(tmpDir, config);
-    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<string, unknown>;
+    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
     expect((parsed['anon'] as Record<string, unknown>)?.['enabled']).toBe(true);
   });
 
   it('transport block has managed hidden service settings', () => {
     const config = getDefaultConfig();
     const { yamlPath } = writeHsConnectorConfig(tmpDir, config);
-    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<string, unknown>;
+    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
     const transport = parsed['transport'] as Record<string, unknown>;
     expect(transport['type']).toBe('socks5');
     expect(transport['managed']).toBe(true);
@@ -85,14 +102,21 @@ describe('writeHsConnectorConfig', () => {
   it('overwrites when existing file lacks the HS marker (legacy non-HS config)', () => {
     const existingPath = join(tmpDir, 'connector.yaml');
     // Write a file that does NOT have anon.enabled: true
-    writeFileSync(existingPath, 'nodeId: g.townhouse\nanon:\n  enabled: false\n', {
-      mode: 0o600,
-    });
+    writeFileSync(
+      existingPath,
+      'nodeId: g.townhouse\nanon:\n  enabled: false\n',
+      {
+        mode: 0o600,
+      }
+    );
 
     const config = getDefaultConfig();
     const result = writeHsConnectorConfig(tmpDir, config);
     expect(result.created).toBe(true);
-    const parsed = parse(readFileSync(existingPath, 'utf-8')) as Record<string, unknown>;
+    const parsed = parse(readFileSync(existingPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
     const anon = parsed['anon'] as Record<string, unknown> | undefined;
     expect(anon?.['enabled']).toBe(true);
   });

@@ -14,8 +14,9 @@ interface FailureCopyEntry {
 
 const FAILURE_COPY: Readonly<Record<string, FailureCopyEntry>> = {
   'anon-timeout': {
-    headline: 'Hidden service didn\'t publish in time.',
-    explanation: 'The .anyone descriptor did not publish within the allotted time.',
+    headline: "Hidden service didn't publish in time.",
+    explanation:
+      'The .anyone descriptor did not publish within the allotted time.',
     nextStep: 'Re-run with DEBUG=townhouse:* for verbose anon logs.',
   },
   'anon-disabled': {
@@ -31,14 +32,16 @@ const FAILURE_COPY: Readonly<Record<string, FailureCopyEntry>> = {
   'port-collision': {
     headline: 'Port already in use.',
     explanation: 'A required host port is already bound by another process.',
-    nextStep: 'Stop the conflicting service or override the port via --connector-admin-port.',
+    nextStep:
+      'Stop the conflicting service or override the port via --connector-admin-port.',
   },
   'missing-docker-sock': {
     headline: 'Docker daemon unreachable.',
-    explanation: 'The Docker socket is not accessible or Docker is not running.',
+    explanation:
+      'The Docker socket is not accessible or Docker is not running.',
     nextStep: 'Start Docker and re-run `townhouse hs up`.',
   },
-  'generic': {
+  generic: {
     headline: 'Apex boot failed.',
     explanation: '',
     nextStep: 'Run with DEBUG=townhouse:* for verbose logs.',
@@ -54,7 +57,8 @@ function supportsUnicode(): boolean {
 }
 
 function useAscii(): boolean {
-  if (process.env['NO_COLOR'] !== undefined && process.env['NO_COLOR'] !== '') return true;
+  if (process.env['NO_COLOR'] !== undefined && process.env['NO_COLOR'] !== '')
+    return true;
   return !supportsUnicode();
 }
 
@@ -134,7 +138,9 @@ export function renderFailure(error: unknown): { exitCode: number } {
     const arrow = ascii ? '->' : '→';
     process.stderr.write(`${xMark} Apex boot failed.\n`);
     process.stderr.write(`  ${explanation}\n`);
-    process.stderr.write(`  ${arrow} Run with DEBUG=townhouse:* for verbose logs.\n`);
+    process.stderr.write(
+      `  ${arrow} Run with DEBUG=townhouse:* for verbose logs.\n`
+    );
     return { exitCode: 1 };
   }
 

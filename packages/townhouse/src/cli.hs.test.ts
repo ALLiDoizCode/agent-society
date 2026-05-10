@@ -6,7 +6,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
@@ -136,14 +142,18 @@ function makeHsOverrides({
               throw new Error('connector is anon-disabled (HTTP 503)');
             }
             // 'cold': simulate ECONNREFUSED so the code proceeds to cold-boot.
-            throw new Error('Connector admin API connection refused: connect ECONNREFUSED 127.0.0.1:9401');
+            throw new Error(
+              'Connector admin API connection refused: connect ECONNREFUSED 127.0.0.1:9401'
+            );
           }
           // Post-up call: return the published hostname.
           return { hostname, publishedAt: new Date().toISOString() };
         }),
       };
     }),
-    runComposeDown: vi.fn(async (_composePath: string, _withVolumes: boolean) => undefined),
+    runComposeDown: vi.fn(
+      async (_composePath: string, _withVolumes: boolean) => undefined
+    ),
   };
 }
 
@@ -156,7 +166,9 @@ describe('CLI hs subcommand', () => {
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    stdoutSpy = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation(() => true);
     // Capture and reset process.exitCode
     process.exitCode = undefined;
     stdinIsTTY = process.stdin.isTTY;
@@ -209,7 +221,12 @@ describe('CLI hs subcommand', () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
       const overrides = makeHsOverrides({});
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
       expect(overrides.materializeComposeTemplate).toHaveBeenCalledTimes(1);
       expect(overrides.materializeComposeTemplate).toHaveBeenCalledWith(
         'hs',
@@ -224,17 +241,27 @@ describe('CLI hs subcommand', () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
       const overrides = makeHsOverrides({});
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
 
       expect(overrides.createOrchestrator).toHaveBeenCalledWith(
         expect.anything(), // docker
         expect.anything(), // config
         expect.anything(), // walletManager
-        expect.objectContaining({ profile: 'hs', composePath: '/tmp/fake/townhouse-hs.yml' })
+        expect.objectContaining({
+          profile: 'hs',
+          composePath: '/tmp/fake/townhouse-hs.yml',
+        })
       );
 
       // up([]) called with empty profile array
-      const orchInstance = (overrides.createOrchestrator as ReturnType<typeof vi.fn>).mock.results[0]?.value as { up: ReturnType<typeof vi.fn> };
+      const orchInstance = (
+        overrides.createOrchestrator as ReturnType<typeof vi.fn>
+      ).mock.results[0]?.value as { up: ReturnType<typeof vi.fn> };
       expect(orchInstance.up).toHaveBeenCalledWith([]);
     } finally {
       rmSync(configDir, { recursive: true, force: true });
@@ -245,12 +272,20 @@ describe('CLI hs subcommand', () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
       const overrides = makeHsOverrides({});
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
 
       const yamlPath = join(configDir, 'connector.yaml');
       expect(existsSync(yamlPath)).toBe(true);
       const { parse: yamlParse } = await import('yaml');
-      const parsed = yamlParse(readFileSync(yamlPath, 'utf-8')) as Record<string, unknown>;
+      const parsed = yamlParse(readFileSync(yamlPath, 'utf-8')) as Record<
+        string,
+        unknown
+      >;
       const anon = parsed['anon'] as Record<string, unknown> | undefined;
       expect(anon?.['enabled']).toBe(true);
     } finally {
@@ -263,7 +298,12 @@ describe('CLI hs subcommand', () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
       const overrides = makeHsOverrides({ hostname });
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
 
       const hostJsonPath = join(configDir, 'host.json');
       expect(existsSync(hostJsonPath)).toBe(true);
@@ -289,9 +329,16 @@ describe('CLI hs subcommand', () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
       const overrides = makeHsOverrides({ hostname });
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
 
-      const allOutput = stdoutSpy.mock.calls.map(c => c[0] as string).join('');
+      const allOutput = stdoutSpy.mock.calls
+        .map((c) => c[0] as string)
+        .join('');
       expect(allOutput).toContain(`Apex live at ${hostname}`);
     } finally {
       rmSync(configDir, { recursive: true, force: true });
@@ -324,7 +371,12 @@ describe('CLI hs subcommand', () => {
     delete process.env['TOWNHOUSE_WALLET_PASSWORD'];
     try {
       // stdin.isTTY is already false from beforeEach
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, makeHsOverrides({}));
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        makeHsOverrides({})
+      );
       expect(process.exitCode).toBe(1);
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringContaining('Wallet password required')
@@ -344,15 +396,21 @@ describe('CLI hs subcommand', () => {
       // probe: 'running' → first admin client call returns the running hostname.
       const overrides = makeHsOverrides({ hostname, probe: 'running' });
 
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
 
       // materializeComposeTemplate should NOT be called (idempotent path)
       expect(overrides.materializeComposeTemplate).not.toHaveBeenCalled();
       // orchestrator should NOT be constructed
       expect(overrides.createOrchestrator).not.toHaveBeenCalled();
 
-      const allOutput = (consoleSpy.mock.calls.map(c => c[0] as string).join('') +
-        stdoutSpy.mock.calls.map(c => c[0] as string).join(''));
+      const allOutput =
+        consoleSpy.mock.calls.map((c) => c[0] as string).join('') +
+        stdoutSpy.mock.calls.map((c) => c[0] as string).join('');
       expect(allOutput).toContain(`Apex live at ${hostname}`);
     } finally {
       rmSync(configDir, { recursive: true, force: true });
@@ -364,8 +422,16 @@ describe('CLI hs subcommand', () => {
   it('hs up wires containerState listener (ribbon bootstrap transitions on "creating")', async () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
-      const overrides = makeHsOverrides({ hostname: 'test.anyone', emitContainerStateOnUp: true });
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      const overrides = makeHsOverrides({
+        hostname: 'test.anyone',
+        emitContainerStateOnUp: true,
+      });
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
       // If no error is thrown, the ribbon transition fired without crashing.
       expect(process.exitCode).not.toBe(1);
     } finally {
@@ -379,8 +445,16 @@ describe('CLI hs subcommand', () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
       const downFn = vi.fn(async () => undefined);
-      const overrides = makeHsOverrides({ hostname: 'test.anyone', down: downFn });
-      await main(['hs', 'down', '-c', configPath], undefined, undefined, overrides);
+      const overrides = makeHsOverrides({
+        hostname: 'test.anyone',
+        down: downFn,
+      });
+      await main(
+        ['hs', 'down', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
 
       expect(downFn).toHaveBeenCalledTimes(1);
       // runComposeDown (the -v path) must NOT have been called
@@ -394,7 +468,12 @@ describe('CLI hs subcommand', () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
       const overrides = makeHsOverrides({});
-      await main(['hs', 'down', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'down', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('Volumes preserved')
       );
@@ -409,7 +488,10 @@ describe('CLI hs subcommand', () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
       // Create a host.json that rotate-keys should delete
-      writeFileSync(join(configDir, 'host.json'), JSON.stringify({ hostname: 'old.anyone' }));
+      writeFileSync(
+        join(configDir, 'host.json'),
+        JSON.stringify({ hostname: 'old.anyone' })
+      );
 
       const overrides = makeHsOverrides({});
       await main(
@@ -454,17 +536,29 @@ describe('CLI hs subcommand', () => {
   it('anon-timeout OrchestratorError renders failure copy on stderr', async () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
-      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const stderrSpy = vi
+        .spyOn(process.stderr, 'write')
+        .mockImplementation(() => true);
       const overrides = makeHsOverrides({
         up: vi.fn(async () => {
-          const { OrchestratorError } = await import('./docker/orchestrator.js');
-          throw new OrchestratorError('HS hostname publication timeout after 120000ms');
+          const { OrchestratorError } =
+            await import('./docker/orchestrator.js');
+          throw new OrchestratorError(
+            'HS hostname publication timeout after 120000ms'
+          );
         }),
       });
 
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
 
-      const stderrOut = stderrSpy.mock.calls.map(c => c[0] as string).join('');
+      const stderrOut = stderrSpy.mock.calls
+        .map((c) => c[0] as string)
+        .join('');
       expect(stderrOut).toContain("Hidden service didn't publish in time.");
       expect(process.exitCode).toBe(1);
       stderrSpy.mockRestore();
@@ -476,19 +570,30 @@ describe('CLI hs subcommand', () => {
   it('image-pull-failure stderr renders failure copy', async () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
-      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const stderrSpy = vi
+        .spyOn(process.stderr, 'write')
+        .mockImplementation(() => true);
       const overrides = makeHsOverrides({
         up: vi.fn(async () => {
-          const { OrchestratorError } = await import('./docker/orchestrator.js');
+          const { OrchestratorError } =
+            await import('./docker/orchestrator.js');
           throw new OrchestratorError('docker compose up failed', {
-            stderr: 'failed to pull ghcr.io/toon-protocol/connector: image not found',
+            stderr:
+              'failed to pull ghcr.io/toon-protocol/connector: image not found',
           });
         }),
       });
 
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
 
-      const stderrOut = stderrSpy.mock.calls.map(c => c[0] as string).join('');
+      const stderrOut = stderrSpy.mock.calls
+        .map((c) => c[0] as string)
+        .join('');
       expect(stderrOut).toContain('Image pull failed.');
       expect(process.exitCode).toBe(1);
       stderrSpy.mockRestore();
@@ -500,19 +605,29 @@ describe('CLI hs subcommand', () => {
   it('port-collision stderr renders failure copy', async () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
-      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const stderrSpy = vi
+        .spyOn(process.stderr, 'write')
+        .mockImplementation(() => true);
       const overrides = makeHsOverrides({
         up: vi.fn(async () => {
-          const { OrchestratorError } = await import('./docker/orchestrator.js');
+          const { OrchestratorError } =
+            await import('./docker/orchestrator.js');
           throw new OrchestratorError('docker compose up failed', {
             stderr: 'Bind for 127.0.0.1:9401 failed: port is already allocated',
           });
         }),
       });
 
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
 
-      const stderrOut = stderrSpy.mock.calls.map(c => c[0] as string).join('');
+      const stderrOut = stderrSpy.mock.calls
+        .map((c) => c[0] as string)
+        .join('');
       expect(stderrOut).toContain('Port already in use.');
       expect(process.exitCode).toBe(1);
       stderrSpy.mockRestore();
@@ -524,19 +639,29 @@ describe('CLI hs subcommand', () => {
   it('missing-docker-sock renders failure copy', async () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
-      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const stderrSpy = vi
+        .spyOn(process.stderr, 'write')
+        .mockImplementation(() => true);
       const overrides = makeHsOverrides({
         up: vi.fn(async () => {
-          const { OrchestratorError } = await import('./docker/orchestrator.js');
+          const { OrchestratorError } =
+            await import('./docker/orchestrator.js');
           throw new OrchestratorError(
             'docker CLI not found on PATH (ENOENT): docker: command not found'
           );
         }),
       });
 
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
 
-      const stderrOut = stderrSpy.mock.calls.map(c => c[0] as string).join('');
+      const stderrOut = stderrSpy.mock.calls
+        .map((c) => c[0] as string)
+        .join('');
       expect(stderrOut).toContain('Docker daemon unreachable.');
       expect(process.exitCode).toBe(1);
       stderrSpy.mockRestore();
@@ -548,16 +673,25 @@ describe('CLI hs subcommand', () => {
   it('generic unknown error renders generic failure copy', async () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
-      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const stderrSpy = vi
+        .spyOn(process.stderr, 'write')
+        .mockImplementation(() => true);
       const overrides = makeHsOverrides({
         up: vi.fn(async () => {
           throw new Error('something completely unexpected');
         }),
       });
 
-      await main(['hs', 'up', '-c', configPath], undefined, undefined, overrides);
+      await main(
+        ['hs', 'up', '-c', configPath],
+        undefined,
+        undefined,
+        overrides
+      );
 
-      const stderrOut = stderrSpy.mock.calls.map(c => c[0] as string).join('');
+      const stderrOut = stderrSpy.mock.calls
+        .map((c) => c[0] as string)
+        .join('');
       expect(stderrOut).toContain('Apex boot failed.');
       expect(stderrOut).toContain('something completely unexpected');
       expect(process.exitCode).toBe(1);

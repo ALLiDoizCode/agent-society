@@ -10,7 +10,9 @@ describe('OnboardingRibbon', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    stdoutSpy = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation(() => true);
     originalTerm = process.env['TERM'];
     originalNoColor = process.env['NO_COLOR'];
     originalCI = process.env['CI'];
@@ -53,7 +55,7 @@ describe('OnboardingRibbon', () => {
       const ribbon = new OnboardingRibbon();
       ribbon.start('pull');
       ribbon.stop();
-      const output = stdoutSpy.mock.calls.map(c => c[0] as string).join('');
+      const output = stdoutSpy.mock.calls.map((c) => c[0] as string).join('');
       expect(output).toContain('Pulling apex image');
     });
 
@@ -61,7 +63,7 @@ describe('OnboardingRibbon', () => {
       const ribbon = new OnboardingRibbon();
       ribbon.start('bootstrap');
       ribbon.stop();
-      const output = stdoutSpy.mock.calls.map(c => c[0] as string).join('');
+      const output = stdoutSpy.mock.calls.map((c) => c[0] as string).join('');
       expect(output).toContain('Bootstrapping hidden service');
     });
 
@@ -69,7 +71,7 @@ describe('OnboardingRibbon', () => {
       const ribbon = new OnboardingRibbon();
       ribbon.start('live', 'abc123.anyone');
       ribbon.stop();
-      const output = stdoutSpy.mock.calls.map(c => c[0] as string).join('');
+      const output = stdoutSpy.mock.calls.map((c) => c[0] as string).join('');
       expect(output).toContain('Apex live at abc123.anyone');
     });
 
@@ -78,7 +80,7 @@ describe('OnboardingRibbon', () => {
       ribbon.start('pull');
       ribbon.start('bootstrap');
       ribbon.stop();
-      const output = stdoutSpy.mock.calls.map(c => c[0] as string).join('');
+      const output = stdoutSpy.mock.calls.map((c) => c[0] as string).join('');
       expect(output).not.toContain('\x1b[1A');
     });
   });
@@ -158,7 +160,7 @@ describe('OnboardingRibbon', () => {
       ribbon.start('pull');
       ribbon.start('bootstrap');
       ribbon.stop();
-      const output = stdoutSpy.mock.calls.map(c => c[0] as string).join('');
+      const output = stdoutSpy.mock.calls.map((c) => c[0] as string).join('');
       // Second phase transition should emit cursor-up + line-clear
       expect(output).toContain('\x1b[1A\x1b[2K');
     });

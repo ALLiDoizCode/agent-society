@@ -13,7 +13,13 @@
  */
 
 import { parseArgs } from 'node:util';
-import { mkdirSync, writeFileSync, existsSync, renameSync, rmSync } from 'node:fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  existsSync,
+  renameSync,
+  rmSync,
+} from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -113,7 +119,12 @@ export interface CliHsOverrides {
   createAdminClient?: (
     baseUrl: string,
     timeoutMs: number
-  ) => { getHsHostname: () => Promise<{ hostname: string | null; publishedAt: string | null }> };
+  ) => {
+    getHsHostname: () => Promise<{
+      hostname: string | null;
+      publishedAt: string | null;
+    }>;
+  };
   /** Override `docker compose down -v` spawn for --rotate-keys (avoids real Docker). */
   runComposeDown?: (composePath: string, withVolumes: boolean) => Promise<void>;
 }
@@ -762,8 +773,7 @@ async function handleHsUp(
     return;
   }
 
-  const walletPassword =
-    password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
+  const walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
 
   let resolvedPassword: string;
   if (walletPassword) {
@@ -788,7 +798,9 @@ async function handleHsUp(
   let walletManager: WalletManager | undefined;
   try {
     walletManager = new WalletManager({ encryptedPath: walletPath });
-    await walletManager.fromMnemonic(decryptWallet(loaded.wallet, resolvedPassword));
+    await walletManager.fromMnemonic(
+      decryptWallet(loaded.wallet, resolvedPassword)
+    );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`Failed to decrypt wallet: ${msg}`);
@@ -820,7 +832,8 @@ async function handleHsUp(
         }
         // hostname is null → apex started but HS not ready → treat as cold-start.
       } catch (probeErr: unknown) {
-        const msg = probeErr instanceof Error ? probeErr.message : String(probeErr);
+        const msg =
+          probeErr instanceof Error ? probeErr.message : String(probeErr);
         if (msg.includes('anon-disabled')) {
           // Apex running but anon is disabled — render failure copy and exit.
           const { exitCode } = renderFailure(probeErr);
@@ -847,8 +860,12 @@ async function handleHsUp(
     // Step 4: construct orchestrator and wire ribbon events.
     const orchestratorFactory =
       hsOverrides?.createOrchestrator ??
-      ((d: Docker, cfg: TownhouseConfig, wm: WalletManager | undefined, opts: { profile: 'hs'; composePath: string }) =>
-        new DockerOrchestrator(d, cfg, wm, opts));
+      ((
+        d: Docker,
+        cfg: TownhouseConfig,
+        wm: WalletManager | undefined,
+        opts: { profile: 'hs'; composePath: string }
+      ) => new DockerOrchestrator(d, cfg, wm, opts));
 
     const orch = orchestratorFactory(docker, config, walletManager, {
       profile: 'hs',
@@ -859,7 +876,10 @@ async function handleHsUp(
     let bootstrapStarted = false;
     orch.on('containerState', (event: unknown) => {
       const ev = event as { name?: string; state?: string; detail?: string };
-      if (!bootstrapStarted && (ev.state === 'creating' || ev.state === 'starting')) {
+      if (
+        !bootstrapStarted &&
+        (ev.state === 'creating' || ev.state === 'starting')
+      ) {
         bootstrapStarted = true;
         ribbon.start('bootstrap');
       }
@@ -879,13 +899,16 @@ async function handleHsUp(
     const publishedAt = hsInfo.publishedAt ?? new Date().toISOString();
 
     // Step 7: write host.json atomically (AC #6).
-    _writeHostJson(configDir, { hostname, publishedAt, writtenAt: new Date().toISOString() });
+    _writeHostJson(configDir, {
+      hostname,
+      publishedAt,
+      writtenAt: new Date().toISOString(),
+    });
 
     // Step 8: ribbon phase 3 + final stdout line (AC #5).
     // hostname from the connector already includes the .anyone suffix.
     // ribbon.start('live', hostname) prints: "Apex live at <hostname>" as the FINAL stdout line.
     ribbon.start('live', hostname);
-
   } catch (err: unknown) {
     const { exitCode } = renderFailure(err);
     process.exitCode = exitCode;
@@ -950,7 +973,9 @@ async function handleHsDown(
       if (existsSync(hostJsonPath)) {
         try {
           const { readFileSync } = await import('node:fs');
-          const json = JSON.parse(readFileSync(hostJsonPath, 'utf-8')) as { hostname?: string };
+          const json = JSON.parse(readFileSync(hostJsonPath, 'utf-8')) as {
+            hostname?: string;
+          };
           existingHostname = json.hostname ?? existingHostname;
         } catch {
           // best-effort
@@ -959,7 +984,10 @@ async function handleHsDown(
       // Use readline for the yes/no confirmation prompt.
       const { createInterface } = await import('node:readline');
       const answer = await new Promise<string>((resolve) => {
-        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        const rl = createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
         rl.question(
           `WARNING: --rotate-keys will permanently delete your current .anyone address (${existingHostname}). The next 'hs up' will publish a new address. Continue? [y/N] `,
           (ans) => {
@@ -987,15 +1015,21 @@ async function handleHsDown(
     // Delete host.json so the stale hostname doesn't outlive the keypair (AC #9).
     rmSync(join(configDir, 'host.json'), { force: true });
 
-    console.log("Apex stopped. Volumes deleted — your next 'hs up' will publish a NEW .anyone address.");
+    console.log(
+      "Apex stopped. Volumes deleted — your next 'hs up' will publish a NEW .anyone address."
+    );
     return;
   }
 
   // Default: preserve volumes (townhouse-hs-anon survives → same hostname next hs up).
   const orchestratorFactory =
     hsOverrides?.createOrchestrator ??
-    ((d: Docker, cfg: TownhouseConfig, wm: WalletManager | undefined, opts: { profile: 'hs'; composePath: string }) =>
-      new DockerOrchestrator(d, cfg, wm, opts));
+    ((
+      d: Docker,
+      cfg: TownhouseConfig,
+      wm: WalletManager | undefined,
+      opts: { profile: 'hs'; composePath: string }
+    ) => new DockerOrchestrator(d, cfg, wm, opts));
 
   const orch = orchestratorFactory(docker, config, undefined, {
     profile: 'hs',
@@ -1010,14 +1044,19 @@ async function handleHsDown(
     return;
   }
 
-  console.log('Apex stopped. Volumes preserved — your .anyone address is stable.');
+  console.log(
+    'Apex stopped. Volumes preserved — your .anyone address is stable.'
+  );
 }
 
 /**
  * Run `docker compose -f <composePath> down [-v]` as a subprocess.
  * Used by handleHsDown's --rotate-keys path (AC #9).
  */
-function _runDockerComposeDown(composePath: string, withVolumes: boolean): Promise<void> {
+function _runDockerComposeDown(
+  composePath: string,
+  withVolumes: boolean
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const args = ['compose', '-f', composePath, 'down'];
     if (withVolumes) args.push('-v');

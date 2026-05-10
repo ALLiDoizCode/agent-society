@@ -26,7 +26,8 @@ function supportsUnicode(): boolean {
 }
 
 function isAnimationDisabled(): boolean {
-  if (process.env['NO_COLOR'] !== undefined && process.env['NO_COLOR'] !== '') return true;
+  if (process.env['NO_COLOR'] !== undefined && process.env['NO_COLOR'] !== '')
+    return true;
   if (process.env['CI'] === 'true') return true;
   return false;
 }
@@ -47,9 +48,7 @@ export class OnboardingRibbon {
     this._stopSpinner();
 
     if (phase === 'live') {
-      const line = detail
-        ? `Apex live at ${detail}`
-        : 'Apex live.';
+      const line = detail ? `Apex live at ${detail}` : 'Apex live.';
       this._writeLine(line);
       this.currentPhase = 'live';
       return;
