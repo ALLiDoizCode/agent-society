@@ -1,6 +1,6 @@
 # Story 45.4: `townhouse hs up` Subcommand — Apex-Only Boot
 
-Status: review
+Status: done
 
 > **Critical-path fourth story of Epic 45 (One-Command Apex Install).** Sized M. This is the user-visible payoff of Epic 45: Drew runs `npx @toon-protocol/townhouse hs up` and gets a payable `.anyone` apex in under 5 minutes. Stories 45.1–45.3 built the substrate (multi-arch images, embedded compose + image-manifest, dual-profile orchestrator + `getHsHostname()` admin-client + `OrchestratorError`); this story stitches them into a CLI subcommand and adds the on-disk artifacts (`~/.townhouse/connector.yaml`, `~/.townhouse/host.json`) Drew sees. Unblocks Epic 46 Story 46.1 (`nodes.yaml` reconciler — needs an apex to register against).
 >
