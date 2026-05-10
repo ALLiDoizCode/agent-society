@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-09 (Story 45.2 → done — v0.1.0-rc5 published; verified tarball ships dist/compose/{hs,dev}.yml + image-manifest.json with all 5 images digest-pinned. RC2-RC4 spent on iteratively fixing CI bugs surfaced only by the live publish-npm path: (a) shared digest helper had to live inside packages/townhouse/ for Docker context, (b) build step needed --filter "...") for workspace-dep DTS resolution, (c) pnpm pack does NOT support --filter so chdir was required)
+# last_updated: 2026-05-09 (Story 45.3 → review — PR #44 opened; dual-path orchestrator (dockerode dev / compose hs), OrchestratorError, getHsHostname admin-client, 14 HS unit tests + 3 integration test stubs; 71 existing orchestrator tests pass verbatim)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -500,7 +500,7 @@ development_status:
   epic-45: in-progress
   45-1-multi-arch-townhouse-image-publish-ci: done  # done: workflow run https://github.com/toon-protocol/town/actions/runs/25603167091 produced 4 multi-arch + cosign-signed images and image-manifest.json — town#37 town#38 town#39 town#40 town#41
   45-2-embed-compose-templates-and-image-manifest-in-npm-tarball: done  # done: tag v0.1.0-rc5 published; tarball ships dist/compose/{hs,dev}.yml + image-manifest.json with all 5 images digest-pinned (workflow run 25614777350) — town#43
-  45-3-docker-orchestrator-profile-param: backlog
+  45-3-docker-orchestrator-profile-param: review  # PR #44 — orchestrator HS profile + getHsHostname + OrchestratorError
   45-4-townhouse-hs-up-subcommand-apex-only-boot: backlog  # CRITICAL PATH; depends on 44.1
   epic-45-retrospective: optional
 
