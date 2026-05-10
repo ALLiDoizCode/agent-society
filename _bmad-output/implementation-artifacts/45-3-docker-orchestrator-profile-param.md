@@ -1,6 +1,6 @@
 # Story 45.3: DockerOrchestrator Profile Param
 
-Status: review
+Status: review (post-review-2 fixes applied 2026-05-10 — 10 patches landed locally; ready to push to PR #44; status flips to `done` per AC #17 only after PR merge + CI green)
 
 > **Critical-path third story of Epic 45 (One-Command Apex Install).** Sized M. Story 45.4 (`townhouse hs up` subcommand) cannot start until this story lands the `profile: 'dev' | 'hs'` parameter on `DockerOrchestrator`, the `getHsHostname()` admin-client method, and the HS-mode startup readiness gate. Story 45.2 already shipped `loadComposeTemplate` / `materializeComposeTemplate` (the YAML resolution layer); this story is what wires that layer into a runnable orchestrator. Independent of Story 44.1 — the `GET /admin/hs-hostname` endpoint already ships in the connector image at the digest pinned by `DEFAULT_CONNECTOR_IMAGE` (connector v3.5.0+).
 
@@ -996,3 +996,33 @@ None — implementation proceeded without blockers.
 ### Change Log
 
 - 2026-05-09: Implemented Story 45.3 — DockerOrchestrator HS profile, getHsHostname admin client, OrchestratorError class, 14 unit tests + 3 integration test stubs; PR #44 opened
+
+### Review Findings
+
+_Code review 2026-05-09 — Blind Hunter + Edge Case Hunter + Acceptance Auditor (claude-sonnet-4-6)_
+
+- [x] [Review][Decision→Patch] AC #10 stdio inheritance gap — operator sees no `docker pull` progress during HS up — Resolved by switching the default subprocess runner from `promisify(execFile)` to a `spawn`-based helper (`runDockerCompose`) that uses `stdio: ['ignore', 'inherit', 'pipe']` for HS up, captures stderr into a chunk buffer for the failure-surface path, and inherits stdout to the operator's TTY. Test contract preserved via `execFileAsync` injection point.
+
+- [x] [Review][Patch] `response.json()` body-read happens AFTER `clearTimeout(timer)` — request timeout doesn't cover JSON parse, slow body hangs forever past `timeoutMs` [packages/townhouse/src/connector/admin-client.ts:117-119]
+- [x] [Review][Patch] `response.json()` SyntaxError on non-JSON body propagates unwrapped — readiness loop treats it as transient and retries to deadline [packages/townhouse/src/connector/admin-client.ts:119]
+- [x] [Review][Patch] Empty-string `hostname` (`''`) passes the `typeof string` check and orchestrator returns "ready" with an unusable address — tighten shape validation to reject empty strings [packages/townhouse/src/connector/admin-client.ts:127-129]
+- [x] [Review][Patch] `surfaceComposeFailure` breaks after the FIRST regex match — multi-service compose failures lose every service after the first; AC #6 says "For each failed service identified, it emits ..." [packages/townhouse/src/docker/orchestrator.ts:249-260]
+- [x] [Review][Patch] String error codes (`ENOENT` when docker CLI not on PATH, `ETIMEDOUT`, `ERR_CHILD_PROCESS_STDIO_MAXBUFFER`) coerced to `exitCode = -1`, the most common failure modes lose their diagnostic — preserve the string code in the message and on `OrchestratorError.exitCode` (or add a `codeName` field) [packages/townhouse/src/docker/orchestrator.ts:225, :434]
+- [x] [Review][Patch] Unknown profile types in input array are silently dropped — `for (const type of PROFILE_ORDER)` only iterates the canonical set, so any new `NodeType` member or runtime-injected unknown value is ignored without warning [packages/townhouse/src/docker/orchestrator.ts:206-210]
+- [x] [Review][Patch] `execFileAsync` invocations have no `encoding` option — stderr is a Buffer by default; `String(buf)` works for ASCII but loses non-UTF8 detail and breaks if a future caller passes a non-Buffer encoding [packages/townhouse/src/docker/orchestrator.ts:214-217, :425]
+- [x] [Review][Patch] `composePath` whitespace-only string passes `!this.composePath` falsy check — `.trim()` before validation; throw on whitespace-only path [packages/townhouse/src/docker/orchestrator.ts:159-165]
+- [x] [Review][Patch] `downHs` lacks `maxBuffer` ceiling — defaults to Node's 1 MB; voluminous compose-down stderr triggers `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` and reports an empty diagnostic. Mirror upHs's 16 MB [packages/townhouse/src/docker/orchestrator.ts:425]
+
+- [x] [Review][Defer] README documents the anon-disabled error message verbatim — drift hazard between code and doc [packages/townhouse/README.md] — deferred, doc-style improvement
+- [x] [Review][Defer] Magic numbers (timeouts, intervals, maxBuffer, stderr-truncation) not named constants [packages/townhouse/src/docker/orchestrator.ts] — deferred, style only
+- [x] [Review][Defer] AC #5 ECONNREFUSED retry-within-budget path has no dedicated unit test — branch exists but is untested [packages/townhouse/src/docker/orchestrator-hs.test.ts] — deferred, test gap (AC #12 didn't list it as required)
+- [x] [Review][Defer] AC #12 "constructor stores profile/composePath" assertion is `instanceof`-only — fields are private and never observably verified [packages/townhouse/src/docker/orchestrator-hs.test.ts:479-491] — deferred, test improvement
+- [x] [Review][Defer] Integration test container assertion uses substring `name=townhouse-hs-` filter — pollutes on a host with leftover state [packages/townhouse/src/__integration__/orchestrator-hs.test.ts:161-167] — deferred, integration-test gated on RUN_DOCKER_INTEGRATION
+- [x] [Review][Defer] Integration test depends on vitest `it`-order for volume-preservation assertion (`afterAll` runs `down -v`, third `it` checks volume survives `orch.down()` first) [packages/townhouse/src/__integration__/orchestrator-hs.test.ts] — deferred
+- [x] [Review][Defer] `process.env['TOWNHOUSE_WALLET_PASSWORD']` mutated in `beforeAll` without try/finally restore — leaks across worker reuse [packages/townhouse/src/__integration__/orchestrator-hs.test.ts:129, :153] — deferred
+- [x] [Review][Defer] No partial-failure rollback when `docker compose up` times out — Node kills the CLI but dockerd keeps going, leaving a half-started stack [packages/townhouse/src/docker/orchestrator.ts:213-231] — deferred, product decision (Story 45.4 retry policy)
+- [x] [Review][Defer] User-visible error message truncates stderr to 500 chars — full stderr is preserved on `error.stderr` field but human-readable diagnostic is gutted for real compose errors [packages/townhouse/src/docker/orchestrator.ts:228, :432] — deferred, UX
+- [x] [Review][Defer] `composePath` not validated as absolute or existing on disk — defense-in-depth gap; current callers pass paths from `materializeComposeTemplate` [packages/townhouse/src/docker/orchestrator.ts:159] — deferred
+- [x] [Review][Defer] Non-503 / non-200 statuses (404, 500, 502) silently retried for 120s — old connector image (`pre-v3.5.0`) returns 404 and times out instead of fast-failing [packages/townhouse/src/docker/orchestrator.ts:284-294] — deferred, AC neutral
+- [x] [Review][Defer] `activeNodes` mutated before `upHs/upDev` could fail — leaves stale state on error [packages/townhouse/src/docker/orchestrator.ts:174] — deferred, pre-existing in dev path
+

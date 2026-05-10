@@ -7,7 +7,7 @@
  */
 
 import { EventEmitter } from 'node:events';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -25,7 +25,101 @@ import {
 import type { NodeType, HealthCheckOptions, BandwidthStats } from './types.js';
 import type { WalletManager } from '../wallet/index.js';
 
-const execFileAsync = promisify(execFile);
+// Reserved for parity with prior dev-path implementations that used
+// promisify(execFile). HS path uses runDockerCompose (spawn-based) so the
+// operator's TTY sees `docker pull` progress (Story 45.3 AC #10).
+void promisify;
+void execFile;
+
+interface RunDockerOptions {
+  timeout?: number;
+  maxBuffer?: number;
+  inheritStdio?: boolean;
+}
+
+/**
+ * Run `docker <args>` as a child process and resolve with captured stderr/stdout.
+ *
+ * `inheritStdio: true` pipes the child's stdout straight to the parent's TTY so
+ * the operator sees `docker pull` progress during a multi-minute first-time
+ * pull (Story 45.3 AC #10). Stderr is always captured so we can surface
+ * compose failure diagnostics through the `containerState` event channel.
+ */
+function runDockerCompose(
+  file: string,
+  args: readonly string[],
+  options: RunDockerOptions = {}
+): Promise<{ stdout: string; stderr: string }> {
+  const { timeout, maxBuffer = 16 * 1024 * 1024, inheritStdio = false } = options;
+  return new Promise((resolve, reject) => {
+    const child = spawn(file, Array.from(args), {
+      stdio: inheritStdio
+        ? ['ignore', 'inherit', 'pipe']
+        : ['ignore', 'pipe', 'pipe'],
+    });
+    const stderrChunks: Buffer[] = [];
+    let stderrLen = 0;
+    let timedOut = false;
+    const timer =
+      timeout !== undefined && timeout > 0
+        ? setTimeout(() => {
+            timedOut = true;
+            child.kill('SIGTERM');
+            // Force-kill if SIGTERM is ignored (5 s grace).
+            setTimeout(() => {
+              if (!child.killed) child.kill('SIGKILL');
+            }, 5_000).unref();
+          }, timeout)
+        : null;
+    child.stderr?.on('data', (chunk: Buffer) => {
+      if (stderrLen < maxBuffer) {
+        stderrChunks.push(chunk);
+        stderrLen += chunk.length;
+      }
+    });
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      if (timer) clearTimeout(timer);
+      reject(err);
+    });
+    child.on('close', (code, signal) => {
+      if (timer) clearTimeout(timer);
+      const stderr = Buffer.concat(stderrChunks).toString('utf8');
+      if (timedOut) {
+        const err = new Error(
+          `docker subprocess timed out after ${timeout}ms`
+        ) as Error & {
+          stderr?: string;
+          code?: number | string;
+          signal?: NodeJS.Signals | null;
+        };
+        err.stderr = stderr;
+        err.code = 'ETIMEDOUT';
+        err.signal = signal;
+        return reject(err);
+      }
+      if (code === 0) {
+        return resolve({ stdout: '', stderr });
+      }
+      const err = new Error(
+        `docker subprocess exited with ${code !== null ? `code ${code}` : `signal ${signal}`}`
+      ) as Error & {
+        stderr?: string;
+        code?: number | string;
+        signal?: NodeJS.Signals | null;
+      };
+      err.stderr = stderr;
+      if (code !== null) err.code = code;
+      if (signal !== null) err.signal = signal;
+      reject(err);
+    });
+  });
+}
+
+type ExecFileAsyncSignature = (
+  file: string,
+  args: readonly string[],
+  options?: RunDockerOptions
+) => Promise<{ stdout: string; stderr: string }>;
 
 /** Nostr relay WebSocket port on Town containers (fixed by Dockerfile) */
 const TOWN_RELAY_PORT = 7100;
@@ -124,7 +218,7 @@ export class DockerOrchestrator extends EventEmitter {
   private readonly statsCache = new Map<string, CachedStats>();
   private readonly profile: ComposeProfile;
   private readonly composePath: string | undefined;
-  private readonly execFileAsync: typeof execFileAsync;
+  private readonly execFileAsync: ExecFileAsyncSignature;
   private readonly adminClientFactory: (
     baseUrl: string,
     timeoutMs: number
@@ -137,7 +231,7 @@ export class DockerOrchestrator extends EventEmitter {
     options: {
       profile?: ComposeProfile;
       composePath?: string;
-      execFileAsync?: typeof execFileAsync;
+      execFileAsync?: ExecFileAsyncSignature;
       adminClientFactory?: (
         baseUrl: string,
         timeoutMs: number
@@ -150,15 +244,22 @@ export class DockerOrchestrator extends EventEmitter {
     this.configGenerator = new ConnectorConfigGenerator(config);
     this.walletManager = walletManager;
     this.profile = options.profile ?? 'dev';
-    this.composePath = options.composePath;
-    this.execFileAsync = options.execFileAsync ?? execFileAsync;
+    // Trim composePath so a whitespace-only string trips the same validation
+    // as undefined / empty string (otherwise `   ` would slip past the falsy
+    // check below and be passed verbatim to docker).
+    const trimmedComposePath = options.composePath?.trim();
+    this.composePath =
+      trimmedComposePath !== undefined && trimmedComposePath.length > 0
+        ? trimmedComposePath
+        : undefined;
+    this.execFileAsync = options.execFileAsync ?? runDockerCompose;
     this.adminClientFactory =
       options.adminClientFactory ??
       ((url, t) => new ConnectorAdminClient(url, t));
 
     if (this.profile === 'hs' && !this.composePath) {
       throw new OrchestratorError(
-        `profile: 'hs' requires a composePath. Pass options.composePath ` +
+        `profile: 'hs' requires a non-empty composePath. Pass options.composePath ` +
           `pointing at the rendered HS template (typically the composePath ` +
           `returned by materializeComposeTemplate('hs')).`
       );
@@ -199,10 +300,20 @@ export class DockerOrchestrator extends EventEmitter {
   /** HS-mode startup: shell out to `docker compose up -d`, wait for HS hostname. */
   private async upHs(profiles: NodeType[]): Promise<void> {
     const composePath = this.composePath!;
-    const args = ['compose', '-f', composePath];
     // Profile flags MUST come BEFORE the subcommand per Docker Compose CLI grammar.
     // Deterministic order: town → mill → dvm (matches AC #4).
     const PROFILE_ORDER: NodeType[] = ['town', 'mill', 'dvm'];
+    // Reject unknown profile types up-front rather than silently dropping them
+    // (they would otherwise fail the `PROFILE_ORDER.includes()` check below
+    // and start no containers).
+    for (const p of profiles) {
+      if (!PROFILE_ORDER.includes(p)) {
+        throw new OrchestratorError(
+          `Unknown profile '${String(p)}'. Expected one of: ${PROFILE_ORDER.join(', ')}.`
+        );
+      }
+    }
+    const args = ['compose', '-f', composePath];
     for (const type of PROFILE_ORDER) {
       if (profiles.includes(type)) {
         args.push('--profile', type);
@@ -214,55 +325,66 @@ export class DockerOrchestrator extends EventEmitter {
       await this.execFileAsync('docker', args, {
         timeout: 180_000,
         maxBuffer: 16 * 1024 * 1024,
+        inheritStdio: true,
       });
     } catch (err: unknown) {
       const e = err as NodeJS.ErrnoException & {
         stderr?: string;
         stdout?: string;
         code?: number | string;
+        signal?: string | null;
       };
       const stderr = String(e.stderr ?? '');
-      const exitCode = typeof e.code === 'number' ? e.code : -1;
+      const numericExit = typeof e.code === 'number' ? e.code : undefined;
+      const codeLabel = String(e.code ?? e.signal ?? 'unknown');
+      let message: string;
+      if (e.code === 'ENOENT') {
+        message = `docker CLI not found on PATH (ENOENT): ${stderr.trim().slice(0, 500)}`;
+      } else if (e.code === 'ETIMEDOUT') {
+        message = `docker compose up timed out after 180000ms: ${stderr.trim().slice(0, 500)}`;
+      } else {
+        message = `docker compose up failed (exit ${codeLabel}): ${stderr.trim().slice(0, 500)}`;
+      }
       this.surfaceComposeFailure(stderr);
-      throw new OrchestratorError(
-        `docker compose up failed (exit ${exitCode}): ${stderr.trim().slice(0, 500)}`,
-        { exitCode, stderr, cause: err instanceof Error ? err : undefined }
-      );
+      throw new OrchestratorError(message, {
+        ...(numericExit !== undefined ? { exitCode: numericExit } : {}),
+        stderr,
+        cause: err instanceof Error ? err : undefined,
+      });
     }
 
     await this.waitForHsHostname();
   }
 
   /**
-   * Parse Docker Compose stderr for the failed-service name and emit a
-   * containerState event so callers see the failure via the same channel
-   * dev-mode uses (AC #6). When stderr does not match either Compose
-   * failure pattern, emit a single fallback event.
+   * Parse Docker Compose stderr for failed-service names and emit a
+   * containerState event per failed service so callers see the failure via
+   * the same channel dev-mode uses (AC #6 — "for each failed service
+   * identified, it emits..."). When no pattern matches, emit a single
+   * fallback event with name `'compose-up'`.
    */
   private surfaceComposeFailure(stderr: string): void {
     const patterns = [
-      /failed to start (?:service\s+)?["']([^"']+)["']/i,
-      /service\s+["']([^"']+)["']\s+failed/i,
-      /Container\s+townhouse-hs-(\w+)\s+Error/i,
+      /failed to start (?:service\s+)?["']([^"']+)["']/gi,
+      /service\s+["']([^"']+)["']\s+failed/gi,
+      /Container\s+townhouse-hs-(\w+)\s+Error/gi,
     ];
-    let emitted = false;
+    const detail = stderr.trim().slice(0, 500);
+    const seen = new Set<string>();
     for (const pattern of patterns) {
-      const match = stderr.match(pattern);
-      if (match?.[1]) {
-        this.emit('containerState', {
-          name: match[1],
-          state: 'error',
-          detail: stderr.trim().slice(0, 500),
-        });
-        emitted = true;
-        break;
+      for (const match of stderr.matchAll(pattern)) {
+        const name = match[1];
+        if (name && !seen.has(name)) {
+          seen.add(name);
+          this.emit('containerState', { name, state: 'error', detail });
+        }
       }
     }
-    if (!emitted) {
+    if (seen.size === 0) {
       this.emit('containerState', {
         name: 'compose-up',
         state: 'error',
-        detail: stderr.trim().slice(0, 500),
+        detail,
       });
     }
   }
@@ -422,20 +544,32 @@ export class DockerOrchestrator extends EventEmitter {
     // NO -v flag — preserves the townhouse-hs-anon volume so the .anyone
     // address survives `down` (Story 45.4 AC).
     try {
-      await this.execFileAsync('docker', args, { timeout: 60_000 });
+      await this.execFileAsync('docker', args, {
+        timeout: 60_000,
+        maxBuffer: 16 * 1024 * 1024,
+      });
     } catch (err: unknown) {
       const e = err as NodeJS.ErrnoException & {
         stderr?: string;
         code?: number | string;
+        signal?: string | null;
       };
-      throw new OrchestratorError(
-        `docker compose down failed: ${String(e.stderr ?? '').trim().slice(0, 500)}`,
-        {
-          exitCode: typeof e.code === 'number' ? e.code : -1,
-          stderr: String(e.stderr ?? ''),
-          cause: err instanceof Error ? err : undefined,
-        }
-      );
+      const stderr = String(e.stderr ?? '');
+      const numericExit = typeof e.code === 'number' ? e.code : undefined;
+      const codeLabel = String(e.code ?? e.signal ?? 'unknown');
+      let message: string;
+      if (e.code === 'ENOENT') {
+        message = `docker CLI not found on PATH (ENOENT): ${stderr.trim().slice(0, 500)}`;
+      } else if (e.code === 'ETIMEDOUT') {
+        message = `docker compose down timed out after 60000ms: ${stderr.trim().slice(0, 500)}`;
+      } else {
+        message = `docker compose down failed (exit ${codeLabel}): ${stderr.trim().slice(0, 500)}`;
+      }
+      throw new OrchestratorError(message, {
+        ...(numericExit !== undefined ? { exitCode: numericExit } : {}),
+        stderr,
+        cause: err instanceof Error ? err : undefined,
+      });
     }
   }
 

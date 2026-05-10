@@ -92,8 +92,9 @@ export class ConnectorAdminClient {
     const url = `${this.baseUrl}/admin/hs-hostname`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    let response: Response;
+    let body: unknown;
     try {
+      let response: Response;
       try {
         response = await fetch(url, { signal: controller.signal });
       } catch (error: unknown) {
@@ -113,10 +114,21 @@ export class ConnectorAdminClient {
           `Connector admin API error: ${response.status} ${response.statusText}`
         );
       }
+      // Body read MUST happen inside the AbortSignal-protected try so the
+      // request timeout covers a slow / streaming JSON body. response.json()
+      // can throw SyntaxError on a non-JSON body — re-throw as a shape error
+      // so the readiness loop can disambiguate from network errors.
+      try {
+        body = await response.json();
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Connector admin API: invalid JSON in hs-hostname response: ${msg}`
+        );
+      }
     } finally {
       clearTimeout(timer);
     }
-    const body: unknown = await response.json();
     if (typeof body !== 'object' || body === null) {
       throw new Error('Connector admin API: invalid hs-hostname response shape');
     }
@@ -127,6 +139,11 @@ export class ConnectorAdminClient {
       (hostname !== null && typeof hostname !== 'string') ||
       (publishedAt !== null && typeof publishedAt !== 'string')
     ) {
+      throw new Error('Connector admin API: invalid hs-hostname response shape');
+    }
+    // Empty-string hostname is a server-side bug — reject so the readiness
+    // loop keeps polling instead of returning "ready" with an unusable address.
+    if (typeof hostname === 'string' && hostname.length === 0) {
       throw new Error('Connector admin API: invalid hs-hostname response shape');
     }
     return body as HsHostnameResponse;
