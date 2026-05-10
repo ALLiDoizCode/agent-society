@@ -20,12 +20,12 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { execSync, execFileSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync, statSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { isTruthyEnv, CLI_BIN, runCli, waitForExit } from './_test-helpers.js';
+import { isTruthyEnv, runCli, waitForExit } from './_test-helpers.js';
 
 // ── Skip gates ──────────────────────────────────────────────────────────────
 const SKIP_DOCKER = isTruthyEnv(process.env['SKIP_DOCKER']);
@@ -169,7 +169,7 @@ describe.skipIf(!shouldRun)(
         `docker inspect ${HS_CONNECTOR_NAME} --format '{{json .HostConfig.Mounts}}'`,
         { encoding: 'utf-8' }
       );
-      const mounts = JSON.parse(mountsJson) as Array<{ Source?: string }>;
+      const mounts = JSON.parse(mountsJson) as { Source?: string }[];
       const hasSock = mounts.some((m) => m.Source === '/var/run/docker.sock');
       expect(hasSock).toBe(false);
     });
@@ -182,7 +182,7 @@ describe.skipIf(!shouldRun)(
         );
         const bindings = JSON.parse(bindingsJson) as Record<
           string,
-          Array<{ HostIp: string; HostPort: string }>
+          { HostIp: string; HostPort: string }[]
         >;
         for (const [, portBindings] of Object.entries(bindings)) {
           for (const binding of portBindings) {

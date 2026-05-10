@@ -92,7 +92,7 @@ function makeHsOverrides({
   down,
   emitContainerStateOnUp = false,
 }: HsOverrideOptions = {}): CliHsOverrides {
-  const listeners: Map<string, ((...args: unknown[]) => void)[]> = new Map();
+  const listeners = new Map<string, ((...args: unknown[]) => void)[]>();
   let adminClientCallCount = 0;
 
   const orchUp =
