@@ -6,9 +6,9 @@
  * No real Docker daemon is required — all subprocess calls are intercepted.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { DockerOrchestrator, OrchestratorError } from './orchestrator.js';
-import { ConnectorAdminClient } from '../connector/admin-client.js';
+import type { ConnectorAdminClient } from '../connector/admin-client.js';
 import type { TownhouseConfig } from '../config/schema.js';
 import { getDefaultConfig } from '../config/defaults.js';
 import type Docker from 'dockerode';
@@ -29,9 +29,9 @@ function makeDocker(): Docker {
 
 function makeExec(resolve?: { stdout: string; stderr: string }): {
   exec: ExecFileAsync;
-  calls: Array<{ file: string; args: string[] }>;
+  calls: { file: string; args: string[] }[];
 } {
-  const calls: Array<{ file: string; args: string[] }> = [];
+  const calls: { file: string; args: string[] }[] = [];
   const exec: ExecFileAsync = (file, args) => {
     calls.push({ file: String(file), args: Array.from(args) });
     if (resolve !== undefined) return Promise.resolve(resolve);
@@ -233,7 +233,7 @@ describe('DockerOrchestrator (HS profile)', () => {
       composePath: '/x.yml',
       execFileAsync: fakeExec as never,
     });
-    const events: Array<{ name: string; state: string }> = [];
+    const events: { name: string; state: string }[] = [];
     orch.on('containerState', (e) => events.push(e));
     await expect(orch.up([])).rejects.toThrow(OrchestratorError);
     expect(events).toContainEqual(
@@ -256,7 +256,7 @@ describe('DockerOrchestrator (HS profile)', () => {
       composePath: '/x.yml',
       execFileAsync: fakeExec as never,
     });
-    const events: Array<{ name: string; state: string }> = [];
+    const events: { name: string; state: string }[] = [];
     orch.on('containerState', (e) => events.push(e));
     await expect(orch.up([])).rejects.toThrow(OrchestratorError);
     expect(events).toContainEqual(

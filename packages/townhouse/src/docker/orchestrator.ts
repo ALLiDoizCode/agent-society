@@ -297,9 +297,24 @@ export class DockerOrchestrator extends EventEmitter {
     }
   }
 
+  /**
+   * Narrow `this.composePath` to a definite string. The constructor enforces
+   * this invariant for `profile: 'hs'`; this helper exists so the HS-path
+   * methods don't need a non-null assertion (lint-clean) and so a constructor
+   * regression surfaces as an `OrchestratorError` rather than a `TypeError`.
+   */
+  private requireComposePath(): string {
+    if (!this.composePath) {
+      throw new OrchestratorError(
+        `internal: composePath unset for HS profile (constructor invariant violated)`
+      );
+    }
+    return this.composePath;
+  }
+
   /** HS-mode startup: shell out to `docker compose up -d`, wait for HS hostname. */
   private async upHs(profiles: NodeType[]): Promise<void> {
-    const composePath = this.composePath!;
+    const composePath = this.requireComposePath();
     // Profile flags MUST come BEFORE the subcommand per Docker Compose CLI grammar.
     // Deterministic order: town → mill → dvm (matches AC #4).
     const PROFILE_ORDER: NodeType[] = ['town', 'mill', 'dvm'];
@@ -539,7 +554,7 @@ export class DockerOrchestrator extends EventEmitter {
   }
 
   private async downHs(): Promise<void> {
-    const composePath = this.composePath!;
+    const composePath = this.requireComposePath();
     const args = ['compose', '-f', composePath, 'down'];
     // NO -v flag — preserves the townhouse-hs-anon volume so the .anyone
     // address survives `down` (Story 45.4 AC).
