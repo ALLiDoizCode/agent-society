@@ -207,8 +207,15 @@ describe('ConnectorAdminClient', () => {
 
   describe('getHsHostname() (Story 45.3 / AC #7)', () => {
     it('returns hostname + publishedAt when bootstrap is complete (200 with non-null fields)', async () => {
-      const body = { hostname: 'abc123.anyone', publishedAt: '2026-05-09T00:00:00Z' };
-      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => body });
+      const body = {
+        hostname: 'abc123.anyone',
+        publishedAt: '2026-05-09T00:00:00Z',
+      };
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => body,
+      });
 
       const client = new ConnectorAdminClient('http://localhost:9401');
       const result = await client.getHsHostname();
@@ -219,7 +226,11 @@ describe('ConnectorAdminClient', () => {
 
     it('returns nulls when bootstrap is still in progress (200 with null fields)', async () => {
       const body = { hostname: null, publishedAt: null };
-      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => body });
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => body,
+      });
 
       const client = new ConnectorAdminClient('http://localhost:9401');
       const result = await client.getHsHostname();
@@ -229,7 +240,12 @@ describe('ConnectorAdminClient', () => {
     });
 
     it('throws anon-disabled error on 503 response', async () => {
-      fetchMock.mockResolvedValue({ ok: false, status: 503, statusText: 'Service Unavailable', json: async () => ({ error: 'anon-disabled' }) });
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        json: async () => ({ error: 'anon-disabled' }),
+      });
 
       const client = new ConnectorAdminClient('http://localhost:9401');
 
@@ -237,19 +253,31 @@ describe('ConnectorAdminClient', () => {
     });
 
     it('throws on shape-violating response (hostname: number)', async () => {
-      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ hostname: 42, publishedAt: null }) });
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ hostname: 42, publishedAt: null }),
+      });
 
       const client = new ConnectorAdminClient('http://localhost:9401');
 
-      await expect(client.getHsHostname()).rejects.toThrow(/invalid hs-hostname response shape/);
+      await expect(client.getHsHostname()).rejects.toThrow(
+        /invalid hs-hostname response shape/
+      );
     });
 
     it('throws on shape-violating response (publishedAt: number)', async () => {
-      fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ hostname: 'x.anyone', publishedAt: 99 }) });
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ hostname: 'x.anyone', publishedAt: 99 }),
+      });
 
       const client = new ConnectorAdminClient('http://localhost:9401');
 
-      await expect(client.getHsHostname()).rejects.toThrow(/invalid hs-hostname response shape/);
+      await expect(client.getHsHostname()).rejects.toThrow(
+        /invalid hs-hostname response shape/
+      );
     });
   });
 

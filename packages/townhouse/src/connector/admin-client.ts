@@ -130,7 +130,9 @@ export class ConnectorAdminClient {
       clearTimeout(timer);
     }
     if (typeof body !== 'object' || body === null) {
-      throw new Error('Connector admin API: invalid hs-hostname response shape');
+      throw new Error(
+        'Connector admin API: invalid hs-hostname response shape'
+      );
     }
     const obj = body as Record<string, unknown>;
     const hostname = obj['hostname'];
@@ -139,12 +141,16 @@ export class ConnectorAdminClient {
       (hostname !== null && typeof hostname !== 'string') ||
       (publishedAt !== null && typeof publishedAt !== 'string')
     ) {
-      throw new Error('Connector admin API: invalid hs-hostname response shape');
+      throw new Error(
+        'Connector admin API: invalid hs-hostname response shape'
+      );
     }
     // Empty-string hostname is a server-side bug — reject so the readiness
     // loop keeps polling instead of returning "ready" with an unusable address.
     if (typeof hostname === 'string' && hostname.length === 0) {
-      throw new Error('Connector admin API: invalid hs-hostname response shape');
+      throw new Error(
+        'Connector admin API: invalid hs-hostname response shape'
+      );
     }
     return body as HsHostnameResponse;
   }

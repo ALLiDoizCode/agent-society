@@ -85,49 +85,34 @@ describe.skipIf(!shouldRun)(
       delete process.env['TOWNHOUSE_WALLET_PASSWORD'];
     }, 60_000);
 
-    it(
-      'exactly two containers running: connector + townhouse-api',
-      () => {
-        const out = execSync(
-          'docker ps --filter name=townhouse-hs- --format "{{.Names}}"',
-          { encoding: 'utf-8' }
-        );
-        const names = out.trim().split('\n').filter(Boolean).sort();
-        expect(names).toEqual([
-          'townhouse-hs-api',
-          'townhouse-hs-connector',
-        ]);
-      },
-      10_000
-    );
+    it('exactly two containers running: connector + townhouse-api', () => {
+      const out = execSync(
+        'docker ps --filter name=townhouse-hs- --format "{{.Names}}"',
+        { encoding: 'utf-8' }
+      );
+      const names = out.trim().split('\n').filter(Boolean).sort();
+      expect(names).toEqual(['townhouse-hs-api', 'townhouse-hs-connector']);
+    }, 10_000);
 
-    it(
-      'getHsHostname() returns a non-null .anyone address',
-      async () => {
-        const client = new ConnectorAdminClient('http://127.0.0.1:9401', 5_000);
-        const result = await client.getHsHostname();
-        expect(result.hostname).toMatch(/\.anyone$/);
-        expect(result.publishedAt).toBeTruthy();
-      },
-      10_000
-    );
+    it('getHsHostname() returns a non-null .anyone address', async () => {
+      const client = new ConnectorAdminClient('http://127.0.0.1:9401', 5_000);
+      const result = await client.getHsHostname();
+      expect(result.hostname).toMatch(/\.anyone$/);
+      expect(result.publishedAt).toBeTruthy();
+    }, 10_000);
 
-    it(
-      'down() stops containers but preserves townhouse-hs-anon volume',
-      async () => {
-        await orch.down();
-        const containers = execSync(
-          'docker ps -a --filter name=townhouse-hs- --format "{{.Names}}"',
-          { encoding: 'utf-8' }
-        );
-        expect(containers.trim()).toBe('');
-        const volumes = execSync(
-          'docker volume ls --filter name=townhouse-hs-anon --format "{{.Name}}"',
-          { encoding: 'utf-8' }
-        );
-        expect(volumes.trim()).toBe('townhouse-hs-anon');
-      },
-      60_000
-    );
+    it('down() stops containers but preserves townhouse-hs-anon volume', async () => {
+      await orch.down();
+      const containers = execSync(
+        'docker ps -a --filter name=townhouse-hs- --format "{{.Names}}"',
+        { encoding: 'utf-8' }
+      );
+      expect(containers.trim()).toBe('');
+      const volumes = execSync(
+        'docker volume ls --filter name=townhouse-hs-anon --format "{{.Name}}"',
+        { encoding: 'utf-8' }
+      );
+      expect(volumes.trim()).toBe('townhouse-hs-anon');
+    }, 60_000);
   }
 );

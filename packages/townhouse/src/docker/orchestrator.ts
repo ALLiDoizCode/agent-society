@@ -50,7 +50,11 @@ function runDockerCompose(
   args: readonly string[],
   options: RunDockerOptions = {}
 ): Promise<{ stdout: string; stderr: string }> {
-  const { timeout, maxBuffer = 16 * 1024 * 1024, inheritStdio = false } = options;
+  const {
+    timeout,
+    maxBuffer = 16 * 1024 * 1024,
+    inheritStdio = false,
+  } = options;
   return new Promise((resolve, reject) => {
     const child = spawn(file, Array.from(args), {
       stdio: inheritStdio
@@ -415,7 +419,10 @@ export class DockerOrchestrator extends EventEmitter {
     while (Date.now() < deadline) {
       try {
         lastResponse = await client.getHsHostname();
-        if (lastResponse.hostname !== null && lastResponse.publishedAt !== null) {
+        if (
+          lastResponse.hostname !== null &&
+          lastResponse.publishedAt !== null
+        ) {
           return;
         }
       } catch (err: unknown) {

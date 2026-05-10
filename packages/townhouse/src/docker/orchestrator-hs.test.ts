@@ -40,7 +40,12 @@ function makeExec(resolve?: { stdout: string; stderr: string }): {
   return { exec, calls };
 }
 
-function makeAdminFactory(getHsHostnameFn: () => Promise<{ hostname: string | null; publishedAt: string | null }>) {
+function makeAdminFactory(
+  getHsHostnameFn: () => Promise<{
+    hostname: string | null;
+    publishedAt: string | null;
+  }>
+) {
   return () =>
     ({
       getHsHostname: getHsHostnameFn,
@@ -61,7 +66,10 @@ describe('DockerOrchestrator (HS profile)', () => {
       composePath: '/test/compose.yml',
       execFileAsync: exec as never,
       adminClientFactory: makeAdminFactory(() =>
-        Promise.resolve({ hostname: 'x.anyone', publishedAt: '2026-05-09T00:00:00Z' })
+        Promise.resolve({
+          hostname: 'x.anyone',
+          publishedAt: '2026-05-09T00:00:00Z',
+        })
       ) as never,
     });
     // No throw = success; profile and composePath stored internally
@@ -107,13 +115,22 @@ describe('DockerOrchestrator (HS profile)', () => {
       composePath: '/test/compose.yml',
       execFileAsync: exec as never,
       adminClientFactory: makeAdminFactory(() =>
-        Promise.resolve({ hostname: 'x.anyone', publishedAt: '2026-05-09T00:00:00Z' })
+        Promise.resolve({
+          hostname: 'x.anyone',
+          publishedAt: '2026-05-09T00:00:00Z',
+        })
       ) as never,
     });
     await orch.up([]);
     expect(calls).toHaveLength(1);
     expect(calls[0]!.file).toBe('docker');
-    expect(calls[0]!.args).toEqual(['compose', '-f', '/test/compose.yml', 'up', '-d']);
+    expect(calls[0]!.args).toEqual([
+      'compose',
+      '-f',
+      '/test/compose.yml',
+      'up',
+      '-d',
+    ]);
   });
 
   it('up([town]) inserts --profile town BEFORE up -d', async () => {
@@ -123,12 +140,21 @@ describe('DockerOrchestrator (HS profile)', () => {
       composePath: '/test/compose.yml',
       execFileAsync: exec as never,
       adminClientFactory: makeAdminFactory(() =>
-        Promise.resolve({ hostname: 'x.anyone', publishedAt: '2026-05-09T00:00:00Z' })
+        Promise.resolve({
+          hostname: 'x.anyone',
+          publishedAt: '2026-05-09T00:00:00Z',
+        })
       ) as never,
     });
     await orch.up(['town']);
     expect(calls[0]!.args).toEqual([
-      'compose', '-f', '/test/compose.yml', '--profile', 'town', 'up', '-d',
+      'compose',
+      '-f',
+      '/test/compose.yml',
+      '--profile',
+      'town',
+      'up',
+      '-d',
     ]);
   });
 
@@ -139,16 +165,25 @@ describe('DockerOrchestrator (HS profile)', () => {
       composePath: '/test/compose.yml',
       execFileAsync: exec as never,
       adminClientFactory: makeAdminFactory(() =>
-        Promise.resolve({ hostname: 'x.anyone', publishedAt: '2026-05-09T00:00:00Z' })
+        Promise.resolve({
+          hostname: 'x.anyone',
+          publishedAt: '2026-05-09T00:00:00Z',
+        })
       ) as never,
     });
     await orch.up(['dvm', 'mill', 'town']); // intentionally out-of-order input
     expect(calls[0]!.args).toEqual([
-      'compose', '-f', '/test/compose.yml',
-      '--profile', 'town',
-      '--profile', 'mill',
-      '--profile', 'dvm',
-      'up', '-d',
+      'compose',
+      '-f',
+      '/test/compose.yml',
+      '--profile',
+      'town',
+      '--profile',
+      'mill',
+      '--profile',
+      'dvm',
+      'up',
+      '-d',
     ]);
   });
 
@@ -166,7 +201,10 @@ describe('DockerOrchestrator (HS profile)', () => {
         if (callCount < 3) {
           return Promise.resolve({ hostname: null, publishedAt: null });
         }
-        return Promise.resolve({ hostname: 'xyz.anyone', publishedAt: '2026-05-09T00:00:00Z' });
+        return Promise.resolve({
+          hostname: 'xyz.anyone',
+          publishedAt: '2026-05-09T00:00:00Z',
+        });
       }) as never,
     });
     await orch.up([]);
@@ -209,7 +247,9 @@ describe('DockerOrchestrator (HS profile)', () => {
       execFileAsync: exec as never,
       adminClientFactory: makeAdminFactory(() => {
         callCount++;
-        return Promise.reject(new Error('connector is anon-disabled (HTTP 503)'));
+        return Promise.reject(
+          new Error('connector is anon-disabled (HTTP 503)')
+        );
       }) as never,
     });
     await expect(orch.up([])).rejects.toThrow(/anon-disabled/);
@@ -220,7 +260,9 @@ describe('DockerOrchestrator (HS profile)', () => {
 
   it('emits containerState { name: "connector", state: "error" } before throwing on compose up failure', async () => {
     const fakeExec: ExecFileAsync = () => {
-      const e = new Error('Process exited with code 1') as NodeJS.ErrnoException & {
+      const e = new Error(
+        'Process exited with code 1'
+      ) as NodeJS.ErrnoException & {
         stderr?: string;
         code?: number;
       };
@@ -243,7 +285,9 @@ describe('DockerOrchestrator (HS profile)', () => {
 
   it('emits fallback containerState { name: "compose-up" } when stderr is unparseable', async () => {
     const fakeExec: ExecFileAsync = () => {
-      const e = new Error('Process exited with code 1') as NodeJS.ErrnoException & {
+      const e = new Error(
+        'Process exited with code 1'
+      ) as NodeJS.ErrnoException & {
         stderr?: string;
         code?: number;
       };
@@ -275,7 +319,12 @@ describe('DockerOrchestrator (HS profile)', () => {
     });
     await orch.down();
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.args).toEqual(['compose', '-f', '/test/compose.yml', 'down']);
+    expect(calls[0]!.args).toEqual([
+      'compose',
+      '-f',
+      '/test/compose.yml',
+      'down',
+    ]);
     // Ensure no -v flag (volume preservation)
     expect(calls[0]!.args).not.toContain('-v');
   });
@@ -301,11 +350,19 @@ describe('DockerOrchestrator (HS profile)', () => {
       listNetworks: vi.fn().mockResolvedValue([]),
       getNetwork: vi.fn().mockReturnValue(mockNetwork),
       pull: vi.fn().mockResolvedValue({ pipe: vi.fn() }),
-      listImages: vi.fn().mockResolvedValue([{ RepoTags: ['ghcr.io/toon-protocol/connector@sha256:abc'], RepoDigests: [] }]),
+      listImages: vi.fn().mockResolvedValue([
+        {
+          RepoTags: ['ghcr.io/toon-protocol/connector@sha256:abc'],
+          RepoDigests: [],
+        },
+      ]),
       modem: {
-        followProgress: vi.fn().mockImplementation(
-          (_s: unknown, onFinished: (err: Error | null) => void) => onFinished(null)
-        ),
+        followProgress: vi
+          .fn()
+          .mockImplementation(
+            (_s: unknown, onFinished: (err: Error | null) => void) =>
+              onFinished(null)
+          ),
       },
     } as unknown as Docker;
 
