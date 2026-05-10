@@ -1,6 +1,6 @@
 # Story 45.3: DockerOrchestrator Profile Param
 
-Status: review (post-review-3 fixes applied 2026-05-10 — 10 additional patches landed locally on `feat/45-3-orchestrator-profile-param`; PR #44 already merged so these need a follow-up PR; status flips to `done` per AC #17 only after follow-up PR merge + CI green)
+Status: done (PR town#44 merged 2026-05-10 with the orchestrator HS profile + getHsHostname admin client + 14 unit tests + 3 integration test stubs; PR town#45 merged 2026-05-10 with 10 round-3 review patches — `.anyone` enforcement, integration-test config fix, `waitForHsHostname` fatal shape errors + lastError capture, `surfaceComposeFailure` regex hyphen fix, `runDockerCompose` stdout capture, AbortError detection in body-read, empty-string `publishedAt` rejection, dead-import cleanup, wallet env-var try/finally; AC #17 satisfied)
 
 > **Critical-path third story of Epic 45 (One-Command Apex Install).** Sized M. Story 45.4 (`townhouse hs up` subcommand) cannot start until this story lands the `profile: 'dev' | 'hs'` parameter on `DockerOrchestrator`, the `getHsHostname()` admin-client method, and the HS-mode startup readiness gate. Story 45.2 already shipped `loadComposeTemplate` / `materializeComposeTemplate` (the YAML resolution layer); this story is what wires that layer into a runnable orchestrator. Independent of Story 44.1 — the `GET /admin/hs-hostname` endpoint already ships in the connector image at the digest pinned by `DEFAULT_CONNECTOR_IMAGE` (connector v3.5.0+).
 
