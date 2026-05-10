@@ -1,4 +1,19 @@
 
+## Deferred from: code review of 45-3-docker-orchestrator-profile-param (2026-05-10, round 3)
+
+- `up()` mutates `this.activeNodes` before HS-path validation rejects unknown profiles — pre-existing pattern in dev path; HS-path's new `OrchestratorError` for unknown profile types interacts with it but doesn't fundamentally change the picture. [packages/townhouse/src/docker/orchestrator.ts:279,320-334]
+- `upHs` does not roll back successfully-started compose containers when `waitForHsHostname` later times out — operator must `townhouse hs down` manually before re-invoking. Story 45.4 retry-policy territory. [packages/townhouse/src/docker/orchestrator.ts:343-376]
+- `surfaceComposeFailure` pattern 3 hardcodes `townhouse-hs-` container-name prefix — silently dead code for operators who set `COMPOSE_PROJECT_NAME`. [packages/townhouse/src/docker/orchestrator.ts:389]
+- Integration test `docker ps --filter name=townhouse-hs-` is a substring filter — pollutes on a host with leftover state or a parallel townhouse stack. [packages/townhouse/src/__integration__/orchestrator-hs.test.ts:90,107]
+- HS `up()` ENOENT path attributes failure to "docker CLI not found on PATH" — could equally mean the compose plugin is missing. [packages/townhouse/src/docker/orchestrator.ts:360-361]
+- `runDockerCompose` silently drops stderr chunks past 16 MB without truncation marker. [packages/townhouse/src/docker/orchestrator.ts:78-83]
+- HS `waitForHsHostname` "polls until non-null" unit test uses real timers (~6 s wall clock) — slows CI marginally, correctness fine. [packages/townhouse/src/docker/orchestrator-hs.test.ts]
+- `waitForHsHostname` deadline can overrun the advertised 120 s by ~7 s when each request takes ~5 s and the deadline check happens before the call. [packages/townhouse/src/docker/orchestrator.ts:419]
+- `waitForHsHostname` uses `Date.now()` for the deadline — laptop suspend/resume + system clock backward jump can extend the timeout indefinitely. Future hardening (`process.hrtime.bigint()`). [packages/townhouse/src/docker/orchestrator.ts:414,419]
+- `downHs` is not idempotent when nothing is running — exits 0 with WARN on some Compose versions, exits 1 on others. CLI consumers (Story 45.4) need to handle gracefully.
+- `downHs` 60 s timeout may be tight for 3-peer HS stacks where each container's SIGTERM grace is 10 s. Tune on evidence. [packages/townhouse/src/docker/orchestrator.ts:570]
+- HS-path fake-timer tests are sensitive to microtask ordering between `getHsHostname` mock resolution and `setTimeout` advance. Tests pass; refactor is style. [packages/townhouse/src/docker/orchestrator-hs.test.ts:660-685]
+
 ## Deferred from: code review of 44-4-connector-release-contract-cross-repo-doc (2026-05-08)
 
 - Bare `CONNECTOR_MIGRATION.md` reference in body-identical mirror is a dangling reference from the connector-side reader's perspective (file lives only in town). Acceptable trade-off for byte-equivalence discipline; consider path-qualifying as `packages/sdk/CONNECTOR_MIGRATION.md (in toon-protocol/town)` in a future tightening pass. — [`packages/sdk/CONNECTOR_RELEASE_CONTRACT.md` `### Townhouse pin discipline`]
