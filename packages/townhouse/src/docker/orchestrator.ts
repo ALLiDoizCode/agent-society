@@ -7,11 +7,15 @@
  */
 
 import { EventEmitter } from 'node:events';
+import { execFile } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { promisify } from 'node:util';
 import type Docker from 'dockerode';
 import type { TownhouseConfig } from '../config/schema.js';
 import { ConnectorConfigGenerator } from '../connector/config-generator.js';
+import { ConnectorAdminClient } from '../connector/admin-client.js';
+import type { ComposeProfile } from '../compose-loader.js';
 import {
   CONTAINER_PREFIX,
   TOWN_HEALTH_PORT,
@@ -20,6 +24,8 @@ import {
 } from '../constants.js';
 import type { NodeType, HealthCheckOptions, BandwidthStats } from './types.js';
 import type { WalletManager } from '../wallet/index.js';
+
+const execFileAsync = promisify(execFile);
 
 /** Nostr relay WebSocket port on Town containers (fixed by Dockerfile) */
 const TOWN_RELAY_PORT = 7100;
@@ -59,6 +65,32 @@ const RELAY_ATOR_SIDECAR_IMAGE = 'toon:townhouse-ator-sidecar';
 const RELAY_ATOR_SOCKS_PORT = 9051;
 
 /**
+ * Error thrown by DockerOrchestrator HS-path failures (Story 45.3).
+ * Carries the failed-service name + subprocess diagnostics so CLI consumers
+ * (Story 45.4) can render Sally's failure-state copy library (UX-DR5).
+ */
+export class OrchestratorError extends Error {
+  readonly service?: string;
+  readonly exitCode?: number;
+  readonly stderr?: string;
+  constructor(
+    message: string,
+    options: {
+      service?: string;
+      exitCode?: number;
+      stderr?: string;
+      cause?: Error;
+    } = {}
+  ) {
+    super(message, options.cause ? { cause: options.cause } : undefined);
+    this.name = 'OrchestratorError';
+    if (options.service !== undefined) this.service = options.service;
+    if (options.exitCode !== undefined) this.exitCode = options.exitCode;
+    if (options.stderr !== undefined) this.stderr = options.stderr;
+  }
+}
+
+/**
  * Normalize a Docker image reference to include an explicit tag.
  * Docker defaults to `:latest` when no tag is specified, but
  * `listImages()` RepoTags always include the explicit tag.
@@ -90,28 +122,64 @@ export class DockerOrchestrator extends EventEmitter {
   private readonly walletManager: WalletManager | undefined;
   private activeNodes: NodeType[] = [];
   private readonly statsCache = new Map<string, CachedStats>();
+  private readonly profile: ComposeProfile;
+  private readonly composePath: string | undefined;
+  private readonly execFileAsync: typeof execFileAsync;
+  private readonly adminClientFactory: (
+    baseUrl: string,
+    timeoutMs: number
+  ) => ConnectorAdminClient;
 
   constructor(
     docker: Docker,
     config: TownhouseConfig,
-    walletManager?: WalletManager
+    walletManager?: WalletManager,
+    options: {
+      profile?: ComposeProfile;
+      composePath?: string;
+      execFileAsync?: typeof execFileAsync;
+      adminClientFactory?: (
+        baseUrl: string,
+        timeoutMs: number
+      ) => ConnectorAdminClient;
+    } = {}
   ) {
     super();
     this.docker = docker;
     this.config = config;
     this.configGenerator = new ConnectorConfigGenerator(config);
     this.walletManager = walletManager;
+    this.profile = options.profile ?? 'dev';
+    this.composePath = options.composePath;
+    this.execFileAsync = options.execFileAsync ?? execFileAsync;
+    this.adminClientFactory =
+      options.adminClientFactory ??
+      ((url, t) => new ConnectorAdminClient(url, t));
+
+    if (this.profile === 'hs' && !this.composePath) {
+      throw new OrchestratorError(
+        `profile: 'hs' requires a composePath. Pass options.composePath ` +
+          `pointing at the rendered HS template (typically the composePath ` +
+          `returned by materializeComposeTemplate('hs')).`
+      );
+    }
   }
 
   /**
-   * Orchestrate full startup sequence:
-   * 1. Ensure network exists
-   * 2. Pull images (with progress)
-   * 3. Start connector, wait for health
-   * 4. Start enabled node containers in parallel
+   * Orchestrate full startup sequence. Branches on profile:
+   * - 'dev' (default): dockerode-based, preserves existing dev-stack behavior
+   * - 'hs': docker compose subprocess + HS hostname readiness gate
    */
   async up(profiles: NodeType[]): Promise<void> {
     this.activeNodes = [...profiles];
+    if (this.profile === 'hs') {
+      await this.upHs(profiles);
+    } else {
+      await this.upDev(profiles);
+    }
+  }
+
+  private async upDev(profiles: NodeType[]): Promise<void> {
     await this.ensureNetwork();
     await this.pullImages(profiles);
     await this.startConnector();
@@ -126,6 +194,112 @@ export class DockerOrchestrator extends EventEmitter {
     if (profiles.includes('town') && this.config.transport.relayHiddenService) {
       await this.startRelayAtorSidecar();
     }
+  }
+
+  /** HS-mode startup: shell out to `docker compose up -d`, wait for HS hostname. */
+  private async upHs(profiles: NodeType[]): Promise<void> {
+    const composePath = this.composePath!;
+    const args = ['compose', '-f', composePath];
+    // Profile flags MUST come BEFORE the subcommand per Docker Compose CLI grammar.
+    // Deterministic order: town → mill → dvm (matches AC #4).
+    const PROFILE_ORDER: NodeType[] = ['town', 'mill', 'dvm'];
+    for (const type of PROFILE_ORDER) {
+      if (profiles.includes(type)) {
+        args.push('--profile', type);
+      }
+    }
+    args.push('up', '-d');
+
+    try {
+      await this.execFileAsync('docker', args, {
+        timeout: 180_000,
+        maxBuffer: 16 * 1024 * 1024,
+      });
+    } catch (err: unknown) {
+      const e = err as NodeJS.ErrnoException & {
+        stderr?: string;
+        stdout?: string;
+        code?: number | string;
+      };
+      const stderr = String(e.stderr ?? '');
+      const exitCode = typeof e.code === 'number' ? e.code : -1;
+      this.surfaceComposeFailure(stderr);
+      throw new OrchestratorError(
+        `docker compose up failed (exit ${exitCode}): ${stderr.trim().slice(0, 500)}`,
+        { exitCode, stderr, cause: err instanceof Error ? err : undefined }
+      );
+    }
+
+    await this.waitForHsHostname();
+  }
+
+  /**
+   * Parse Docker Compose stderr for the failed-service name and emit a
+   * containerState event so callers see the failure via the same channel
+   * dev-mode uses (AC #6). When stderr does not match either Compose
+   * failure pattern, emit a single fallback event.
+   */
+  private surfaceComposeFailure(stderr: string): void {
+    const patterns = [
+      /failed to start (?:service\s+)?["']([^"']+)["']/i,
+      /service\s+["']([^"']+)["']\s+failed/i,
+      /Container\s+townhouse-hs-(\w+)\s+Error/i,
+    ];
+    let emitted = false;
+    for (const pattern of patterns) {
+      const match = stderr.match(pattern);
+      if (match?.[1]) {
+        this.emit('containerState', {
+          name: match[1],
+          state: 'error',
+          detail: stderr.trim().slice(0, 500),
+        });
+        emitted = true;
+        break;
+      }
+    }
+    if (!emitted) {
+      this.emit('containerState', {
+        name: 'compose-up',
+        state: 'error',
+        detail: stderr.trim().slice(0, 500),
+      });
+    }
+  }
+
+  private async waitForHsHostname(): Promise<void> {
+    const adminUrl = `http://127.0.0.1:${this.config.connector.adminPort}`;
+    const client = this.adminClientFactory(adminUrl, 5_000);
+    const deadline = Date.now() + 120_000;
+    const pollInterval = 2_000;
+    let lastResponse:
+      | { hostname: string | null; publishedAt: string | null }
+      | undefined;
+    while (Date.now() < deadline) {
+      try {
+        lastResponse = await client.getHsHostname();
+        if (lastResponse.hostname !== null && lastResponse.publishedAt !== null) {
+          return;
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // 503 anon-disabled is fatal — do NOT keep polling.
+        if (msg.includes('anon-disabled')) {
+          throw new OrchestratorError(
+            `connector is anon-disabled — set anon.enabled: true in the connector config`,
+            { cause: err instanceof Error ? err : undefined }
+          );
+        }
+        // Network errors (ECONNREFUSED, etc.) — retry within budget.
+      }
+      await new Promise((r) => setTimeout(r, pollInterval));
+    }
+    throw new OrchestratorError(
+      `HS hostname publication timeout after 120000ms` +
+        (lastResponse
+          ? ` (last response: ${JSON.stringify(lastResponse)})`
+          : ' (no successful response received)')
+    );
   }
 
   /**
@@ -196,12 +370,19 @@ export class DockerOrchestrator extends EventEmitter {
   }
 
   /**
-   * Graceful shutdown — stops containers in reverse order:
-   * 1. Stop all node containers in parallel
-   * 2. Stop connector
-   * 3. Remove network
+   * Graceful shutdown. Branches on profile:
+   * - 'dev' (default): dockerode-based teardown
+   * - 'hs': docker compose subprocess
    */
   async down(): Promise<void> {
+    if (this.profile === 'hs') {
+      await this.downHs();
+    } else {
+      await this.downDev();
+    }
+  }
+
+  private async downDev(): Promise<void> {
     const containers = await this.docker.listContainers({ all: true });
 
     // Find all townhouse containers
@@ -233,6 +414,29 @@ export class DockerOrchestrator extends EventEmitter {
 
     // Remove network
     await this.removeNetwork();
+  }
+
+  private async downHs(): Promise<void> {
+    const composePath = this.composePath!;
+    const args = ['compose', '-f', composePath, 'down'];
+    // NO -v flag — preserves the townhouse-hs-anon volume so the .anyone
+    // address survives `down` (Story 45.4 AC).
+    try {
+      await this.execFileAsync('docker', args, { timeout: 60_000 });
+    } catch (err: unknown) {
+      const e = err as NodeJS.ErrnoException & {
+        stderr?: string;
+        code?: number | string;
+      };
+      throw new OrchestratorError(
+        `docker compose down failed: ${String(e.stderr ?? '').trim().slice(0, 500)}`,
+        {
+          exitCode: typeof e.code === 'number' ? e.code : -1,
+          stderr: String(e.stderr ?? ''),
+          cause: err instanceof Error ? err : undefined,
+        }
+      );
+    }
   }
 
   /**

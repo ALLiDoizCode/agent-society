@@ -195,6 +195,7 @@ All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Con
 | **Townhouse npm-tarball compose templates** | `packages/townhouse/compose/` (source) → `dist/compose/` (built output) |
 | Compose loader + materializer API | `packages/townhouse/src/compose-loader.ts` |
 | Image-manifest digest registry (per release) | `packages/townhouse/dist/image-manifest.json` (CI-produced; not committed) |
+| DockerOrchestrator HS-profile entry point | `packages/townhouse/src/docker/orchestrator.ts` (`upHs`, `waitForHsHostname`) |
 
 ## Browser Verification
 
