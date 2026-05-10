@@ -501,7 +501,7 @@ development_status:
   45-1-multi-arch-townhouse-image-publish-ci: done  # done: workflow run https://github.com/toon-protocol/town/actions/runs/25603167091 produced 4 multi-arch + cosign-signed images and image-manifest.json — town#37 town#38 town#39 town#40 town#41
   45-2-embed-compose-templates-and-image-manifest-in-npm-tarball: done  # done: tag v0.1.0-rc5 published; tarball ships dist/compose/{hs,dev}.yml + image-manifest.json with all 5 images digest-pinned (workflow run 25614777350) — town#43
   45-3-docker-orchestrator-profile-param: done  # done: PRs town#44 (orchestrator HS profile + getHsHostname admin client + OrchestratorError + 14 HS unit tests + 3 integration test stubs) + town#45 (10 round-3 review patches) merged 2026-05-10
-  45-4-townhouse-hs-up-subcommand-apex-only-boot: ready-for-dev  # CRITICAL PATH; depends on 44.1 (done) + 45.3 (review/PR #44); story file at _bmad-output/implementation-artifacts/45-4-townhouse-hs-up-subcommand-apex-only-boot.md
+  45-4-townhouse-hs-up-subcommand-apex-only-boot: review  # CRITICAL PATH; depends on 44.1 (done) + 45.3 (review/PR #44); story file at _bmad-output/implementation-artifacts/45-4-townhouse-hs-up-subcommand-apex-only-boot.md
   epic-45-retrospective: optional
 
   # Epic 46: Lazy Peer Node Provisioning
