@@ -59,7 +59,7 @@ export function registerEarningsRoutes(
     opts.leasesPath === null ? null : (opts.leasesPath ?? defaultLeasesPath());
 
   app.get<{ Querystring: EarningsQuery }>(
-    '/earnings',
+    '/api/earnings',
     async (request: FastifyRequest<{ Querystring: EarningsQuery }>, reply) => {
       const sinceRaw = request.query.since;
       let sinceMs: number | undefined;

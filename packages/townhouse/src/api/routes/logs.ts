@@ -67,7 +67,7 @@ export function registerLogsRoutes(
   const docker = opts.docker ?? new Docker();
   const tailFn = opts.tailFn ?? tailContainerLogs;
 
-  app.get('/logs/stream', async (request, reply) => {
+  app.get('/api/logs/stream', async (request, reply) => {
     await streamLogs(request, reply, docker, tailFn);
   });
 }
