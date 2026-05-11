@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-11 (Epic 45 retro A4 enforcement — added Live E2E Gate stories: 46.4, 47.5, 48.7, 49.7. 46.4 must complete before Epic 46 flips to done.)
+# last_updated: 2026-05-11 (Story 46.4 review — gate test file landed; Findings A/B patched via PR #50/51/52 (all merged); Finding C identified — rc5 tarball predates Epic 46's /api/nodes API. Story cannot flip to done until Epic 46 merges to main, rc6 is published, and the gate re-runs green against the new tarball.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -530,7 +530,7 @@ development_status:
   46-1-nodes-yaml-schema-and-boot-reconciler-and-peer-type-resolver: done  # CRITICAL PATH
   46-2-post-and-delete-api-nodes-host-api: done  # code review passed 2026-05-11
   46-3-townhouse-node-add-remove-list-cli: done  # code review passed 2026-05-11 (7 patches applied; 944/955 tests passing, 11 pre-existing failures unchanged)
-  46-4-live-e2e-gate-lazy-peer-node-provisioning: backlog  # Epic 45 retro A4 — must complete before Epic 46 flips to done and before Epic 47 starts
+  46-4-live-e2e-gate-lazy-peer-node-provisioning: review  # Epic 45 retro A4 — gate ran 2026-05-11; 2 integration findings (rc5 manifest pins old connector; compose template hardcodes ~/.townhouse bind-mount) need separate PRs before flipping to done. See Review Findings in story file.
   epic-46-retrospective: optional
 
   # Epic 47: Earnings Data Plane
