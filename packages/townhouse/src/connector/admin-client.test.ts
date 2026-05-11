@@ -208,7 +208,7 @@ describe('ConnectorAdminClient', () => {
   describe('getHsHostname() (Story 45.3 / AC #7)', () => {
     it('returns hostname + publishedAt when bootstrap is complete (200 with non-null fields)', async () => {
       const body = {
-        hostname: 'abc123.anyone',
+        hostname: 'abc123.anon',
         publishedAt: '2026-05-09T00:00:00Z',
       };
       fetchMock.mockResolvedValue({
@@ -220,7 +220,7 @@ describe('ConnectorAdminClient', () => {
       const client = new ConnectorAdminClient('http://localhost:9401');
       const result = await client.getHsHostname();
 
-      expect(result.hostname).toBe('abc123.anyone');
+      expect(result.hostname).toBe('abc123.anon');
       expect(result.publishedAt).toBe('2026-05-09T00:00:00Z');
     });
 
@@ -277,6 +277,34 @@ describe('ConnectorAdminClient', () => {
 
       await expect(client.getHsHostname()).rejects.toThrow(
         /invalid hs-hostname response shape/
+      );
+    });
+
+    it('Fix 5: throws immediately on 404 with "unexpected status" (fast-fail, no retry)', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+      });
+
+      const client = new ConnectorAdminClient('http://localhost:9401');
+
+      await expect(client.getHsHostname()).rejects.toThrow(
+        /unexpected status 404/
+      );
+    });
+
+    it('Fix 5: throws immediately on 401 with "unexpected status"', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+      });
+
+      const client = new ConnectorAdminClient('http://localhost:9401');
+
+      await expect(client.getHsHostname()).rejects.toThrow(
+        /unexpected status 401/
       );
     });
   });
