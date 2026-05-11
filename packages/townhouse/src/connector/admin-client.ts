@@ -314,6 +314,71 @@ export class ConnectorAdminClient {
   }
 
   /**
+   * DELETE /admin/peers/:peerId?removeRoutes=true — deregister a child peer.
+   *
+   * Idempotent: a 404 from the connector (peer already removed) is treated as
+   * success so callers can safely use this as a rollback step without knowing
+   * whether the peer was ever registered.
+   *
+   * `removeRoutes=true` is always sent so the connector drops the ILP routing
+   * entries for this peer along with the BTP connection config.
+   *
+   * @throws Error on empty peerId (rejected at client, no network request made)
+   * @throws Error on non-2xx/404 response, timeout, or connection refused
+   */
+  async removePeer(peerId: string): Promise<void> {
+    if (!peerId) {
+      throw new Error(
+        'Connector admin API: removePeer requires a non-empty peerId'
+      );
+    }
+    const url = `${this.baseUrl}/admin/peers/${encodeURIComponent(peerId)}?removeRoutes=true`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'DELETE',
+          signal: controller.signal,
+        });
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error(
+            `Connector admin API request timeout after ${this.timeoutMs}ms: DELETE ${url}`
+          );
+        }
+        const msg = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Connector admin API request failed: DELETE ${url} — ${msg}`
+        );
+      }
+      // 404 means peer already gone — idempotent success.
+      if (response.status === 404) {
+        return;
+      }
+      if (!response.ok) {
+        let body = '';
+        try {
+          body = await response.text();
+        } catch (error: unknown) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error(
+              `Connector admin API request timeout after ${this.timeoutMs}ms: DELETE ${url} (body read)`
+            );
+          }
+          /* best-effort: leave body empty */
+        }
+        throw new Error(
+          `Connector admin API error: DELETE /admin/peers/${peerId} returned ${response.status} ${response.statusText}${body ? ` — ${body}` : ''}`
+        );
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
    * GET /packets — returns the connector's raw packet log filtered by the
    * given criteria. Used by the timeseries aggregation route (story 21.10).
    *

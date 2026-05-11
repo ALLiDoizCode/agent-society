@@ -14,6 +14,7 @@ import { registerWalletBalancesRoutes } from './routes/wallet-balances.js';
 import { registerWalletRevealRoutes } from './routes/wallet-reveal.js';
 import { registerWalletWithdrawRoutes } from './routes/wallet-withdraw.js';
 import { registerConfigPatchRoutes } from './routes/nodes-patch.js';
+import { registerNodeLifecycleRoutes } from './routes/nodes-lifecycle.js';
 import {
   registerMetricsWsRoutes,
   getOpenWebSockets,
@@ -53,6 +54,7 @@ export async function createApiServer(deps: ApiDeps): Promise<ApiServer> {
   registerWalletRevealRoutes(app, deps);
   registerWalletWithdrawRoutes(app, deps);
   registerConfigPatchRoutes(app, deps);
+  registerNodeLifecycleRoutes(app, deps);
   registerMetricsWsRoutes(app, deps);
 
   const CLOSE_TIMEOUT_MS = 5000;
