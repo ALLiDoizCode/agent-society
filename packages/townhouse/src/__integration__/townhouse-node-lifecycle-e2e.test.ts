@@ -35,7 +35,12 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { isTruthyEnv, runCli, waitForExit, waitForUrl } from './_test-helpers.js';
+import {
+  isTruthyEnv,
+  runCli,
+  waitForExit,
+  waitForUrl,
+} from './_test-helpers.js';
 import { readNodesYaml } from '../state/nodes-yaml.js';
 
 // ── Skip gates ──────────────────────────────────────────────────────────────
@@ -203,183 +208,163 @@ describe.skipIf(!shouldRun)(
     }, 120_000);
 
     // ── AC #1 step 1 ────────────────────────────────────────────────────────
-    it(
-      'node add town provisions a Town node and registers with the connector',
-      async () => {
-        const add = runCli('node', {
-          configDir: tmpDir,
-          env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
-          extraArgs: ['add', 'town', '--json'],
-        });
-        const code = await waitForExit(add.process, 180_000);
-        const stdout = add.stdout.join('');
-        expect(code, `node add stdout: ${stdout}`).toBe(0);
+    it('node add town provisions a Town node and registers with the connector', async () => {
+      const add = runCli('node', {
+        configDir: tmpDir,
+        env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
+        extraArgs: ['add', 'town', '--json'],
+      });
+      const code = await waitForExit(add.process, 180_000);
+      const stdout = add.stdout.join('');
+      expect(code, `node add stdout: ${stdout}`).toBe(0);
 
-        const lines = stdout.trim().split('\n').filter(Boolean);
-        const lastLine = lines[lines.length - 1] ?? '';
-        const body = JSON.parse(lastLine) as {
-          ok: boolean;
-          id: string;
-          type: string;
-          peerId: string;
-          ilpAddress: string;
-          hsRoute?: string;
-          healthCheckUrl?: string;
-        };
-        expect(body.ok).toBe(true);
-        expect(body.type).toBe('town');
-        expect(body.id).toBe('town');
-        expect(body.peerId).toBe('town');
-        expect(body.ilpAddress).toBe('g.townhouse.town');
+      const lines = stdout.trim().split('\n').filter(Boolean);
+      const lastLine = lines[lines.length - 1] ?? '';
+      const body = JSON.parse(lastLine) as {
+        ok: boolean;
+        id: string;
+        type: string;
+        peerId: string;
+        ilpAddress: string;
+        hsRoute?: string;
+        healthCheckUrl?: string;
+      };
+      expect(body.ok).toBe(true);
+      expect(body.type).toBe('town');
+      expect(body.id).toBe('town');
+      expect(body.peerId).toBe('town');
+      expect(body.ilpAddress).toBe('g.townhouse.town');
 
-        // nodes.yaml: exists, mode 0o600, one entry of type 'town'.
-        const nodesYamlPath = join(tmpDir, 'nodes.yaml');
-        expect(existsSync(nodesYamlPath)).toBe(true);
-        const mode = statSync(nodesYamlPath).mode & 0o777;
-        expect(mode).toBe(0o600);
-        const yaml = await readNodesYaml(nodesYamlPath);
-        expect(yaml.entries).toHaveLength(1);
-        expect(yaml.entries[0]?.type).toBe('town');
-        expect(yaml.entries[0]?.peerId).toBe('town');
+      // nodes.yaml: exists, mode 0o600, one entry of type 'town'.
+      const nodesYamlPath = join(tmpDir, 'nodes.yaml');
+      expect(existsSync(nodesYamlPath)).toBe(true);
+      const mode = statSync(nodesYamlPath).mode & 0o777;
+      expect(mode).toBe(0o600);
+      const yaml = await readNodesYaml(nodesYamlPath);
+      expect(yaml.entries).toHaveLength(1);
+      expect(yaml.entries[0]?.type).toBe('town');
+      expect(yaml.entries[0]?.peerId).toBe('town');
 
-        // Container running.
-        expect(dockerPs()).toContain(HS_TOWN_NAME);
+      // Container running.
+      expect(dockerPs()).toContain(HS_TOWN_NAME);
 
-        addedNodeId = body.id;
-      },
-      180_000
-    );
+      addedNodeId = body.id;
+    }, 180_000);
 
     // ── AC #1 step 2 ────────────────────────────────────────────────────────
-    it(
-      'node list shows the Town node as active',
-      async () => {
-        // The connector's peer-connected flag transitions asynchronously after
-        // register-peer returns 200 (BTP handshake). Poll up to 30 s for the
-        // connected state, mirror townhouse-cli-lifecycle.test.ts:156-165.
-        const deadline = Date.now() + 30_000;
-        let lastBody: { nodes?: NodeListEntry[] } = {};
-        let lastStdout = '';
-        while (Date.now() < deadline) {
-          const list = runCli('node', {
-            configDir: tmpDir,
-            env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
-            extraArgs: ['list', '--json'],
-          });
-          const code = await waitForExit(list.process, 10_000);
-          lastStdout = list.stdout.join('');
-          expect(code, `node list stdout: ${lastStdout}`).toBe(0);
-          const lines = lastStdout.trim().split('\n').filter(Boolean);
-          const lastLine = lines[lines.length - 1] ?? '';
-          lastBody = JSON.parse(lastLine) as { nodes?: NodeListEntry[] };
-          if (
-            lastBody.nodes?.length === 1 &&
-            lastBody.nodes[0]?.status === 'connected'
-          ) {
-            break;
-          }
-          await sleep(2_000);
-        }
-
-        expect(lastBody.nodes, `final node list: ${lastStdout}`).toHaveLength(1);
-        const node = lastBody.nodes?.[0];
-        expect(node?.type).toBe('town');
-        expect(node?.peerId).toBe('town');
-        expect(node?.status).toBe('connected');
-      },
-      60_000
-    );
-
-    // ── AC #1 step 3 ────────────────────────────────────────────────────────
-    it(
-      'node remove <id> deregisters and stops the Town node',
-      async () => {
-        expect(addedNodeId).toBeTruthy();
-
-        const remove = runCli('node', {
-          configDir: tmpDir,
-          env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
-          extraArgs: ['remove', addedNodeId, '--yes', '--json'],
-        });
-        const code = await waitForExit(remove.process, 60_000);
-        const stdout = remove.stdout.join('');
-        expect(code, `node remove stdout: ${stdout}`).toBe(0);
-
-        const lines = stdout.trim().split('\n').filter(Boolean);
-        const lastLine = lines[lines.length - 1] ?? '';
-        const body = JSON.parse(lastLine) as {
-          ok: boolean;
-          id: string;
-          type: string;
-        };
-        expect(body.ok).toBe(true);
-        expect(body.id).toBe(addedNodeId);
-        expect(body.type).toBe('town');
-
-        // Container gone.
-        expect(dockerPs()).not.toContain(HS_TOWN_NAME);
-
-        // nodes.yaml: now empty.
-        const yaml = await readNodesYaml(join(tmpDir, 'nodes.yaml'));
-        expect(yaml.entries).toEqual([]);
-      },
-      90_000
-    );
-
-    // ── AC #1 step 4 ────────────────────────────────────────────────────────
-    it(
-      'node list shows no active nodes after remove',
-      async () => {
+    it('node list shows the Town node as active', async () => {
+      // The connector's peer-connected flag transitions asynchronously after
+      // register-peer returns 200 (BTP handshake). Poll up to 30 s for the
+      // connected state, mirror townhouse-cli-lifecycle.test.ts:156-165.
+      const deadline = Date.now() + 30_000;
+      let lastBody: { nodes?: NodeListEntry[] } = {};
+      let lastStdout = '';
+      while (Date.now() < deadline) {
         const list = runCli('node', {
           configDir: tmpDir,
           env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
           extraArgs: ['list', '--json'],
         });
         const code = await waitForExit(list.process, 10_000);
-        const stdout = list.stdout.join('');
-        expect(code, `node list stdout: ${stdout}`).toBe(0);
-
-        const lines = stdout.trim().split('\n').filter(Boolean);
+        lastStdout = list.stdout.join('');
+        expect(code, `node list stdout: ${lastStdout}`).toBe(0);
+        const lines = lastStdout.trim().split('\n').filter(Boolean);
         const lastLine = lines[lines.length - 1] ?? '';
-        const body = JSON.parse(lastLine) as { nodes?: NodeListEntry[] };
-        expect(body.nodes).toEqual([]);
-      },
-      15_000
-    );
+        lastBody = JSON.parse(lastLine) as { nodes?: NodeListEntry[] };
+        if (
+          lastBody.nodes?.length === 1 &&
+          lastBody.nodes[0]?.status === 'connected'
+        ) {
+          break;
+        }
+        await sleep(2_000);
+      }
+
+      expect(lastBody.nodes, `final node list: ${lastStdout}`).toHaveLength(1);
+      const node = lastBody.nodes?.[0];
+      expect(node?.type).toBe('town');
+      expect(node?.peerId).toBe('town');
+      expect(node?.status).toBe('connected');
+    }, 60_000);
+
+    // ── AC #1 step 3 ────────────────────────────────────────────────────────
+    it('node remove <id> deregisters and stops the Town node', async () => {
+      expect(addedNodeId).toBeTruthy();
+
+      const remove = runCli('node', {
+        configDir: tmpDir,
+        env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
+        extraArgs: ['remove', addedNodeId, '--yes', '--json'],
+      });
+      const code = await waitForExit(remove.process, 60_000);
+      const stdout = remove.stdout.join('');
+      expect(code, `node remove stdout: ${stdout}`).toBe(0);
+
+      const lines = stdout.trim().split('\n').filter(Boolean);
+      const lastLine = lines[lines.length - 1] ?? '';
+      const body = JSON.parse(lastLine) as {
+        ok: boolean;
+        id: string;
+        type: string;
+      };
+      expect(body.ok).toBe(true);
+      expect(body.id).toBe(addedNodeId);
+      expect(body.type).toBe('town');
+
+      // Container gone.
+      expect(dockerPs()).not.toContain(HS_TOWN_NAME);
+
+      // nodes.yaml: now empty.
+      const yaml = await readNodesYaml(join(tmpDir, 'nodes.yaml'));
+      expect(yaml.entries).toEqual([]);
+    }, 90_000);
+
+    // ── AC #1 step 4 ────────────────────────────────────────────────────────
+    it('node list shows no active nodes after remove', async () => {
+      const list = runCli('node', {
+        configDir: tmpDir,
+        env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
+        extraArgs: ['list', '--json'],
+      });
+      const code = await waitForExit(list.process, 10_000);
+      const stdout = list.stdout.join('');
+      expect(code, `node list stdout: ${stdout}`).toBe(0);
+
+      const lines = stdout.trim().split('\n').filter(Boolean);
+      const lastLine = lines[lines.length - 1] ?? '';
+      const body = JSON.parse(lastLine) as { nodes?: NodeListEntry[] };
+      expect(body.nodes).toEqual([]);
+    }, 15_000);
 
     // ── AC #1 step 5 ────────────────────────────────────────────────────────
-    it(
-      're-run hs up preserves volume + hostname (apex idempotent)',
-      async () => {
-        // Idempotency probe path (cli.ts:878-908) — admin client returns the
-        // already-published hostname within ~3 s; no Docker mutation.
-        const up = runCli('hs', {
-          configDir: tmpDir,
-          password: TEST_PASSWORD,
-          env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
-          extraArgs: ['up'],
-        });
-        const code = await waitForExit(up.process, 30_000);
-        const stdout = up.stdout.join('');
-        expect(code, `hs up (re-run) stdout: ${stdout}`).toBe(0);
+    it('re-run hs up preserves volume + hostname (apex idempotent)', async () => {
+      // Idempotency probe path (cli.ts:878-908) — admin client returns the
+      // already-published hostname within ~3 s; no Docker mutation.
+      const up = runCli('hs', {
+        configDir: tmpDir,
+        password: TEST_PASSWORD,
+        env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
+        extraArgs: ['up'],
+      });
+      const code = await waitForExit(up.process, 30_000);
+      const stdout = up.stdout.join('');
+      expect(code, `hs up (re-run) stdout: ${stdout}`).toBe(0);
 
-        // Volume preserved.
-        expect(volumeExists(HS_ANON_VOLUME)).toBe(true);
+      // Volume preserved.
+      expect(volumeExists(HS_ANON_VOLUME)).toBe(true);
 
-        // host.json hostname unchanged.
-        const hostJson = JSON.parse(
-          readFileSync(join(tmpDir, 'host.json'), 'utf-8')
-        ) as { hostname: string };
-        expect(hostJson.hostname).toBe(firstHostname);
+      // host.json hostname unchanged.
+      const hostJson = JSON.parse(
+        readFileSync(join(tmpDir, 'host.json'), 'utf-8')
+      ) as { hostname: string };
+      expect(hostJson.hostname).toBe(firstHostname);
 
-        // Apex containers still up — name-based assertion is stable even
-        // though IDs would not be (containers are not recreated on the
-        // idempotent path).
-        const names = dockerPs();
-        expect(names).toContain(HS_CONNECTOR_NAME);
-        expect(names).toContain(HS_API_NAME);
-      },
-      30_000
-    );
+      // Apex containers still up — name-based assertion is stable even
+      // though IDs would not be (containers are not recreated on the
+      // idempotent path).
+      const names = dockerPs();
+      expect(names).toContain(HS_CONNECTOR_NAME);
+      expect(names).toContain(HS_API_NAME);
+    }, 30_000);
   }
 );

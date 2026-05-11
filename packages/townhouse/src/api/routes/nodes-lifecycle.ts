@@ -22,10 +22,7 @@ import { bytesToHex } from '@noble/hashes/utils';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ApiDeps } from '../types.js';
 import type { NodeType } from '../types.js';
-import {
-  readNodesYaml,
-  writeNodesYaml,
-} from '../../state/nodes-yaml.js';
+import { readNodesYaml, writeNodesYaml } from '../../state/nodes-yaml.js';
 import { readImageManifest } from '../../state/image-manifest.js';
 import {
   CONTAINER_PREFIX,
@@ -148,7 +145,9 @@ export function registerNodeLifecycleRoutes(
       return reply.status(500).send({ error: 'yaml_read_failed', err: errMsg });
     }
 
-    type PeerStatus = Awaited<ReturnType<typeof deps.connectorAdmin.getPeers>>[number];
+    type PeerStatus = Awaited<
+      ReturnType<typeof deps.connectorAdmin.getPeers>
+    >[number];
     let peers: PeerStatus[] = [];
     let connectorUnreachable = false;
     try {
@@ -201,9 +200,7 @@ export function registerNodeLifecycleRoutes(
     },
     async (request, reply) => {
       if (!acquireNodeLifecycleMutex()) {
-        return reply
-          .status(409)
-          .send({ error: 'node_lifecycle_in_flight' });
+        return reply.status(409).send({ error: 'node_lifecycle_in_flight' });
       }
 
       try {
@@ -246,7 +243,11 @@ export function registerNodeLifecycleRoutes(
             err instanceof Error ? err.message : String(err)
           );
           request.log.error(
-            { event: 'node_lifecycle_failure', step: 'derive-key', err: errMsg },
+            {
+              event: 'node_lifecycle_failure',
+              step: 'derive-key',
+              err: errMsg,
+            },
             'Step 1 failed: derive-key'
           );
           return reply.status(500).send({ step: 'derive-key', err: errMsg });
@@ -265,7 +266,11 @@ export function registerNodeLifecycleRoutes(
           const errMsg =
             'Wallet locked between step 1 and step 4 — refusing to start container without mnemonic';
           request.log.error(
-            { event: 'node_lifecycle_failure', step: 'derive-key', err: errMsg },
+            {
+              event: 'node_lifecycle_failure',
+              step: 'derive-key',
+              err: errMsg,
+            },
             'Step 1 post-condition failed: mnemonic gone after derive'
           );
           return reply.status(500).send({ step: 'derive-key', err: errMsg });
@@ -288,7 +293,11 @@ export function registerNodeLifecycleRoutes(
             err instanceof Error ? err.message : String(err)
           );
           request.log.error(
-            { event: 'node_lifecycle_failure', step: 'pull-image', err: errMsg },
+            {
+              event: 'node_lifecycle_failure',
+              step: 'pull-image',
+              err: errMsg,
+            },
             'Step 2 failed: pull-image'
           );
           return reply.status(502).send({ step: 'pull-image', err: errMsg });
@@ -318,7 +327,11 @@ export function registerNodeLifecycleRoutes(
             err instanceof Error ? err.message : String(err)
           );
           request.log.error(
-            { event: 'node_lifecycle_failure', step: 'write-yaml', err: errMsg },
+            {
+              event: 'node_lifecycle_failure',
+              step: 'write-yaml',
+              err: errMsg,
+            },
             'Step 3 failed: write-yaml'
           );
           return reply.status(500).send({ step: 'write-yaml', err: errMsg });
@@ -347,8 +360,8 @@ export function registerNodeLifecycleRoutes(
             millConfigWritten = true;
           } catch (err: unknown) {
             const errMsg = sanitizeErrorMessage(
-            err instanceof Error ? err.message : String(err)
-          );
+              err instanceof Error ? err.message : String(err)
+            );
             request.log.error(
               {
                 event: 'node_lifecycle_failure',
@@ -580,9 +593,7 @@ export function registerNodeLifecycleRoutes(
     },
     async (request, reply) => {
       if (!acquireNodeLifecycleMutex()) {
-        return reply
-          .status(409)
-          .send({ error: 'node_lifecycle_in_flight' });
+        return reply.status(409).send({ error: 'node_lifecycle_in_flight' });
       }
 
       try {
@@ -658,7 +669,11 @@ export function registerNodeLifecycleRoutes(
 
         // Step 3: remove yaml entry (idempotent — if entry not present, writes same array)
         request.log.info(
-          { event: 'node_lifecycle_step', step: 'remove-yaml', type: entry.type },
+          {
+            event: 'node_lifecycle_step',
+            step: 'remove-yaml',
+            type: entry.type,
+          },
           'DELETE step 3: removing nodes.yaml entry'
         );
         try {

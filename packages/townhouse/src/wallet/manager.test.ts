@@ -309,9 +309,9 @@ describe('WalletManager', () => {
 
       expect(derived.nostrPubkey).toBe(cached.nostrPubkey);
       expect(derived.evmAddress).toBe(cached.evmAddress);
-      expect(
-        Buffer.from(derived.nostrSecretKey).toString('hex')
-      ).toBe(Buffer.from(cached.nostrSecretKey).toString('hex'));
+      expect(Buffer.from(derived.nostrSecretKey).toString('hex')).toBe(
+        Buffer.from(cached.nostrSecretKey).toString('hex')
+      );
     });
 
     it('produces different keys when derivationIndex differs from the default', async () => {

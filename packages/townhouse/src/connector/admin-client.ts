@@ -288,7 +288,9 @@ export class ConnectorAdminClient {
           );
         }
         const msg = error instanceof Error ? error.message : String(error);
-        throw new Error(`Connector admin API request failed: POST ${url} — ${msg}`);
+        throw new Error(
+          `Connector admin API request failed: POST ${url} — ${msg}`
+        );
       }
       if (!response.ok) {
         // Body read MUST happen inside the AbortSignal-protected try so a slow

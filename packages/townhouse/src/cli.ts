@@ -1008,11 +1008,7 @@ async function handleHsUp(
           HS_CONNECTOR_ADMIN_URL,
           5_000
         );
-        return new BootReconciler(
-          reconcilerAdminClient,
-          nodesPath,
-          logPath
-        );
+        return new BootReconciler(reconcilerAdminClient, nodesPath, logPath);
       });
     const reconciler = reconcilerFactory(nodesYamlPath, reconcilerLogPath);
     // Brief retry on cold-boot transient errors — orchestrator.up() returns

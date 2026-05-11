@@ -180,7 +180,10 @@ export class WalletManager {
    * first (and only) instance per type. Multi-instance support is out of
    * scope for v1 — the route layer enforces single-instance-per-type.
    */
-  async deriveNodeKey(type: NodeType, derivationIndex: number): Promise<NodeKeys> {
+  async deriveNodeKey(
+    type: NodeType,
+    derivationIndex: number
+  ): Promise<NodeKeys> {
     if (!this.state) {
       throw new Error(
         'Wallet not initialized. Call generate() or fromMnemonic() first.'

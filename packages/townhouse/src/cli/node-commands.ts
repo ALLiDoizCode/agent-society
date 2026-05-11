@@ -122,10 +122,7 @@ async function confirmInteractive(question: string): Promise<boolean> {
   }
 }
 
-function emitJsonError(
-  obj: Record<string, unknown>,
-  exitCode = 1
-): void {
+function emitJsonError(obj: Record<string, unknown>, exitCode = 1): void {
   process.stdout.write(JSON.stringify(obj) + '\n');
   process.exitCode = exitCode;
 }
@@ -182,8 +179,7 @@ export async function handleNodeAdd(
     });
   } catch (err: unknown) {
     clearTimeout(timer);
-    const isAborted =
-      err instanceof Error && err.name === 'AbortError';
+    const isAborted = err instanceof Error && err.name === 'AbortError';
     const errMsg = isAborted
       ? 'Request timed out after 120 seconds.'
       : "townhouse hs up isn't running. Run 'townhouse hs up' first.";
@@ -415,7 +411,10 @@ export async function handleNodeRemove(
 
   if (response.status === 404) {
     process.stderr.write(`${xMark} No node with id '${id}'\n`);
-  } else if (response.status === 409 && body.error === 'node_lifecycle_in_flight') {
+  } else if (
+    response.status === 409 &&
+    body.error === 'node_lifecycle_in_flight'
+  ) {
     process.stderr.write(
       `${xMark} Another node operation is in flight. Try again in a moment.\n`
     );
@@ -468,7 +467,11 @@ export async function handleNodeList(options: NodeListOptions): Promise<void> {
       ? 'Request timed out.'
       : "townhouse hs up isn't running. Run 'townhouse hs up' first.";
     if (options.json) {
-      emitJsonError({ ok: false, error: isAborted ? 'timeout' : 'econnrefused', message: errMsg });
+      emitJsonError({
+        ok: false,
+        error: isAborted ? 'timeout' : 'econnrefused',
+        message: errMsg,
+      });
     } else {
       process.stderr.write(`${xMark} ${errMsg}\n`);
       process.exitCode = 1;
@@ -478,11 +481,16 @@ export async function handleNodeList(options: NodeListOptions): Promise<void> {
   clearTimeout(timer);
 
   if (response.status !== 200) {
-    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = (await response.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
     if (options.json) {
       emitJsonError({ ok: false, ...body });
     } else {
-      process.stderr.write(`${xMark} Failed to fetch nodes (HTTP ${response.status})\n`);
+      process.stderr.write(
+        `${xMark} Failed to fetch nodes (HTTP ${response.status})\n`
+      );
       process.exitCode = 1;
     }
     return;
@@ -517,11 +525,19 @@ export async function handleNodeList(options: NodeListOptions): Promise<void> {
       node.lastSeenAt !== null ? formatRelativeTime(node.lastSeenAt) : emDash,
   }));
 
-  const HEADERS = { peer: 'peer', type: 'type', status: 'status', lastClaim: 'last claim' };
+  const HEADERS = {
+    peer: 'peer',
+    type: 'type',
+    status: 'status',
+    lastClaim: 'last claim',
+  };
   const widths = {
     peer: Math.max(HEADERS.peer.length, ...rows.map((r) => r.peer.length)),
     type: Math.max(HEADERS.type.length, ...rows.map((r) => r.type.length)),
-    status: Math.max(HEADERS.status.length, ...rows.map((r) => r.status.length)),
+    status: Math.max(
+      HEADERS.status.length,
+      ...rows.map((r) => r.status.length)
+    ),
     lastClaim: Math.max(
       HEADERS.lastClaim.length,
       ...rows.map((r) => r.lastClaim.length)

@@ -160,17 +160,15 @@ function makeHsOverrides({
     runComposeDown: vi.fn(
       async (_composePath: string, _withVolumes: boolean) => undefined
     ),
-    createReconciler: vi.fn(
-      (_nodesYamlPath: string, _logPath: string) => ({
-        reconcile:
-          reconcileSpy ??
-          vi.fn(async () => {
-            if (reconcileThrows) {
-              throw new Error('reconciler boom');
-            }
-          }),
-      })
-    ),
+    createReconciler: vi.fn((_nodesYamlPath: string, _logPath: string) => ({
+      reconcile:
+        reconcileSpy ??
+        vi.fn(async () => {
+          if (reconcileThrows) {
+            throw new Error('reconciler boom');
+          }
+        }),
+    })),
   };
 }
 

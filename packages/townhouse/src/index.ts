@@ -132,7 +132,10 @@ export {
 export type { NodesYaml, NodesYamlEntry } from './state/nodes-yaml.js';
 
 // Story 46.2 — image manifest reader (POST /api/nodes step 2).
-export { readImageManifest, ImageManifestSchema } from './state/image-manifest.js';
+export {
+  readImageManifest,
+  ImageManifestSchema,
+} from './state/image-manifest.js';
 export type { ImageManifest } from './state/image-manifest.js';
 export { PeerTypeResolver } from './registry/peer-type-resolver.js';
 export { BootReconciler } from './reconciler.js';

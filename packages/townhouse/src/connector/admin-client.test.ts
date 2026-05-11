@@ -350,7 +350,10 @@ describe('ConnectorAdminClient', () => {
       await expect(client.removePeer('town')).resolves.toBeUndefined();
       expect(fetchMock).toHaveBeenCalledWith(
         'http://localhost:9401/admin/peers/town?removeRoutes=true',
-        expect.objectContaining({ method: 'DELETE', signal: expect.any(AbortSignal) })
+        expect.objectContaining({
+          method: 'DELETE',
+          signal: expect.any(AbortSignal),
+        })
       );
     });
 
@@ -363,7 +366,8 @@ describe('ConnectorAdminClient', () => {
         ok: false,
         status: 404,
         statusText: 'Not Found',
-        text: async () => '{"error":"Not found","message":"Peer \'town\' not found"}',
+        text: async () =>
+          '{"error":"Not found","message":"Peer \'town\' not found"}',
       });
 
       const client = new ConnectorAdminClient('http://localhost:9401');
@@ -421,9 +425,7 @@ describe('ConnectorAdminClient', () => {
 
     it('throws immediately for empty peerId without making a network request', async () => {
       const client = new ConnectorAdminClient('http://localhost:9401');
-      await expect(client.removePeer('')).rejects.toThrow(
-        /non-empty peerId/i
-      );
+      await expect(client.removePeer('')).rejects.toThrow(/non-empty peerId/i);
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });

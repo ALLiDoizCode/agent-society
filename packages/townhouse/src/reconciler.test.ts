@@ -13,9 +13,7 @@ import type { PeerStatus } from './connector/types.js';
 
 const ENABLED_AT = '2026-05-10T12:00:00Z';
 
-function entry(
-  overrides: Partial<NodesYamlEntry> = {}
-): NodesYamlEntry {
+function entry(overrides: Partial<NodesYamlEntry> = {}): NodesYamlEntry {
   return {
     id: 'town-01',
     type: 'town',
@@ -43,11 +41,13 @@ interface StubAdminClient {
   registerPeer: ReturnType<typeof vi.fn>;
 }
 
-function makeStubClient(opts: {
-  peers?: PeerStatus[];
-  getPeersError?: Error;
-  registerPeerError?: Error;
-} = {}): StubAdminClient {
+function makeStubClient(
+  opts: {
+    peers?: PeerStatus[];
+    getPeersError?: Error;
+    registerPeerError?: Error;
+  } = {}
+): StubAdminClient {
   return {
     getPeers: vi.fn(async () => {
       if (opts.getPeersError) throw opts.getPeersError;
@@ -153,7 +153,10 @@ describe('BootReconciler', () => {
     );
 
     const log = readFileSync(logPath, 'utf-8');
-    const lines = log.trim().split('\n').map((l) => JSON.parse(l));
+    const lines = log
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
     expect(lines).toHaveLength(2);
     const actions = lines.map((l) => `${l.peerId}:${l.action}`).sort();
     expect(actions).toEqual([
@@ -200,9 +203,7 @@ describe('BootReconciler', () => {
       timestamp: string;
     };
     // ISO-8601: YYYY-MM-DDTHH:MM:SS.sssZ
-    expect(parsed.timestamp).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
-    );
+    expect(parsed.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
     // Round-trip parse → same wall-clock string.
     expect(new Date(parsed.timestamp).toISOString()).toBe(parsed.timestamp);
   });

@@ -139,13 +139,14 @@ class MockWalletManager {
     return this._keys[type];
   }
 
-  deriveNodeKeyFn: Mock = vi.fn().mockImplementation(
-    (_type: NodeType, _idx: number) =>
+  deriveNodeKeyFn: Mock = vi
+    .fn()
+    .mockImplementation((_type: NodeType, _idx: number) =>
       Promise.resolve({
         ...FAKE_KEYS,
         nostrDerivationPath: `m/44'/1237'/x'/0/0`,
       })
-  );
+    );
 
   async deriveNodeKey(type: NodeType, idx: number) {
     return this.deriveNodeKeyFn(type, idx);
@@ -158,12 +159,10 @@ class MockWalletManager {
 
 class MockConnectorAdminClient {
   private registeredPeerIds: string[] = [];
-  registerPeerFn: Mock = vi.fn().mockImplementation(
-    (input: { id: string }) => {
-      this.registeredPeerIds.push(input.id);
-      return Promise.resolve();
-    }
-  );
+  registerPeerFn: Mock = vi.fn().mockImplementation((input: { id: string }) => {
+    this.registeredPeerIds.push(input.id);
+    return Promise.resolve();
+  });
   removePeerFn: Mock = vi.fn().mockImplementation((peerId: string) => {
     this.registeredPeerIds = this.registeredPeerIds.filter((p) => p !== peerId);
     return Promise.resolve();
@@ -374,7 +373,9 @@ describe('POST /api/nodes success path', () => {
 
 describe('POST /api/nodes rollback — step failures (AC #3)', () => {
   it('derive-key failure → 500 with step, no yaml mutation', async () => {
-    wallet.deriveNodeKeyFn.mockRejectedValueOnce(new Error('derivation failed'));
+    wallet.deriveNodeKeyFn.mockRejectedValueOnce(
+      new Error('derivation failed')
+    );
 
     const res = await app.inject({
       method: 'POST',
@@ -683,7 +684,11 @@ describe('DELETE /api/nodes/:id success path', () => {
     };
     await writeNodesYaml(nodesYamlPath, { entries: [entry] });
     // Pre-register the peer in mock
-    connectorAdmin.registerPeerFn({ id: 'town', url: 'ws://x:3000', authToken: '' });
+    connectorAdmin.registerPeerFn({
+      id: 'town',
+      url: 'ws://x:3000',
+      authToken: '',
+    });
     connectorAdmin.registerPeerFn.mockClear();
   });
 
@@ -909,16 +914,34 @@ describe('GET /api/nodes', () => {
     });
 
     connectorAdmin.getPeersFn.mockResolvedValue([
-      { id: 'town', connected: true, ilpAddresses: ['g.townhouse.town'], routeCount: 1 },
-      { id: 'mill', connected: true, ilpAddresses: ['g.townhouse.mill'], routeCount: 1 },
+      {
+        id: 'town',
+        connected: true,
+        ilpAddresses: ['g.townhouse.town'],
+        routeCount: 1,
+      },
+      {
+        id: 'mill',
+        connected: true,
+        ilpAddresses: ['g.townhouse.mill'],
+        routeCount: 1,
+      },
     ]);
 
     const res = await app.inject({ method: 'GET', url: '/api/nodes' });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.nodes).toHaveLength(2);
-    expect(body.nodes[0]).toMatchObject({ id: 'town', type: 'town', status: 'connected' });
-    expect(body.nodes[1]).toMatchObject({ id: 'mill', type: 'mill', status: 'connected' });
+    expect(body.nodes[0]).toMatchObject({
+      id: 'town',
+      type: 'town',
+      status: 'connected',
+    });
+    expect(body.nodes[1]).toMatchObject({
+      id: 'mill',
+      type: 'mill',
+      status: 'connected',
+    });
   });
 
   it('returns disconnected when yaml entry has no matching connector peer', async () => {
@@ -986,7 +1009,12 @@ describe('GET /api/nodes', () => {
     });
 
     connectorAdmin.getPeersFn.mockResolvedValue([
-      { id: 'town', connected: true, ilpAddresses: ['g.townhouse.town'], routeCount: 1 },
+      {
+        id: 'town',
+        connected: true,
+        ilpAddresses: ['g.townhouse.town'],
+        routeCount: 1,
+      },
     ]);
 
     const res = await app.inject({ method: 'GET', url: '/api/nodes' });

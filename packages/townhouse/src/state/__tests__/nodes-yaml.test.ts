@@ -146,7 +146,10 @@ describe('nodes-yaml schema + read/write helpers', () => {
 
     it('overwrites existing file and corrects mode', async () => {
       // Pre-create the file with a permissive mode to verify chmod-after-rename
-      await fsp.writeFile(path, 'entries: []\n', { encoding: 'utf-8', mode: 0o644 });
+      await fsp.writeFile(path, 'entries: []\n', {
+        encoding: 'utf-8',
+        mode: 0o644,
+      });
       await writeNodesYaml(path, { entries: [] });
       const mode = statSync(path).mode & 0o777;
       expect(mode).toBe(0o600);
