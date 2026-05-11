@@ -676,7 +676,7 @@ export class DockerOrchestrator extends EventEmitter {
           stderr.includes('no such service') ||
           stderr.includes('no containers to remove') ||
           stderr.includes('No such container') ||
-          stderr.includes('network') && stderr.includes('not found')
+          (stderr.includes('network') && stderr.includes('not found'))
         ) {
           return;
         }

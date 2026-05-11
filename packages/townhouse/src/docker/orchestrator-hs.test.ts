@@ -63,7 +63,10 @@ function makeTempCompose(): { composePath: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), 'orch-hs-test-'));
   const composePath = join(dir, 'compose.yml');
   writeFileSync(composePath, 'services: {}\n');
-  return { composePath, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  return {
+    composePath,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
 }
 
 describe('DockerOrchestrator (HS profile)', () => {
@@ -77,17 +80,22 @@ describe('DockerOrchestrator (HS profile)', () => {
     const { composePath, cleanup } = makeTempCompose();
     try {
       const { exec } = makeExec();
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: exec as never,
-        adminClientFactory: makeAdminFactory(() =>
-          Promise.resolve({
-            hostname: 'x.anon',
-            publishedAt: '2026-05-09T00:00:00Z',
-          })
-        ) as never,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: exec as never,
+          adminClientFactory: makeAdminFactory(() =>
+            Promise.resolve({
+              hostname: 'x.anon',
+              publishedAt: '2026-05-09T00:00:00Z',
+            })
+          ) as never,
+        }
+      );
       // No throw = success; profile and composePath stored internally
       expect(orch).toBeInstanceOf(DockerOrchestrator);
     } finally {
@@ -131,17 +139,22 @@ describe('DockerOrchestrator (HS profile)', () => {
     const { composePath, cleanup } = makeTempCompose();
     try {
       const { exec, calls } = makeExec();
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: exec as never,
-        adminClientFactory: makeAdminFactory(() =>
-          Promise.resolve({
-            hostname: 'x.anon',
-            publishedAt: '2026-05-09T00:00:00Z',
-          })
-        ) as never,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: exec as never,
+          adminClientFactory: makeAdminFactory(() =>
+            Promise.resolve({
+              hostname: 'x.anon',
+              publishedAt: '2026-05-09T00:00:00Z',
+            })
+          ) as never,
+        }
+      );
       await orch.up([]);
       expect(calls).toHaveLength(1);
       expect(calls[0]!.file).toBe('docker');
@@ -161,17 +174,22 @@ describe('DockerOrchestrator (HS profile)', () => {
     const { composePath, cleanup } = makeTempCompose();
     try {
       const { exec, calls } = makeExec();
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: exec as never,
-        adminClientFactory: makeAdminFactory(() =>
-          Promise.resolve({
-            hostname: 'x.anon',
-            publishedAt: '2026-05-09T00:00:00Z',
-          })
-        ) as never,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: exec as never,
+          adminClientFactory: makeAdminFactory(() =>
+            Promise.resolve({
+              hostname: 'x.anon',
+              publishedAt: '2026-05-09T00:00:00Z',
+            })
+          ) as never,
+        }
+      );
       await orch.up(['town']);
       expect(calls[0]!.args).toEqual([
         'compose',
@@ -191,17 +209,22 @@ describe('DockerOrchestrator (HS profile)', () => {
     const { composePath, cleanup } = makeTempCompose();
     try {
       const { exec, calls } = makeExec();
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: exec as never,
-        adminClientFactory: makeAdminFactory(() =>
-          Promise.resolve({
-            hostname: 'x.anon',
-            publishedAt: '2026-05-09T00:00:00Z',
-          })
-        ) as never,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: exec as never,
+          adminClientFactory: makeAdminFactory(() =>
+            Promise.resolve({
+              hostname: 'x.anon',
+              publishedAt: '2026-05-09T00:00:00Z',
+            })
+          ) as never,
+        }
+      );
       await orch.up(['dvm', 'mill', 'town']); // intentionally out-of-order input
       expect(calls[0]!.args).toEqual([
         'compose',
@@ -228,21 +251,26 @@ describe('DockerOrchestrator (HS profile)', () => {
     try {
       const { exec } = makeExec();
       let callCount = 0;
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: exec as never,
-        adminClientFactory: makeAdminFactory(() => {
-          callCount++;
-          if (callCount < 3) {
-            return Promise.resolve({ hostname: null, publishedAt: null });
-          }
-          return Promise.resolve({
-            hostname: 'xyz.anon',
-            publishedAt: '2026-05-09T00:00:00Z',
-          });
-        }) as never,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: exec as never,
+          adminClientFactory: makeAdminFactory(() => {
+            callCount++;
+            if (callCount < 3) {
+              return Promise.resolve({ hostname: null, publishedAt: null });
+            }
+            return Promise.resolve({
+              hostname: 'xyz.anon',
+              publishedAt: '2026-05-09T00:00:00Z',
+            });
+          }) as never,
+        }
+      );
       await orch.up([]);
       expect(callCount).toBe(3);
     } finally {
@@ -257,14 +285,19 @@ describe('DockerOrchestrator (HS profile)', () => {
     const { composePath, cleanup } = makeTempCompose();
     try {
       const { exec } = makeExec();
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: exec as never,
-        adminClientFactory: makeAdminFactory(() =>
-          Promise.resolve({ hostname: null, publishedAt: null })
-        ) as never,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: exec as never,
+          adminClientFactory: makeAdminFactory(() =>
+            Promise.resolve({ hostname: null, publishedAt: null })
+          ) as never,
+        }
+      );
       // Attach rejection handler immediately to avoid unhandled-rejection warning
       // when fake timers fire the rejection before we await it.
       const settled = new Promise<Error | null>((resolve) => {
@@ -289,17 +322,22 @@ describe('DockerOrchestrator (HS profile)', () => {
     try {
       const { exec } = makeExec();
       let callCount = 0;
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: exec as never,
-        adminClientFactory: makeAdminFactory(() => {
-          callCount++;
-          return Promise.reject(
-            new Error('connector is anon-disabled (HTTP 503)')
-          );
-        }) as never,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: exec as never,
+          adminClientFactory: makeAdminFactory(() => {
+            callCount++;
+            return Promise.reject(
+              new Error('connector is anon-disabled (HTTP 503)')
+            );
+          }) as never,
+        }
+      );
       await expect(orch.up([])).rejects.toThrow(/anon-disabled/);
       expect(callCount).toBe(1); // exactly one call, no retry on 503
     } finally {
@@ -323,11 +361,16 @@ describe('DockerOrchestrator (HS profile)', () => {
         e.code = 1;
         return Promise.reject(e);
       };
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: fakeExec as never,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: fakeExec as never,
+        }
+      );
       const events: { name: string; state: string }[] = [];
       orch.on('containerState', (e) => events.push(e));
       await expect(orch.up([])).rejects.toThrow(OrchestratorError);
@@ -353,11 +396,16 @@ describe('DockerOrchestrator (HS profile)', () => {
         e.code = 1;
         return Promise.reject(e);
       };
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: fakeExec as never,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: fakeExec as never,
+        }
+      );
       const events: { name: string; state: string }[] = [];
       orch.on('containerState', (e) => events.push(e));
       await expect(orch.up([])).rejects.toThrow(OrchestratorError);
@@ -454,11 +502,16 @@ describe('DockerOrchestrator (HS profile)', () => {
       // upHs throws, a subsequent up() call with different profiles would
       // inherit phantom state. The real check is that up() rejects cleanly
       // without leaving the orchestrator in an inconsistent state.
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: fakeExec as never,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: fakeExec as never,
+        }
+      );
       await expect(orch.up(['town'])).rejects.toThrow(OrchestratorError);
       // If mutation happens before throw, a second call would carry ['town']
       // in activeNodes even though the first up() failed. Here we just confirm
@@ -481,19 +534,24 @@ describe('DockerOrchestrator (HS profile)', () => {
         if (subcommand) calls.push(subcommand);
         return Promise.resolve({ stdout: '', stderr: '' });
       };
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: fakeExec as never,
-        // Always return null hostname so waitForHsHostname times out immediately
-        adminClientFactory: () =>
-          ({
-            getHsHostname: () =>
-              Promise.reject(
-                new Error('connector is anon-disabled (HTTP 503)')
-              ),
-          }) as unknown as ConnectorAdminClient,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: fakeExec as never,
+          // Always return null hostname so waitForHsHostname times out immediately
+          adminClientFactory: () =>
+            ({
+              getHsHostname: () =>
+                Promise.reject(
+                  new Error('connector is anon-disabled (HTTP 503)')
+                ),
+            }) as unknown as ConnectorAdminClient,
+        }
+      );
       await expect(orch.up([])).rejects.toThrow(/anon-disabled/);
       // Should have called 'up' then 'down' (rollback)
       expect(calls).toContain('up');
@@ -508,7 +566,9 @@ describe('DockerOrchestrator (HS profile)', () => {
 
   it('Fix 3: downHs does not throw when compose down exits non-zero with "no such service"', async () => {
     const fakeExec: ExecFileAsync = () => {
-      const e = new Error('compose down: nothing to stop') as NodeJS.ErrnoException & {
+      const e = new Error(
+        'compose down: nothing to stop'
+      ) as NodeJS.ErrnoException & {
         code?: number;
         stderr?: string;
       };
@@ -540,16 +600,23 @@ describe('DockerOrchestrator (HS profile)', () => {
         e.stderr = 'Container townhouse-epic46-town-1 Error';
         return Promise.reject(e);
       };
-      const orch = new DockerOrchestrator(makeDocker(), makeConfig(), undefined, {
-        profile: 'hs',
-        composePath,
-        execFileAsync: fakeExec as never,
-      });
+      const orch = new DockerOrchestrator(
+        makeDocker(),
+        makeConfig(),
+        undefined,
+        {
+          profile: 'hs',
+          composePath,
+          execFileAsync: fakeExec as never,
+        }
+      );
       const events: { name: string; state: string }[] = [];
       orch.on('containerState', (e) => events.push(e));
       await expect(orch.up([])).rejects.toThrow(OrchestratorError);
       // Should capture 'town' (the service name), not fall through to 'compose-up'
-      expect(events.some((ev) => ev.name !== 'compose-up' && ev.state === 'error')).toBe(true);
+      expect(
+        events.some((ev) => ev.name !== 'compose-up' && ev.state === 'error')
+      ).toBe(true);
     } finally {
       cleanup();
     }
