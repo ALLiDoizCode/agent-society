@@ -157,17 +157,18 @@ class MockWalletManager {
 }
 
 class MockConnectorAdminClient {
-  private peers: string[] = [];
+  private registeredPeerIds: string[] = [];
   registerPeerFn: Mock = vi.fn().mockImplementation(
     (input: { id: string }) => {
-      this.peers.push(input.id);
+      this.registeredPeerIds.push(input.id);
       return Promise.resolve();
     }
   );
   removePeerFn: Mock = vi.fn().mockImplementation((peerId: string) => {
-    this.peers = this.peers.filter((p) => p !== peerId);
+    this.registeredPeerIds = this.registeredPeerIds.filter((p) => p !== peerId);
     return Promise.resolve();
   });
+  getPeersFn: Mock = vi.fn().mockResolvedValue([]);
 
   async registerPeer(input: {
     id: string;
@@ -182,8 +183,8 @@ class MockConnectorAdminClient {
     return this.removePeerFn(peerId);
   }
 
-  getPeers() {
-    return [...this.peers];
+  async getPeers() {
+    return this.getPeersFn();
   }
 
   async getMetrics() {
@@ -388,7 +389,7 @@ describe('POST /api/nodes rollback — step failures (AC #3)', () => {
     const yaml = await readNodesYaml(nodesYamlPath);
     expect(yaml.entries).toHaveLength(0);
     // No peer registered
-    expect(connectorAdmin.getPeers()).toHaveLength(0);
+    expect(await connectorAdmin.getPeers()).toHaveLength(0);
   });
 
   it('pull-image failure → 502 with step, no yaml mutation', async () => {
@@ -405,7 +406,7 @@ describe('POST /api/nodes rollback — step failures (AC #3)', () => {
     expect(JSON.parse(res.body).step).toBe('pull-image');
     const yaml = await readNodesYaml(nodesYamlPath);
     expect(yaml.entries).toHaveLength(0);
-    expect(connectorAdmin.getPeers()).toHaveLength(0);
+    expect(await connectorAdmin.getPeers()).toHaveLength(0);
   });
 
   it('start-container failure → 502, yaml entry removed, no peer registered', async () => {
@@ -424,7 +425,7 @@ describe('POST /api/nodes rollback — step failures (AC #3)', () => {
     expect(JSON.parse(res.body).step).toBe('start-container');
     const yaml = await readNodesYaml(nodesYamlPath);
     expect(yaml.entries).toHaveLength(0);
-    expect(connectorAdmin.getPeers()).toHaveLength(0);
+    expect(await connectorAdmin.getPeers()).toHaveLength(0);
   });
 
   it('healthcheck failure → 502, yaml rolled back, container stopped', async () => {
@@ -449,7 +450,7 @@ describe('POST /api/nodes rollback — step failures (AC #3)', () => {
     // Container stop was called
     expect(orchestrator.stopNodeViaComposeFn).toHaveBeenCalledWith('dvm');
     // No peer registered
-    expect(connectorAdmin.getPeers()).toHaveLength(0);
+    expect(await connectorAdmin.getPeers()).toHaveLength(0);
   }, 70_000); // healthcheck timeout = 60 s; allow 70 s for test
 
   it('register-peer failure → 502, yaml rolled back, container stopped', async () => {
@@ -469,7 +470,7 @@ describe('POST /api/nodes rollback — step failures (AC #3)', () => {
     const yaml = await readNodesYaml(nodesYamlPath);
     expect(yaml.entries).toHaveLength(0);
     expect(orchestrator.stopNodeViaComposeFn).toHaveBeenCalledWith('town');
-    expect(connectorAdmin.getPeers()).toHaveLength(0);
+    expect(await connectorAdmin.getPeers()).toHaveLength(0);
   });
 
   it('mill: start-container failure removes mill.config.json on rollback', async () => {
@@ -868,6 +869,142 @@ describe('Wallet locked mid-pipeline returns 500 step:derive-key (P4)', () => {
     const body = JSON.parse(res.body);
     expect(body.step).toBe('derive-key');
     expect(body.err).toMatch(/wallet locked|mnemonic/i);
+  });
+});
+
+// ── GET /api/nodes (Story 46.3) ────────────────────────────────────────────────
+
+describe('GET /api/nodes', () => {
+  it('returns empty nodes array when nodes.yaml does not exist', async () => {
+    // nodesYamlPath does not exist in the fresh homeDir
+    const res = await app.inject({ method: 'GET', url: '/api/nodes' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body).toEqual({ nodes: [] });
+  });
+
+  it('returns connected status when yaml entry matches a connected connector peer', async () => {
+    // Provision town + mill via nodes.yaml directly
+    await writeNodesYaml(nodesYamlPath, {
+      entries: [
+        {
+          id: 'town',
+          type: 'town',
+          peerId: 'town',
+          ilpAddress: 'g.townhouse.town',
+          derivationIndex: 0,
+          enabledAt: new Date().toISOString(),
+          lastSeenAt: null,
+        } as NodesYamlEntry,
+        {
+          id: 'mill',
+          type: 'mill',
+          peerId: 'mill',
+          ilpAddress: 'g.townhouse.mill',
+          derivationIndex: 1,
+          enabledAt: new Date().toISOString(),
+          lastSeenAt: null,
+        } as NodesYamlEntry,
+      ],
+    });
+
+    connectorAdmin.getPeersFn.mockResolvedValue([
+      { id: 'town', connected: true, ilpAddresses: ['g.townhouse.town'], routeCount: 1 },
+      { id: 'mill', connected: true, ilpAddresses: ['g.townhouse.mill'], routeCount: 1 },
+    ]);
+
+    const res = await app.inject({ method: 'GET', url: '/api/nodes' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.nodes).toHaveLength(2);
+    expect(body.nodes[0]).toMatchObject({ id: 'town', type: 'town', status: 'connected' });
+    expect(body.nodes[1]).toMatchObject({ id: 'mill', type: 'mill', status: 'connected' });
+  });
+
+  it('returns disconnected when yaml entry has no matching connector peer', async () => {
+    await writeNodesYaml(nodesYamlPath, {
+      entries: [
+        {
+          id: 'town',
+          type: 'town',
+          peerId: 'town',
+          ilpAddress: 'g.townhouse.town',
+          derivationIndex: 0,
+          enabledAt: new Date().toISOString(),
+          lastSeenAt: null,
+        } as NodesYamlEntry,
+      ],
+    });
+
+    connectorAdmin.getPeersFn.mockResolvedValue([]); // no peers registered
+
+    const res = await app.inject({ method: 'GET', url: '/api/nodes' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.nodes[0]).toMatchObject({ id: 'town', status: 'disconnected' });
+  });
+
+  it('returns unknown status and 200 when connector throws (graceful degradation)', async () => {
+    await writeNodesYaml(nodesYamlPath, {
+      entries: [
+        {
+          id: 'town',
+          type: 'town',
+          peerId: 'town',
+          ilpAddress: 'g.townhouse.town',
+          derivationIndex: 0,
+          enabledAt: new Date().toISOString(),
+          lastSeenAt: null,
+        } as NodesYamlEntry,
+      ],
+    });
+
+    connectorAdmin.getPeersFn.mockRejectedValue(
+      new Error('connect ECONNREFUSED 127.0.0.1:9401')
+    );
+
+    const res = await app.inject({ method: 'GET', url: '/api/nodes' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.nodes[0]).toMatchObject({ id: 'town', status: 'unknown' });
+  });
+
+  it('response shape matches schema — no extra keys, correct types', async () => {
+    const enabledAt = new Date().toISOString();
+    await writeNodesYaml(nodesYamlPath, {
+      entries: [
+        {
+          id: 'town',
+          type: 'town',
+          peerId: 'town',
+          ilpAddress: 'g.townhouse.town',
+          derivationIndex: 0,
+          enabledAt,
+          lastSeenAt: null,
+        } as NodesYamlEntry,
+      ],
+    });
+
+    connectorAdmin.getPeersFn.mockResolvedValue([
+      { id: 'town', connected: true, ilpAddresses: ['g.townhouse.town'], routeCount: 1 },
+    ]);
+
+    const res = await app.inject({ method: 'GET', url: '/api/nodes' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const node = body.nodes[0];
+
+    // Required fields with correct types
+    expect(typeof node.id).toBe('string');
+    expect(typeof node.type).toBe('string');
+    expect(typeof node.peerId).toBe('string');
+    expect(typeof node.ilpAddress).toBe('string');
+    expect(['connected', 'disconnected', 'unknown']).toContain(node.status);
+    expect(typeof node.enabledAt).toBe('string');
+    expect(node.lastSeenAt).toBeNull();
+
+    // derivationIndex MUST NOT be exposed
+    expect('derivationIndex' in node).toBe(false);
   });
 });
 

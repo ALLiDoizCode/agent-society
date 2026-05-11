@@ -126,12 +126,65 @@ export function registerNodeLifecycleRoutes(
   app: FastifyInstance,
   deps: ApiDeps
 ): void {
+  // ── GET /api/nodes ─────────────────────────────────────────────────────────
+  // Yaml-driven node list: joins nodes.yaml entries with connector peer state.
+  // Always returns 200; connector-down degrades to status:'unknown' (not 500).
+  // Note: the legacy GET /nodes route (no /api prefix, docker-status-driven,
+  // in nodes.ts) is intentionally separate and powers the SPA docker-state view.
+
+  app.get('/api/nodes', async (request, reply) => {
+    const homeDir = dirname(deps.configPath);
+    const nodesYamlPath = join(homeDir, 'nodes.yaml');
+
+    let yaml: Awaited<ReturnType<typeof readNodesYaml>>;
+    try {
+      yaml = await readNodesYaml(nodesYamlPath);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      request.log.error(
+        { event: 'get_nodes_yaml_error', err: errMsg },
+        'Failed to read nodes.yaml'
+      );
+      return reply.status(500).send({ error: 'yaml_read_failed', err: errMsg });
+    }
+
+    type PeerStatus = Awaited<ReturnType<typeof deps.connectorAdmin.getPeers>>[number];
+    let peers: PeerStatus[] = [];
+    let connectorUnreachable = false;
+    try {
+      peers = await deps.connectorAdmin.getPeers();
+    } catch (err: unknown) {
+      connectorUnreachable = true;
+      request.log.warn(
+        { event: 'get_nodes_connector_warn', err: String(err) },
+        'connector unreachable during GET /api/nodes — returning status:unknown'
+      );
+    }
+
+    const nodes = yaml.entries.map((entry) => {
+      let status: 'connected' | 'disconnected' | 'unknown';
+      if (connectorUnreachable) {
+        status = 'unknown';
+      } else {
+        const peer = peers.find((p) => p.id === entry.peerId);
+        status = peer?.connected ? 'connected' : 'disconnected';
+      }
+      return {
+        id: entry.id,
+        type: entry.type,
+        peerId: entry.peerId,
+        ilpAddress: entry.ilpAddress,
+        status,
+        enabledAt: entry.enabledAt,
+        lastSeenAt: entry.lastSeenAt,
+      };
+    });
+
+    return reply.status(200).send({ nodes });
+  });
+
   // ── POST /api/nodes ────────────────────────────────────────────────────────
 
-  // TODO(46.3): decide whether config.nodes[type].enabled gates lifecycle
-  // provisioning or is deprecated for HS mode. Today this route ignores the
-  // flag — Epic 46 lazy provisioning makes nodes.yaml the source of truth,
-  // but the CLI verbs (Story 46.3) are where the answer becomes user-facing.
   app.post<{ Body: { type: NodeType } }>(
     '/api/nodes',
     {

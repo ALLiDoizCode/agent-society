@@ -50,6 +50,15 @@ import { OnboardingRibbon } from './cli/onboarding-ribbon.js';
 import { renderFailure } from './cli/failure-copy.js';
 import { promptPassword } from './cli/password-prompt.js';
 import {
+  handleNodeAdd,
+  handleNodeRemove,
+  handleNodeList,
+  NODE_HELP,
+  NODE_ADD_HELP,
+  NODE_REMOVE_HELP,
+  NODE_LIST_HELP,
+} from './cli/node-commands.js';
+import {
   WalletManager,
   encryptWallet,
   decryptWallet,
@@ -81,6 +90,9 @@ Usage:
   townhouse wallet show [-c <path>] [--password <pw>]  Show derived addresses
   townhouse hs up [--password <pw>] [-c <path>]                Boot apex (connector + .anyone HS)
   townhouse hs down [--rotate-keys] [-c <path>]               Stop apex (--rotate-keys deletes .anyone keypair)
+  townhouse node add [<type>] [--json] [-c <path>]    Provision a child node (default: town)
+  townhouse node remove <id> [--yes] [--json] [-c <path>]   Deprovision a child node
+  townhouse node list [--json] [-c <path>]            List provisioned nodes
   townhouse --help                               Show this help
 
 Flags:
@@ -93,6 +105,7 @@ Flags:
   --port         Override the API port (setup command, default 9400)
   --preset       Init from a named preset (init only). Supported: demo
   --yes          Non-interactive (init only); with --preset=demo uses demo password if --password absent
+  --json         Machine-readable JSON output (node commands)
   If no flags given, starts all enabled nodes from config.`;
 
 /**
@@ -138,6 +151,16 @@ export interface CliHsOverrides {
     nodesYamlPath: string,
     reconcilerLogPath: string
   ) => { reconcile: () => Promise<void> };
+}
+
+/**
+ * Dependency-injection overrides for the `node add` / `node remove` / `node list` CLI path.
+ * Used by unit tests to stub `fetch` and the interactive confirmation prompt.
+ */
+export interface CliNodeCommandOverrides {
+  fetch?: (url: string, init?: RequestInit) => Promise<Response>;
+  confirm?: (question: string) => Promise<boolean>;
+  apiUrl?: string;
 }
 
 const DEFAULT_CONFIG_DIR = join(homedir(), '.townhouse');
@@ -1195,7 +1218,8 @@ export async function main(
   argv: string[],
   dockerInstance?: Docker,
   browserOpener?: BrowserOpener,
-  hsOverrides?: CliHsOverrides
+  hsOverrides?: CliHsOverrides,
+  nodeCommandOverrides?: CliNodeCommandOverrides
 ): Promise<void> {
   const { values, positionals } = parseArgs({
     args: argv,
@@ -1214,17 +1238,34 @@ export async function main(
       preset: { type: 'string' },
       yes: { type: 'boolean' },
       'rotate-keys': { type: 'boolean' },
+      json: { type: 'boolean' },
     },
     strict: false,
     allowPositionals: true,
   });
 
+  const command = positionals[0];
+
+  // Handle `townhouse node <verb> --help` before the global --help check so
+  // node sub-help takes priority over the global HELP_TEXT.
+  if (command === 'node' && values.help) {
+    const action = positionals[1];
+    const subHelp =
+      action === 'add'
+        ? NODE_ADD_HELP
+        : action === 'remove'
+          ? NODE_REMOVE_HELP
+          : action === 'list'
+            ? NODE_LIST_HELP
+            : NODE_HELP;
+    console.log(subHelp);
+    throw new CliHelpRequested();
+  }
+
   if (values.help) {
     console.log(HELP_TEXT);
     throw new CliHelpRequested();
   }
-
-  const command = positionals[0];
 
   if (!command) {
     console.log(HELP_TEXT);
@@ -1337,6 +1378,58 @@ export async function main(
           'Usage: townhouse hs <up|down> [--rotate-keys] [--password <pw>] [-c <path>]'
         );
         process.exitCode = 1;
+      }
+      break;
+    }
+    case 'node': {
+      const action = positionals[1];
+      const jsonMode = values.json === true;
+      const yesMode = values.yes === true;
+      const nodeApiUrl = nodeCommandOverrides?.apiUrl ?? HS_TOWNHOUSE_API_URL;
+
+      if (!action) {
+        console.log(NODE_HELP);
+        throw new CliHelpRequested();
+      }
+
+      switch (action) {
+        case 'add': {
+          const typeArg = positionals[2] ?? 'town';
+          await handleNodeAdd(typeArg, {
+            json: jsonMode,
+            apiUrl: nodeApiUrl,
+            fetch: nodeCommandOverrides?.fetch,
+            confirm: nodeCommandOverrides?.confirm,
+          });
+          break;
+        }
+        case 'remove': {
+          const idArg = positionals[2] ?? '';
+          await handleNodeRemove(idArg, {
+            yes: yesMode,
+            json: jsonMode,
+            apiUrl: nodeApiUrl,
+            fetch: nodeCommandOverrides?.fetch,
+            confirm: nodeCommandOverrides?.confirm,
+          });
+          break;
+        }
+        case 'list': {
+          await handleNodeList({
+            json: jsonMode,
+            apiUrl: nodeApiUrl,
+            fetch: nodeCommandOverrides?.fetch,
+          });
+          break;
+        }
+        default: {
+          // Sanitize to prevent log injection
+          // eslint-disable-next-line no-control-regex
+          const safeAction = action.replace(/[\x00-\x1f\x7f]/g, '');
+          console.error(`Unknown node subcommand: ${safeAction}`);
+          console.log(NODE_HELP);
+          process.exitCode = 1;
+        }
       }
       break;
     }

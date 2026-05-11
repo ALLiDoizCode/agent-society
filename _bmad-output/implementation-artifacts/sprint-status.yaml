@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-11 (Story 46.2 → done — code review applied 14 patches: DELETE remove-yaml→500, Pino redact paths extended, mill-config dir chmod, wallet-locked fail-fast, stderr-secret sanitization, rollbackError surfaced, DELETE :id params schema, deriveMillKeys warn log, locked-wallet test rewrite, stopNodeViaCompose OrchestratorError parity, P12 DELETE step-3 error test, safeRollbackYaml re-read pattern, 46.3 TODO comment. 905/916 tests passing, 0 regressions.)
+# last_updated: 2026-05-11 (Story 46.3 → review-passed; 7 patches applied — sub-help dispatch, response.json guards, formatRelativeTime NaN guard, peer column header, isTTY descriptor restore, dynamic column widths, +12 coverage tests; 944/955 passing.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -511,7 +511,7 @@ development_status:
   epic-46: in-progress
   46-1-nodes-yaml-schema-and-boot-reconciler-and-peer-type-resolver: done  # CRITICAL PATH
   46-2-post-and-delete-api-nodes-host-api: done  # code review passed 2026-05-11
-  46-3-townhouse-node-add-remove-list-cli: backlog
+  46-3-townhouse-node-add-remove-list-cli: done  # code review passed 2026-05-11 (7 patches applied; 944/955 tests passing, 11 pre-existing failures unchanged)
   epic-46-retrospective: optional
 
   # Epic 47: Earnings Data Plane
