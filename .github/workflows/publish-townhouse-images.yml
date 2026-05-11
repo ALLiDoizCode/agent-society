@@ -44,10 +44,10 @@ on:
         required: true
         type: string
       connector_version:
-        description: 'Connector image tag to record in image-manifest.json (default: 3.4.1 = digest pinned in DEFAULT_CONNECTOR_IMAGE)'
+        description: 'Connector image tag to record in image-manifest.json. Default 3.5.1 — earliest connector that exposes /admin/hs-hostname (added in 3.5.0), which the townhouse-api needs for HS apex orchestration.'
         required: false
         type: string
-        default: '3.4.1'
+        default: '3.5.1'
 
 concurrency:
   group: '${{ github.workflow }}-${{ github.ref }}'
@@ -202,7 +202,7 @@ jobs:
 
           # Resolve connector digest via buildx imagetools (handles OCI image index
           # correctly — docker manifest inspect doesn't expose the index digest directly)
-          CONNECTOR_TAG="${{ inputs.connector_version || '3.4.1' }}"
+          CONNECTOR_TAG="${{ inputs.connector_version || '3.5.1' }}"
           CONNECTOR_DIGEST=$(docker buildx imagetools inspect \
             "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" \
             --format '{{.Manifest.Digest}}')
