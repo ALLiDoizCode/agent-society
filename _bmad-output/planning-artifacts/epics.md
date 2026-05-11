@@ -121,13 +121,15 @@ This document provides the epic and story breakdown for `@toon-protocol/sdk`, de
 - FR-BRIDGE-6: AO/HyperBEAM SHALL be treated as a blockchain target (kind:5260), NOT a compute backend (kind:5250). Providers broadcast signed AO messages via HyperBEAM's HTTP API
 - FR-BRIDGE-7: (NEW) TOON SHALL ship provider handoff documents for Ethereum/EVM, Solana, and AO/HyperBEAM chain bridge operators
 
-**Loony — Autonomous Agent Application (derived from Party Mode 2026-03-23)**
+**Loony — Decentralized Agent Harness (rescoped Party Mode 2026-05-11)**
 
-- FR-LOONY-1: Loony SHALL be an example application (`packages/loony`) that demonstrates all six layers of the TOON Agent Architecture: identity, payment, discovery, primitives, composition, and agent lifecycle
-- FR-LOONY-2: Loony SHALL consume LLM inference from kind:5250 compute providers discovered via marketplace (decoupled inference — no embedded LLM)
-- FR-LOONY-3: Loony SHALL register as a DVM provider for composite services (workflows composed from discovered primitives), earning revenue to sustain operations
-- FR-LOONY-4: Loony SHALL discover new services at runtime via kind:10035 SkillDescriptors and integrate them without code changes (emergent capability extension)
-- FR-LOONY-5: Loony SHALL exercise all four network primitives: messaging (kind:1), blob storage (kind:5094), compute (kind:5250), chain bridge (kind:5260)
+- FR-LOONY-1: Loony SHALL be a decentralized agent harness (`packages/loony`) implementing the OS model: LLM(CPU) / Relay(RAM) / Arweave(DISK) / DVMs(DRIVERS) / Mina zkApp(KERNEL) / VRF(SCHEDULER) / ILP(METERING)
+- FR-LOONY-2: Loony SHALL govern its OODA loop via Mina VRF-based worker selection — no single party can control which DVM runs next; selection is provably fair and on-chain verifiable
+- FR-LOONY-3: Loony SHALL persist all workspace state and raw execution traces to Arweave — traces are NEVER summarized; the full uncompressed history is always available to DVM workers
+- FR-LOONY-4: Loony SHALL expose the four harness primitives (`read_file`, `edit_file`, `run_bash`, `grep`) as DVM-backed tool calls via kind:5094 (Arweave) and kind:5250 (Compute)
+- FR-LOONY-5: Loony's Mina integration SHALL serve as Epic 13's first Chain Bridge DVM reference implementation — the kind:5260 Mina adapter is co-developed with and validated by Loony
+- FR-LOONY-6: Loony SHALL earn as a DVM provider for composite services and self-prune unprofitable services — self-sustaining via ILP economics
+- FR-LOONY-7: Loony SHALL discover new kind:10035 SkillDescriptors at runtime and extend capabilities without code changes
 
 **NIP-34 Git Forge — The Rig (derived from TOON Service Protocol + NIP-34)**
 
@@ -261,11 +263,13 @@ FR-COMPUTE-5: Epic 14 - Self-describing compute receipt spec
 FR-COMPUTE-6: DEFERRED - JobTracker async state management (may be added to consumer SDK if DX demands)
 FR-COMPUTE-7: Epic 14 - Provider test harness for compliance validation
 FR-COMPUTE-8: Epic 14 - Provider handoff docs (HyperBEAM, Oyster CVM, Akash)
-FR-LOONY-1: Epic 15 - Autonomous agent demonstrating all six architecture layers
-FR-LOONY-2: Epic 15 - Decoupled LLM inference via marketplace discovery
-FR-LOONY-3: Epic 15 - Revenue generation as composite service DVM provider
-FR-LOONY-4: Epic 15 - Emergent capability extension via runtime SkillDescriptor discovery
-FR-LOONY-5: Epic 15 - Exercise all four network primitives end-to-end
+FR-LOONY-1: Epic 15 - Decentralized harness implementing LLM/Relay/Arweave/DVMs/Mina/VRF/ILP OS model
+FR-LOONY-2: Epic 15 - VRF-governed OODA loop via Mina zkApp SessionRegistry
+FR-LOONY-3: Epic 15 - Arweave workspace + raw execution traces (never summarized)
+FR-LOONY-4: Epic 15 - Harness primitives (read_file/edit_file/run_bash/grep) as DVM-backed tool calls
+FR-LOONY-5: Epic 15 - Epic 13 Chain Bridge Mina adapter first reference implementation
+FR-LOONY-6: Epic 15 - Self-sustaining DVM provider economics with self-pruning
+FR-LOONY-7: Epic 15 - Runtime capability extension via SkillDescriptor discovery
 
 ## Epic List
 
@@ -430,55 +434,115 @@ Define the compute provider protocol, refine the consumer DX, and ship provider 
 - **Provider test harness is the force multiplier** — Validates provider compliance without requiring TOON team involvement.
 - **Decoupled inference model** — LLM providers (Oyster CVM running Llama, Akash running Mixtral, HyperBEAM running WASM models) are just kind:5250 DVM providers. Agent reasoning is a service consumed via the marketplace, not embedded.
 
-### Epic 15: Loony — Autonomous Agent Application
+### Epic 15: Loony — Decentralized Agent Harness
 
-Loony is an example application that proves TOON Protocol can support a self-bootstrapping, self-sustaining, self-extending autonomous agent. Like Forge proves decentralized git, Loony proves the autonomous agent lifecycle. Loony exercises all four network primitives (messaging, storage, compute, chain bridge) plus composition (workflows, marketplace discovery, provider selection).
+Loony is a decentralized agent harness — the first harness where no single party controls the execution loop. It implements the OS model for trustless agent execution: **LLM(CPU) / Relay(RAM) / Arweave(DISK) / DVMs(DRIVERS) / Mina zkApp(KERNEL) / VRF(SCHEDULER) / ILP(METERING)**. Like Forge proves decentralized git, Loony proves the decentralized harness thesis: an agent whose loop is provably ungoverned, whose workspace is permanently auditable, and whose tool execution is certified by ZK proof.
+
+**The OS Model:**
+
+| Component | Role | TOON Implementation |
+|---|---|---|
+| CPU | Raw compute, inert alone | LLM sourced from kind:5250 Compute DVM |
+| RAM | Fast ephemeral working memory | Nostr Relay (session events, DVM job/result pairs, kind:30000 file pointers) |
+| DISK | Permanent content-addressed storage | Arweave (file blobs, raw execution traces, session checkpoints) |
+| DRIVERS | Abstraction layer over services | DVMs — read_file/edit_file/run_bash/grep exposed via kind:5094 + kind:5250 |
+| KERNEL | Enforces state transitions, cannot be bypassed | Mina zkApp (`SessionRegistry` SmartContract — on-chain workspace_hash, lock, VRF) |
+| SCHEDULER | Selects who runs next, provably fair | Mina VRF — unpredictable selection, ZK-verifiable, ILP-compensated |
+| METERING | Economic incentive layer | ILP — every relay write, DVM job, Arweave upload is micropayment-gated |
 
 **Relationship to Protocol:**
-- Loony is an APPLICATION, not a protocol feature — same relationship as Forge (`packages/rig`) to blob storage
-- Loony is a CONSUMER of DVM services, not a provider — it discovers providers via kind:10035 and pays for services via ILP
-- Loony validates the protocol by being the first entity on the network that isn't a node operator or human — it's an autonomous participant
+- Loony is the **harness layer** — generic, forkable, no application-specific logic baked in
+- Loony is the substrate **Overmind (Epic 16+) runs on** — Overmind adds TEE sovereignty, Shamir backup, ZK biography on top of this harness
+- Loony's Mina integration **IS Epic 13's first Chain Bridge DVM reference implementation** — the kind:5260 Mina adapter is co-developed with Loony, not Epic 16
+- Epic 15 co-develops with Epic 13 Track A (protocol spec, abstract interface) and depends on Epic 14 (kind:5250 consumer SDK) for LLM inference and run_bash
 
-**Agent Lifecycle (what Loony demonstrates):**
-1. **Bootstrap** — Generate identity from seed phrase, fund wallet, connect to TOON relay, discover peers and services
-2. **Perceive** — Subscribe to relay events (free reads), build map of available services from kind:10035 SkillDescriptors
-3. **Reason** — Consume LLM inference from a kind:5250 compute provider (decoupled — Loony picks the best inference provider from the marketplace based on pricing/reputation/features)
-4. **Act** — Publish events (messaging), store data on Arweave (kind:5094), dispatch compute jobs (kind:5250), broadcast transactions (kind:5260), compose multi-step workflows (kind:10040)
-5. **Earn** — Register as a DVM provider (publish kind:10035 SkillDescriptor) for services Loony can offer (e.g., composed workflows, curated analysis, brokered compute). Accept jobs from other agents, earn convenience fees.
-6. **Extend** — Discover new services at runtime that didn't exist when Loony was deployed. Read SkillDescriptors (TOON format, LLM-readable), understand new service APIs, compose novel workflows from discovered primitives, publish compositions as new SkillDescriptors for others to use.
+**Epic Sequencing:**
+```
+PARALLEL NOW (no Mina dep):
+  Epic 13 Track A: kind:5260 schema → ChainAdapter interface → EVM/Solana/AO adapters
+  Epic 15: 15.1 (scaffold), 15.2 (service discovery), 15.5 (workspace), 15.6 (trace events)
+
+GATE 1 — Epic 16 story 16.3 (OvermindRegistry zkApp) merges:
+  Epic 15.7 (SessionRegistry zkApp) — copies VRF pattern from 16.3, adds session lifecycle
+
+GATE 2 — Epic 16 story 16.4 (Chain Bridge Mina adapter) merges:
+  Epic 13 Track B: 13.5 (Mina adapter ratification) → 13.9 (Consumer SDK)
+
+GATE 3 — Epic 14 complete + Epic 13.9 Consumer SDK:
+  Epic 15.3 (LLM inference), 15.4 (harness primitives), 15.8 (Session Lifecycle Manager)
+
+GATE 4 — Epic 16 complete:
+  Epic 15.9-15.13 (locking, earnings, capability extension, E2E)
+```
+
+**Phase 0 (Pre-Mina MVP — stories 15.1, 15.2, 15.5, 15.6):**
+Phase 0 proves the Arweave-persisted autonomous loop without Mina. An agent that observes the relay, acts via DVMs, persists every tool call to Arweave, and recovers state after crash. Shippable before any Mina work begins. Validates the "loop without a central server" claim.
 
 **What Loony is NOT:**
-- Not a general-purpose AI agent framework (use LangGraph, CrewAI, etc. for that)
-- Not a chatbot or assistant
-- Not coupled to any specific LLM (switches providers at runtime via marketplace)
-- Not a protocol extension — uses only existing event kinds and primitives
+- Not a re-implementation of Claude Code, Cursor, or Codex
+- Not a general-purpose AI agent framework
+- Not coupled to any specific LLM (sources inference from kind:5250 marketplace)
+- Not Overmind — Loony is the generic harness substrate; Overmind adds TEE identity + ZK sovereignty on top
 
-**Stories (8 stories):**
+**Stories (13 stories):**
 
-**Phase 1: Identity & Bootstrap (14.1–14.2)**
-- **14.1 Loony Package Scaffold & Identity Bootstrap** — Create `packages/loony` package. Loony imports `@toon-protocol/sdk` (leaf node, same relationship as Forge/`packages/rig` to blob storage — never imports core/bls directly). Generate identity from seed phrase via SDK's existing secp256k1 identity system, fund wallet from faucet in dev mode, connect to TOON relay, authenticate via BTP. Entry point: `createLoonyAgent(config: LoonyConfig): Promise<LoonyAgent>`. `LoonyConfig`: seed phrase (or mnemonic), relay URLs, chain config, initial funding amount, budget limits. `LoonyAgent` interface: `start()`, `stop()`, `getIdentity()`, `getBalance()`. Package scaffolding: `package.json` with `@toon-protocol/sdk` dependency, tsconfig extending root, vitest config, basic README. Acceptance: Loony can connect to genesis node, has valid Nostr+EVM identity, can send and receive events on the relay, wallet is funded in dev mode.
-- **14.2 Service Discovery & Perception Layer** — Subscribe to kind:10035 (SkillDescriptor) events on relay via SDK subscription API. Build and maintain an in-memory `ServiceRegistry`: maps provider pubkeys to their capabilities, pricing, features, and last-seen timestamp. `ServiceRegistry` API: `discoverProviders(kind: number, features?: string[]): SkillDescriptor[]` — query the registry filtered by DVM kind and optional feature requirements. `getProvider(pubkey: string): SkillDescriptor | null`. `getBestProvider(kind: number, features?: string[], rankBy?: 'price' | 'reputation'): SkillDescriptor | null` — returns highest-ranked provider matching criteria. Auto-refresh: new kind:10035 events update the registry in real-time via relay subscription. Stale provider pruning: providers not seen for configurable TTL are deprioritized (not removed). Acceptance: Loony discovers all four primitive provider types (messaging via relay, blob storage kind:5094, compute kind:5250, chain bridge kind:5260) from relay events and can query them by kind and features.
+**Phase 0: Bootstrap + Arweave Loop (15.1–15.2, 15.5–15.6) — No external deps beyond Epic 8**
 
-**Phase 2: Reasoning & Action (14.3–14.5)**
-- **14.3 Decoupled LLM Inference via Compute Marketplace** — Loony consumes LLM inference from a kind:5250 compute provider discovered via `ServiceRegistry` (14.2). NO embedded LLM — inference is a service consumed from the marketplace. Provider selection logic: filter by `features: ['compute', 'inference']`, rank by pricing (lowest cost) and optionally reputation (kind:7000 feedback event scores). `ReasoningEngine` class: `reason(prompt: string, context?: string): Promise<string>` — builds kind:5250 job request with inference parameters, submits via SDK's `submitComputeJob()`, polls for result, extracts response text. `selectInferenceProvider(): SkillDescriptor` — queries ServiceRegistry for best inference provider. Provider failover: if primary provider fails or times out, automatically try next-best provider from registry. Structured output support: `reasonStructured<T>(prompt: string, schema: T): Promise<T>` — requests JSON-formatted response matching schema. Acceptance: Loony sends a natural language prompt to a compute provider discovered from the marketplace and receives an LLM-generated response. Uses reference Docker provider from Epic 10 test harness in dev/test.
-- **14.4 Multi-Primitive Action Layer** — Loony can exercise all four network primitives through a unified action dispatcher. Actions: (1) **Messaging** — publish Nostr events via `publishEvent()` (pay-to-write via ILP), (2) **Blob Storage** — store data on Arweave via kind:5094 using SDK's blob storage helpers, (3) **Compute** — dispatch jobs via kind:5250 using SDK's compute helpers, (4) **Chain Bridge** — broadcast transactions via kind:5260 using SDK's chain bridge helpers. `ActionDispatcher` class: `act(action: LoonyAction): Promise<LoonyResult>` — routes to the appropriate primitive based on action type. `LoonyAction` discriminated union: `{ type: 'message', content } | { type: 'store', data, contentType } | { type: 'compute', wasmRef, input } | { type: 'bridge', chains, signedTx }`. `LoonyResult`: includes primitive-specific receipt, cost incurred, and provider used. Cost tracking: every action records its ILP cost for economics (14.8). Acceptance: Loony performs at least one operation on each of the four primitives and receives valid receipts for each.
-- **14.5 OODA Decision Loop** — Implement the Observe-Orient-Decide-Act autonomous loop that drives Loony's behavior. `OODALoop` class with configurable cycle: (1) **Observe** — read new relay events since last cycle (free reads), check ServiceRegistry for new/changed providers, check wallet balance. (2) **Orient** — feed observations to ReasoningEngine (14.3) with system prompt describing Loony's goals, current state, available actions, and budget constraints. LLM interprets observations and suggests priorities. (3) **Decide** — ReasoningEngine outputs a structured action plan: list of `LoonyAction` items with rationale and expected cost. Budget governor validates total cost against available balance. (4) **Act** — execute approved actions via ActionDispatcher (14.4), record results. Loop configuration: `{ intervalMs, maxActionsPerCycle, budgetPerCycle, goals[] }`. Goals are natural language strings that shape the LLM's orientation (e.g., "discover profitable service compositions", "maintain positive balance", "extend capabilities"). Graceful degradation: if no inference provider available, Loony enters passive observation mode (observe only, no reason/decide/act). Acceptance: Loony autonomously observes relay activity, reasons about observations via LLM, and takes at least one reasoned action per cycle without human intervention.
+- **15.1 Package Scaffold & Identity Bootstrap** *(S)* — `packages/loony` (leaf node, imports `@toon-protocol/sdk` only, never core/bls). `createLoonyAgent(config: LoonyConfig): Promise<LoonyAgent>`. `LoonyConfig`: `{ mnemonic, relayUrls, chainConfig, budgetReserve }`. `LoonyAgent`: `start/stop/getIdentity/getBalance`. Identity from NIP-06 path `m/44'/1237'/0'/0/0`. Dev-mode faucet funding. AC: connects to relay, round-trips kind:1, `getBalance()` non-zero, `stop()` no dangling timers.
 
-**Phase 3: Economics & Extension (14.6–14.8)**
-- **14.6 DVM Provider Registration & Earning** — Loony registers as a DVM provider by publishing kind:10035 SkillDescriptor(s) for composite services it can offer. Composite service pattern: Loony orchestrates multiple primitive calls into a single workflow and charges a convenience fee margin. Example composite: "verified-deploy" = lint code (kind:5250 compute) + run tests (kind:5250 compute) + store artifact (kind:5094 blob) — Loony prices the bundle higher than the sum of sub-job costs. `CompositeServiceManager` class: `registerService(descriptor: SkillDescriptor, handler: CompositeHandler)` — publishes SkillDescriptor to relay and registers local handler. `CompositeHandler`: receives incoming kind:5250 job, orchestrates sub-jobs to real primitive providers via ActionDispatcher (14.4), aggregates results, returns composed result. Revenue tracking: each completed job records `{ earned, spent_on_sub_jobs, margin }`. Loony's SDK node handles incoming ILP payments for its registered services (same pattern as any TOON DVM provider). Acceptance: Loony publishes a SkillDescriptor for a composite service, receives a job request from another client (or test harness), orchestrates the workflow across multiple providers, returns the composed result, and earns net positive margin.
-- **14.7 Runtime Capability Extension** — Loony discovers new kind:10035 SkillDescriptors at runtime that didn't exist when Loony was deployed. `CapabilityExtender` class: monitors ServiceRegistry (14.2) for new SkillDescriptors, feeds new descriptors to ReasoningEngine (14.3) with prompt: "A new service is available on the network. Here is its SkillDescriptor (TOON format). What can this service do? How could it be composed with existing services to create value?" LLM reads the descriptor (TOON format is LLM-readable by design), understands the new service API, and suggests compositions. `proposeComposition(newService: SkillDescriptor, existingServices: SkillDescriptor[]): Promise<CompositionProposal[]>` — LLM generates proposed workflows combining new and existing services. If a composition is deemed profitable (estimated margin > 0), Loony auto-registers it as a new composite service via CompositeServiceManager (14.6) and publishes a new SkillDescriptor. The marketplace IS the extension mechanism — no code changes needed to integrate new capabilities. Acceptance: A new SkillDescriptor is published to the relay after Loony starts; Loony discovers it, uses LLM reasoning to understand it, proposes a novel composition incorporating the new service, registers the composition as a new service, and can execute it when requested.
-- **14.8 Self-Sustaining Economics & E2E Validation** — End-to-end validation that Loony operates as a self-sustaining autonomous agent. `LoonyEconomics` tracker: `{ totalEarned, totalSpent, currentBalance, profitableServices: { name, totalRevenue, totalCost, margin }[], unprofitableServices: { name, reason }[] }`. Budget governor integration with OODA loop: Loony won't take actions that would reduce balance below configurable reserve threshold. Economic reporting: Loony periodically publishes its economics summary as a Nostr event (transparent operation). Self-pruning: if a composite service is consistently unprofitable (margin < 0 over N executions), Loony de-registers it and stops offering it. Full E2E integration test scenario: (1) Loony bootstraps from seed phrase on test network, (2) discovers primitive providers (blob, compute, chain bridge), (3) reasons about service opportunities via LLM, (4) registers as composite service provider, (5) receives and fulfills job requests, (6) discovers a new service published mid-test, (7) extends capabilities by composing with new service, (8) maintains positive or stable balance over N OODA cycles. Performance assertions: balance trending positive, at least one composite service registered, at least one capability extension performed. Acceptance: Loony runs autonomously for N cycles demonstrating the complete agent lifecycle (bootstrap → perceive → reason → act → earn → extend) with positive or stable economics.
+- **15.2 Service Discovery & Perception Layer** *(S)* — `ServiceRegistry` subscribing to kind:10035 SkillDescriptor events. `discoverProviders(kind, features?)`, `getBestProvider(kind, features?, rankBy?)`, real-time update, stale TTL pruning (deprioritize not delete). AC: discovers kind:5094/5250/5260 providers; `getBestProvider('price')` returns lowest bid; new kind:10035 updates registry within 500ms.
 
-**Dependencies:** Epic 8 (blob storage primitive), Epic 9 (agent skills for protocol understanding), Epic 14 (compute provider protocol — at least one third-party provider must exist), Epic 13 (chain bridge provider protocol — at least one third-party provider must exist)
-**Decision source:** Party Mode 2026-03-23 — Architecture + Loony + Provider Model; Party Mode 2026-03-24 — Story Decomposition
+- **15.5 Workspace State: Arweave Blob + kind:30000 Pointer Protocol** *(M)* — `WorkspaceManager`. Mutable file pointer: Nostr replaceable event (kind:30000-range, `d` tag = logical path, `r` tag = Arweave tx ID, `x` tag = sha256, `s` tag = sessionId). `readPointer(path)`, `writePointer(path, txId, sha256)`, `fetchBlob(txId)`, `snapshotHash(paths)` (Poseidon hash of sorted `[path, txId]` pairs — becomes `workspace_hash` for on-chain commitment). AC: write→read roundtrip matches; `snapshotHash` is deterministic and order-invariant; kind:30000 event has all four tags.
+
+- **15.6 Session Trace Events (kind:5252)** *(M)* — `SESSION_TRACE_KIND = 5252`. `SessionTrace.recordToolCall(call: ToolCallRecord)` — publishes kind:5252 tagged `['s', sessionId], ['tool', type], ['i', input], ['o', output], ['cost', costUsdc]`. **Raw only — NEVER summarize tool traces.** `queryCalls(sessionId, since?)`. `drainToArweave(sessionId): Promise<string>` — NDJSON upload via kind:5094, returns Arweave tx ID. AC: every `ActionDispatcher.act()` publishes kind:5252; cross-session isolation; drain roundtrips to original records verbatim.
+
+**Phase 1: Harness Primitives (15.3–15.4) — Requires Epic 14**
+
+- **15.3 Decoupled LLM Inference via Compute Marketplace** *(M)* — `ReasoningEngine.reason(prompt, context?): Promise<string>`, `reasonStructured<T>(prompt, schema): Promise<T>`. Discovers inference provider via `ServiceRegistry` (`features: ['inference']`), submits kind:5250, polls kind:6250. Provider failover: on timeout or kind:7000 negative feedback, retry next-best (max 3). Uses reference Docker provider from Epic 14 in CI — no live LLM. AC: submits kind:5250, receives text; failover test passes; structured output validates against schema.
+
+- **15.4 Harness Primitive Action Layer** *(M)* — `ActionDispatcher.act(action: HarnessAction): Promise<HarnessResult>`. `HarnessAction` union extends original four primitives (message/store/compute/bridge) with four harness tools:
+  ```ts
+  | { type: 'read_file';  path: string }
+  | { type: 'edit_file';  path: string; oldStr: string; newStr: string }
+  | { type: 'run_bash';   cmd: string; sessionId: string }
+  | { type: 'grep';       pattern: string; path: string }
+  ```
+  `read_file`: resolves kind:30000 pointer → fetches Arweave blob. `edit_file`: reads → patches → uploads new blob via kind:5094 → updates pointer. `run_bash`: dispatches kind:5250 with `['param','session-id',sessionId]`. `grep`: dispatches kind:5250 with grep params. `HarnessResult`: `{ receipt, costUsdc, providerPubkey, arweaveTxId? }`. AC: all four harness tools produce correct event shapes and receipts; `edit_file` throws `PatchError` on no-match.
+
+**Phase 2: Mina Loop Governance (15.7–15.8) — Requires 15.5 + Epic 16.3 + Epic 13.9**
+
+- **15.7 Mina zkApp: SessionRegistry + VRF Lock Election** *(L)* — o1js `SmartContract` in `src/mina/session-registry.ts`. 8 on-chain state fields: `workspace_hash`, `session_id`, `iteration_count`, `lock_holder_key`, `lock_expires_slot`, `task_hash`, `vrf_seed`, `trusted_worker_set_root` (IndexedMerkleMap root, height 8). VRF mechanism: `Poseidon.hash([iteration_count, blockHash, session_id])` as seed; `blockHash` passed as `Provable.witness`, constrained to current slot via `this.network.globalSlotSinceGenesis.getAndRequireEquals()`. Methods: `openSession()` (VRF election), `checkpoint(newWorkspaceHash, iterationCount)` (caller must be `lock_holder_key`), `closeSession(finalHash)`, `reclaimLock()` (fires when `currentSlot > lock_expires_slot`). Copies VRF pattern from Epic 16 story 16.3 (OvermindRegistry) — do NOT start before 16.3 merges. ⚠️ o1js memory footprint comparable to pet-circuit (~2-4 GB) — never run tests from sub-agents. AC: all 8 fields set after `openSession`; `checkpoint` rejects non-lock-holder; `reclaimLock` re-elects after slot expiry; VRF deterministic over 50 rounds; deploys to Mina devnet.
+
+- **15.8 Session Lifecycle Manager** *(L)* — `SessionManager`. `startSession(task, config): Promise<Session>` — submits Mina tx via kind:5260 chain bridge, waits for kind:5261 confirmation, stores `{ sessionId, lockHolderKey, lockExpiresSlot }`. `runCycle(session): Promise<CycleResult>` — full OODA body: Observe (relay reads + `WorkspaceManager`), Orient+Decide (`ReasoningEngine.reasonStructured`), Act (`ActionDispatcher`); signs all relay events with `lockHolderKey`; auto-checkpoints every K=50 iterations. `closeSession(session)` — drains traces to Arweave, submits close tx via kind:5260, publishes kind:5103 with Arweave tx ID. `SessionConfig`: `{ maxIterations, checkpointInterval: 50, budgetPerCycleUsdc, lockExtensionSlots }`. AC: VRF elects non-zero `lockHolderKey`; cycle events signed by `lockHolderKey` and verifiable against on-chain field; checkpoint auto-fires and matches `snapshotHash`; dead-man's switch reclaim test passes.
+
+- **15.9 Multi-Agent CAS Pointer Locking** *(M)* — `CASPointerLock.compareAndSwap(path, expectedTxId, newTxId, sessionId): Promise<'ok'|'conflict'>`. Two concurrent agents with same `expectedTxId`: exactly one `'ok'`, one `'conflict'`. Integrated into `ActionDispatcher` `edit_file` — surfaces as `HarnessResult.status: 'conflict'` not a throw. `resolveConflict(path)` returns both sides.
+
+**Phase 3: Economics & Extension (15.10–15.13) — Requires Epic 16 complete**
+
+- **15.10 DVM Provider Registration & Earning** *(M)* — `CompositeServiceManager.registerService(descriptor, handler)`. Composite handler orchestrates sub-jobs, charges margin. Revenue tracker per service: `{ earned, spent, margin, executionCount }`. AC: kind:10035 discoverable; incoming job dispatched, ILP received; `margin > 0` for earning service; thrown handler returns kind:7000 feedback without crash.
+
+- **15.11 Runtime Capability Extension** *(M)* — `CapabilityExtender.watch(registry, engine, manager)` — on new kind:10035, calls `engine.reasonStructured<CompositionProposal[]>()`, auto-registers profitable proposals. `CompositionProposal`: `{ name, steps, estimatedMargin, rationale }`. AC: new SkillDescriptor triggers proposal; profitable proposal auto-registers and appears on relay within 2s; malformed descriptor logs warning, no throw.
+
+- **15.12 Self-Sustaining Economics + E2E Validation** *(L)* — `LoonyEconomics`: total earned/spent, per-service margin. Self-pruning: after 5 consecutive negative-margin executions, `deregisterService()` + kind:5 deletion. Budget governor: `willExceedReserve(cost)` checked before every `act()`. Periodic kind:1 economics report every 5 cycles. Full E2E: 10 autonomous OODA cycles, balance non-negative, one composite service registered, one capability extension performed, all cycles' traces reconstructible from Arweave. AC: 10 unattended cycles complete; self-pruning fires; budget governor blocks correctly; E2E passes against townhouse dev stack (28xxx ports).
+
+- **15.13 Compute DVM Session Affinity Extension** *(S)* — Adds optional `['param', 'session-id', sessionId]` tag to kind:5250 in `@toon-protocol/core` event builder/parser. `run_bash` in `ActionDispatcher` includes it from active session. Provider handoff doc: `docs/provider-handoffs/compute-session-affinity.md` — best-effort affinity, not cryptographically enforced. AC: kind:5250 from `run_bash` contains tag; tag is optional (absent valid); roundtrip parses correctly.
+
+**Dependencies:**
+- Epic 8 (kind:5094 Arweave DVM) — required for 15.5, 15.6
+- Epic 13 Track A (kind:5260 schema + ChainAdapter interface) — co-developed; required for 15.8
+- Epic 14 (kind:5250 Compute DVM consumer SDK) — required for 15.3, 15.4, 15.8
+- Epic 16 story 16.3 (OvermindRegistry zkApp VRF pattern) — required before 15.7 starts
+- Epic 16 story 16.4 (Chain Bridge Mina adapter) — required before 15.8 starts
+
+**Decision source:** Party Mode 2026-03-23 (original scope); **Rescoped Party Mode 2026-05-11** — Decentralized Harness (VRF loop, Arweave workspace, DVM primitives, Mina zkApp kernel); Epic 13 co-development clarified same session.
 
 **Key Design Decisions:**
-- `packages/loony` is the package — a TOON SDK consumer application, not a library
-- Loony imports `@toon-protocol/sdk` (or `@toon-protocol/client`) — never core/bls directly (leaf node, same as Forge)
-- LLM inference is decoupled — Loony discovers compute providers via kind:10035, picks based on pricing/reputation, consumes via kind:5250. No embedded LLM.
-- Earning model — Loony acts as a DVM provider for composite services (workflows it has composed from discovered primitives). Revenue sustains its operation.
-- Emergent capability extension — Loony discovers new kind:10035 SkillDescriptors at runtime, reads them (LLM-readable TOON format), and integrates new capabilities without code changes. The marketplace IS the extension mechanism.
-- Self-sustaining economics — Loony earns by providing services and spends by consuming them. If it discovers a profitable composition (e.g., "verified code deploy" = lint + test + deploy), it publishes that as a new service and earns margin on each execution.
+- `packages/loony` imports `@toon-protocol/sdk` only — leaf node, never core/bls directly
+- LLM inference is decoupled — no embedded model; sources from kind:5250 marketplace
+- **Raw execution traces are NEVER summarized** — raw traces are irreplaceable for performance (Video 2 finding: summarizing drops accuracy 50%→34%)
+- VRF is the **scheduler**, not the loop — the OODA cycle is the loop; VRF certifies which DVM runs each iteration
+- Mina is **off the critical hot path** — relay handles fast working memory between checkpoints; Mina checkpoints every K=50 iterations (~5-10 Mina txns per session)
+- Epic 13 story 13.5 (Mina adapter) is **reclassified** from "build" to "ratify" — Epic 16.4 builds the Mina adapter; Epic 13.5 validates it against the spec and absorbs it into `packages/bridge`
 
 ---
 

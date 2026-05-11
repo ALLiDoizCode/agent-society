@@ -147,7 +147,7 @@ toon/
 │   ├── pet-circuit/ # @toon-protocol/pet-circuit -- PetLifecycle ZkProgram + PetZkApp SmartContract + PetToken + PetBreeding (Epic 11, Stories 11-2/11-3/11-8/11-13)
 │   ├── pet-dvm/     # @toon-protocol/pet-dvm -- Pet DVM handler, game engine, dungeon engine, checkpoint, pricing (Epic 11, Stories 11-4/11-5/11-15-11-18)
 │   ├── overmind/    # Overmind Protocol spike code (Epics 15-19, spike only)
-│   └── loony/       # @toon-protocol/loony -- (planned, Epic 15: autonomous agent example application)
+│   └── loony/       # @toon-protocol/loony -- (planned, Epic 15: decentralized agent harness — VRF loop, Arweave workspace, DVM primitives)
 ├── docker/          # Container entrypoint (pnpm workspace member)
 │   ├── src/
 │   │   ├── shared.ts              # Config parsing, admin client, health check utilities
@@ -230,7 +230,7 @@ Epic 11: TOON Pets — ZK-Proven Virtual Pet Economy COMPLETE (18/18 stories, 5 
 Epic 12: Token Swap Primitive                       COMPLETE (11/11 stories, 1 new package: @toon-protocol/mill; NIP-59 gift-wrapped ILP micropayment swaps, SwapPair on IlpPeerInfo, Mill swap handler, streamSwap() sender API, buildSettlementTx(), multi-chain claim issuers, Docker E2E multi-chain validation; +892 tests)
 Epic 13: Chain Bridge Primitive (kind:5260)        PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
 Epic 14: Compute Primitive (kind:5250)             PLANNED (Provider protocol spec + consumer DX + test harness + provider handoff docs; provider implementations out of scope)
-Epic 15: Loony — Autonomous Agent                  PLANNED (Example application proving all four primitives + composition; self-bootstrapping agent lifecycle)
+Epic 15: Loony — Decentralized Agent Harness        PLANNED (13 stories; OS model: LLM/Relay/Arweave/DVMs/Mina/VRF/ILP; VRF-governed OODA loop, Arweave workspace, harness primitives read_file/edit_file/run_bash/grep via DVMs; Epic 13 Mina Chain Bridge co-developed; Phase 0 shippable before Mina)
 Epic 16: Overmind Heartbeat                          PLANNED (9 stories; minimal viable overmind: TEE key genesis, Arweave state, Mina VRF selection, Chain Bridge DVM Mina adapter, OODA engine; spike validated 10/10 tests)
 Epic 17: Overmind Treasury                           PLANNED (5 stories; self-funding via DVM income, live treasury queries D-OMP-010, adaptive behavior)
 Epic 18: Overmind Sovereign                          PLANNED (7 stories; TEE key sovereignty: signing policy, BIP-44 key hierarchy, Shamir K-of-N backup, sealed migration, disaster recovery)
@@ -238,7 +238,7 @@ Epic 19: Overmind Biography                          PLANNED (5 stories; recursi
 Epic 20: Overmind Swarm                              PLANNED (5 stories; sub-agent spawning, NIP-44 parent-child comms, DVM task delegation, swarm treasury management)
 ```
 
-**Epic progression:** Build SDK -> Prove it with relay -> Make protocol production-grade -> Make it verifiable -> Build DVM compute marketplace -> Advanced coordination + verifiable compute -> Hierarchical addressing & protocol economics -> Build applications on top: blob storage primitive + Forge-UI (DONE) -> Teach agents the protocol: skills pipeline + 30+ socialverse skills (DONE) -> Rig E2E integration test suite (real infra, no mocks, Playwright, in-progress) -> TOON Pets: ZK-proven virtual pet economy on Mina + Memvid brain + Pet Dungeon Crawl (DONE) -> Token swap primitive: NIP-59 gift-wrapped ILP micropayment swaps, Mill peer with multi-chain claim issuers, streamSwap() sender API, buildSettlementTx() (DONE) -> Chain bridge provider protocol + DX (spec, test harness, handoff docs; composes with Token Swap for zero-token cross-chain onboarding) -> Compute provider protocol + DX (spec, test harness, handoff docs) -> Loony autonomous agent (demand-side proof composing all four primitives) -> Overmind sovereign agents (Mina VRF + Arweave state + TEE identity + ILP economics).
+**Epic progression:** Build SDK -> Prove it with relay -> Make protocol production-grade -> Make it verifiable -> Build DVM compute marketplace -> Advanced coordination + verifiable compute -> Hierarchical addressing & protocol economics -> Build applications on top: blob storage primitive + Forge-UI (DONE) -> Teach agents the protocol: skills pipeline + 30+ socialverse skills (DONE) -> Rig E2E integration test suite (real infra, no mocks, Playwright, in-progress) -> TOON Pets: ZK-proven virtual pet economy on Mina + Memvid brain + Pet Dungeon Crawl (DONE) -> Token swap primitive: NIP-59 gift-wrapped ILP micropayment swaps, Mill peer with multi-chain claim issuers, streamSwap() sender API, buildSettlementTx() (DONE) -> Chain bridge provider protocol + DX (spec, test harness, handoff docs; composes with Token Swap for zero-token cross-chain onboarding) -> Compute provider protocol + DX (spec, test harness, handoff docs) -> Loony decentralized agent harness (VRF-governed OODA loop, Arweave workspace, DVM-backed read_file/edit_file/run_bash/grep, Mina zkApp kernel — co-develops Epic 13 Chain Bridge Mina reference impl) -> Overmind sovereign agents (TEE key genesis + Shamir backup + ZK biography, built on top of Loony harness substrate).
 
 **Strategic North Star (Party Mode 2026-03-22, updated 2026-03-24):** TOON Protocol = "Stripe for decentralized services." Four network primitives — Messaging (kind:1), Blob Storage (kind:5094), Compute (kind:5250), Chain Bridge (kind:5260) — with unified ILP payment, Nostr discovery (kind:10035), self-describing receipts, and competing providers. DVM providers are resellers who earn convenience fees for abstracting backend complexity. Protocol proves itself through example applications: **Forge** (decentralized git), **Loony** (autonomous agent), and **Overmind** (sovereign agent living on the network — Mina ZK adjudication, Arweave permanent memory, TEE-born identity, self-funding economics). Provider implementations are out of scope — TOON defines the provider protocol + ships handoff docs; third-party teams build providers for their platforms (HyperBEAM, Oyster CVM, Akash, per-chain bridge operators). Full decision records: `_bmad-output/planning-artifacts/research/party-mode-network-primitives-strategy-2026-03-22.md`, `_bmad-output/planning-artifacts/research/party-mode-overmind-protocol-decisions-2026-03-24.md`
 
@@ -407,7 +407,7 @@ TOON Protocol proves itself through example applications. The protocol defines t
 |---|---|---|---|
 | **Forge** | `packages/rig` | Decentralized git hosting | Blob Storage + Messaging |
 | **TOON Pets + Dungeon** | `packages/pet-dvm` | ZK-proven game engine + marketplace-as-world | Compute + Storage + Messaging + ZK (Mina) |
-| **Loony** | `packages/loony` (planned) | Autonomous agent lifecycle | All four primitives + Composition |
+| **Loony** | `packages/loony` (planned) | Decentralized agent harness | VRF loop + Arweave workspace + DVM primitives + Mina kernel |
 
 - **Six-Layer Protocol Capability Model:**
 

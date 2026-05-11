@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-10 (Epic 45 → done — live e2e verified; 10 post-merge bugs patched in commit 572544f; `townhouse hs up` publishes .anon apex end-to-end, both containers healthy)
+# last_updated: 2026-05-11 (Story 46.4 review — gate test file landed; Findings A/B patched via PR #50/51/52 (all merged); Finding C identified — rc5 tarball predates Epic 46's /api/nodes API. Story cannot flip to done until Epic 46 merges to main, rc6 is published, and the gate re-runs green against the new tarball.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -307,12 +307,30 @@ development_status:
   14-8-publish-compute-primitive: backlog
   epic-14-retrospective: optional
 
-  # Epic 15: Loony — Autonomous Agent Example Application
-  # Decision source: Party Mode 2026-03-23 — Loony Agent Architecture
-  # Example application proving all four primitives + composition; self-bootstrapping agent lifecycle
-  # Dependencies: Epics 13 + 14 (primitives)
-  # NOTE: Renumbered from Epic 13 → 14 (2026-04-06) → 15 (2026-04-09)
+  # Epic 15: Loony — Decentralized Agent Harness
+  # Decision source: Party Mode 2026-03-23 (original); Rescoped Party Mode 2026-05-11
+  # OS model: LLM(CPU)/Relay(RAM)/Arweave(DISK)/DVMs(DRIVERS)/Mina(KERNEL)/VRF(SCHEDULER)/ILP(METERING)
+  # Epic 13 Chain Bridge Mina adapter co-developed with Loony (15.8 IS the reference impl)
+  # Dependencies: Epic 8, Epic 13 Track A, Epic 14, Epic 16.3 (before 15.7), Epic 16.4 (before 15.8)
+  # NOTE: Renumbered from Epic 13 → 14 (2026-04-06) → 15 (2026-04-09); rescoped 2026-05-11
+  # Phase 0 (no Mina dep): 15.1, 15.2, 15.5, 15.6
+  # Phase 1 (requires Epic 14): 15.3, 15.4
+  # Phase 2 (requires Epic 16.3 + 16.4 + Epic 13.9): 15.7, 15.8, 15.9
+  # Phase 3 (requires Epic 16 complete): 15.10, 15.11, 15.12, 15.13
   epic-15: backlog
+  15-1-package-scaffold-identity: backlog
+  15-2-service-discovery: backlog
+  15-3-decoupled-llm-inference: backlog
+  15-4-harness-primitive-action-layer: backlog
+  15-5-workspace-arweave-pointer: backlog
+  15-6-session-trace-events: backlog
+  15-7-mina-session-registry-zkapp: backlog
+  15-8-session-lifecycle-manager: backlog
+  15-9-cas-pointer-locking: backlog
+  15-10-dvm-provider-earning: backlog
+  15-11-runtime-capability-extension: backlog
+  15-12-economics-e2e-validation: backlog
+  15-13-compute-session-affinity: backlog
   epic-15-retrospective: optional
 
   # ═══════════════════════════════════════════════════════════════
@@ -508,10 +526,11 @@ development_status:
   # `townhouse node add <town|mill|dvm>` provisions on-demand: derive HD key →
   # pull image → write nodes.yaml → start container → /health → register.
   # nodes.yaml is operator-managed source of truth; default = Town only.
-  epic-46: backlog
-  46-1-nodes-yaml-schema-and-boot-reconciler-and-peer-type-resolver: backlog  # CRITICAL PATH
-  46-2-post-and-delete-api-nodes-host-api: backlog
-  46-3-townhouse-node-add-remove-list-cli: backlog
+  epic-46: in-progress
+  46-1-nodes-yaml-schema-and-boot-reconciler-and-peer-type-resolver: done  # CRITICAL PATH
+  46-2-post-and-delete-api-nodes-host-api: done  # code review passed 2026-05-11
+  46-3-townhouse-node-add-remove-list-cli: done  # code review passed 2026-05-11 (7 patches applied; 944/955 tests passing, 11 pre-existing failures unchanged)
+  46-4-live-e2e-gate-lazy-peer-node-provisioning: review  # Epic 45 retro A4 — gate ran 2026-05-11; 2 integration findings (rc5 manifest pins old connector; compose template hardcodes ~/.townhouse bind-mount) need separate PRs before flipping to done. See Review Findings in story file.
   epic-46-retrospective: optional
 
   # Epic 47: Earnings Data Plane
@@ -524,6 +543,7 @@ development_status:
   47-2-aggregator-earnings-surgery: backlog  # deletes the packet-volume proxy
   47-3-hourly-earnings-snapshot-writer: backlog  # property-based tests required (DST/year boundaries/corruption)
   47-4-get-api-earnings-two-bucket-endpoint: backlog
+  47-5-live-e2e-gate-earnings-data-plane: backlog  # Epic 45 retro A4 — must complete before Epic 47 flips to done
   epic-47-retrospective: optional
 
   # Epic 48: Operator Dashboard (Ink TUI)
@@ -539,6 +559,7 @@ development_status:
   48-4-activity-ticker-footer-and-activity-overlay: backlog
   48-5-drill-subcommands: backlog  # townhouse channels/metrics/logs/peer/health
   48-6-sats-power-user-flag: backlog  # undocumented --units=sats power-user flag
+  48-7-live-e2e-gate-operator-dashboard: backlog  # Epic 45 retro A4 — must complete before Epic 48 flips to done
   epic-48-retrospective: optional
 
   # Epic 49: Telemetry & Validation Gate
@@ -555,4 +576,5 @@ development_status:
   49-4-townhouse-telemetry-cli: backlog
   49-5-telemetry-receiver-server-and-cloudflare-and-grafana-dashboard: backlog  # BLOCKED: pending owner assignment for telemetry.toon-protocol.dev (Cloudflare account, domain, Grafana hosting)
   49-6-pilot-day-30-decision-artifact: backlog
+  49-7-live-e2e-gate-telemetry-and-validation: backlog  # Epic 45 retro A4 — must complete before Epic 49 flips to done
   epic-49-retrospective: optional
