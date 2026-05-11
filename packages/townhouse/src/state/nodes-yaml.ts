@@ -37,8 +37,7 @@ export const NodesYamlSchema = z
   .superRefine((data, ctx) => {
     const seenPeerIds = new Set<string>();
     const seenDerivationIndexes = new Set<number>();
-    for (let i = 0; i < data.entries.length; i++) {
-      const e = data.entries[i]!;
+    for (const [i, e] of data.entries.entries()) {
       if (seenPeerIds.has(e.peerId)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
