@@ -119,3 +119,21 @@ export type {
 } from './api/index.js';
 export type { BandwidthStats } from './docker/index.js';
 export type { PacketLogEntry, PacketLogFilter } from './connector/types.js';
+
+// Story 46.1 — nodes.yaml schema, peer-type resolver, boot reconciler.
+// Exported so Epic 47's aggregator (and downstream consumers) can import
+// without reaching into relative paths.
+export {
+  readNodesYaml,
+  writeNodesYaml,
+  NodesYamlSchema,
+  NodesYamlEntrySchema,
+} from './state/nodes-yaml.js';
+export type { NodesYaml, NodesYamlEntry } from './state/nodes-yaml.js';
+export { PeerTypeResolver } from './registry/peer-type-resolver.js';
+export { BootReconciler } from './reconciler.js';
+export type {
+  DivergenceAction,
+  DivergenceLog,
+  ReconcileSummary,
+} from './reconciler.js';

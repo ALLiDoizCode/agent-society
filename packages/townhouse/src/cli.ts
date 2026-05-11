@@ -40,6 +40,7 @@ import {
 } from './connector/index.js';
 import { materializeComposeTemplate } from './compose-loader.js';
 import type { ComposeLoaderOptions } from './compose-loader.js';
+import { BootReconciler } from './reconciler.js';
 import { createApiServer } from './api/server.js';
 import { createWizardApiServer } from './api/wizard-server.js';
 import type { ApiServer } from './api/index.js';
@@ -127,6 +128,16 @@ export interface CliHsOverrides {
   };
   /** Override `docker compose down -v` spawn for --rotate-keys (avoids real Docker). */
   runComposeDown?: (composePath: string, withVolumes: boolean) => Promise<void>;
+  /**
+   * Override BootReconciler construction (Story 46.1). Tests inject a stub
+   * with a spied-on `reconcile()` to assert wiring without touching disk
+   * or the connector. When omitted, the default constructs a real
+   * `BootReconciler` against `~/.townhouse/{nodes.yaml,reconciler.log}`.
+   */
+  createReconciler?: (
+    nodesYamlPath: string,
+    reconcilerLogPath: string
+  ) => { reconcile: () => Promise<void> };
 }
 
 const DEFAULT_CONFIG_DIR = join(homedir(), '.townhouse');
@@ -746,6 +757,36 @@ const HS_CONNECTOR_ADMIN_URL = 'http://127.0.0.1:9401';
 const HS_TOWNHOUSE_API_URL = 'http://127.0.0.1:28090';
 
 /**
+ * Run `reconciler.reconcile()` with a brief retry budget for cold-boot
+ * transients. The connector container may not have bound its admin port
+ * by the time `orchestrator.up()` resolves; treat ECONNREFUSED / timeout
+ * on early attempts as "still warming" and retry. Persistent failures
+ * surface to the caller and end up in the non-fatal stderr log.
+ */
+async function reconcileWithBriefRetry(
+  reconciler: { reconcile: () => Promise<unknown> },
+  budgetMs: number
+): Promise<void> {
+  const deadline = Date.now() + budgetMs;
+  for (;;) {
+    try {
+      await reconciler.reconcile();
+      return;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const transient =
+        msg.includes('ECONNREFUSED') ||
+        msg.includes('connection refused') ||
+        msg.includes('request timeout');
+      if (!transient || Date.now() >= deadline) {
+        throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+}
+
+/**
  * Boot the apex (connector + townhouse-api) via `townhouse hs up`.
  * Idempotent: if the apex is already running, re-prints the hostname and exits 0.
  * After the apex is live, writes `~/.townhouse/host.json` and prints the final line.
@@ -918,6 +959,44 @@ async function handleHsUp(
       } else {
         process.env['TOWNHOUSE_WALLET_DIR'] = prevWalletDir;
       }
+    }
+
+    // Step 5b: reconcile connector peer state to nodes.yaml (Story 46.1).
+    // Runs after orchestrator.up([]) but BEFORE host.json is written and the
+    // hostname is printed. Reconciler divergences are non-fatal — the
+    // failure is logged to stderr but does not block apex boot.
+    const nodesYamlPath = join(configDir, 'nodes.yaml');
+    const reconcilerLogPath = join(configDir, 'reconciler.log');
+    const reconcilerFactory =
+      hsOverrides?.createReconciler ??
+      ((nodesPath: string, logPath: string) => {
+        const reconcilerAdminClient = new ConnectorAdminClient(
+          HS_CONNECTOR_ADMIN_URL,
+          5_000
+        );
+        return new BootReconciler(
+          reconcilerAdminClient,
+          nodesPath,
+          logPath
+        );
+      });
+    const reconciler = reconcilerFactory(nodesYamlPath, reconcilerLogPath);
+    // Brief retry on cold-boot transient errors — orchestrator.up() returns
+    // once Docker accepts the create call, not when the connector inside
+    // the container has bound its admin port. A short retry budget keeps
+    // cold-boot stderr quiet on the common "connector still warming" case
+    // while still surfacing genuine connector-down failures via the final
+    // non-fatal log below.
+    try {
+      await reconcileWithBriefRetry(reconciler, 5_000);
+    } catch (reconcilerErr: unknown) {
+      const detail =
+        reconcilerErr instanceof Error
+          ? (reconcilerErr.stack ?? reconcilerErr.message)
+          : String(reconcilerErr);
+      console.error(
+        `[townhouse hs up] reconciler error (non-fatal): ${detail}`
+      );
     }
 
     // Step 6: fetch published hostname and publishedAt for host.json (AC #6).

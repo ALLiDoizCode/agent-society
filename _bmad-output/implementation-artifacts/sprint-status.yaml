@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-10 (Epic 45 → done — live e2e verified; 10 post-merge bugs patched in commit 572544f; `townhouse hs up` publishes .anon apex end-to-end, both containers healthy)
+# last_updated: 2026-05-11 (Story 46.1 → done — code review applied 19 patches across reconciler/admin-client/schema/cli + index.ts: brief retry on cold-boot transients, schema uniqueness + ISO-8601 + .strict() + non-empty fields, per-divergence timestamps + log mkdir collapsed + reconciler.log chmod, reconcile() now returns ReconcileSummary, registerPeer URL-scheme guard + body-read timeout. 47/47 changed-code tests pass; build clean.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -508,8 +508,8 @@ development_status:
   # `townhouse node add <town|mill|dvm>` provisions on-demand: derive HD key →
   # pull image → write nodes.yaml → start container → /health → register.
   # nodes.yaml is operator-managed source of truth; default = Town only.
-  epic-46: backlog
-  46-1-nodes-yaml-schema-and-boot-reconciler-and-peer-type-resolver: backlog  # CRITICAL PATH
+  epic-46: in-progress
+  46-1-nodes-yaml-schema-and-boot-reconciler-and-peer-type-resolver: done  # CRITICAL PATH
   46-2-post-and-delete-api-nodes-host-api: backlog
   46-3-townhouse-node-add-remove-list-cli: backlog
   epic-46-retrospective: optional
