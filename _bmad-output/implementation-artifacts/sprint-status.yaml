@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-11 (Story 46.4 review — gate test file landed; Findings A/B patched via PR #50/51/52 (all merged); Finding C identified — rc5 tarball predates Epic 46's /api/nodes API. Story cannot flip to done until Epic 46 merges to main, rc6 is published, and the gate re-runs green against the new tarball.)
+# last_updated: 2026-05-12 (Epic 46 → done + retrospective complete (epic-46-retro-2026-05-12.md). 46.4 gate 5/5 PASS against rc6 (run 25750788502, image-manifest 0.1.0-rc6, connector v3.6.2). 14 integration findings resolved across PRs #50–#57 + connector#70. Retro carries 4 gate-sharpening action items (A1'–A4') for Epic 47. Epic 47 unblocks.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -526,12 +526,12 @@ development_status:
   # `townhouse node add <town|mill|dvm>` provisions on-demand: derive HD key →
   # pull image → write nodes.yaml → start container → /health → register.
   # nodes.yaml is operator-managed source of truth; default = Town only.
-  epic-46: in-progress
+  epic-46: done
   46-1-nodes-yaml-schema-and-boot-reconciler-and-peer-type-resolver: done  # CRITICAL PATH
   46-2-post-and-delete-api-nodes-host-api: done  # code review passed 2026-05-11
   46-3-townhouse-node-add-remove-list-cli: done  # code review passed 2026-05-11 (7 patches applied; 944/955 tests passing, 11 pre-existing failures unchanged)
-  46-4-live-e2e-gate-lazy-peer-node-provisioning: review  # Epic 45 retro A4 — gate ran 2026-05-11; 2 integration findings (rc5 manifest pins old connector; compose template hardcodes ~/.townhouse bind-mount) need separate PRs before flipping to done. See Review Findings in story file.
-  epic-46-retrospective: optional
+  46-4-live-e2e-gate-lazy-peer-node-provisioning: done  # Epic 45 retro A4 — gate ran 5/5 PASS against rc6 tarball 2026-05-12 (publish run 25750788502). Cleared findings A/B/C/D/E/F/G/H/I/J/L/M/N/O via PRs #50/51/52/53/54/55. Finding Q resolved by connector v3.6.2 (toon-protocol/connector#69 + #70) and adopted via PR #56. DVM arm64 QEMU SIGILL resolved by native runners (PR #57). Final gate timestamp: 2026-05-12T17:33:24, duration 82s.
+  epic-46-retrospective: done  # done: epic-46-retro-2026-05-12.md — 5/5 Epic 45 retro action items applied; 4 new gate-sharpening commitments (A1'–A4') for Epic 47
 
   # Epic 47: Earnings Data Plane
   # Connector is single source of truth for earnings (children stay /health-only).
