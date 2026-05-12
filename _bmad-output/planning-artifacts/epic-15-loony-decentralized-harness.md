@@ -1,7 +1,7 @@
 # Epic 15: Loony — Decentralized Agent Harness
 
 **Status:** BACKLOG
-**Decision source:** Party Mode 2026-03-23 (original autonomous agent scope); **Rescoped Party Mode 2026-05-11** — Decentralized Agent Harness
+**Decision source:** Party Mode 2026-03-23 (original autonomous agent scope); **Rescoped Party Mode 2026-05-11** — Decentralized Agent Harness; **Technical Research 2026-05-12** — drand quicknet adopted as VRF seed source (replaces Mina blockHash); Mina zkApp retained as ZK state kernel
 **Package:** `packages/loony` (planned — leaf node, imports `@toon-protocol/sdk` only)
 
 ---
@@ -18,8 +18,8 @@ The OS model that Loony implements:
 | Nostr Relay | RAM — fast ephemeral working memory | Session events, DVM job/result pairs, kind:30000 file pointers |
 | Arweave | DISK — permanent content-addressed storage | File blobs, raw execution traces (never summarized), checkpoints |
 | DVMs | DRIVERS — abstraction over services | read_file/edit_file/run_bash/grep via kind:5094 + kind:5250 |
-| Mina zkApp | KERNEL — enforces state, cannot be bypassed | `SessionRegistry` SmartContract: workspace_hash, lock, VRF election |
-| VRF (Mina) | SCHEDULER — selects who runs next, provably fair | Poseidon-hash VRF; selection unpredictable + on-chain verifiable |
+| Mina zkApp | KERNEL — enforces state, cannot be bypassed | `SessionRegistry` SmartContract: workspace_hash, lock, ZK state succession |
+| drand quicknet | SCHEDULER — selects who runs next, provably fair | Threshold BLS beacon (3s rounds, unbiasable) seeds Mina zkApp Poseidon VRF |
 | ILP | METERING — economic incentive layer | Every relay write, DVM job, Arweave upload is micropayment-gated |
 
 **Key insight:** VRF is the **scheduler**, not the loop. The loop is the OODA cycle. VRF certifies which DVM runs each iteration and proves no single party rigged the selection.
@@ -39,43 +39,90 @@ The OS model that Loony implements:
 ```
 PARALLEL NOW (no Mina dep, no Epic 14 dep):
   Epic 13 Track A: kind:5260 schema → ChainAdapter interface → EVM/Solana/AO adapters
-  Epic 15 Phase 0: 15.1 (scaffold), 15.2 (service discovery), 15.5 (workspace), 15.6 (trace events)
+  Epic 15 Phase 0: 15.0 (drand adapter), 15.1 (scaffold), 15.2 (service discovery),
+                   15.5 (workspace), 15.6 (trace events)
 
 GATE 1 — Epic 14 (kind:5250 consumer SDK) complete:
   Epic 15.3 (LLM inference), 15.4 (harness primitive action layer)
 
-GATE 2 — Epic 16 story 16.3 (OvermindRegistry zkApp) merges:
-  Epic 15.7 (SessionRegistry zkApp) — copies VRF pattern from 16.3, adds session lifecycle
-  ⚠️ Do NOT start 15.7 before 16.3 — the VRF o1js pattern must be established first
+GATE 2 — 15.0 complete + Epic 16 story 16.3 (OvermindRegistry zkApp) merges:
+  Epic 15.7 (SessionRegistry zkApp) — copies ZK pattern from 16.3, uses drand output as VRF seed
+  ⚠️ Do NOT start 15.7 before 16.3 — the o1js SmartContract pattern must be established first
 
 GATE 3 — Epic 16 story 16.4 (Chain Bridge Mina adapter) merges:
   Epic 13 Track B: 13.5 (Mina adapter ratification) → 13.9 (Consumer SDK) → 13.8 (handler registry)
 
 GATE 4 — Epic 13.9 Consumer SDK + 15.7 complete:
-  Epic 15.8 (Session Lifecycle Manager) — submits Mina txns via kind:5260, runs full OODA loop
+  Epic 15.8 (Session Lifecycle Manager) — fetches drand beacon, submits Mina txns via kind:5260
 
 GATE 5 — Epic 16 fully complete:
   Epic 15.9 (CAS locking), 15.10 (DVM earnings), 15.11 (capability extension), 15.12 (E2E)
   Epic 15.13 (session affinity) can run alongside 15.4
 ```
 
-**Critical path:** `15.1 → 15.2 → 15.5 → 15.7 → 15.8 → 15.12`
-Mina zkApp (15.7) is the long pole — start in parallel with 15.3/15.4 once 15.5 lands and 16.3 merges.
+**Critical path:** `15.0 → 15.7 → 15.8 → 15.12` (in parallel with `15.1 → 15.2 → 15.5 → 15.6`)
+Story 15.0 (drand adapter) is a fast unlock — S complexity, no external deps. Story 15.7 remains the long pole.
 
 ---
 
 ## Phase 0: Pre-Mina MVP
 
-Stories 15.1, 15.2, 15.5, 15.6 are fully buildable without Mina, without Epic 14, and without Epic 16. Phase 0 proves:
+Stories 15.0, 15.1, 15.2, 15.5, 15.6 are fully buildable without Mina, without Epic 14, and without Epic 16. Phase 0 proves:
 - An autonomous loop can run without a central server
 - Every tool call persists to Arweave and is independently reconstructible
 - The loop recovers from crash via Arweave state replay
+- drand randomness can be fetched and verified (15.0 is the seed for 15.7)
 
 Phase 0 does NOT prove trustless VRF election — that requires 15.7. Phase 0 is a real milestone, shippable as a standalone demo.
 
 ---
 
 ## Stories
+
+### Story 15.0 — drand Integration + Session Randomness Adapter *(S)*
+
+**Builds:** `src/drand-adapter.ts` — `DrandAdapter`. Fetches and verifies drand quicknet beacons. This is the randomness source that feeds the Mina zkApp's VRF seed in story 15.7.
+
+```ts
+interface DrandBeacon {
+  round: number          // monotonically increasing round number
+  randomness: string     // 32-byte hex — the actual random output
+  signature: string      // 48-byte hex BLS12-381 G1 signature
+  previousSignature: string  // unchained mode: empty string
+}
+
+class DrandAdapter {
+  // Fetch latest beacon or specific round
+  getBeacon(round?: number): Promise<DrandBeacon>
+
+  // Verify beacon against the hardcoded quicknet public key
+  verifyBeacon(beacon: DrandBeacon): Promise<boolean>
+
+  // Convert randomness hex to o1js Field for use as Provable.witness in zkApp
+  toField(randomness: string): Field
+}
+```
+
+**Implementation details:**
+- Endpoint: `https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/latest` (quicknet chain hash)
+- Specific round: append `/{round}` to path
+- Hardcode the quicknet group public key for offline verification — never trust the server to provide it
+- Beacon verification: check that `BLS12-381.verify(beacon.signature, groupPublicKey, SHA256(round_bytes))` holds. Use `@noble/bls12-381` (already a transitive dep via nostr-tools) for verification.
+- `toField`: `BigInt('0x' + beacon.randomness.slice(0, 62))` — truncate to fit o1js Field (< Mina's field modulus)
+- Retry logic: 3 attempts with 1s backoff on network failure
+- Timeout: 5s per attempt
+
+**AC:**
+- AC-15.0-1: `getBeacon()` returns a beacon with `round > 0`, non-empty `randomness` and `signature`
+- AC-15.0-2: `verifyBeacon()` returns `true` for a real quicknet beacon; returns `false` for tampered `randomness`
+- AC-15.0-3: `getBeacon(specificRound)` returns the beacon for exactly that round
+- AC-15.0-4: `toField()` returns a value within Mina's field modulus (< `2^254`); deterministic for same input
+- AC-15.0-5: Network failure triggers retry; throws `DrandError` after 3 failed attempts
+- AC-15.0-6: Hardcoded public key matches the known quicknet chain public key (test against a pinned real beacon)
+
+**Dependencies:** `@noble/bls12-381` (transitive), no external TOON deps — fully self-contained
+
+---
 
 ### Story 15.1 — Package Scaffold + Identity Bootstrap *(S)*
 
@@ -274,9 +321,13 @@ kind:5252 tags: `['s', sessionId], ['tool', type], ['i', JSON.stringify(input)],
 
 ---
 
-### Story 15.7 — Mina zkApp: SessionRegistry + VRF Lock Election *(L)*
+### Story 15.7 — Mina zkApp: SessionRegistry + drand-Seeded VRF Lock Election *(L)*
 
 **Builds:** `src/mina/session-registry.ts` — o1js `SmartContract`.
+
+**Role split (post-research decision 2026-05-12):**
+- **drand quicknet** → provides the unbiasable random seed (threshold BLS, 3s rounds)
+- **Mina zkApp** → ZK state kernel: commits `workspace_hash`, enforces lock ownership, proves succession
 
 **On-chain state (8 fields):**
 ```
@@ -286,38 +337,44 @@ iteration_count       Field  // monotonic, prevents replay
 lock_holder_key       Field  // pubkey of DVM currently holding write token
 lock_expires_slot     Field  // Mina slot — dead-man's switch
 task_hash             Field  // Poseidon hash of current task spec
-vrf_seed              Field  // input to next VRF election round
+drand_round           Field  // the drand quicknet round number used for this session's VRF
 trusted_worker_set_root Field // IndexedMerkleMap root (height 8, max 256 workers)
 ```
 
-**VRF mechanism** (no native VRF in o1js — uses structured entropy commitment):
+**VRF mechanism** (drand output as entropy source):
 ```ts
 // Inside @method openSession():
-const vrfSeed = Poseidon.hash([iteration_count, blockHash, session_id])
-// blockHash passed as Provable.witness Field, constrained to current slot:
-this.network.globalSlotSinceGenesis.getAndRequireEquals()
+// drandOutput: Field — passed as Provable.witness from DrandAdapter.toField(beacon.randomness)
+// Caller pre-verifies the drand beacon off-chain via DrandAdapter.verifyBeacon() before tx
+const vrfSeed = Poseidon.hash([drandOutput, session_id, iteration_count])
 // Winner = worker at index (vrfSeed % workerCount) in IndexedMerkleMap
+// No globalSlotSinceGenesis constraint — drand provides time-binding instead
 ```
 
+Why drand replaces `blockHash + globalSlotSinceGenesis`:
+- drand is **genuinely unbiasable** (threshold BLS — no last-revealer attack)
+- drand rounds are **3 seconds** vs 90-second Mina slots
+- The DVM calling `openSession()` verifies the drand beacon off-chain, passes the output as `Provable.witness` — the zkApp trusts the witness because a forged drand output would fail off-chain verification and the DVM would be slashable for submitting an invalid session
+
 **Methods:**
-- `openSession(workspaceHash, taskHash, workerRoot)` — VRF election, sets all 8 fields, emits `SessionOpened`
+- `openSession(workspaceHash, taskHash, drandOutput, drandRound, workerRoot)` — VRF election using drand seed, sets all 8 fields, emits `SessionOpened`
 - `checkpoint(newWorkspaceHash, iterationCount)` — caller must be `lock_holder_key`; updates hash + count; emits `Checkpoint`
 - `closeSession(finalWorkspaceHash)` — caller must be `lock_holder_key`; zeroes lock; emits `SessionClosed`
-- `reclaimLock()` — any caller after `currentSlot > lock_expires_slot`; re-runs VRF; emits `LockReclaimed`
+- `reclaimLock(drandOutput, drandRound)` — any caller after `currentSlot > lock_expires_slot`; re-runs VRF with fresh drand output; emits `LockReclaimed`
 
-⚠️ **Do NOT start this story before Epic 16 story 16.3 (OvermindRegistry zkApp) merges.** Copy the VRF Poseidon pattern directly from 16.3 — do not rediscover o1js constraints from scratch.
+⚠️ **Do NOT start this story before Epic 16 story 16.3 (OvermindRegistry zkApp) merges.** Copy the o1js SmartContract patterns (state fields, `@method async`, provable witness, `IndexedMerkleMap`) from 16.3.
 
 ⚠️ **Memory footprint comparable to pet-circuit (~2-4 GB).** Never run tests from sub-agents. Only run from main conversation with explicit approval.
 
 **AC:**
-- AC-15.7-1: `openSession()` sets all 8 fields; `lock_holder_key` matches VRF winner; test with `Mina.LocalBlockchain()`
-- AC-15.7-2: `checkpoint()` rejects caller not matching `lock_holder_key` (constraint fails)
-- AC-15.7-3: `reclaimLock()` succeeds only when `currentSlot > lock_expires_slot`; re-elects via VRF
-- AC-15.7-4: VRF is deterministic: same `(blockHash, session_id, workerRoot)` → same winner over 50 rounds
+- AC-15.7-1: `openSession()` sets all 8 fields; `lock_holder_key` matches VRF winner derived from drand seed; test with `Mina.LocalBlockchain()`
+- AC-15.7-2: `checkpoint()` rejects caller not matching `lock_holder_key` (ZK constraint fails)
+- AC-15.7-3: `reclaimLock()` succeeds only when `currentSlot > lock_expires_slot`; re-elects via fresh drand output
+- AC-15.7-4: VRF is deterministic: same `(drandOutput, session_id, iteration_count, workerRoot)` → same winner over 50 rounds; different drand rounds → different winners (randomness test)
 - AC-15.7-5: Contract compiles and deploys to Mina devnet; test skips gracefully if devnet offline
-- AC-15.7-6: `trusted_worker_set_root` is an `IndexedMerkleMap` root (height 8)
+- AC-15.7-6: `trusted_worker_set_root` is an `IndexedMerkleMap` root (height 8); `drand_round` stored on-chain for audit
 
-**Dependencies:** o1js ^2.2.0, 15.5 (`snapshotHash` produces the `workspace_hash` Field), **Epic 16 story 16.3** (VRF pattern — must ship first)
+**Dependencies:** o1js ^2.2.0, **15.0** (drand adapter — `toField()` produces the `Provable.witness` input), 15.5 (`snapshotHash` produces `workspace_hash`), **Epic 16 story 16.3** (o1js SmartContract pattern — must ship first)
 
 ---
 
@@ -365,7 +422,7 @@ class SessionManager {
 **Dead-man's switch:** if process dies mid-session, another `SessionManager` can call `reclaimLock()` after `lock_expires_slot` (integration test: kill process, advance mock slot, new agent reclaims).
 
 **AC:**
-- AC-15.8-1: `startSession()` elects non-zero `lockHolderKey` via Mina VRF and non-zero `lockExpiresSlot`
+- AC-15.8-1: `startSession()` fetches a drand beacon via `DrandAdapter`, verifies it, passes `toField(beacon.randomness)` to `openSession()`; resulting `lockHolderKey` is non-zero and `lockExpiresSlot` is set
 - AC-15.8-2: Relay events signed by `lockHolderKey`; verifiable against on-chain `lock_holder_key` field
 - AC-15.8-3: After 50 iterations, `checkpoint()` auto-fires; on-chain `workspace_hash` matches `snapshotHash()`
 - AC-15.8-4: `closeSession()` emits kind:5103 with Arweave tx ID; on-chain `lock_holder_key` zeroed
@@ -525,10 +582,12 @@ Provider handoff doc: `docs/provider-handoffs/compute-session-affinity.md` — a
 
 | Dependency | Blocks | Why |
 |---|---|---|
+| None (self-contained) | — | **15.0** has no TOON deps — `@noble/bls12-381` is transitive |
 | Epic 8 (kind:5094) | 15.5, 15.6 | Arweave blob upload for workspace + trace drain |
 | Epic 13 Track A | 15.8 | kind:5260 schema + consumer SDK |
 | **Epic 14 (kind:5250)** | 15.3, 15.4, 15.8, 15.13 | Compute DVM consumer SDK — CRITICAL PATH |
-| **Epic 16 story 16.3** | 15.7 | OvermindRegistry VRF pattern — do NOT start 15.7 before this |
+| **15.0 (drand adapter)** | 15.7 | `toField(beacon.randomness)` is the `Provable.witness` input to `openSession()` |
+| **Epic 16 story 16.3** | 15.7 | o1js SmartContract patterns — do NOT start 15.7 before this |
 | **Epic 16 story 16.4** | 15.8 | Chain Bridge Mina adapter must exist as provider |
 | Epic 16 complete | 15.9–15.12 | Full harness substrate available |
 
@@ -536,13 +595,14 @@ Provider handoff doc: `docs/provider-handoffs/compute-session-affinity.md` — a
 
 | Story | Title | Size |
 |---|---|---|
+| **15.0** | **drand Integration + Session Randomness Adapter** | **S** |
 | 15.1 | Package Scaffold + Identity | S |
 | 15.2 | Service Discovery | S |
 | 15.3 | Decoupled LLM Inference | M |
 | 15.4 | Harness Primitive Action Layer | M |
 | 15.5 | Workspace State / kind:30000 | M |
 | 15.6 | Session Trace Events / kind:5252 | M |
-| **15.7** | **Mina zkApp SessionRegistry** | **L** |
+| **15.7** | **Mina zkApp SessionRegistry (drand-seeded VRF)** | **L** |
 | **15.8** | **Session Lifecycle Manager** | **L** |
 | 15.9 | Multi-Agent CAS Locking | M |
 | 15.10 | DVM Provider + Earning | M |
@@ -550,4 +610,4 @@ Provider handoff doc: `docs/provider-handoffs/compute-session-affinity.md` — a
 | **15.12** | **Economics + E2E Validation** | **L** |
 | 15.13 | Compute Session Affinity | S |
 
-**Total: 2S + 7M + 3L = 13 stories**
+**Total: 3S + 7M + 3L = 14 stories**

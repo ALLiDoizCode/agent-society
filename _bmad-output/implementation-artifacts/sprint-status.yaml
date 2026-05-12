@@ -313,11 +313,13 @@ development_status:
   # Epic 13 Chain Bridge Mina adapter co-developed with Loony (15.8 IS the reference impl)
   # Dependencies: Epic 8, Epic 13 Track A, Epic 14, Epic 16.3 (before 15.7), Epic 16.4 (before 15.8)
   # NOTE: Renumbered from Epic 13 → 14 (2026-04-06) → 15 (2026-04-09); rescoped 2026-05-11
-  # Phase 0 (no Mina dep): 15.1, 15.2, 15.5, 15.6
+  # drand decision: 2026-05-12 — drand quicknet replaces Mina blockHash as VRF seed source
+  # Phase 0 (no Mina dep): 15.0 (drand adapter), 15.1, 15.2, 15.5, 15.6
   # Phase 1 (requires Epic 14): 15.3, 15.4
-  # Phase 2 (requires Epic 16.3 + 16.4 + Epic 13.9): 15.7, 15.8, 15.9
+  # Phase 2 (requires 15.0 + Epic 16.3 + 16.4 + Epic 13.9): 15.7, 15.8, 15.9
   # Phase 3 (requires Epic 16 complete): 15.10, 15.11, 15.12, 15.13
   epic-15: backlog
+  15-0-drand-integration-adapter: backlog
   15-1-package-scaffold-identity: backlog
   15-2-service-discovery: backlog
   15-3-decoupled-llm-inference: backlog

@@ -460,10 +460,11 @@ Loony is a decentralized agent harness — the first harness where no single par
 ```
 PARALLEL NOW (no Mina dep):
   Epic 13 Track A: kind:5260 schema → ChainAdapter interface → EVM/Solana/AO adapters
-  Epic 15: 15.1 (scaffold), 15.2 (service discovery), 15.5 (workspace), 15.6 (trace events)
+  Epic 15: 15.0 (drand adapter), 15.1 (scaffold), 15.2 (service discovery),
+           15.5 (workspace), 15.6 (trace events)
 
-GATE 1 — Epic 16 story 16.3 (OvermindRegistry zkApp) merges:
-  Epic 15.7 (SessionRegistry zkApp) — copies VRF pattern from 16.3, adds session lifecycle
+GATE 1 — 15.0 complete + Epic 16 story 16.3 (OvermindRegistry zkApp) merges:
+  Epic 15.7 (SessionRegistry zkApp) — uses drand output as VRF seed; o1js patterns from 16.3
 
 GATE 2 — Epic 16 story 16.4 (Chain Bridge Mina adapter) merges:
   Epic 13 Track B: 13.5 (Mina adapter ratification) → 13.9 (Consumer SDK)
@@ -475,8 +476,8 @@ GATE 4 — Epic 16 complete:
   Epic 15.9-15.13 (locking, earnings, capability extension, E2E)
 ```
 
-**Phase 0 (Pre-Mina MVP — stories 15.1, 15.2, 15.5, 15.6):**
-Phase 0 proves the Arweave-persisted autonomous loop without Mina. An agent that observes the relay, acts via DVMs, persists every tool call to Arweave, and recovers state after crash. Shippable before any Mina work begins. Validates the "loop without a central server" claim.
+**Phase 0 (Pre-Mina MVP — stories 15.0, 15.1, 15.2, 15.5, 15.6):**
+Phase 0 proves the Arweave-persisted autonomous loop without Mina. Story 15.0 also validates drand integration (the seed that feeds 15.7). Shippable before any Mina work begins.
 
 **What Loony is NOT:**
 - Not a re-implementation of Claude Code, Cursor, or Codex
@@ -484,65 +485,61 @@ Phase 0 proves the Arweave-persisted autonomous loop without Mina. An agent that
 - Not coupled to any specific LLM (sources inference from kind:5250 marketplace)
 - Not Overmind — Loony is the generic harness substrate; Overmind adds TEE identity + ZK sovereignty on top
 
-**Stories (13 stories):**
+**Stories (14 stories):**
 
-**Phase 0: Bootstrap + Arweave Loop (15.1–15.2, 15.5–15.6) — No external deps beyond Epic 8**
+**Phase 0: Bootstrap + Arweave Loop (15.0–15.2, 15.5–15.6) — No external deps**
 
-- **15.1 Package Scaffold & Identity Bootstrap** *(S)* — `packages/loony` (leaf node, imports `@toon-protocol/sdk` only, never core/bls). `createLoonyAgent(config: LoonyConfig): Promise<LoonyAgent>`. `LoonyConfig`: `{ mnemonic, relayUrls, chainConfig, budgetReserve }`. `LoonyAgent`: `start/stop/getIdentity/getBalance`. Identity from NIP-06 path `m/44'/1237'/0'/0/0`. Dev-mode faucet funding. AC: connects to relay, round-trips kind:1, `getBalance()` non-zero, `stop()` no dangling timers.
+- **15.0 drand Integration + Session Randomness Adapter** *(S)* — `DrandAdapter` fetching and verifying drand quicknet beacons (3s rounds, threshold BLS, genuinely unbiasable). `getBeacon(round?): Promise<DrandBeacon>`, `verifyBeacon(beacon): Promise<boolean>`, `toField(randomness): Field`. Hardcodes quicknet group public key — never trusts server-provided key. Uses `@noble/bls12-381` (transitive dep) for signature verification. `toField` truncates 32-byte hex to fit o1js Field. AC: fetches real beacon; `verifyBeacon` returns false for tampered randomness; `toField` output < Mina field modulus; retry on network failure; pinned test beacon verifies against hardcoded public key.
 
-- **15.2 Service Discovery & Perception Layer** *(S)* — `ServiceRegistry` subscribing to kind:10035 SkillDescriptor events. `discoverProviders(kind, features?)`, `getBestProvider(kind, features?, rankBy?)`, real-time update, stale TTL pruning (deprioritize not delete). AC: discovers kind:5094/5250/5260 providers; `getBestProvider('price')` returns lowest bid; new kind:10035 updates registry within 500ms.
+- **15.1 Package Scaffold & Identity Bootstrap** *(S)* — `packages/loony` (leaf node, imports `@toon-protocol/sdk` only). `createLoonyAgent(config: LoonyConfig): Promise<LoonyAgent>`. Identity from NIP-06 path `m/44'/1237'/0'/0/0`. Dev-mode faucet funding. AC: connects to relay, round-trips kind:1, `getBalance()` non-zero, `stop()` no dangling timers.
 
-- **15.5 Workspace State: Arweave Blob + kind:30000 Pointer Protocol** *(M)* — `WorkspaceManager`. Mutable file pointer: Nostr replaceable event (kind:30000-range, `d` tag = logical path, `r` tag = Arweave tx ID, `x` tag = sha256, `s` tag = sessionId). `readPointer(path)`, `writePointer(path, txId, sha256)`, `fetchBlob(txId)`, `snapshotHash(paths)` (Poseidon hash of sorted `[path, txId]` pairs — becomes `workspace_hash` for on-chain commitment). AC: write→read roundtrip matches; `snapshotHash` is deterministic and order-invariant; kind:30000 event has all four tags.
+- **15.2 Service Discovery & Perception Layer** *(S)* — `ServiceRegistry` subscribing to kind:10035 SkillDescriptor events. `discoverProviders(kind, features?)`, `getBestProvider(kind, features?, rankBy?)`, real-time update, stale TTL pruning. AC: discovers kind:5094/5250/5260 providers; `getBestProvider('price')` returns lowest bid; new kind:10035 updates registry within 500ms.
 
-- **15.6 Session Trace Events (kind:5252)** *(M)* — `SESSION_TRACE_KIND = 5252`. `SessionTrace.recordToolCall(call: ToolCallRecord)` — publishes kind:5252 tagged `['s', sessionId], ['tool', type], ['i', input], ['o', output], ['cost', costUsdc]`. **Raw only — NEVER summarize tool traces.** `queryCalls(sessionId, since?)`. `drainToArweave(sessionId): Promise<string>` — NDJSON upload via kind:5094, returns Arweave tx ID. AC: every `ActionDispatcher.act()` publishes kind:5252; cross-session isolation; drain roundtrips to original records verbatim.
+- **15.5 Workspace State: Arweave Blob + kind:30000 Pointer Protocol** *(M)* — `WorkspaceManager`. Mutable file pointer: Nostr replaceable event (kind:30000-range, `d`=path, `r`=Arweave tx ID, `x`=sha256, `s`=sessionId). `snapshotHash(paths)` (Poseidon hash of sorted `[path, txId]` pairs — becomes `workspace_hash` for Mina zkApp). AC: write→read roundtrip matches; `snapshotHash` deterministic and order-invariant; kind:30000 event has all four tags.
+
+- **15.6 Session Trace Events (kind:5252)** *(M)* — `SESSION_TRACE_KIND = 5252`. Publishes kind:5252 per tool call tagged with sessionId, tool type, raw input/output, cost. **Raw only — NEVER summarize.** `drainToArweave(sessionId)` — NDJSON upload via kind:5094. AC: every `ActionDispatcher.act()` publishes trace; cross-session isolation; drain roundtrips verbatim.
 
 **Phase 1: Harness Primitives (15.3–15.4) — Requires Epic 14**
 
-- **15.3 Decoupled LLM Inference via Compute Marketplace** *(M)* — `ReasoningEngine.reason(prompt, context?): Promise<string>`, `reasonStructured<T>(prompt, schema): Promise<T>`. Discovers inference provider via `ServiceRegistry` (`features: ['inference']`), submits kind:5250, polls kind:6250. Provider failover: on timeout or kind:7000 negative feedback, retry next-best (max 3). Uses reference Docker provider from Epic 14 in CI — no live LLM. AC: submits kind:5250, receives text; failover test passes; structured output validates against schema.
+- **15.3 Decoupled LLM Inference via Compute Marketplace** *(M)* — `ReasoningEngine.reason/reasonStructured`. Discovers `features: ['inference']` providers, submits kind:5250, polls kind:6250. Provider failover (max 3). Reference Docker provider from Epic 14 in CI. AC: kind:5250 submitted, text returned; failover passes; structured output validates against schema.
 
-- **15.4 Harness Primitive Action Layer** *(M)* — `ActionDispatcher.act(action: HarnessAction): Promise<HarnessResult>`. `HarnessAction` union extends original four primitives (message/store/compute/bridge) with four harness tools:
-  ```ts
-  | { type: 'read_file';  path: string }
-  | { type: 'edit_file';  path: string; oldStr: string; newStr: string }
-  | { type: 'run_bash';   cmd: string; sessionId: string }
-  | { type: 'grep';       pattern: string; path: string }
-  ```
-  `read_file`: resolves kind:30000 pointer → fetches Arweave blob. `edit_file`: reads → patches → uploads new blob via kind:5094 → updates pointer. `run_bash`: dispatches kind:5250 with `['param','session-id',sessionId]`. `grep`: dispatches kind:5250 with grep params. `HarnessResult`: `{ receipt, costUsdc, providerPubkey, arweaveTxId? }`. AC: all four harness tools produce correct event shapes and receipts; `edit_file` throws `PatchError` on no-match.
+- **15.4 Harness Primitive Action Layer** *(M)* — `ActionDispatcher` extending four TOON primitives with `read_file`, `edit_file`, `run_bash`, `grep` as DVM-backed tool calls. `read_file`: kind:30000→Arweave. `edit_file`: read→patch→kind:5094→pointer update. `run_bash`/`grep`: kind:5250. AC: correct event shapes; `edit_file` throws `PatchError` on no-match.
 
-**Phase 2: Mina Loop Governance (15.7–15.8) — Requires 15.5 + Epic 16.3 + Epic 13.9**
+**Phase 2: Mina Loop Governance (15.7–15.9) — Requires 15.0 + 15.5 + Epic 16.3 + Epic 13.9**
 
-- **15.7 Mina zkApp: SessionRegistry + VRF Lock Election** *(L)* — o1js `SmartContract` in `src/mina/session-registry.ts`. 8 on-chain state fields: `workspace_hash`, `session_id`, `iteration_count`, `lock_holder_key`, `lock_expires_slot`, `task_hash`, `vrf_seed`, `trusted_worker_set_root` (IndexedMerkleMap root, height 8). VRF mechanism: `Poseidon.hash([iteration_count, blockHash, session_id])` as seed; `blockHash` passed as `Provable.witness`, constrained to current slot via `this.network.globalSlotSinceGenesis.getAndRequireEquals()`. Methods: `openSession()` (VRF election), `checkpoint(newWorkspaceHash, iterationCount)` (caller must be `lock_holder_key`), `closeSession(finalHash)`, `reclaimLock()` (fires when `currentSlot > lock_expires_slot`). Copies VRF pattern from Epic 16 story 16.3 (OvermindRegistry) — do NOT start before 16.3 merges. ⚠️ o1js memory footprint comparable to pet-circuit (~2-4 GB) — never run tests from sub-agents. AC: all 8 fields set after `openSession`; `checkpoint` rejects non-lock-holder; `reclaimLock` re-elects after slot expiry; VRF deterministic over 50 rounds; deploys to Mina devnet.
+- **15.7 Mina zkApp: SessionRegistry + drand-Seeded VRF** *(L)* — o1js `SmartContract`. 8 on-chain fields: `workspace_hash`, `session_id`, `iteration_count`, `lock_holder_key`, `lock_expires_slot`, `task_hash`, `drand_round`, `trusted_worker_set_root`. **VRF mechanism (drand-seeded):** `Poseidon.hash([drandOutput, session_id, iteration_count])` — `drandOutput` passed as `Provable.witness` from `DrandAdapter.toField()`; no `globalSlotSinceGenesis` constraint (drand provides time-binding). DVM verifies beacon off-chain before calling `openSession()`. Methods: `openSession(workspaceHash, taskHash, drandOutput, drandRound, workerRoot)`, `checkpoint(newWorkspaceHash, iterationCount)`, `closeSession(finalHash)`, `reclaimLock(drandOutput, drandRound)`. Do NOT start before 16.3 merges. ⚠️ ~2-4 GB memory — never run tests from sub-agents. AC: all 8 fields set; `checkpoint` rejects non-lock-holder; `reclaimLock` re-elects with fresh drand; VRF deterministic over 50 rounds; deploys to Mina devnet; `drand_round` stored on-chain for audit.
 
-- **15.8 Session Lifecycle Manager** *(L)* — `SessionManager`. `startSession(task, config): Promise<Session>` — submits Mina tx via kind:5260 chain bridge, waits for kind:5261 confirmation, stores `{ sessionId, lockHolderKey, lockExpiresSlot }`. `runCycle(session): Promise<CycleResult>` — full OODA body: Observe (relay reads + `WorkspaceManager`), Orient+Decide (`ReasoningEngine.reasonStructured`), Act (`ActionDispatcher`); signs all relay events with `lockHolderKey`; auto-checkpoints every K=50 iterations. `closeSession(session)` — drains traces to Arweave, submits close tx via kind:5260, publishes kind:5103 with Arweave tx ID. `SessionConfig`: `{ maxIterations, checkpointInterval: 50, budgetPerCycleUsdc, lockExtensionSlots }`. AC: VRF elects non-zero `lockHolderKey`; cycle events signed by `lockHolderKey` and verifiable against on-chain field; checkpoint auto-fires and matches `snapshotHash`; dead-man's switch reclaim test passes.
+- **15.8 Session Lifecycle Manager** *(L)* — `SessionManager`. `startSession` fetches drand beacon via `DrandAdapter`, verifies it, submits Mina tx via kind:5260. `runCycle` — full OODA (Observe/Orient+Decide/Act), signs relay events with `lockHolderKey`, auto-checkpoints every K=50. `closeSession` — drains traces to Arweave, submits close tx, publishes kind:5103. AC: drand beacon fetched and verified before session opens; `lockHolderKey` non-zero; checkpoint fires at K=50 matching `snapshotHash`; dead-man's switch reclaim passes.
 
-- **15.9 Multi-Agent CAS Pointer Locking** *(M)* — `CASPointerLock.compareAndSwap(path, expectedTxId, newTxId, sessionId): Promise<'ok'|'conflict'>`. Two concurrent agents with same `expectedTxId`: exactly one `'ok'`, one `'conflict'`. Integrated into `ActionDispatcher` `edit_file` — surfaces as `HarnessResult.status: 'conflict'` not a throw. `resolveConflict(path)` returns both sides.
+- **15.9 Multi-Agent CAS Pointer Locking** *(M)* — `CASPointerLock.compareAndSwap` — optimistic lock on kind:30000 file pointers. Two concurrent agents: exactly one `'ok'`, one `'conflict'`. Surfaces as `HarnessResult.status: 'conflict'`, not a throw.
 
 **Phase 3: Economics & Extension (15.10–15.13) — Requires Epic 16 complete**
 
-- **15.10 DVM Provider Registration & Earning** *(M)* — `CompositeServiceManager.registerService(descriptor, handler)`. Composite handler orchestrates sub-jobs, charges margin. Revenue tracker per service: `{ earned, spent, margin, executionCount }`. AC: kind:10035 discoverable; incoming job dispatched, ILP received; `margin > 0` for earning service; thrown handler returns kind:7000 feedback without crash.
+- **15.10 DVM Provider Registration & Earning** *(M)* — `CompositeServiceManager`. Composite handler orchestrates sub-jobs, charges margin. Revenue tracker per service. AC: kind:10035 discoverable; ILP received; `margin > 0`; thrown handler returns kind:7000 without crash.
 
-- **15.11 Runtime Capability Extension** *(M)* — `CapabilityExtender.watch(registry, engine, manager)` — on new kind:10035, calls `engine.reasonStructured<CompositionProposal[]>()`, auto-registers profitable proposals. `CompositionProposal`: `{ name, steps, estimatedMargin, rationale }`. AC: new SkillDescriptor triggers proposal; profitable proposal auto-registers and appears on relay within 2s; malformed descriptor logs warning, no throw.
+- **15.11 Runtime Capability Extension** *(M)* — `CapabilityExtender` — on new kind:10035, LLM proposes compositions; profitable ones auto-register. AC: new SkillDescriptor triggers proposal; profitable proposal on relay within 2s.
 
-- **15.12 Self-Sustaining Economics + E2E Validation** *(L)* — `LoonyEconomics`: total earned/spent, per-service margin. Self-pruning: after 5 consecutive negative-margin executions, `deregisterService()` + kind:5 deletion. Budget governor: `willExceedReserve(cost)` checked before every `act()`. Periodic kind:1 economics report every 5 cycles. Full E2E: 10 autonomous OODA cycles, balance non-negative, one composite service registered, one capability extension performed, all cycles' traces reconstructible from Arweave. AC: 10 unattended cycles complete; self-pruning fires; budget governor blocks correctly; E2E passes against townhouse dev stack (28xxx ports).
+- **15.12 Self-Sustaining Economics + E2E Validation** *(L)* — `LoonyEconomics`, self-pruning after 5 negative-margin executions, budget governor. Full E2E: 10 unattended OODA cycles, balance non-negative, all traces reconstructible from Arweave, on-chain `workspace_hash` matches `snapshotHash` at close. AC: E2E passes against townhouse dev stack (28xxx ports).
 
-- **15.13 Compute DVM Session Affinity Extension** *(S)* — Adds optional `['param', 'session-id', sessionId]` tag to kind:5250 in `@toon-protocol/core` event builder/parser. `run_bash` in `ActionDispatcher` includes it from active session. Provider handoff doc: `docs/provider-handoffs/compute-session-affinity.md` — best-effort affinity, not cryptographically enforced. AC: kind:5250 from `run_bash` contains tag; tag is optional (absent valid); roundtrip parses correctly.
+- **15.13 Compute DVM Session Affinity Extension** *(S)* — Optional `['param','session-id',sessionId]` tag on kind:5250 in `@toon-protocol/core`. Provider handoff doc: best-effort affinity. AC: tag present on `run_bash`; optional (absent valid); roundtrip parses.
 
 **Dependencies:**
+- **15.0** (drand adapter) — required before 15.7 starts; self-contained, no TOON deps
 - Epic 8 (kind:5094 Arweave DVM) — required for 15.5, 15.6
 - Epic 13 Track A (kind:5260 schema + ChainAdapter interface) — co-developed; required for 15.8
 - Epic 14 (kind:5250 Compute DVM consumer SDK) — required for 15.3, 15.4, 15.8
-- Epic 16 story 16.3 (OvermindRegistry zkApp VRF pattern) — required before 15.7 starts
+- Epic 16 story 16.3 (OvermindRegistry o1js SmartContract patterns) — required before 15.7 starts
 - Epic 16 story 16.4 (Chain Bridge Mina adapter) — required before 15.8 starts
 
-**Decision source:** Party Mode 2026-03-23 (original scope); **Rescoped Party Mode 2026-05-11** — Decentralized Harness (VRF loop, Arweave workspace, DVM primitives, Mina zkApp kernel); Epic 13 co-development clarified same session.
+**Decision source:** Party Mode 2026-03-23 (original); Rescoped Party Mode 2026-05-11; **Technical Research 2026-05-12** — drand quicknet adopted as VRF seed (replaces Mina blockHash; genuinely unbiasable, 3s rounds, chain-agnostic); Mina zkApp retained as ZK state kernel.
 
 **Key Design Decisions:**
 - `packages/loony` imports `@toon-protocol/sdk` only — leaf node, never core/bls directly
-- LLM inference is decoupled — no embedded model; sources from kind:5250 marketplace
-- **Raw execution traces are NEVER summarized** — raw traces are irreplaceable for performance (Video 2 finding: summarizing drops accuracy 50%→34%)
-- VRF is the **scheduler**, not the loop — the OODA cycle is the loop; VRF certifies which DVM runs each iteration
-- Mina is **off the critical hot path** — relay handles fast working memory between checkpoints; Mina checkpoints every K=50 iterations (~5-10 Mina txns per session)
-- Epic 13 story 13.5 (Mina adapter) is **reclassified** from "build" to "ratify" — Epic 16.4 builds the Mina adapter; Epic 13.5 validates it against the spec and absorbs it into `packages/bridge`
+- LLM inference is decoupled — sources from kind:5250 marketplace; no embedded model
+- **Raw execution traces are NEVER summarized** (summarizing drops accuracy 50%→34%)
+- **drand is the SCHEDULER; Mina is the KERNEL** — drand provides unbiasable 3s selection; Mina commits workspace_hash and ZK-proves state succession; the two are complementary
+- Mina is **off the critical hot path** — relay handles fast working memory; Mina checkpoints every K=50 iterations
+- Epic 13 story 13.5 (Mina adapter) is **reclassified** from "build" to "ratify" — Epic 16.4 builds it; 13.5 validates against spec and absorbs into `packages/bridge`
 
 ---
 
