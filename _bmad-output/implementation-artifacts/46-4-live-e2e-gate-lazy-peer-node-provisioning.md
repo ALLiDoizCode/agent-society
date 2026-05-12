@@ -1,6 +1,6 @@
 # Story 46.4: Live E2E Gate — Lazy Peer Node Provisioning
 
-Status: review
+Status: done
 
 > **Fourth and final story of Epic 46 (Lazy Peer Node Provisioning) — the close-out gate per Epic 45 retro A4.** Sized S–M. Depends on Stories 46.1 (`nodes.yaml` schema + reconciler + peer-type resolver — done), 46.2 (POST/DELETE `/api/nodes` 6-step pipeline — done), 46.3 (`townhouse node add|remove|list` CLI verbs + GET `/api/nodes` — done). This story does **not** ship new product code by default; it ships ONE new vitest integration test file that drives the real CLI against real Docker and asserts the happy-path lazy-provisioning lifecycle survives the integration layer. If the gate finds bugs, those are patched in separate PRs **before** this story flips to `done` — that is the explicit rule from `_bmad-output/planning-artifacts/epics-townhouse-hs-v1.md:802-805` ("any bugs found during the gate run are patched (in separate PRs if needed) before this story is marked done"). Epic 47 cannot start until this story is `done`. Epic 46 cannot flip to `done` until this story is `done`. Both gates are enforced by the comment header in `_bmad-output/implementation-artifacts/sprint-status.yaml:1` (line: "46.4 must complete before Epic 46 flips to done").
 
@@ -376,6 +376,60 @@ But the vitest gate hit two distinct problems after the apex came up:
 7. ⏳ Flip 46.4 → `done` with PR #50, PR #51, and the publish-workflow PR cited in Review Findings.
 
 **Gate value re-affirmed.** This run caught a fresh integration bug (PR #50's `handleHsDown` regression) that would have shipped operator-visible. It also surfaced Finding C — the rc5 / Epic 46 release ordering — which is exactly the "integration gap not visible in code review" the Epic 45 retro A4 motivation called out: the unit suite never noticed because it stubs `fetch`; only end-to-end execution against the actual tarball-shipped image surfaces this.
+
+---
+
+_Final gate run 2026-05-12T17:33:24Z — **5/5 PASS** against the rc6 tarball with no local workarounds. Story → `done`._
+
+**Tarball under test:** `0.1.0-rc6` (publish workflow run [25750788502](https://github.com/toon-protocol/town/actions/runs/25750788502)).
+
+**Image manifest (from rc6 artifact):**
+
+| Image | Digest |
+|---|---|
+| townhouse-api | `sha256:b490df09d163dd88ae6f7d62faa6b0650d4a3a9aa5af7ab21102e82952c17755` |
+| town | `sha256:edd8c11c55fef11efd5d5bd530215f2393c79ff646299505592315eaf9ba469f` |
+| mill | `sha256:f59cdac83b33def16c33fbb75bd484c1a88c454b50e17ec9eb3bfb764d224c80` |
+| dvm | `sha256:90e116b6571b0fa5edead2bd17d15152b16b5a7e6fdf65d35f1ecaac3cb9ceeb` |
+| connector (3.6.2) | `sha256:815cef14708fa3e23f605379b19eeb26a478d4bdc52bd786806b55223cda09dd` |
+
+**Per-test PASS:**
+
+- [Test 1: `node add town`] PASS — all 6 pipeline steps complete (derive-key → pull-image → write-yaml → start-container → healthcheck → register-peer). Town container `townhouse-hs-town` healthy; nodes.yaml mode `0o600`; peerId / id / type all `town`; ilpAddress `g.townhouse.town`.
+- [Test 2: `node list` shows connected] PASS — connector reported `peer.connected: true` within the 30 s poll window after Finding Q's per-peer direct-transport opt-in landed (PR #56 + connector v3.6.2).
+- [Test 3: `node remove <id>`] PASS — container removed in ~8 s; nodes.yaml back to `entries: []`.
+- [Test 4: `node list` shows empty] PASS — `{nodes: []}`.
+- [Test 5: re-up idempotency] PASS — hostname unchanged via fast-path probe at `cli.ts:879-911` (<3 s); `townhouse-hs-anon` volume preserved (named without project prefix per Finding H); apex containers still running.
+
+**Suite duration:** 82.3 s on a warm-cache local box.
+
+**Findings resolution map (14 total — all closed):**
+
+| Finding | PR / external | Notes |
+|---|---|---|
+| A — rc5 connector pin too old | #52 | Publish-workflow default bumped 3.4.1 → 3.5.1, then 3.5.1 → 3.6.2 in #56 |
+| B — `~/.townhouse` hardcoded bind-mounts | #50 | `${TOWNHOUSE_HOME}` interpolation |
+| B.1 — `handleHsDown` env exports | #51 | Mirror handleHsUp pattern |
+| C — rc5 predates Epic 46 | #53 | Epic 46 merge to main → rc6 publish ships the new API |
+| D — docker.sock EACCES | #54 | `group_add: [${TOWNHOUSE_DOCKER_GID:-0}]` |
+| E — docker CLI missing from townhouse-api image | #54 | `apk add docker-cli docker-cli-compose` |
+| F — orchestrator constructed without HS profile | #54 | Pass `{profile:'hs', composePath}` in entrypoint |
+| G — connector URL via container loopback | #54 | `http://connector:${port}` via Docker DNS |
+| H — volume project-prefix | #54 | Explicit `name:` on volumes |
+| I — handleHsDown missing wallet-dir / UID / DOCKER_GID exports | #54 | Extend save/restore block |
+| J — `${VAR:?}` mandatory-error broke teardown | #54 | Switch to `${VAR:-}` lenient default |
+| L — env passthrough into townhouse-api container | #55 | Inner compose-up needs same vars |
+| M — networks lack explicit `name:` | #55 | Match volume treatment from H |
+| N — town settlement env var name wrong | #55 | Rename to `TOON_SETTLEMENT_PRIVATE_KEY` |
+| O — settlement key missing 0x prefix | #55 | Prefix in `buildNodeEnv` |
+| Q — connector routes local peers through SOCKS5 | toon-protocol/connector#69 → #70 → v3.6.2 → #56 | Per-peer `transport: 'direct'` field added to connector admin API; Townhouse opts every Docker-sibling peer into direct transport |
+| (operational) — DVM arm64 QEMU SIGILL | #57 | Replaced QEMU with native `ubuntu-24.04-arm` runners |
+
+Finding P was investigated and rejected (entrypoint-town.ts already maps the legacy env var names; no defect).
+
+Finding K (transport probe uses container loopback when `transport.mode === 'ator'`) was identified during triage but is dormant — the gate uses direct transport. Recorded as a known follow-up; will need the same Finding-G-style fix when ATOR mode is exercised in HS configuration.
+
+**Epic-level effect:** Epic 46 → `done`. Epic 47 (Earnings Data Plane) unblocks.
 
 ## Story Close-Out Checklist
 
