@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-11 (Story 46.4 review — gate test file landed; Findings A/B patched via PR #50/51/52 (all merged); Finding C identified — rc5 tarball predates Epic 46's /api/nodes API. Story cannot flip to done until Epic 46 merges to main, rc6 is published, and the gate re-runs green against the new tarball.)
+# last_updated: 2026-05-12 (Epic 46 → done. Epic 15 → in-progress: story 15-0-drand-integration-adapter created, ready-for-dev.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -313,13 +313,22 @@ development_status:
   # Epic 13 Chain Bridge Mina adapter co-developed with Loony (15.8 IS the reference impl)
   # Dependencies: Epic 8, Epic 13 Track A, Epic 14, Epic 16.3 (before 15.7), Epic 16.4 (before 15.8)
   # NOTE: Renumbered from Epic 13 → 14 (2026-04-06) → 15 (2026-04-09); rescoped 2026-05-11
+<<<<<<< HEAD
   # drand decision: 2026-05-12 — drand quicknet replaces Mina blockHash as VRF seed source
+=======
+  # drand decision 2026-05-12: drand quicknet replaces Mina blockHash as VRF seed
+>>>>>>> a4a4abd (feat(15.0): create story file — drand integration + session randomness adapter)
   # Phase 0 (no Mina dep): 15.0 (drand adapter), 15.1, 15.2, 15.5, 15.6
   # Phase 1 (requires Epic 14): 15.3, 15.4
   # Phase 2 (requires 15.0 + Epic 16.3 + 16.4 + Epic 13.9): 15.7, 15.8, 15.9
   # Phase 3 (requires Epic 16 complete): 15.10, 15.11, 15.12, 15.13
+<<<<<<< HEAD
   epic-15: backlog
   15-0-drand-integration-adapter: backlog
+=======
+  epic-15: in-progress
+  15-0-drand-integration-adapter: ready-for-dev
+>>>>>>> a4a4abd (feat(15.0): create story file — drand integration + session randomness adapter)
   15-1-package-scaffold-identity: backlog
   15-2-service-discovery: backlog
   15-3-decoupled-llm-inference: backlog
