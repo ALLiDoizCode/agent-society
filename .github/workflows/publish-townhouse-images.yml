@@ -23,6 +23,33 @@
 #       --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 #   done
 #
+# Build topology (native multi-arch runners — no QEMU):
+#   Job 1 build-per-platform (matrix image × platform = 8 jobs):
+#     - amd64 jobs run on `ubuntu-latest`, arm64 jobs on `ubuntu-24.04-arm`.
+#     - Each builds single-arch, pushes BY DIGEST ONLY (no tag applied at this
+#       stage — tags belong to manifest lists, not platform manifests).
+#     - Each signs its per-platform digest (defense-in-depth).
+#     - Each uploads a digest file named `<sha>` keyed under
+#       `digests-platform-<image>-<platform-pair>`.
+#   Job 2 merge-multi-arch (matrix image = 4 jobs):
+#     - Downloads the two per-platform digests for the image.
+#     - `docker buildx imagetools create -t <tag1> -t <tag2> … <image>@<digest1> <image>@<digest2>`
+#       publishes the manifest list with the right tags.
+#     - Signs the manifest-list digest (this is what `cosign verify <tag>`
+#       resolves against).
+#     - Verifies amd64+arm64 are both present in the manifest list.
+#     - Uploads the manifest-list digest as the `digest-<image>` artifact that
+#       Job 3 consumes.
+#   Job 3 build-image-manifest: reads manifest-list digests → image-manifest.json.
+#   Job 4 publish-npm: tag-only; same as before.
+#
+# Why ditch QEMU: arm64 emulation of the Solana dep chain in Dockerfile.dvm
+# triggered `qemu: uncaught target signal 4 (Illegal instruction) - core
+# dumped` — QEMU's user-mode emulator doesn't model some ARMv8 SIMD/atomics
+# instructions that LLVM emits in release-mode rustc / native postinstalls.
+# Native arm64 runners eliminate the emulation gap entirely. GitHub-hosted
+# `ubuntu-24.04-arm` is free on public repos (announced Jan 2025).
+#
 # Staged delivery history:
 #   v0.1.0 (Story 45.1): images + signatures + manifest published; npm publish in --dry-run
 #     pending Story 45.2 (tarball must ship compose templates + manifest before live publish).
@@ -61,25 +88,36 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Job 1: build-publish-sign (matrix across 4 townhouse-owned images)
+  # Job 1: build-per-platform (matrix across 4 images × 2 native-arch runners)
   # ---------------------------------------------------------------------------
-  build-publish-sign:
-    runs-on: ubuntu-latest
-    # arm64 QEMU emulation of the Solana dep chain takes 5.5-6 hrs on cold cache;
-    # extend beyond the 6hr GHA default to accommodate first-run cold-cache builds.
-    timeout-minutes: 420
+  #
+  # Each entry runs on the native runner for its target platform — no QEMU.
+  # Pushes by digest only (no tags); the merge-multi-arch job assembles the
+  # manifest list with the actual tags.
+  build-per-platform:
+    runs-on: ${{ matrix.runner }}
+    # Native arm64 builds complete in well under the 6 h GHA default. The 90-min
+    # ceiling is a guardrail against runtime regressions — well above the rc5
+    # baseline of 19 min on QEMU and the projected 8–10 min on native arm64.
+    timeout-minutes: 90
     strategy:
       matrix:
         image: [townhouse-api, town, mill, dvm]
-      # fail-fast: false — one image's transient sigstore flake should not abort the others
+        platform: [linux/amd64, linux/arm64]
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            platform_pair: linux-amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            platform_pair: linux-arm64
+      # fail-fast: false — one image/platform's transient sigstore flake should
+      # not abort the other 7
       fail-fast: false
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-
-      - name: Set up QEMU (cross-arch emulation for linux/arm64 on amd64 runners)
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130  # v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
@@ -91,7 +129,89 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract image metadata (tags + labels)
+      - name: Build and push platform image (by digest)
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: .
+          file: docker/Dockerfile.${{ matrix.image }}
+          platforms: ${{ matrix.platform }}
+          # push-by-digest=true: no tag is applied here. Tags belong to the
+          # manifest list, which the merge-multi-arch job creates from the
+          # per-platform digests. name-canonical=true keeps the registry ref
+          # stable for cosign signing.
+          outputs: type=image,name=ghcr.io/toon-protocol/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          # Per-platform cache buckets — sharing one bucket across platforms
+          # causes restoration of the wrong-arch layers.
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.platform_pair }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.platform_pair }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3.9.1
+
+      - name: Sign per-platform digest (defense-in-depth)
+        # The cosign-verify runbook in the file header resolves the
+        # manifest-list digest, which the merge job signs separately. Signing
+        # platform digests here lets advanced consumers verify a specific arch
+        # without resolving through the manifest list.
+        env:
+          COSIGN_YES: 'true'
+        run: |
+          cosign sign \
+            ghcr.io/toon-protocol/${{ matrix.image }}@${{ steps.build.outputs.digest }}
+
+      - name: Export digest to artifact
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload per-platform digest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: digests-platform-${{ matrix.image }}-${{ matrix.platform_pair }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Job 2: merge-multi-arch (4 entries — one per image)
+  # ---------------------------------------------------------------------------
+  #
+  # Combines the per-platform digests into a multi-arch manifest list, applies
+  # the canonical tags, signs the manifest-list digest, and uploads the digest
+  # in the artifact shape that Job 3 expects (digest-<image>/digest-<image>.txt).
+  merge-multi-arch:
+    runs-on: ubuntu-latest
+    needs: [build-per-platform]
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        image: [townhouse-api, town, mill, dvm]
+      fail-fast: false
+
+    steps:
+      - name: Download all per-platform digests for this image
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          # Two artifacts per image, one per platform_pair. merge-multiple: true
+          # flattens both directories into /tmp/digests so the create step can
+          # `printf` a single ref list.
+          pattern: digests-platform-${{ matrix.image }}-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata (tags)
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
         with:
@@ -102,48 +222,53 @@ jobs:
             type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
             type=sha,prefix=sha-
 
-      - name: Build and push multi-arch image
-        id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
-        with:
-          context: .
-          file: docker/Dockerfile.${{ matrix.image }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3.9.1
-
-      - name: Sign image digest via keyless OIDC
-        # Sign the immutable content digest, NOT the tag (tags are mutable —
-        # re-pointing a tag invalidates the signature binding to the old content).
-        # The id-token: write permission granted at job level supplies the OIDC token.
-        env:
-          COSIGN_YES: 'true'
+      - name: Create manifest list and push
+        # `docker buildx imagetools create` accepts one or more source refs (by
+        # digest) and zero or more -t target tags. It computes a fresh manifest
+        # list and pushes it under every -t tag atomically. The DOCKER_METADATA_*
+        # env vars come from the metadata-action above.
+        working-directory: /tmp/digests
         run: |
-          cosign sign \
-            ghcr.io/toon-protocol/${{ matrix.image }}@${{ steps.build.outputs.digest }}
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/toon-protocol/${{ matrix.image }}@sha256:%s ' *)
+
+      - name: Inspect manifest list (capture digest)
+        id: inspect
+        run: |
+          # Use the first tag from metadata-action's JSON output as the ref to
+          # resolve the manifest-list digest. Tag → digest is stable post-push
+          # because the create step above ran atomically.
+          FIRST_TAG=$(jq -cr '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          DIGEST=$(docker buildx imagetools inspect "$FIRST_TAG" --format '{{.Manifest.Digest}}')
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Verify multi-arch manifest (amd64 + arm64 both present)
-        # Use docker buildx imagetools inspect with the digest-form ref — more
-        # reliable than docker manifest inspect under parallel publishes because
-        # tag → digest resolution is racy during concurrent matrix jobs.
         run: |
           docker buildx imagetools inspect \
-            ghcr.io/toon-protocol/${{ matrix.image }}@${{ steps.build.outputs.digest }} \
+            ghcr.io/toon-protocol/${{ matrix.image }}@${{ steps.inspect.outputs.digest }} \
             --format '{{json .Manifest}}' \
             | jq -e '.manifests | map(.platform.architecture) | sort | contains(["amd64", "arm64"])' \
             || { echo "FAIL: ${{ matrix.image }} missing amd64 or arm64 in manifest list"; exit 1; }
 
-      - name: Write digest file for artifact upload
-        run: |
-          echo "${{ steps.build.outputs.digest }}" > /tmp/digest-${{ matrix.image }}.txt
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3.9.1
 
-      - name: Upload digest artifact
+      - name: Sign manifest-list digest
+        # This is the signature the cosign-verify runbook resolves against —
+        # `cosign verify <ref>` walks the registry to get the manifest-list
+        # digest and looks for that specific digest in the transparency log.
+        env:
+          COSIGN_YES: 'true'
+        run: |
+          cosign sign \
+            ghcr.io/toon-protocol/${{ matrix.image }}@${{ steps.inspect.outputs.digest }}
+
+      - name: Write manifest-list digest to file for downstream jobs
+        run: |
+          echo "${{ steps.inspect.outputs.digest }}" > /tmp/digest-${{ matrix.image }}.txt
+
+      - name: Upload manifest-list digest artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: digest-${{ matrix.image }}
@@ -152,11 +277,11 @@ jobs:
           overwrite: true
 
   # ---------------------------------------------------------------------------
-  # Job 2: build-image-manifest (collect digests → write manifest.json)
+  # Job 3: build-image-manifest (collect manifest-list digests → manifest.json)
   # ---------------------------------------------------------------------------
   build-image-manifest:
     runs-on: ubuntu-latest
-    needs: [build-publish-sign]
+    needs: [merge-multi-arch]
 
     steps:
       - name: Checkout repository
@@ -227,11 +352,11 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # Job 3: publish-npm (gated: tag pushes only, after all images signed)
+  # Job 4: publish-npm (gated: tag pushes only, after all images signed)
   # ---------------------------------------------------------------------------
   publish-npm:
     runs-on: ubuntu-latest
-    needs: [build-publish-sign, build-image-manifest]
+    needs: [merge-multi-arch, build-image-manifest]
     # Only npm-publish on real v* tag pushes — never on workflow_dispatch smoke runs
     if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
 
