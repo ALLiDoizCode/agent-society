@@ -19,6 +19,7 @@ import {
   existsSync,
   renameSync,
   rmSync,
+  statSync,
 } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
@@ -958,10 +959,24 @@ async function handleHsUp(
     //   TOWNHOUSE_WALLET_PASSWORD — required by townhouse-api service
     //   TOWNHOUSE_UID — run townhouse-api as the host user so bind-mounted
     //     ~/.townhouse files (rw------- 600) are readable inside the container
+    //   TOWNHOUSE_DOCKER_GID — host docker socket group (typically root:docker
+    //     mode 660 on Linux); added as supplementary group so the non-root
+    //     container user can read/write /var/run/docker.sock for the
+    //     `pull-image` step of POST /api/nodes. Without this, dockerode calls
+    //     from townhouse-api fail with `connect EACCES /var/run/docker.sock`.
+    let dockerSockGid = 0;
+    try {
+      dockerSockGid = statSync('/var/run/docker.sock').gid;
+    } catch {
+      // Socket missing — operator will see a clearer error at compose-up time.
+      // Fallback 0 keeps Compose interpolation valid; the container just won't
+      // gain extra group access (matches pre-fix behaviour for that case).
+    }
     const prevTownhouseHome = process.env['TOWNHOUSE_HOME'];
     const prevWalletPassword = process.env['TOWNHOUSE_WALLET_PASSWORD'];
     const prevTownhouseUid = process.env['TOWNHOUSE_UID'];
     const prevWalletDir = process.env['TOWNHOUSE_WALLET_DIR'];
+    const prevDockerGid = process.env['TOWNHOUSE_DOCKER_GID'];
     process.env['TOWNHOUSE_HOME'] = configDir;
     process.env['TOWNHOUSE_WALLET_PASSWORD'] = resolvedPassword;
     process.env['TOWNHOUSE_UID'] = String(process.getuid?.() ?? 1000);
@@ -970,6 +985,7 @@ async function handleHsUp(
     process.env['TOWNHOUSE_WALLET_DIR'] = dirname(
       resolve(config.wallet.encrypted_path)
     );
+    process.env['TOWNHOUSE_DOCKER_GID'] = String(dockerSockGid);
     try {
       await orch.up([]);
     } finally {
@@ -992,6 +1008,11 @@ async function handleHsUp(
         delete process.env['TOWNHOUSE_WALLET_DIR'];
       } else {
         process.env['TOWNHOUSE_WALLET_DIR'] = prevWalletDir;
+      }
+      if (prevDockerGid === undefined) {
+        delete process.env['TOWNHOUSE_DOCKER_GID'];
+      } else {
+        process.env['TOWNHOUSE_DOCKER_GID'] = prevDockerGid;
       }
     }
 
