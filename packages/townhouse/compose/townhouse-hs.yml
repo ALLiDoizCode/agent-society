@@ -55,10 +55,23 @@ networks:
 volumes:
   # Named volume for the connector's .anyone keypair + HS state.
   # Survives `docker compose down`; delete to rotate the .anyone address.
+  #
+  # The explicit `name:` fields bypass Compose's project-prefix mechanism.
+  # Without them, Compose derives the project name from the compose file's
+  # parent directory (e.g. `compose` when the file lives at
+  # ~/.townhouse/compose/townhouse-hs.yml or <tmpDir>/compose/townhouse-hs.yml),
+  # producing on-disk volumes named `compose_townhouse-hs-anon` etc. — which
+  # would break the test 5 `volumeExists('townhouse-hs-anon')` assertion AND
+  # operator-facing rotate-keys docs that reference the bare name. Discovered
+  # by Story 46.4 live gate run (Finding H, 2026-05-11).
   townhouse-hs-anon:
+    name: townhouse-hs-anon
   townhouse-hs-town-data:
+    name: townhouse-hs-town-data
   townhouse-hs-mill-data:
+    name: townhouse-hs-mill-data
   townhouse-hs-dvm-data:
+    name: townhouse-hs-dvm-data
 
 services:
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -185,9 +198,15 @@ services:
       TOWNHOUSE_API_HOST: 0.0.0.0
       TOWNHOUSE_API_ALLOW_REMOTE: '1'
       # Wallet decryption password — operator must export TOWNHOUSE_WALLET_PASSWORD
-      # in the shell that runs `docker compose up`. Compose interpolates the value
-      # at up time; the container exits immediately if it is unset (intended).
-      TOWNHOUSE_WALLET_PASSWORD: '${TOWNHOUSE_WALLET_PASSWORD:?TOWNHOUSE_WALLET_PASSWORD must be exported before docker compose up}'
+      # in the shell that runs `docker compose up`. The container-side
+      # entrypoint (entrypoint-townhouse-api.ts) enforces the password
+      # requirement at startup and exits 1 if it is missing — so the YAML
+      # uses `:-` (lenient default) here instead of `:?` (Compose-time
+      # mandatory error). The `:?` variant would also force `docker compose
+      # down` to error out unless the operator pre-exports the password,
+      # which broke the teardown flow. Discovered by Story 46.4 live gate
+      # run (Finding J, 2026-05-11).
+      TOWNHOUSE_WALLET_PASSWORD: '${TOWNHOUSE_WALLET_PASSWORD:-}'
     healthcheck:
       # nosemgrep: trailofbits.generic.wget-unencrypted-url.wget-unencrypted-url -- container-internal probe
       # Use 127.0.0.1 (not localhost) to avoid IPv6 resolution surprises. The

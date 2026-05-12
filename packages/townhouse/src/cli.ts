@@ -1126,19 +1126,61 @@ async function handleHsDown(
     hsOverrides?.materializeComposeTemplate ?? materializeComposeTemplate;
   const { composePath } = materialize('hs', { townhouseHome: configDir });
 
-  // TOWNHOUSE_HOME must be exported for `docker compose down` to interpolate
-  // the same bind-mount sources the template uses (`${TOWNHOUSE_HOME}/...`).
-  // Without it, Compose warns "TOWNHOUSE_HOME is not set" and rejects the
-  // teardown with `invalid spec: :/.townhouse:rw: empty section between colons`.
-  // Mirrors the env-export pattern in handleHsUp; covers both the default
-  // (orch.down()) and --rotate-keys (_runDockerComposeDown) paths below.
+  // Export every env var the compose template interpolates, so `docker compose
+  // down` parses the same YAML that `up` parsed. Compose's `${VAR:-default}`
+  // fallbacks for the wallet dir use a literal `~/.townhouse` which Docker
+  // doesn't expand — they only work when handleHsDown explicitly sets the
+  // var. TOWNHOUSE_WALLET_PASSWORD has a `${...:?...}` mandatory-error
+  // fallback (Finding J — fixed in the same PR by switching to `:-`), so set
+  // an empty string here to bypass it if Compose still requires it. Mirrors
+  // the env-export pattern in handleHsUp. Discovered by Story 46.4 live gate
+  // run (Finding I, 2026-05-11; supersedes PR #51's TOWNHOUSE_HOME-only fix).
   const prevTownhouseHome = process.env['TOWNHOUSE_HOME'];
+  const prevTownhouseUid = process.env['TOWNHOUSE_UID'];
+  const prevWalletDir = process.env['TOWNHOUSE_WALLET_DIR'];
+  const prevDockerGid = process.env['TOWNHOUSE_DOCKER_GID'];
+  const prevWalletPassword = process.env['TOWNHOUSE_WALLET_PASSWORD'];
   process.env['TOWNHOUSE_HOME'] = configDir;
+  process.env['TOWNHOUSE_UID'] = String(process.getuid?.() ?? 1000);
+  process.env['TOWNHOUSE_WALLET_DIR'] = dirname(
+    resolve(config.wallet.encrypted_path)
+  );
+  let dockerSockGid = 0;
+  try {
+    dockerSockGid = statSync('/var/run/docker.sock').gid;
+  } catch {
+    /* Docker socket missing — fall back to 0; compose down won't actually use it */
+  }
+  process.env['TOWNHOUSE_DOCKER_GID'] = String(dockerSockGid);
+  // Empty string keeps Compose interpolation valid even if the template still
+  // has a mandatory-error fallback. The container side checks the password
+  // itself; compose-down doesn't actually need it.
+  if (prevWalletPassword === undefined) {
+    process.env['TOWNHOUSE_WALLET_PASSWORD'] = '';
+  }
   const restoreTownhouseHome = (): void => {
     if (prevTownhouseHome === undefined) {
       delete process.env['TOWNHOUSE_HOME'];
     } else {
       process.env['TOWNHOUSE_HOME'] = prevTownhouseHome;
+    }
+    if (prevTownhouseUid === undefined) {
+      delete process.env['TOWNHOUSE_UID'];
+    } else {
+      process.env['TOWNHOUSE_UID'] = prevTownhouseUid;
+    }
+    if (prevWalletDir === undefined) {
+      delete process.env['TOWNHOUSE_WALLET_DIR'];
+    } else {
+      process.env['TOWNHOUSE_WALLET_DIR'] = prevWalletDir;
+    }
+    if (prevDockerGid === undefined) {
+      delete process.env['TOWNHOUSE_DOCKER_GID'];
+    } else {
+      process.env['TOWNHOUSE_DOCKER_GID'] = prevDockerGid;
+    }
+    if (prevWalletPassword === undefined) {
+      delete process.env['TOWNHOUSE_WALLET_PASSWORD'];
     }
   };
 
