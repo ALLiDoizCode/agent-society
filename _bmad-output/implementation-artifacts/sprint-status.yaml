@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-12 (Epic 46 → done + retrospective complete (epic-46-retro-2026-05-12.md). 46.4 gate 5/5 PASS against rc6 (run 25750788502, image-manifest 0.1.0-rc6, connector v3.6.2). 14 integration findings resolved across PRs #50–#57 + connector#70. Retro carries 4 gate-sharpening action items (A1'–A4') for Epic 47. Epic 47 unblocks.)
+# last_updated: 2026-05-12 (Story 47.1 → done after 3-layer parallel code review. 9 patches applied: inner-shape validation for peers/byAsset/connectorFees/recentClaims elements (resolved AC #3 inner-drift coverage gap); Omit+spread cast replaced with explicit construction; /503/ regex tightened; let-earnings any-leak fixed; non-Error 503-skip-path hardened; CONNECTOR_MIGRATION.md v3.2.0 vs v3.3.3+ contradiction unified; test descriptions and section titles aligned; stub fixtures use rest-spread deletion to mirror wire missing-key behavior. 6 deferred items (body-read-outside-timeout, non-ISO/NaN/Array body slip, Path-B 503 silent green) appended to deferred-work.md as project-wide pattern fixes shared with getMetrics()/getPeers(). Verification: 43 contract-canary tests in 36ms (sub-500ms held), 967 total townhouse tests, build clean.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -538,8 +538,8 @@ development_status:
   # Townhouse owns its own time-series via hourly snapshots in
   # ~/.townhouse/earnings-snapshots.jsonl. API-only — power users can curl
   # GET /api/earnings before any TUI ships.
-  epic-47: backlog
-  47-1-sdk-get-earnings-wrap-and-contract-canary: backlog  # CRITICAL PATH
+  epic-47: in-progress
+  47-1-sdk-get-earnings-wrap-and-contract-canary: done  # CRITICAL PATH; code review 2026-05-12: 9 patches applied (inner-shape validation + 8 hardening), 6 deferred to project-wide pattern fixes
   47-2-aggregator-earnings-surgery: backlog  # deletes the packet-volume proxy
   47-3-hourly-earnings-snapshot-writer: backlog  # property-based tests required (DST/year boundaries/corruption)
   47-4-get-api-earnings-two-bucket-endpoint: backlog
