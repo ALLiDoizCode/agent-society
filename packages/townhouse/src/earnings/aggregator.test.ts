@@ -20,7 +20,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import type { ConnectorAdminClient } from '../connector/index.js';
-import type { EarningsResponse, AssetEarnings } from '../connector/types.js';
+import type { EarningsResponse, AssetEarnings, MetricsResponse } from '../connector/types.js';
 import type { NodeType } from '../docker/types.js';
 
 import { PeerTypeResolver } from '../registry/peer-type-resolver.js';
@@ -35,8 +35,16 @@ import {
 const ENABLED_AT = '2026-01-01T00:00:00Z';
 
 function makeConnector(
-  earningsResponse?: EarningsResponse | 'throw' | '503'
+  earningsResponse?: EarningsResponse | 'throw' | '503',
+  metricsOverride?: MetricsResponse | 'throw'
 ): ConnectorAdminClient {
+  const defaultMetrics: MetricsResponse = {
+    uptimeSeconds: 0,
+    aggregate: { packetsForwarded: 0, packetsRejected: 0, bytesSent: 0 },
+    peers: [],
+    timestamp: '',
+  };
+
   return {
     getEarnings: vi.fn(async () => {
       if (earningsResponse === 'throw') throw new Error('connector down');
@@ -52,12 +60,10 @@ function makeConnector(
         }
       );
     }),
-    getMetrics: vi.fn(async () => ({
-      uptimeSeconds: 0,
-      aggregate: { packetsForwarded: 0, packetsRejected: 0, bytesSent: 0 },
-      peers: [],
-      timestamp: '',
-    })),
+    getMetrics: vi.fn(async () => {
+      if (metricsOverride === 'throw') throw new Error('metrics down');
+      return metricsOverride ?? defaultMetrics;
+    }),
     getHealth: vi.fn(async () => ({
       status: 'healthy' as const,
       uptime: 0,
@@ -116,6 +122,9 @@ describe('aggregateEarnings', () => {
     expect(result.status).toBe('ok');
     expect(result.apex.routingFees).toEqual({});
     expect(result.peers).toEqual([]);
+    expect(result.recentClaims).toEqual([]);
+    expect(result.eventsRelayed).toBe(0);
+    expect(result.uptimeSeconds).toBe(0);
   });
 
   it('[case 2] full earnings, all known peers — never touches getPacketLog (AC #5)', async () => {
@@ -160,12 +169,17 @@ describe('aggregateEarnings', () => {
 
     // All delta fields default to '0' when no deltaComputer.
     for (const peer of result.peers) {
+      expect(peer.lastClaimAt).toBeNull();
       for (const asset of Object.values(peer.byAsset)) {
         expect(asset.today).toBe('0');
         expect(asset.month).toBe('0');
         expect(asset.year).toBe('0');
       }
     }
+
+    expect(result.recentClaims).toEqual([]);
+    expect(result.eventsRelayed).toBe(0);
+    expect(result.uptimeSeconds).toBe(0);
 
     // AC #5 belt-and-suspenders: aggregator must not pull packet log.
     expect(connector.getPacketLog).not.toHaveBeenCalled();
@@ -190,6 +204,10 @@ describe('aggregateEarnings', () => {
     expect(result.peers[0].type).toBe('external');
     expect(result.peers[0].id).toBe('peer-external-x');
     expect(result.peers[0].byAsset['USD'].lifetime).toBe('99');
+    expect(result.peers[0].lastClaimAt).toBeNull();
+    expect(result.recentClaims).toEqual([]);
+    expect(result.eventsRelayed).toBe(0);
+    expect(result.uptimeSeconds).toBe(0);
   });
 
   it('[case 4] connector throws — status connector_unavailable, logger warned', async () => {
@@ -204,6 +222,9 @@ describe('aggregateEarnings', () => {
       status: 'connector_unavailable',
       apex: { routingFees: {} },
       peers: [],
+      recentClaims: [],
+      eventsRelayed: 0,
+      uptimeSeconds: 0,
     });
     expect(logger.warn).toHaveBeenCalledTimes(1);
     const [obj] = logger.warn.mock.calls[0];
@@ -220,6 +241,9 @@ describe('aggregateEarnings', () => {
       status: 'connector_unavailable',
       apex: { routingFees: {} },
       peers: [],
+      recentClaims: [],
+      eventsRelayed: 0,
+      uptimeSeconds: 0,
     });
   });
 
@@ -249,6 +273,9 @@ describe('aggregateEarnings', () => {
     expect(result.apex.routingFees['USD'].today).toBe('1');
     expect(result.peers[0].byAsset['USD'].today).toBe('1');
     expect(result.peers[0].byAsset['USD'].year).toBe('3');
+    expect(result.recentClaims).toEqual([]);
+    expect(result.eventsRelayed).toBe(0);
+    expect(result.uptimeSeconds).toBe(0);
 
     expect(deltaComputer).toHaveBeenCalledTimes(2);
     const calls = (deltaComputer as ReturnType<typeof vi.fn>).mock
@@ -309,6 +336,9 @@ describe('aggregateEarnings', () => {
     expect(result.peers[0].byAsset['A'].today).toBe('A');
     expect(result.peers[0].byAsset['B'].today).toBe('B');
     expect(result.peers[0].byAsset['C'].today).toBe('C');
+    expect(result.recentClaims).toEqual([]);
+    expect(result.eventsRelayed).toBe(0);
+    expect(result.uptimeSeconds).toBe(0);
   });
 
   it('[case 8] peer with empty byAsset — emits byAsset: {}, type resolved', async () => {
@@ -328,7 +358,7 @@ describe('aggregateEarnings', () => {
 
     expect(result.status).toBe('ok');
     expect(result.peers).toHaveLength(1);
-    expect(result.peers[0]).toEqual({ id: 'peer-quiet', type: 'town', byAsset: {} });
+    expect(result.peers[0]).toEqual({ id: 'peer-quiet', type: 'town', byAsset: {}, lastClaimAt: null });
   });
 
   it('[case 9] mixed known + unknown peers — both appear in the result', async () => {
@@ -405,5 +435,170 @@ describe('aggregateEarnings', () => {
     expect(logger.warn).toHaveBeenCalledTimes(1);
     const [obj] = logger.warn.mock.calls[0];
     expect((obj as { assetCode: string }).assetCode).toBe('BAD');
+  });
+
+  it('[case 11] eventsRelayed sums getMetrics().peers[].packetsForwarded', async () => {
+    const metrics: MetricsResponse = {
+      uptimeSeconds: 3600,
+      aggregate: { packetsForwarded: 350, packetsRejected: 0, bytesSent: 0 },
+      peers: [
+        { peerId: 'p1', connected: true, packetsForwarded: 100, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
+        { peerId: 'p2', connected: true, packetsForwarded: 200, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
+        { peerId: 'p3', connected: false, packetsForwarded: 50, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
+      ],
+      timestamp: '',
+    };
+
+    const result = await aggregateEarnings({
+      connectorAdmin: makeConnector(undefined, metrics),
+      peerTypeResolver: makeResolver([]),
+    });
+
+    expect(result.status).toBe('ok');
+    // Sum of peers[].packetsForwarded (100+200+50=350), NOT aggregate.packetsForwarded.
+    expect(result.eventsRelayed).toBe(350);
+    expect(result.uptimeSeconds).toBe(3600);
+  });
+
+  it('[case 12] getMetrics throws → graceful zero, getEarnings happy path proceeds', async () => {
+    const logger = makeLogger();
+    const earnings: EarningsResponse = {
+      uptimeSeconds: 0,
+      connectorFees: [],
+      recentClaims: [],
+      timestamp: { iso: '' },
+      peers: [{ peerId: 'peer-x', byAsset: [assetEntry('USD', '100')] }],
+    };
+
+    const result = await aggregateEarnings({
+      connectorAdmin: makeConnector(earnings, 'throw'),
+      peerTypeResolver: makeResolver([{ peerId: 'peer-x', type: 'town' }]),
+      logger,
+    });
+
+    expect(result.status).toBe('ok');
+    expect(result.eventsRelayed).toBe(0);
+    expect(result.uptimeSeconds).toBe(0);
+    expect(result.peers).toHaveLength(1);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    const [logObj, logMsg] = logger.warn.mock.calls[0];
+    expect(logMsg).toContain('getMetrics failed');
+    expect((logObj as { err: unknown }).err).toBeInstanceOf(Error);
+  });
+
+  it('[case 13] lastClaimAt is temporal max across peer assets (Date.parse comparator)', async () => {
+    const earnings: EarningsResponse = {
+      uptimeSeconds: 0,
+      connectorFees: [],
+      recentClaims: [],
+      timestamp: { iso: '' },
+      peers: [
+        {
+          peerId: 'peer-multi-asset',
+          byAsset: [
+            { ...assetEntry('USD', '100'), lastClaimAt: null },
+            { ...assetEntry('ETH', '200'), lastClaimAt: '2026-05-12T10:00:00.000Z' },
+            { ...assetEntry('SOL', '300'), lastClaimAt: '2026-05-13T05:00:00.000Z' },
+          ],
+        },
+        {
+          peerId: 'peer-all-null',
+          byAsset: [
+            { ...assetEntry('USD', '50'), lastClaimAt: null },
+            { ...assetEntry('ETH', '50'), lastClaimAt: null },
+          ],
+        },
+      ],
+    };
+
+    const result = await aggregateEarnings({
+      connectorAdmin: makeConnector(earnings),
+      peerTypeResolver: makeResolver([
+        { peerId: 'peer-multi-asset', type: 'town' },
+        { peerId: 'peer-all-null', type: 'mill' },
+      ]),
+    });
+
+    expect(result.status).toBe('ok');
+    const byId = Object.fromEntries(result.peers.map((p) => [p.id, p]));
+    expect(byId['peer-multi-asset'].lastClaimAt).toBe('2026-05-13T05:00:00.000Z');
+    expect(byId['peer-all-null'].lastClaimAt).toBeNull();
+  });
+
+  it('[case 14] lastClaimAt picks temporal max across heterogeneous ISO formats', async () => {
+    // Drift-resilience: same instant across millisecond-precision and offset-suffix variants.
+    // Raw string compare would pick '2026-05-13T05:00:00.000Z' over '2026-05-13T05:00:00Z'
+    // (`.` < `Z`); Date.parse normalizes the comparison.
+    const earnings: EarningsResponse = {
+      uptimeSeconds: 0,
+      connectorFees: [],
+      recentClaims: [],
+      timestamp: { iso: '' },
+      peers: [
+        {
+          peerId: 'peer-iso-mix',
+          byAsset: [
+            // No millis, Z suffix — earlier in real time
+            { ...assetEntry('USD', '1'), lastClaimAt: '2026-05-13T05:00:00Z' },
+            // Same instant + 1ms — should win
+            { ...assetEntry('ETH', '2'), lastClaimAt: '2026-05-13T05:00:00.001Z' },
+            // Offset suffix, earlier instant — must NOT lexicographically beat .001Z
+            { ...assetEntry('SOL', '3'), lastClaimAt: '2026-05-13T04:00:00+00:00' },
+          ],
+        },
+      ],
+    };
+
+    const result = await aggregateEarnings({
+      connectorAdmin: makeConnector(earnings),
+      peerTypeResolver: makeResolver([{ peerId: 'peer-iso-mix', type: 'town' }]),
+    });
+
+    expect(result.peers[0].lastClaimAt).toBe('2026-05-13T05:00:00.001Z');
+  });
+
+  it('[case 15] eventsRelayed falls back to aggregate.packetsForwarded when peers[] empty', async () => {
+    // Early-boot scenario per Task 1.8: connector returns 200 with peers: [] but
+    // aggregate.packetsForwarded > 0 because counters tick before peer registration.
+    const metrics: MetricsResponse = {
+      uptimeSeconds: 600,
+      aggregate: { packetsForwarded: 4096, packetsRejected: 0, bytesSent: 0 },
+      peers: [],
+      timestamp: '',
+    };
+
+    const result = await aggregateEarnings({
+      connectorAdmin: makeConnector(undefined, metrics),
+      peerTypeResolver: makeResolver([]),
+    });
+
+    expect(result.status).toBe('ok');
+    expect(result.eventsRelayed).toBe(4096);
+    expect(result.uptimeSeconds).toBe(600);
+  });
+
+  it('[case 16] eventsRelayed clamps negative / non-finite metric values to 0', async () => {
+    // Defense-in-depth: connector contract says nonneg int; if a regression ships
+    // a negative or NaN value, schema rejects it but Fastify response = serializer
+    // (would ship garbage). Clamp at the source.
+    const metrics: MetricsResponse = {
+      uptimeSeconds: -1,
+      aggregate: { packetsForwarded: 0, packetsRejected: 0, bytesSent: 0 },
+      peers: [
+        { peerId: 'p1', connected: true, packetsForwarded: 100, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
+        { peerId: 'p2', connected: true, packetsForwarded: Number.NaN, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
+        { peerId: 'p3', connected: true, packetsForwarded: -50, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
+      ],
+      timestamp: '',
+    };
+
+    const result = await aggregateEarnings({
+      connectorAdmin: makeConnector(undefined, metrics),
+      peerTypeResolver: makeResolver([]),
+    });
+
+    // Only the valid 100 counts; NaN + -50 clamp to 0.
+    expect(result.eventsRelayed).toBe(100);
+    expect(result.uptimeSeconds).toBe(0);
   });
 });

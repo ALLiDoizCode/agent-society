@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-12 (Story 47.2 → done. Code review applied 23 patches across aggregator + route + SPA + e2e: BLOCKER fix for malformed nodes.yaml → structured 500; deltaComputer rejection now graceful per-asset; wire-shape extension to {status: 'ok' | 'connector_unavailable', apex, peers} with SPA banner (D1 resolution); aggregator logger injection; test suite extended 7→10 cases incl. concurrent-fan-out proof, mixed known/unknown peers, deltaComputer-rejects-on-one-asset. Aggregator refactored from sequential apex→peers awaits to parallel Promise.all blocks. Unbounded peers[] deferred (D2). 965 townhouse + 429 townhouse-web tests passing.)
+# last_updated: 2026-05-13 (Story 47.4 → done)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -541,8 +541,8 @@ development_status:
   epic-47: in-progress
   47-1-sdk-get-earnings-wrap-and-contract-canary: done  # CRITICAL PATH; code review 2026-05-12: 9 patches applied (inner-shape validation + 8 hardening), 6 deferred to project-wide pattern fixes
   47-2-aggregator-earnings-surgery: done  # code review 2026-05-12: 23 patches applied (incl. D1 wire-shape change to add status: 'ok' | 'connector_unavailable' + SPA banner; D2 unbounded peers[] deferred). 965/965 townhouse + 429/429 townhouse-web. Aggregator refactored to parallel apex+peer Promise.all.
-  47-3-hourly-earnings-snapshot-writer: backlog  # property-based tests required (DST/year boundaries/corruption)
-  47-4-get-api-earnings-two-bucket-endpoint: backlog
+  47-3-hourly-earnings-snapshot-writer: done  # code review 2026-05-13: 15 patches applied (D1 simplified appendEntries to single appendFile; D2 logger.warn on tick skip; D3 leave fsync to project-wide story). 994/994 townhouse green. Negative-baseline inflation bug (P11) fixed; runTick wrapped to honor "NEVER throws" contract (P6); idempotent start() (P4); always-mkdir+chmod (P5); __apex__ peer-collision guard (P7); reader switched to numeric Date.parse comparisons (P10); empty-map on stream error (P13); NaN-clock guard (P14). 5 deferred to deferred-work.md.
+  47-4-get-api-earnings-two-bucket-endpoint: done  # code review 2026-05-13: 7 patches applied (P1 Date.parse comparator, P2 route-fixture schema validation, P3+P5 clamp+aggregate fallback, P4 comment reword, P6 open pass-through subschemas, P7 pattern+format enforcement w/ ajv-formats). 1015/1015 townhouse green, canary 43/43 unchanged. 4 deferred to deferred-work.md (buildFastifyApp test bypass, __apex__ collision, snapshot-reader logger, nodes.yaml symlink).
   47-5-live-e2e-gate-earnings-data-plane: backlog  # Epic 45 retro A4 — must complete before Epic 47 flips to done
   epic-47-retrospective: optional
 

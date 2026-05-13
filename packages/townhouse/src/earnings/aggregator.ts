@@ -22,10 +22,12 @@
  */
 
 import type { ConnectorAdminClient } from '../connector/index.js';
+import type { RecentClaim } from '../connector/types.js';
 import type { PeerTypeResolver } from '../registry/peer-type-resolver.js';
 import type { NodeType } from '../docker/types.js';
 
 export type { NodeType };
+export type { RecentClaim };
 
 /**
  * Per-asset cumulative + delta breakdown. `lifetime` is the connector's
@@ -47,6 +49,8 @@ export interface NodeEarnings {
   id: string;                         // == connector peerId
   type: NodeType | 'external';        // PeerTypeResolver attribution
   byAsset: Record<string, PerAsset>;  // keyed by assetCode
+  /** Max `lastClaimAt` across this peer's assets, or `null` if none. Added in 47.4. */
+  lastClaimAt: string | null;
 }
 
 /**
@@ -58,13 +62,19 @@ export interface NodeEarnings {
  */
 export type AggregatedEarningsStatus = 'ok' | 'connector_unavailable';
 
-/** Top-level aggregator output. */
+/** Top-level aggregator output. Extended in 47.4 with dashboard fields. */
 export interface AggregatedEarnings {
   status: AggregatedEarningsStatus;
   apex: {
     routingFees: Record<string, PerAsset>;  // keyed by assetCode
   };
   peers: NodeEarnings[];
+  /** Pass-through from connector `recentClaims`. Empty array on connector outage. */
+  recentClaims: RecentClaim[];
+  /** Sum of `getMetrics().peers[].packetsForwarded`. 0 on connector outage or metrics failure. */
+  eventsRelayed: number;
+  /** From `getMetrics().uptimeSeconds`. 0 on connector outage or metrics failure. */
+  uptimeSeconds: number;
 }
 
 /** Resolves TODAY / MONTH / YEAR deltas for a (scope, assetCode) tuple. */
@@ -150,6 +160,9 @@ export async function aggregateEarnings(
       status: 'connector_unavailable',
       apex: { routingFees: {} },
       peers: [],
+      recentClaims: [],
+      eventsRelayed: 0,
+      uptimeSeconds: 0,
     };
   }
 
@@ -197,13 +210,71 @@ export async function aggregateEarnings(
           })
         );
 
-        return { id: peer.peerId, type, byAsset };
+        // lastClaimAt: temporally-latest non-null timestamp across this peer's
+        // assets. Uses `Date.parse` rather than raw string compare so the result
+        // is stable under ISO-8601 format drift (millisecond-precision variance,
+        // timezone-offset suffix). Unparseable strings are skipped — never crash
+        // the response on a connector format regression.
+        const lastClaimAt = peer.byAsset.reduce<string | null>((acc, a) => {
+          const v = a.lastClaimAt;
+          if (!v) return acc;
+          const vMs = Date.parse(v);
+          if (!Number.isFinite(vMs)) return acc;
+          if (acc === null) return v;
+          const accMs = Date.parse(acc);
+          if (!Number.isFinite(accMs)) return v;
+          return vMs > accMs ? v : acc;
+        }, null);
+
+        return { id: peer.peerId, type, byAsset, lastClaimAt };
       })
     );
 
-  // Apex and peer blocks have no ordering dependency — run them in parallel
-  // so a single getEarnings() response fans out into one wave of delta calls.
-  const [routingFees, peers] = await Promise.all([buildRoutingFees(), buildPeers()]);
+  // Fan out: routing fees + peers + metrics concurrently.
+  // Reachable only after getEarnings() succeeded — early return above guards the failure path.
+  const metricsPromise = input.connectorAdmin.getMetrics().catch((err) => {
+    input.logger?.warn(
+      { err },
+      'aggregator: getMetrics failed — eventsRelayed/uptimeSeconds defaulting to 0'
+    );
+    return null;
+  });
 
-  return { status: 'ok', apex: { routingFees }, peers };
+  const [routingFees, peers, metricsResult] = await Promise.all([
+    buildRoutingFees(),
+    buildPeers(),
+    metricsPromise,
+  ]);
+
+  // eventsRelayed:
+  //   - primary: sum of peers[].packetsForwarded (AC #2 verbatim)
+  //   - fallback: aggregate.packetsForwarded when peers[] is empty
+  //     (early-boot case per Task 1.8 — connector returns 200 with peers: []
+  //     before any peer has registered, but aggregate counts may already be > 0)
+  // Both sources are clamped to non-negative finite integers — schema declares
+  // `{ type: 'integer', minimum: 0 }` but Fastify response is a serializer,
+  // not a validator, so we clamp at the source.
+  const clampInt = (n: number): number =>
+    Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+  let eventsRelayed = 0;
+  if (metricsResult) {
+    if (metricsResult.peers.length === 0) {
+      eventsRelayed = clampInt(metricsResult.aggregate.packetsForwarded);
+    } else {
+      eventsRelayed = metricsResult.peers.reduce(
+        (sum, p) => sum + clampInt(p.packetsForwarded),
+        0
+      );
+    }
+  }
+  const uptimeSeconds = clampInt(metricsResult?.uptimeSeconds ?? 0);
+
+  return {
+    status: 'ok',
+    apex: { routingFees },
+    peers,
+    recentClaims: earnings.recentClaims,
+    eventsRelayed,
+    uptimeSeconds,
+  };
 }

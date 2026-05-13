@@ -20,8 +20,10 @@ import { dirname, join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { ApiDeps } from '../types.js';
 import { aggregateEarnings } from '../../earnings/aggregator.js';
+import { createDeltaComputer } from '../../earnings/snapshot-reader.js';
 import { readNodesYaml } from '../../state/nodes-yaml.js';
 import { PeerTypeResolver } from '../../registry/peer-type-resolver.js';
+import { earningsResponseSchema } from '../schemas/earnings.js';
 
 /**
  * Convention shared with `nodes-lifecycle.ts`: `nodes.yaml` lives next to
@@ -32,11 +34,15 @@ function resolveNodesYamlPath(deps: ApiDeps): string {
   return join(dirname(deps.configPath), 'nodes.yaml');
 }
 
+function resolveSnapshotPath(deps: ApiDeps): string {
+  return join(dirname(deps.configPath), 'earnings-snapshots.jsonl');
+}
+
 export function registerEarningsRoutes(
   app: FastifyInstance,
   deps: ApiDeps
 ): void {
-  app.get('/api/earnings', async (request, reply) => {
+  app.get('/api/earnings', { schema: earningsResponseSchema }, async (request, reply) => {
     let yaml;
     try {
       yaml = await readNodesYaml(resolveNodesYamlPath(deps));
@@ -48,9 +54,11 @@ export function registerEarningsRoutes(
       return reply.status(500).send({ error: 'nodes_yaml_invalid' });
     }
     const peerTypeResolver = new PeerTypeResolver(yaml);
+    const deltaComputer = createDeltaComputer({ snapshotPath: resolveSnapshotPath(deps) });
     return aggregateEarnings({
       connectorAdmin: deps.connectorAdmin,
       peerTypeResolver,
+      deltaComputer,
       logger: request.log,
     });
   });
