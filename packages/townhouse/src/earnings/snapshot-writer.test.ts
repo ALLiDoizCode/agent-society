@@ -153,7 +153,7 @@ describe('SnapshotWriter', () => {
 
     await writer.tick();
 
-    const lines = readLines(snapshotPath) as Array<{ peerId: string }>;
+    const lines = readLines(snapshotPath) as { peerId: string }[];
     expect(lines).toHaveLength(1);
     expect(lines[0].peerId).toBe('__apex__');
   });
@@ -176,7 +176,7 @@ describe('SnapshotWriter', () => {
 
     await writer.tick();
 
-    const lines = readLines(snapshotPath) as Array<{ ts: string }>;
+    const lines = readLines(snapshotPath) as { ts: string }[];
     expect(lines.length).toBeGreaterThan(0);
     for (const l of lines) {
       expect(l.ts).toBe('2026-05-12T15:00:00.000Z');
@@ -261,7 +261,7 @@ describe('SnapshotWriter', () => {
     await writer.tick();
     await writer.tick();
 
-    const lines = readLines(snapshotPath) as Array<{ ts: string }>;
+    const lines = readLines(snapshotPath) as { ts: string }[];
     expect(lines).toHaveLength(3);
     const tsValues = lines.map((l) => l.ts);
     expect(tsValues[0]).toBe('2026-05-12T10:00:00.000Z');
@@ -305,7 +305,7 @@ describe('SnapshotWriter', () => {
 
     // Cutoff is 13 months before now: 2025-04-12T15:00:00.000Z
     const cutoff = new Date('2025-04-12T15:00:00.000Z');
-    const keptLines = readLines(snapshotPath) as Array<{ ts: string }>;
+    const keptLines = readLines(snapshotPath) as { ts: string }[];
     for (const l of keptLines) {
       expect(new Date(l.ts).getTime()).toBeGreaterThanOrEqual(cutoff.getTime());
     }
@@ -429,7 +429,7 @@ describe('SnapshotWriter', () => {
     }
 
     // Verify that at least some peer-0000 entries exist (round-trip correctness).
-    const peer0Lines = (lines as Array<{ peerId: string }>).filter((l) => l.peerId === 'peer-0000');
+    const peer0Lines = (lines as { peerId: string }[]).filter((l) => l.peerId === 'peer-0000');
     expect(peer0Lines).toHaveLength(2); // USD + ETH
   });
 

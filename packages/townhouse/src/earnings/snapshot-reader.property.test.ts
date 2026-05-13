@@ -20,7 +20,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { createDeltaComputer, utcDayBoundary, utcMonthBoundary, utcYearBoundary } from './snapshot-reader.js';
+import { createDeltaComputer, utcDayBoundary } from './snapshot-reader.js';
 import type { SnapshotEntry } from './snapshot-writer.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

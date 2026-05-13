@@ -150,9 +150,7 @@ describe('writeHsConnectorConfig', () => {
       string,
       unknown
     >;
-    const chainProviders = parsed['chainProviders'] as Array<
-      Record<string, unknown>
-    >;
+    const chainProviders = parsed['chainProviders'] as Record<string, unknown>[];
     expect(Array.isArray(chainProviders)).toBe(true);
     expect(chainProviders.length).toBeGreaterThanOrEqual(1);
     const first = chainProviders[0] ?? {};
@@ -182,9 +180,7 @@ describe('writeHsConnectorConfig', () => {
       string,
       unknown
     >;
-    const chainProviders = parsed['chainProviders'] as Array<
-      Record<string, unknown>
-    >;
+    const chainProviders = parsed['chainProviders'] as Record<string, unknown>[];
     expect(chainProviders).toHaveLength(1);
     expect(chainProviders[0]?.['chainId']).toBe('evm:base:8453');
     expect(chainProviders[0]?.['rpcUrl']).toBe('https://mainnet.base.org');

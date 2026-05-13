@@ -38,6 +38,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execSync } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import {
   mkdtempSync,
   rmSync,
@@ -186,7 +187,7 @@ function sleep(ms: number): Promise<void> {
 // names the budget. (Cross-cutting fix for the shared helper is tracked in
 // deferred-work.md.)
 async function waitForExitLabelled(
-  child: import('node:child_process').ChildProcess,
+  child: ChildProcess,
   budgetMs: number,
   label: string
 ): Promise<number> {
@@ -287,7 +288,7 @@ describe.skipIf(!shouldRun)(
   () => {
     let tmpDir: string;
     let firstHostname: string;
-    let addedNodeId: string;
+    let _addedNodeId: string;
     // Code-review P17: the CLI returns `{id, peerId}` but the route's
     // `peers[].id` is the connector-side peerId, NOT the local id. Capture both
     // so cross-checks compare apples to apples (the route never surfaces the
@@ -447,7 +448,7 @@ describe.skipIf(!shouldRun)(
       // Code-review P17: keep the CLI's local `id` for local bookkeeping, but
       // ALSO capture `peerId` for cross-checks against `/api/earnings.peers[].id`,
       // which is the connector-side peerId (not the CLI's local id).
-      addedNodeId = addBody.id;
+      _addedNodeId = addBody.id;
       addedPeerId = addBody.peerId;
 
       // 6. Construct adminClient for direct connector-state probing.
@@ -742,12 +743,12 @@ describe.skipIf(!shouldRun)(
           'snapshot file must contain ≥1 non-empty line'
         ).toBeGreaterThanOrEqual(1);
 
-        const entries: Array<{
+        const entries: {
           ts: string;
           peerId: string;
           assetCode: string;
           claimsReceivedTotal: string;
-        }> = [];
+        }[] = [];
         for (const line of lines) {
           let entry: { ts: string; peerId: string; assetCode: string; claimsReceivedTotal: string };
           try {
@@ -838,7 +839,7 @@ describe.skipIf(!shouldRun)(
           } catch (e) {
             // Log + continue; transient errors are expected during connector
             // restarts or chain-of-events races.
-            // eslint-disable-next-line no-console
+             
             console.warn(
               `[Test 4 poll] transient error (continuing): ${e instanceof Error ? e.message : String(e)}`
             );
@@ -873,7 +874,7 @@ describe.skipIf(!shouldRun)(
         if (!ext) {
           const escape = isTruthyEnv(process.env['SKIP_AC_STEP_6_BLOCKED']);
           if (escape) {
-            // eslint-disable-next-line no-console
+             
             console.warn(
               `⚠️  Test 4 BLOCKED-PARTIAL accepted via SKIP_AC_STEP_6_BLOCKED=1: ` +
                 `external peer ${externalPeerId} absent from /api/earnings after ` +

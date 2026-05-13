@@ -116,7 +116,7 @@ function makeDeps(opts: MockOpts, tmpHome: string): ApiDeps {
 /** Write a minimal nodes.yaml (real YAML, not JSON-passing-as-YAML). */
 function writeNodesYaml(
   tmpHome: string,
-  entries: Array<{ peerId: string; type: 'town' | 'mill' | 'dvm' }>
+  entries: { peerId: string; type: 'town' | 'mill' | 'dvm' }[]
 ): void {
   const doc = {
     entries: entries.map((e, i) => ({
