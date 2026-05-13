@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-12 (Epic 46 → done + retrospective complete (epic-46-retro-2026-05-12.md). 46.4 gate 5/5 PASS against rc6 (run 25750788502, image-manifest 0.1.0-rc6, connector v3.6.2). 14 integration findings resolved across PRs #50–#57 + connector#70. Retro carries 4 gate-sharpening action items (A1'–A4') for Epic 47. Epic 47 unblocks.)
+# last_updated: 2026-05-13 (Epic 47 retrospective → done; epic-47-retro-2026-05-13.md committed. 4 new action items A5'–A8' carry forward to Epic 48: compose-template ↔ generator contract test (widens Epic 46 retro A3'), connector × townhouse smoke test on publish (preempts BUG-2-class latents), D3 real-claim driver plan documented for Epic 50, patch-volume calibration heuristic in close-out checklist.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -538,13 +538,13 @@ development_status:
   # Townhouse owns its own time-series via hourly snapshots in
   # ~/.townhouse/earnings-snapshots.jsonl. API-only — power users can curl
   # GET /api/earnings before any TUI ships.
-  epic-47: backlog
-  47-1-sdk-get-earnings-wrap-and-contract-canary: backlog  # CRITICAL PATH
-  47-2-aggregator-earnings-surgery: backlog  # deletes the packet-volume proxy
-  47-3-hourly-earnings-snapshot-writer: backlog  # property-based tests required (DST/year boundaries/corruption)
-  47-4-get-api-earnings-two-bucket-endpoint: backlog
-  47-5-live-e2e-gate-earnings-data-plane: backlog  # Epic 45 retro A4 — must complete before Epic 47 flips to done
-  epic-47-retrospective: optional
+  epic-47: done
+  47-1-sdk-get-earnings-wrap-and-contract-canary: done  # CRITICAL PATH; code review 2026-05-12: 9 patches applied (inner-shape validation + 8 hardening), 6 deferred to project-wide pattern fixes
+  47-2-aggregator-earnings-surgery: done  # code review 2026-05-12: 23 patches applied (incl. D1 wire-shape change to add status: 'ok' | 'connector_unavailable' + SPA banner; D2 unbounded peers[] deferred). 965/965 townhouse + 429/429 townhouse-web. Aggregator refactored to parallel apex+peer Promise.all.
+  47-3-hourly-earnings-snapshot-writer: done  # code review 2026-05-13: 15 patches applied (D1 simplified appendEntries to single appendFile; D2 logger.warn on tick skip; D3 leave fsync to project-wide story). 994/994 townhouse green. Negative-baseline inflation bug (P11) fixed; runTick wrapped to honor "NEVER throws" contract (P6); idempotent start() (P4); always-mkdir+chmod (P5); __apex__ peer-collision guard (P7); reader switched to numeric Date.parse comparisons (P10); empty-map on stream error (P13); NaN-clock guard (P14). 5 deferred to deferred-work.md.
+  47-4-get-api-earnings-two-bucket-endpoint: done  # code review 2026-05-13: 7 patches applied (P1 Date.parse comparator, P2 route-fixture schema validation, P3+P5 clamp+aggregate fallback, P4 comment reword, P6 open pass-through subschemas, P7 pattern+format enforcement w/ ajv-formats). 1015/1015 townhouse green, canary 43/43 unchanged. 4 deferred to deferred-work.md (buildFastifyApp test bypass, __apex__ collision, snapshot-reader logger, nodes.yaml symlink).
+  47-5-live-e2e-gate-earnings-data-plane: done  # Epic 45 retro A4 — gate run 3 5/5 PASS 2026-05-13 in 60.79s against connector v3.6.3 (PR #72 merged + published) + locally-built townhouse-api (Epic 47.1–47.4 + D2). All 4 D-blockers resolved (D1 merged + released, D2 landed in-branch, D3 PM-deferred to Epic 50, D4 rerun harness scripted). Story flipped to done.
+  epic-47-retrospective: done  # done: epic-47-retro-2026-05-13.md — 2/4 Epic 46 retro action items fully applied + 2/4 partial; 4 new commitments (A5'–A8') focused on compose-template contract test, connector × townhouse smoke on publish, D3 real-claim driver plan for Epic 50, and patch-volume calibration heuristic
 
   # Epic 48: Operator Dashboard (Ink TUI)
   # Hero metric: MONTH $X.XX USDC. Two-bucket display (apex routing fees +
