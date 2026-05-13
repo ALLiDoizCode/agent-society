@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-12 (Story 47.1 → done after 3-layer parallel code review. 9 patches applied: inner-shape validation for peers/byAsset/connectorFees/recentClaims elements (resolved AC #3 inner-drift coverage gap); Omit+spread cast replaced with explicit construction; /503/ regex tightened; let-earnings any-leak fixed; non-Error 503-skip-path hardened; CONNECTOR_MIGRATION.md v3.2.0 vs v3.3.3+ contradiction unified; test descriptions and section titles aligned; stub fixtures use rest-spread deletion to mirror wire missing-key behavior. 6 deferred items (body-read-outside-timeout, non-ISO/NaN/Array body slip, Path-B 503 silent green) appended to deferred-work.md as project-wide pattern fixes shared with getMetrics()/getPeers(). Verification: 43 contract-canary tests in 36ms (sub-500ms held), 967 total townhouse tests, build clean.)
+# last_updated: 2026-05-12 (Story 47.2 → done. Code review applied 23 patches across aggregator + route + SPA + e2e: BLOCKER fix for malformed nodes.yaml → structured 500; deltaComputer rejection now graceful per-asset; wire-shape extension to {status: 'ok' | 'connector_unavailable', apex, peers} with SPA banner (D1 resolution); aggregator logger injection; test suite extended 7→10 cases incl. concurrent-fan-out proof, mixed known/unknown peers, deltaComputer-rejects-on-one-asset. Aggregator refactored from sequential apex→peers awaits to parallel Promise.all blocks. Unbounded peers[] deferred (D2). 965 townhouse + 429 townhouse-web tests passing.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -540,7 +540,7 @@ development_status:
   # GET /api/earnings before any TUI ships.
   epic-47: in-progress
   47-1-sdk-get-earnings-wrap-and-contract-canary: done  # CRITICAL PATH; code review 2026-05-12: 9 patches applied (inner-shape validation + 8 hardening), 6 deferred to project-wide pattern fixes
-  47-2-aggregator-earnings-surgery: backlog  # deletes the packet-volume proxy
+  47-2-aggregator-earnings-surgery: done  # code review 2026-05-12: 23 patches applied (incl. D1 wire-shape change to add status: 'ok' | 'connector_unavailable' + SPA banner; D2 unbounded peers[] deferred). 965/965 townhouse + 429/429 townhouse-web. Aggregator refactored to parallel apex+peer Promise.all.
   47-3-hourly-earnings-snapshot-writer: backlog  # property-based tests required (DST/year boundaries/corruption)
   47-4-get-api-earnings-two-bucket-endpoint: backlog
   47-5-live-e2e-gate-earnings-data-plane: backlog  # Epic 45 retro A4 — must complete before Epic 47 flips to done

@@ -120,6 +120,19 @@ export type {
 export type { BandwidthStats } from './docker/index.js';
 export type { PacketLogEntry, PacketLogFilter } from './connector/types.js';
 
+// Story 47.2 — aggregated earnings types (AggregatedEarnings, NodeEarnings,
+// PerAsset, DeltaComputer, AggregateEarningsInput, AggregatedEarningsStatus,
+// AggregatorLogger).
+export type {
+  AggregatedEarnings,
+  AggregatedEarningsStatus,
+  AggregateEarningsInput,
+  AggregatorLogger,
+  NodeEarnings,
+  PerAsset,
+  DeltaComputer,
+} from './earnings/aggregator.js';
+
 // Story 46.1 — nodes.yaml schema, peer-type resolver, boot reconciler.
 // Exported so Epic 47's aggregator (and downstream consumers) can import
 // without reaching into relative paths.
