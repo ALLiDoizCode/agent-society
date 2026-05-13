@@ -20,7 +20,11 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import type { ConnectorAdminClient } from '../connector/index.js';
-import type { EarningsResponse, AssetEarnings, MetricsResponse } from '../connector/types.js';
+import type {
+  EarningsResponse,
+  AssetEarnings,
+  MetricsResponse,
+} from '../connector/types.js';
 import type { NodeType } from '../docker/types.js';
 
 import { PeerTypeResolver } from '../registry/peer-type-resolver.js';
@@ -134,9 +138,18 @@ describe('aggregateEarnings', () => {
       recentClaims: [],
       timestamp: { iso: '2026-05-12T00:00:00Z' },
       peers: [
-        { peerId: 'peer-town', byAsset: [assetEntry('USD', '500'), assetEntry('ETH', '200')] },
-        { peerId: 'peer-mill', byAsset: [assetEntry('USD', '300'), assetEntry('ETH', '100')] },
-        { peerId: 'peer-dvm',  byAsset: [assetEntry('USD', '800'), assetEntry('ETH', '50')] },
+        {
+          peerId: 'peer-town',
+          byAsset: [assetEntry('USD', '500'), assetEntry('ETH', '200')],
+        },
+        {
+          peerId: 'peer-mill',
+          byAsset: [assetEntry('USD', '300'), assetEntry('ETH', '100')],
+        },
+        {
+          peerId: 'peer-dvm',
+          byAsset: [assetEntry('USD', '800'), assetEntry('ETH', '50')],
+        },
       ],
     };
     const resolver = makeResolver([
@@ -191,7 +204,9 @@ describe('aggregateEarnings', () => {
       connectorFees: [],
       recentClaims: [],
       timestamp: { iso: '' },
-      peers: [{ peerId: 'peer-external-x', byAsset: [assetEntry('USD', '99')] }],
+      peers: [
+        { peerId: 'peer-external-x', byAsset: [assetEntry('USD', '99')] },
+      ],
     };
 
     const result = await aggregateEarnings({
@@ -278,8 +293,9 @@ describe('aggregateEarnings', () => {
     expect(result.uptimeSeconds).toBe(0);
 
     expect(deltaComputer).toHaveBeenCalledTimes(2);
-    const calls = (deltaComputer as ReturnType<typeof vi.fn>).mock
-      .calls as [Parameters<DeltaComputer>[0]][];
+    const calls = (deltaComputer as ReturnType<typeof vi.fn>).mock.calls as [
+      Parameters<DeltaComputer>[0],
+    ][];
     const scopes = calls.map(([p]) => p.scope);
     expect(scopes).toContain('__apex__');
     expect(scopes).toContain('peer-a');
@@ -315,7 +331,11 @@ describe('aggregateEarnings', () => {
       peers: [
         {
           peerId: 'peer-multi',
-          byAsset: [assetEntry('A', '1'), assetEntry('B', '2'), assetEntry('C', '3')],
+          byAsset: [
+            assetEntry('A', '1'),
+            assetEntry('B', '2'),
+            assetEntry('C', '3'),
+          ],
         },
       ],
     };
@@ -329,7 +349,9 @@ describe('aggregateEarnings', () => {
 
     // Concurrency: all 4 calls (1 apex + 3 peer) entered before any resolved.
     expect(pendingCount).toBe(4);
-    expect(observedAssets).toEqual(new Set(['__apex__:APEX', 'peer-multi:A', 'peer-multi:B', 'peer-multi:C']));
+    expect(observedAssets).toEqual(
+      new Set(['__apex__:APEX', 'peer-multi:A', 'peer-multi:B', 'peer-multi:C'])
+    );
 
     // Resolved values reach the output (not just "calls were started").
     expect(result.apex.routingFees['APEX'].today).toBe('APEX');
@@ -358,7 +380,12 @@ describe('aggregateEarnings', () => {
 
     expect(result.status).toBe('ok');
     expect(result.peers).toHaveLength(1);
-    expect(result.peers[0]).toEqual({ id: 'peer-quiet', type: 'town', byAsset: {}, lastClaimAt: null });
+    expect(result.peers[0]).toEqual({
+      id: 'peer-quiet',
+      type: 'town',
+      byAsset: {},
+      lastClaimAt: null,
+    });
   });
 
   it('[case 9] mixed known + unknown peers — both appear in the result', async () => {
@@ -368,7 +395,7 @@ describe('aggregateEarnings', () => {
       recentClaims: [],
       timestamp: { iso: '' },
       peers: [
-        { peerId: 'peer-known',   byAsset: [assetEntry('USD', '111')] },
+        { peerId: 'peer-known', byAsset: [assetEntry('USD', '111')] },
         { peerId: 'peer-stranger', byAsset: [assetEntry('USD', '222')] },
       ],
     };
@@ -442,9 +469,30 @@ describe('aggregateEarnings', () => {
       uptimeSeconds: 3600,
       aggregate: { packetsForwarded: 350, packetsRejected: 0, bytesSent: 0 },
       peers: [
-        { peerId: 'p1', connected: true, packetsForwarded: 100, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
-        { peerId: 'p2', connected: true, packetsForwarded: 200, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
-        { peerId: 'p3', connected: false, packetsForwarded: 50, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
+        {
+          peerId: 'p1',
+          connected: true,
+          packetsForwarded: 100,
+          packetsRejected: 0,
+          bytesSent: 0,
+          lastPacketAt: null,
+        },
+        {
+          peerId: 'p2',
+          connected: true,
+          packetsForwarded: 200,
+          packetsRejected: 0,
+          bytesSent: 0,
+          lastPacketAt: null,
+        },
+        {
+          peerId: 'p3',
+          connected: false,
+          packetsForwarded: 50,
+          packetsRejected: 0,
+          bytesSent: 0,
+          lastPacketAt: null,
+        },
       ],
       timestamp: '',
     };
@@ -497,8 +545,14 @@ describe('aggregateEarnings', () => {
           peerId: 'peer-multi-asset',
           byAsset: [
             { ...assetEntry('USD', '100'), lastClaimAt: null },
-            { ...assetEntry('ETH', '200'), lastClaimAt: '2026-05-12T10:00:00.000Z' },
-            { ...assetEntry('SOL', '300'), lastClaimAt: '2026-05-13T05:00:00.000Z' },
+            {
+              ...assetEntry('ETH', '200'),
+              lastClaimAt: '2026-05-12T10:00:00.000Z',
+            },
+            {
+              ...assetEntry('SOL', '300'),
+              lastClaimAt: '2026-05-13T05:00:00.000Z',
+            },
           ],
         },
         {
@@ -521,7 +575,9 @@ describe('aggregateEarnings', () => {
 
     expect(result.status).toBe('ok');
     const byId = Object.fromEntries(result.peers.map((p) => [p.id, p]));
-    expect(byId['peer-multi-asset'].lastClaimAt).toBe('2026-05-13T05:00:00.000Z');
+    expect(byId['peer-multi-asset'].lastClaimAt).toBe(
+      '2026-05-13T05:00:00.000Z'
+    );
     expect(byId['peer-all-null'].lastClaimAt).toBeNull();
   });
 
@@ -541,9 +597,15 @@ describe('aggregateEarnings', () => {
             // No millis, Z suffix — earlier in real time
             { ...assetEntry('USD', '1'), lastClaimAt: '2026-05-13T05:00:00Z' },
             // Same instant + 1ms — should win
-            { ...assetEntry('ETH', '2'), lastClaimAt: '2026-05-13T05:00:00.001Z' },
+            {
+              ...assetEntry('ETH', '2'),
+              lastClaimAt: '2026-05-13T05:00:00.001Z',
+            },
             // Offset suffix, earlier instant — must NOT lexicographically beat .001Z
-            { ...assetEntry('SOL', '3'), lastClaimAt: '2026-05-13T04:00:00+00:00' },
+            {
+              ...assetEntry('SOL', '3'),
+              lastClaimAt: '2026-05-13T04:00:00+00:00',
+            },
           ],
         },
       ],
@@ -551,7 +613,9 @@ describe('aggregateEarnings', () => {
 
     const result = await aggregateEarnings({
       connectorAdmin: makeConnector(earnings),
-      peerTypeResolver: makeResolver([{ peerId: 'peer-iso-mix', type: 'town' }]),
+      peerTypeResolver: makeResolver([
+        { peerId: 'peer-iso-mix', type: 'town' },
+      ]),
     });
 
     expect(result.peers[0].lastClaimAt).toBe('2026-05-13T05:00:00.001Z');
@@ -585,9 +649,30 @@ describe('aggregateEarnings', () => {
       uptimeSeconds: -1,
       aggregate: { packetsForwarded: 0, packetsRejected: 0, bytesSent: 0 },
       peers: [
-        { peerId: 'p1', connected: true, packetsForwarded: 100, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
-        { peerId: 'p2', connected: true, packetsForwarded: Number.NaN, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
-        { peerId: 'p3', connected: true, packetsForwarded: -50, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
+        {
+          peerId: 'p1',
+          connected: true,
+          packetsForwarded: 100,
+          packetsRejected: 0,
+          bytesSent: 0,
+          lastPacketAt: null,
+        },
+        {
+          peerId: 'p2',
+          connected: true,
+          packetsForwarded: Number.NaN,
+          packetsRejected: 0,
+          bytesSent: 0,
+          lastPacketAt: null,
+        },
+        {
+          peerId: 'p3',
+          connected: true,
+          packetsForwarded: -50,
+          packetsRejected: 0,
+          bytesSent: 0,
+          lastPacketAt: null,
+        },
       ],
       timestamp: '',
     };

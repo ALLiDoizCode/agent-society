@@ -25,7 +25,10 @@ import type { SnapshotEntry } from './snapshot-writer.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function writeTmpSnapshot(entries: SnapshotEntry[]): { path: string; cleanup: () => void } {
+function writeTmpSnapshot(entries: SnapshotEntry[]): {
+  path: string;
+  cleanup: () => void;
+} {
   const dir = mkdtempSync(join(tmpdir(), '47-3-prop-'));
   const path = join(dir, 'earnings-snapshots.jsonl');
   const content = entries.map((e) => JSON.stringify(e)).join('\n') + '\n';
@@ -67,7 +70,10 @@ describe('snapshot-reader property tests', () => {
       fc.property(
         fc.date({ min: new Date('2025-01-01'), max: new Date('2026-12-01') }),
         fc.integer({ min: 24, max: 720 }),
-        fc.array(fc.bigInt({ min: 0n, max: 1_000_000n }), { minLength: 1, maxLength: 50 }),
+        fc.array(fc.bigInt({ min: 0n, max: 1_000_000n }), {
+          minLength: 1,
+          maxLength: 50,
+        }),
         (start, hours, increments) => {
           const entries = buildMonotonicEntries(
             start.getTime(),
@@ -96,17 +102,35 @@ describe('snapshot-reader property tests', () => {
     await fc.assert(
       fc.asyncProperty(
         fc.date({ min: new Date('2026-07-01'), max: new Date('2026-12-30') }),
-        fc.array(fc.bigInt({ min: 0n, max: 100_000n }), { minLength: 1, maxLength: 50 }),
+        fc.array(fc.bigInt({ min: 0n, max: 100_000n }), {
+          minLength: 1,
+          maxLength: 50,
+        }),
         async (now, increments) => {
           const yearStartMs = new Date('2026-01-01T00:00:00.000Z').getTime();
-          const hoursNeeded = Math.ceil((now.getTime() - yearStartMs) / 3_600_000) + 2;
-          const entries = buildMonotonicEntries(yearStartMs, hoursNeeded, 'peer-1', 'USD', increments);
-          const currentLifetime = entries[entries.length - 1].claimsReceivedTotal;
+          const hoursNeeded =
+            Math.ceil((now.getTime() - yearStartMs) / 3_600_000) + 2;
+          const entries = buildMonotonicEntries(
+            yearStartMs,
+            hoursNeeded,
+            'peer-1',
+            'USD',
+            increments
+          );
+          const currentLifetime =
+            entries[entries.length - 1].claimsReceivedTotal;
 
           const { path, cleanup } = writeTmpSnapshot(entries);
           try {
-            const dc = createDeltaComputer({ snapshotPath: path, now: () => now });
-            const result = await dc({ scope: 'peer-1', assetCode: 'USD', currentLifetime });
+            const dc = createDeltaComputer({
+              snapshotPath: path,
+              now: () => now,
+            });
+            const result = await dc({
+              scope: 'peer-1',
+              assetCode: 'USD',
+              currentLifetime,
+            });
             const today = BigInt(result.today);
             const month = BigInt(result.month);
             const year = BigInt(result.year);
@@ -132,13 +156,19 @@ describe('snapshot-reader property tests', () => {
 
     for (const dstDay of DST_DAYS) {
       const startMs = dstDay.getTime() - 48 * 3_600_000; // 2 days before
-      const entries = buildMonotonicEntries(startMs, 96, 'peer-1', 'USD', [100n]);
+      const entries = buildMonotonicEntries(startMs, 96, 'peer-1', 'USD', [
+        100n,
+      ]);
       const now = new Date(dstDay.getTime() + 3_600_000);
 
       const { path, cleanup } = writeTmpSnapshot(entries);
       try {
         const dc = createDeltaComputer({ snapshotPath: path, now: () => now });
-        const result = await dc({ scope: 'peer-1', assetCode: 'USD', currentLifetime: '10000' });
+        const result = await dc({
+          scope: 'peer-1',
+          assetCode: 'USD',
+          currentLifetime: '10000',
+        });
         // Assert valid strings (no NaN, no undefined, no throw).
         expect(typeof result.today).toBe('string');
         expect(typeof result.month).toBe('string');
@@ -159,20 +189,38 @@ describe('snapshot-reader property tests', () => {
   it('[prop 4] year boundary: YEAR resets across 2026-12-31 → 2027-01-01', async () => {
     // Build a sequence from 2026-12-30 through 2027-01-02.
     const startMs = new Date('2026-12-30T00:00:00.000Z').getTime();
-    const entries = buildMonotonicEntries(startMs, 72, 'peer-1', 'USD', [1000n]);
+    const entries = buildMonotonicEntries(startMs, 72, 'peer-1', 'USD', [
+      1000n,
+    ]);
 
     const beforeBoundary = new Date('2026-12-31T23:30:00.000Z');
     const afterBoundary = new Date('2027-01-01T00:30:00.000Z');
 
     const { path, cleanup } = writeTmpSnapshot(entries);
     try {
-      const currentLifetime = (BigInt(entries[entries.length - 1].claimsReceivedTotal) + 5000n).toString();
+      const currentLifetime = (
+        BigInt(entries[entries.length - 1].claimsReceivedTotal) + 5000n
+      ).toString();
 
-      const dcBefore = createDeltaComputer({ snapshotPath: path, now: () => beforeBoundary });
-      const dcAfter = createDeltaComputer({ snapshotPath: path, now: () => afterBoundary });
+      const dcBefore = createDeltaComputer({
+        snapshotPath: path,
+        now: () => beforeBoundary,
+      });
+      const dcAfter = createDeltaComputer({
+        snapshotPath: path,
+        now: () => afterBoundary,
+      });
 
-      const resBefore = await dcBefore({ scope: 'peer-1', assetCode: 'USD', currentLifetime });
-      const resAfter = await dcAfter({ scope: 'peer-1', assetCode: 'USD', currentLifetime });
+      const resBefore = await dcBefore({
+        scope: 'peer-1',
+        assetCode: 'USD',
+        currentLifetime,
+      });
+      const resAfter = await dcAfter({
+        scope: 'peer-1',
+        assetCode: 'USD',
+        currentLifetime,
+      });
 
       // Before the boundary: year boundary is 2026-01-01 (far in the past relative
       // to the entries which start 2026-12-30) — so year may be '0' (no snapshot
@@ -195,10 +243,19 @@ describe('snapshot-reader property tests', () => {
     await fc.assert(
       fc.asyncProperty(
         fc.integer({ min: 1, max: 50 }),
-        fc.array(fc.bigInt({ min: 0n, max: 100_000n }), { minLength: 1, maxLength: 20 }),
+        fc.array(fc.bigInt({ min: 0n, max: 100_000n }), {
+          minLength: 1,
+          maxLength: 20,
+        }),
         async (hours, increments) => {
           const startMs = new Date('2026-05-01T00:00:00.000Z').getTime();
-          const entries = buildMonotonicEntries(startMs, hours, 'peer-1', 'USD', increments);
+          const entries = buildMonotonicEntries(
+            startMs,
+            hours,
+            'peer-1',
+            'USD',
+            increments
+          );
 
           // Inject corruption: truncated last line (no '\n'), malformed JSON,
           // line with negative claimsReceivedTotal, BOM-prefixed line.
@@ -219,10 +276,18 @@ describe('snapshot-reader property tests', () => {
           writeFileSync(path, corruptLines.join('\n'), { mode: 0o600 });
 
           try {
-            const currentLifetime = entries[entries.length - 1].claimsReceivedTotal;
+            const currentLifetime =
+              entries[entries.length - 1].claimsReceivedTotal;
             const now = new Date(startMs + (hours + 1) * 3_600_000);
-            const dc = createDeltaComputer({ snapshotPath: path, now: () => now });
-            const result = await dc({ scope: 'peer-1', assetCode: 'USD', currentLifetime });
+            const dc = createDeltaComputer({
+              snapshotPath: path,
+              now: () => now,
+            });
+            const result = await dc({
+              scope: 'peer-1',
+              assetCode: 'USD',
+              currentLifetime,
+            });
 
             // No throw, no NaN, no undefined — just valid strings.
             if (typeof result.today !== 'string') return false;
@@ -249,13 +314,19 @@ describe('snapshot-reader property tests', () => {
   it('[prop 6] clock skew: all snapshots in the future → returns {0,0,0}', async () => {
     // Generate a sequence entirely in the future relative to `now`.
     const futureStart = new Date('2027-01-01T00:00:00.000Z').getTime();
-    const entries = buildMonotonicEntries(futureStart, 48, 'peer-1', 'USD', [500n]);
+    const entries = buildMonotonicEntries(futureStart, 48, 'peer-1', 'USD', [
+      500n,
+    ]);
     const now = new Date('2026-05-12T00:00:00.000Z'); // before all entries
 
     const { path, cleanup } = writeTmpSnapshot(entries);
     try {
       const dc = createDeltaComputer({ snapshotPath: path, now: () => now });
-      const result = await dc({ scope: 'peer-1', assetCode: 'USD', currentLifetime: '100000' });
+      const result = await dc({
+        scope: 'peer-1',
+        assetCode: 'USD',
+        currentLifetime: '100000',
+      });
       expect(result).toEqual({ today: '0', month: '0', year: '0' });
     } finally {
       cleanup();

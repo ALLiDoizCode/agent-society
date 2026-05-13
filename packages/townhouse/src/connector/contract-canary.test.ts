@@ -375,37 +375,52 @@ describe('getEarnings() shape contract', () => {
     expect(stub.calls).toHaveLength(1);
     // AC #3 canonical assertions (required by name in the acceptance criteria)
     expect(typeof result.uptimeSeconds).toBe('number');
-    expect(typeof result.peers[0]!.byAsset[0]!.claimsReceivedTotal).toBe('string');
+    expect(typeof result.peers[0]!.byAsset[0]!.claimsReceivedTotal).toBe(
+      'string'
+    );
     expect(typeof result.connectorFees[0]!.assetCode).toBe('string');
     expect(Array.isArray(result.recentClaims)).toBe(true);
   });
 
   it('rejects when uptimeSeconds has wrong type (string instead of number)', async () => {
-    mockFetchAt('/admin/earnings.json', { ...EARNINGS_BODY, uptimeSeconds: '60' });
-    await expect(client.getEarnings()).rejects.toThrow(/invalid earnings response shape/);
+    mockFetchAt('/admin/earnings.json', {
+      ...EARNINGS_BODY,
+      uptimeSeconds: '60',
+    });
+    await expect(client.getEarnings()).rejects.toThrow(
+      /invalid earnings response shape/
+    );
   });
 
   it('rejects when peers is missing (key absent — mirrors JSON wire dropping undefined)', async () => {
     const { peers: _omitPeers, ...rest } = EARNINGS_BODY;
     mockFetchAt('/admin/earnings.json', rest);
-    await expect(client.getEarnings()).rejects.toThrow(/invalid earnings response shape/);
+    await expect(client.getEarnings()).rejects.toThrow(
+      /invalid earnings response shape/
+    );
   });
 
   it('rejects when connectorFees is missing (key absent)', async () => {
     const { connectorFees: _omitFees, ...rest } = EARNINGS_BODY;
     mockFetchAt('/admin/earnings.json', rest);
-    await expect(client.getEarnings()).rejects.toThrow(/invalid earnings response shape/);
+    await expect(client.getEarnings()).rejects.toThrow(
+      /invalid earnings response shape/
+    );
   });
 
   it('rejects when recentClaims is not an array', async () => {
     mockFetchAt('/admin/earnings.json', { ...EARNINGS_BODY, recentClaims: {} });
-    await expect(client.getEarnings()).rejects.toThrow(/invalid earnings response shape/);
+    await expect(client.getEarnings()).rejects.toThrow(
+      /invalid earnings response shape/
+    );
   });
 
   it('rejects when timestamp is missing (key absent)', async () => {
     const { timestamp: _omitTs, ...rest } = EARNINGS_BODY;
     mockFetchAt('/admin/earnings.json', rest);
-    await expect(client.getEarnings()).rejects.toThrow(/invalid earnings response shape/);
+    await expect(client.getEarnings()).rejects.toThrow(
+      /invalid earnings response shape/
+    );
   });
 
   it('accepts empty arrays — fresh connector with no claims yet', async () => {
@@ -452,7 +467,9 @@ describe('getEarnings() shape contract', () => {
         },
       ],
     });
-    await expect(client.getEarnings()).rejects.toThrow(/invalid earnings response shape/);
+    await expect(client.getEarnings()).rejects.toThrow(
+      /invalid earnings response shape/
+    );
   });
 
   it('rejects when connectorFees[].assetCode is missing (inner presence drift)', async () => {
@@ -460,7 +477,9 @@ describe('getEarnings() shape contract', () => {
       ...EARNINGS_BODY,
       connectorFees: [{ assetScale: 6, total: '1000' }],
     });
-    await expect(client.getEarnings()).rejects.toThrow(/invalid earnings response shape/);
+    await expect(client.getEarnings()).rejects.toThrow(
+      /invalid earnings response shape/
+    );
   });
 
   it('rejects when recentClaims[].direction is not in the enum (inner enum drift)', async () => {
@@ -477,7 +496,9 @@ describe('getEarnings() shape contract', () => {
         },
       ],
     });
-    await expect(client.getEarnings()).rejects.toThrow(/invalid earnings response shape/);
+    await expect(client.getEarnings()).rejects.toThrow(
+      /invalid earnings response shape/
+    );
   });
 
   it('rejects when peers[].byAsset is not an array (inner structural drift)', async () => {
@@ -485,7 +506,9 @@ describe('getEarnings() shape contract', () => {
       ...EARNINGS_BODY,
       peers: [{ peerId: 'town', byAsset: null }],
     });
-    await expect(client.getEarnings()).rejects.toThrow(/invalid earnings response shape/);
+    await expect(client.getEarnings()).rejects.toThrow(
+      /invalid earnings response shape/
+    );
   });
 });
 

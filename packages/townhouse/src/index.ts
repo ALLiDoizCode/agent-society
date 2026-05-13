@@ -122,7 +122,10 @@ export type { PacketLogEntry, PacketLogFilter } from './connector/types.js';
 
 // Story 47.3 — hourly earnings snapshot writer + reader (DeltaComputer factory).
 export { SnapshotWriter } from './earnings/snapshot-writer.js';
-export type { SnapshotEntry, SnapshotWriterOptions } from './earnings/snapshot-writer.js';
+export type {
+  SnapshotEntry,
+  SnapshotWriterOptions,
+} from './earnings/snapshot-writer.js';
 export {
   createDeltaComputer,
   utcDayBoundary,

@@ -84,8 +84,18 @@ describe('createDeltaComputer', () => {
     const path = setup();
     try {
       const entries: SnapshotEntry[] = [
-        { ts: '2026-05-12T00:00:00.000Z', peerId: 'peer-1', assetCode: 'USD', claimsReceivedTotal: '1000000' },
-        { ts: '2026-05-01T00:00:00.000Z', peerId: 'peer-1', assetCode: 'USD', claimsReceivedTotal: '500000' },
+        {
+          ts: '2026-05-12T00:00:00.000Z',
+          peerId: 'peer-1',
+          assetCode: 'USD',
+          claimsReceivedTotal: '1000000',
+        },
+        {
+          ts: '2026-05-01T00:00:00.000Z',
+          peerId: 'peer-1',
+          assetCode: 'USD',
+          claimsReceivedTotal: '500000',
+        },
       ];
       writeSnapshot(path, entries);
 
@@ -94,10 +104,14 @@ describe('createDeltaComputer', () => {
         now: () => new Date('2026-05-12T15:42:00.000Z'),
       });
 
-      const result = await dc({ scope: 'peer-1', assetCode: 'USD', currentLifetime: '1234567' });
-      expect(result.today).toBe('234567');  // 1234567 - 1000000
-      expect(result.month).toBe('734567');  // 1234567 - 500000
-      expect(result.year).toBe('0');        // no year-boundary snapshot → '0' per AC #3
+      const result = await dc({
+        scope: 'peer-1',
+        assetCode: 'USD',
+        currentLifetime: '1234567',
+      });
+      expect(result.today).toBe('234567'); // 1234567 - 1000000
+      expect(result.month).toBe('734567'); // 1234567 - 500000
+      expect(result.year).toBe('0'); // no year-boundary snapshot → '0' per AC #3
     } finally {
       teardown();
     }
@@ -107,7 +121,12 @@ describe('createDeltaComputer', () => {
     const path = setup();
     try {
       const entries: SnapshotEntry[] = [
-        { ts: '2026-05-12T00:00:00.000Z', peerId: '__apex__', assetCode: 'USD', claimsReceivedTotal: '300' },
+        {
+          ts: '2026-05-12T00:00:00.000Z',
+          peerId: '__apex__',
+          assetCode: 'USD',
+          claimsReceivedTotal: '300',
+        },
       ];
       writeSnapshot(path, entries);
 
@@ -116,7 +135,11 @@ describe('createDeltaComputer', () => {
         now: () => new Date('2026-05-12T08:00:00.000Z'),
       });
 
-      const result = await dc({ scope: '__apex__', assetCode: 'USD', currentLifetime: '500' });
+      const result = await dc({
+        scope: '__apex__',
+        assetCode: 'USD',
+        currentLifetime: '500',
+      });
       expect(result.today).toBe('200'); // 500 - 300
     } finally {
       teardown();
@@ -132,7 +155,11 @@ describe('createDeltaComputer', () => {
         now: () => new Date('2026-05-12T15:00:00.000Z'),
       });
 
-      const result = await dc({ scope: 'nobody', assetCode: 'USD', currentLifetime: '9999' });
+      const result = await dc({
+        scope: 'nobody',
+        assetCode: 'USD',
+        currentLifetime: '9999',
+      });
       expect(result).toEqual({ today: '0', month: '0', year: '0' });
     } finally {
       teardown();
@@ -144,9 +171,19 @@ describe('createDeltaComputer', () => {
     try {
       const entries: SnapshotEntry[] = [
         // Future snapshot — should be ignored.
-        { ts: '2026-05-15T00:00:00.000Z', peerId: 'peer-1', assetCode: 'USD', claimsReceivedTotal: '999999999' },
+        {
+          ts: '2026-05-15T00:00:00.000Z',
+          peerId: 'peer-1',
+          assetCode: 'USD',
+          claimsReceivedTotal: '999999999',
+        },
         // Past snapshot — should be used.
-        { ts: '2026-05-12T00:00:00.000Z', peerId: 'peer-1', assetCode: 'USD', claimsReceivedTotal: '1000' },
+        {
+          ts: '2026-05-12T00:00:00.000Z',
+          peerId: 'peer-1',
+          assetCode: 'USD',
+          claimsReceivedTotal: '1000',
+        },
       ];
       writeSnapshot(path, entries);
 
@@ -155,7 +192,11 @@ describe('createDeltaComputer', () => {
         now: () => new Date('2026-05-12T10:00:00.000Z'),
       });
 
-      const result = await dc({ scope: 'peer-1', assetCode: 'USD', currentLifetime: '1500' });
+      const result = await dc({
+        scope: 'peer-1',
+        assetCode: 'USD',
+        currentLifetime: '1500',
+      });
       // Uses the 2026-05-12 snapshot (500), NOT the future 999999999.
       expect(result.today).toBe('500');
     } finally {
@@ -168,7 +209,12 @@ describe('createDeltaComputer', () => {
     try {
       const entries: SnapshotEntry[] = [
         // snapshot > currentLifetime → degenerate/corrupt state
-        { ts: '2026-05-12T00:00:00.000Z', peerId: 'peer-1', assetCode: 'USD', claimsReceivedTotal: '9999999' },
+        {
+          ts: '2026-05-12T00:00:00.000Z',
+          peerId: 'peer-1',
+          assetCode: 'USD',
+          claimsReceivedTotal: '9999999',
+        },
       ];
       writeSnapshot(path, entries);
 
@@ -177,7 +223,11 @@ describe('createDeltaComputer', () => {
         now: () => new Date('2026-05-12T10:00:00.000Z'),
       });
 
-      const result = await dc({ scope: 'peer-1', assetCode: 'USD', currentLifetime: '100' });
+      const result = await dc({
+        scope: 'peer-1',
+        assetCode: 'USD',
+        currentLifetime: '100',
+      });
       expect(result.today).toBe('0');
     } finally {
       teardown();
@@ -187,11 +237,22 @@ describe('createDeltaComputer', () => {
   it('[case 10] malformed line is skipped without crashing', async () => {
     const path = setup();
     try {
-      const content = [
-        JSON.stringify({ ts: '2026-05-12T00:00:00.000Z', peerId: 'peer-1', assetCode: 'USD', claimsReceivedTotal: '1000' }),
-        'not-valid-json',
-        JSON.stringify({ ts: '2026-05-01T00:00:00.000Z', peerId: 'peer-1', assetCode: 'USD', claimsReceivedTotal: '500' }),
-      ].join('\n') + '\n';
+      const content =
+        [
+          JSON.stringify({
+            ts: '2026-05-12T00:00:00.000Z',
+            peerId: 'peer-1',
+            assetCode: 'USD',
+            claimsReceivedTotal: '1000',
+          }),
+          'not-valid-json',
+          JSON.stringify({
+            ts: '2026-05-01T00:00:00.000Z',
+            peerId: 'peer-1',
+            assetCode: 'USD',
+            claimsReceivedTotal: '500',
+          }),
+        ].join('\n') + '\n';
       writeFileSync(path, content, { mode: 0o600 });
 
       const dc = createDeltaComputer({
@@ -199,9 +260,13 @@ describe('createDeltaComputer', () => {
         now: () => new Date('2026-05-12T15:00:00.000Z'),
       });
 
-      const result = await dc({ scope: 'peer-1', assetCode: 'USD', currentLifetime: '1500' });
+      const result = await dc({
+        scope: 'peer-1',
+        assetCode: 'USD',
+        currentLifetime: '1500',
+      });
       // Both valid lines are used; no throw.
-      expect(result.today).toBe('500');  // 1500 - 1000
+      expect(result.today).toBe('500'); // 1500 - 1000
       expect(result.month).toBe('1000'); // 1500 - 500
     } finally {
       teardown();
@@ -265,7 +330,11 @@ describe('createDeltaComputer', () => {
       });
 
       const t0 = performance.now();
-      await dc({ scope: 'peer-1', assetCode: 'USD', currentLifetime: '2000000000' });
+      await dc({
+        scope: 'peer-1',
+        assetCode: 'USD',
+        currentLifetime: '2000000000',
+      });
       const elapsed = performance.now() - t0;
 
       expect(elapsed).toBeLessThan(100);

@@ -33,7 +33,10 @@ import { registerLogsRoutes } from './routes/logs.js';
 export async function createApiServer(deps: ApiDeps): Promise<ApiServer> {
   const { config, logger } = deps;
 
-  const snapshotPath = join(dirname(deps.configPath), 'earnings-snapshots.jsonl');
+  const snapshotPath = join(
+    dirname(deps.configPath),
+    'earnings-snapshots.jsonl'
+  );
   const snapshotWriter = new SnapshotWriter({
     connectorAdmin: deps.connectorAdmin,
     snapshotPath,

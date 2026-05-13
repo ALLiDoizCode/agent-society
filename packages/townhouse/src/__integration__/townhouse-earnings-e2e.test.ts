@@ -74,7 +74,9 @@ import type { SnapshotEntry } from '../earnings/snapshot-writer.js';
 const ajv = new Ajv({ strict: true });
 addFormats(ajv);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const validateResponseShape = ajv.compile((earningsResponseSchema.response as any)[200]);
+const validateResponseShape = ajv.compile(
+  (earningsResponseSchema.response as any)[200]
+);
 
 function expectMatchesSchema(body: unknown): void {
   const ok = validateResponseShape(body);
@@ -141,7 +143,9 @@ const EARNINGS_URL = 'http://127.0.0.1:28090/api/earnings';
 // shell-side `--filter name=<prefix>`. (The cross-cutting fix for ALL townhouse
 // integration tests is tracked in deferred-work.md.)
 function dockerPs(): string[] {
-  const out = execSync(`docker ps --format "{{.Names}}"`, { encoding: 'utf-8' });
+  const out = execSync(`docker ps --format "{{.Names}}"`, {
+    encoding: 'utf-8',
+  });
   const names = new Set<string>(HS_CONTAINER_NAMES);
   return out
     .trim()
@@ -232,7 +236,10 @@ function parseLastJsonLine<T = unknown>(stdout: string, label: string): T {
 // 28090 (townhouse-api) are bound by a stale stack or unrelated process, `hs
 // up` will fail opaquely after a 360s timeout. Probing here surfaces the
 // conflict in <2s with a clear remediation hint.
-async function probePortFree(port: number, host = '127.0.0.1'): Promise<boolean> {
+async function probePortFree(
+  port: number,
+  host = '127.0.0.1'
+): Promise<boolean> {
   // We try to CONNECT to the port. If the connect succeeds, something is
   // listening (port is NOT free). If it fails (ECONNREFUSED), the port is
   // free. Using net.connect is cheaper than spawning a listener and avoids
@@ -279,7 +286,9 @@ async function fetchWithTimeout(
     return await fetch(url, { signal: AbortSignal.timeout(budgetMs) });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`[fetch ${label ?? url}] failed within ${budgetMs}ms: ${msg}`);
+    throw new Error(
+      `[fetch ${label ?? url}] failed within ${budgetMs}ms: ${msg}`
+    );
   }
 }
 
@@ -357,7 +366,11 @@ describe.skipIf(!shouldRun)(
         env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
       });
       // Code-review P11: distinguish timeout from null-exit clearly.
-      const initCode = await waitForExitLabelled(init.process, 30_000, 'townhouse init');
+      const initCode = await waitForExitLabelled(
+        init.process,
+        30_000,
+        'townhouse init'
+      );
       if (initCode !== 0) {
         throw new Error(
           `townhouse init exited ${initCode}. stdout: ${init.stdout.join('')}`
@@ -372,7 +385,11 @@ describe.skipIf(!shouldRun)(
         env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
         extraArgs: ['up'],
       });
-      const upCode = await waitForExitLabelled(up.process, 360_000, 'townhouse hs up');
+      const upCode = await waitForExitLabelled(
+        up.process,
+        360_000,
+        'townhouse hs up'
+      );
       if (upCode !== 0) {
         throw new Error(
           `townhouse hs up exited ${upCode}. stdout: ${up.stdout.join('')}`
@@ -427,7 +444,11 @@ describe.skipIf(!shouldRun)(
         env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
         extraArgs: ['add', 'town', '--json'],
       });
-      const addCode = await waitForExitLabelled(add.process, 180_000, 'townhouse node add town');
+      const addCode = await waitForExitLabelled(
+        add.process,
+        180_000,
+        'townhouse node add town'
+      );
       const addStdout = add.stdout.join('');
       if (addCode !== 0) {
         throw new Error(
@@ -477,7 +498,7 @@ describe.skipIf(!shouldRun)(
         // AC #1 step 1 is BLOCKED-PARTIAL (B.3.c) regardless.
         console.warn(
           '⚠️  earnings-e2e: no connected peers after 30s — ' +
-          'AC #1 step 1 BLOCKED-PARTIAL (OQ-1 sub-path B.3.c)'
+            'AC #1 step 1 BLOCKED-PARTIAL (OQ-1 sub-path B.3.c)'
         );
       }
 
@@ -551,438 +572,438 @@ describe.skipIf(!shouldRun)(
 
     // ── Test 1: GET /api/earnings 200 + schema + two-bucket shape ────────────
     // AC #1 step 2 + 5
-    it(
-      'GET /api/earnings returns 200 with valid two-bucket wire shape and eventsRelayed',
-      async () => {
-        // Code-review P16: hard 10s budget on the fetch itself; suite-level 30s
-        // is the ceiling but a hung connector should fail FAST with a labelled
-        // diagnostic instead of running out vitest's per-test timer.
-        const res = await fetchWithTimeout(EARNINGS_URL, 10_000, 'GET /api/earnings #1');
-        expect(res.status, 'HTTP status must be 200').toBe(200);
+    it('GET /api/earnings returns 200 with valid two-bucket wire shape and eventsRelayed', async () => {
+      // Code-review P16: hard 10s budget on the fetch itself; suite-level 30s
+      // is the ceiling but a hung connector should fail FAST with a labelled
+      // diagnostic instead of running out vitest's per-test timer.
+      const res = await fetchWithTimeout(
+        EARNINGS_URL,
+        10_000,
+        'GET /api/earnings #1'
+      );
+      expect(res.status, 'HTTP status must be 200').toBe(200);
 
-        const body = await res.json() as unknown;
+      const body = (await res.json()) as unknown;
 
-        // Schema-first: validate against earningsResponseSchema using Ajv
-        // directly (NOT Fastify's wire-level fast-json-stringify serializer,
-        // which silently drops unknown fields — 47.4 task 4.4 / story notes).
-        expectMatchesSchema(body);
+      // Schema-first: validate against earningsResponseSchema using Ajv
+      // directly (NOT Fastify's wire-level fast-json-stringify serializer,
+      // which silently drops unknown fields — 47.4 task 4.4 / story notes).
+      expectMatchesSchema(body);
 
-        const b = body as Record<string, unknown>;
+      const b = body as Record<string, unknown>;
 
-        // AC #1 step 2: two-bucket separation — apex.routingFees and peers[]
-        // must be distinct top-level keys (NOT collapsed to a single sum).
-        const apex = b['apex'] as Record<string, unknown> | undefined;
-        expect(apex, 'apex must be present').toBeDefined();
-        expect(
-          typeof apex?.['routingFees'],
-          'apex.routingFees must be an object'
-        ).toBe('object');
-        expect(Array.isArray(b['peers']), 'peers must be an array').toBe(true);
+      // AC #1 step 2: two-bucket separation — apex.routingFees and peers[]
+      // must be distinct top-level keys (NOT collapsed to a single sum).
+      const apex = b['apex'] as Record<string, unknown> | undefined;
+      expect(apex, 'apex must be present').toBeDefined();
+      expect(
+        typeof apex?.['routingFees'],
+        'apex.routingFees must be an object'
+      ).toBe('object');
+      expect(Array.isArray(b['peers']), 'peers must be an array').toBe(true);
 
-        // Code-review P2: status is union 'ok' | 'connector_unavailable' after
-        // 47.2's banner-mode widening. Accept either; gate the downstream
-        // peer-bucket assertions (Tests 2/4) on status === 'ok' since they
-        // require a live connector. Test 1's role is wire-shape validation;
-        // the connector-unavailable branch is a legitimate response.
-        expect(['ok', 'connector_unavailable']).toContain(b['status']);
+      // Code-review P2: status is union 'ok' | 'connector_unavailable' after
+      // 47.2's banner-mode widening. Accept either; gate the downstream
+      // peer-bucket assertions (Tests 2/4) on status === 'ok' since they
+      // require a live connector. Test 1's role is wire-shape validation;
+      // the connector-unavailable branch is a legitimate response.
+      expect(['ok', 'connector_unavailable']).toContain(b['status']);
 
-        // AC #1 step 5: eventsRelayed must be a non-negative integer — NOT
-        // undefined or null (47.4 AC #2 small-number-shaming guard).
-        // Code-review P13: Number.isInteger rejects NaN but accepts neither
-        // Infinity nor -Infinity in current ECMAScript. Add explicit
-        // Number.isFinite + Number.isInteger so any future numeric anomaly
-        // (NaN from a corrupted bigint, Infinity from a div-by-zero) trips.
-        const eventsRelayed = b['eventsRelayed'];
-        expect(eventsRelayed, 'eventsRelayed must be defined').toBeDefined();
-        expect(eventsRelayed, 'eventsRelayed must not be null').not.toBeNull();
-        expect(typeof eventsRelayed, 'eventsRelayed must be a number').toBe('number');
-        expect(
-          Number.isFinite(eventsRelayed),
-          'eventsRelayed must be finite (not NaN/Infinity)'
-        ).toBe(true);
-        expect(
-          Number.isInteger(eventsRelayed),
-          'eventsRelayed must be an integer'
-        ).toBe(true);
-        expect(
-          eventsRelayed as number,
-          'eventsRelayed must be ≥ 0'
-        ).toBeGreaterThanOrEqual(0);
+      // AC #1 step 5: eventsRelayed must be a non-negative integer — NOT
+      // undefined or null (47.4 AC #2 small-number-shaming guard).
+      // Code-review P13: Number.isInteger rejects NaN but accepts neither
+      // Infinity nor -Infinity in current ECMAScript. Add explicit
+      // Number.isFinite + Number.isInteger so any future numeric anomaly
+      // (NaN from a corrupted bigint, Infinity from a div-by-zero) trips.
+      const eventsRelayed = b['eventsRelayed'];
+      expect(eventsRelayed, 'eventsRelayed must be defined').toBeDefined();
+      expect(eventsRelayed, 'eventsRelayed must not be null').not.toBeNull();
+      expect(typeof eventsRelayed, 'eventsRelayed must be a number').toBe(
+        'number'
+      );
+      expect(
+        Number.isFinite(eventsRelayed),
+        'eventsRelayed must be finite (not NaN/Infinity)'
+      ).toBe(true);
+      expect(
+        Number.isInteger(eventsRelayed),
+        'eventsRelayed must be an integer'
+      ).toBe(true);
+      expect(
+        eventsRelayed as number,
+        'eventsRelayed must be ≥ 0'
+      ).toBeGreaterThanOrEqual(0);
 
-        const uptime = b['uptimeSeconds'];
-        expect(
-          Number.isFinite(uptime),
-          'uptimeSeconds must be finite'
-        ).toBe(true);
-        expect(
-          Number.isInteger(uptime),
-          'uptimeSeconds must be an integer'
-        ).toBe(true);
-        expect(uptime as number).toBeGreaterThanOrEqual(0);
+      const uptime = b['uptimeSeconds'];
+      expect(Number.isFinite(uptime), 'uptimeSeconds must be finite').toBe(
+        true
+      );
+      expect(Number.isInteger(uptime), 'uptimeSeconds must be an integer').toBe(
+        true
+      );
+      expect(uptime as number).toBeGreaterThanOrEqual(0);
 
-        // Cache for tests 2–5.
-        earningsBody = b;
-      },
-      30_000
-    );
+      // Cache for tests 2–5.
+      earningsBody = b;
+    }, 30_000);
 
     // ── Test 2: Four delta windows + lifetime consistency ────────────────────
     // AC #1 step 3
-    it(
-      'all four delta windows populated and lifetime consistent with connector earnings',
-      async () => {
-        expect(earningsBody, 'earningsBody must be set by Test 1').toBeDefined();
-        // Code-review P2: skip if Test 1 saw connector_unavailable — the delta
-        // assertions require a live connector and would be vacuous otherwise.
-        if (earningsBody['status'] !== 'ok') {
-          throw new Error(
-            `Test 2 BLOCKED-PARTIAL: status="${earningsBody['status']}" — ` +
-              'cannot validate delta windows without a live connector.'
+    it('all four delta windows populated and lifetime consistent with connector earnings', async () => {
+      expect(earningsBody, 'earningsBody must be set by Test 1').toBeDefined();
+      // Code-review P2: skip if Test 1 saw connector_unavailable — the delta
+      // assertions require a live connector and would be vacuous otherwise.
+      if (earningsBody['status'] !== 'ok') {
+        throw new Error(
+          `Test 2 BLOCKED-PARTIAL: status="${earningsBody['status']}" — ` +
+            'cannot validate delta windows without a live connector.'
+        );
+      }
+
+      const peers = earningsBody['peers'] as {
+        id: string;
+        type: string;
+        byAsset: Record<
+          string,
+          { lifetime: string; today: string; month: string; year: string }
+        >;
+        lastClaimAt: string | null;
+      }[];
+
+      // Code-review P4: empty peers[] makes the inner loop vacuous. AC #1
+      // step 3 mandates four delta windows on the peer that received the
+      // claim — if no peer surfaced, the assertion is structurally
+      // impossible. With OQ-1 sub-path B.3.c (no real BTP claim driven), the
+      // connector may not surface zero-claim peers in /admin/earnings.json
+      // (4B.2 finding). Mark this as BLOCKED-PARTIAL so CI sees an explicit
+      // failure category rather than a green test that asserted nothing.
+      if (peers.length === 0) {
+        throw new Error(
+          'Test 2 BLOCKED-PARTIAL (AC #1 step 3): peers[] empty — ' +
+            'connector does not surface zero-claim peers in earnings.json ' +
+            '(4B.2 finding). Drive a real claim (OQ-1 B.3.a / B.3.b) or the ' +
+            'delta-window assertions cannot be exercised. Documented gap.'
+        );
+      }
+
+      // Fetch connector earnings for lifetime cross-check (AC #1 step 3).
+      const connectorEarnings = await adminClient.getEarnings();
+
+      for (const peer of peers) {
+        for (const [assetCode, pa] of Object.entries(peer.byAsset)) {
+          // All four window fields must be decimal-string bigints.
+          expect(
+            pa.lifetime,
+            `peer ${peer.id} asset ${assetCode} lifetime must match /^-?\\d+$/`
+          ).toMatch(/^-?\d+$/);
+          expect(
+            pa.today,
+            `peer ${peer.id} asset ${assetCode} today must match /^-?\\d+$/`
+          ).toMatch(/^-?\d+$/);
+          expect(
+            pa.month,
+            `peer ${peer.id} asset ${assetCode} month must match /^-?\\d+$/`
+          ).toMatch(/^-?\d+$/);
+          expect(
+            pa.year,
+            `peer ${peer.id} asset ${assetCode} year must match /^-?\\d+$/`
+          ).toMatch(/^-?\d+$/);
+
+          // Cross-check lifetime against the connector's direct response.
+          // Code-review P7: in a zero-claim run (OQ-1 B.3.c) drift MUST be
+          // exactly 0n — a 1n tolerance would hide an off-by-one in baseline
+          // arithmetic. The previous wider tolerance was justified only when
+          // a real claim is in flight between the two HTTP calls. If a real
+          // claim driver lands (Epic 50), widen back to ≤1n + re-test.
+          const connectorPeer = connectorEarnings.peers.find(
+            (cp) => cp.peerId === peer.id
           );
-        }
-
-        const peers = earningsBody['peers'] as {
-          id: string;
-          type: string;
-          byAsset: Record<
-            string,
-            { lifetime: string; today: string; month: string; year: string }
-          >;
-          lastClaimAt: string | null;
-        }[];
-
-        // Code-review P4: empty peers[] makes the inner loop vacuous. AC #1
-        // step 3 mandates four delta windows on the peer that received the
-        // claim — if no peer surfaced, the assertion is structurally
-        // impossible. With OQ-1 sub-path B.3.c (no real BTP claim driven), the
-        // connector may not surface zero-claim peers in /admin/earnings.json
-        // (4B.2 finding). Mark this as BLOCKED-PARTIAL so CI sees an explicit
-        // failure category rather than a green test that asserted nothing.
-        if (peers.length === 0) {
-          throw new Error(
-            'Test 2 BLOCKED-PARTIAL (AC #1 step 3): peers[] empty — ' +
-              'connector does not surface zero-claim peers in earnings.json ' +
-              '(4B.2 finding). Drive a real claim (OQ-1 B.3.a / B.3.b) or the ' +
-              'delta-window assertions cannot be exercised. Documented gap.'
-          );
-        }
-
-        // Fetch connector earnings for lifetime cross-check (AC #1 step 3).
-        const connectorEarnings = await adminClient.getEarnings();
-
-        for (const peer of peers) {
-          for (const [assetCode, pa] of Object.entries(peer.byAsset)) {
-            // All four window fields must be decimal-string bigints.
-            expect(
-              pa.lifetime,
-              `peer ${peer.id} asset ${assetCode} lifetime must match /^-?\\d+$/`
-            ).toMatch(/^-?\d+$/);
-            expect(
-              pa.today,
-              `peer ${peer.id} asset ${assetCode} today must match /^-?\\d+$/`
-            ).toMatch(/^-?\d+$/);
-            expect(
-              pa.month,
-              `peer ${peer.id} asset ${assetCode} month must match /^-?\\d+$/`
-            ).toMatch(/^-?\d+$/);
-            expect(
-              pa.year,
-              `peer ${peer.id} asset ${assetCode} year must match /^-?\\d+$/`
-            ).toMatch(/^-?\d+$/);
-
-            // Cross-check lifetime against the connector's direct response.
-            // Code-review P7: in a zero-claim run (OQ-1 B.3.c) drift MUST be
-            // exactly 0n — a 1n tolerance would hide an off-by-one in baseline
-            // arithmetic. The previous wider tolerance was justified only when
-            // a real claim is in flight between the two HTTP calls. If a real
-            // claim driver lands (Epic 50), widen back to ≤1n + re-test.
-            const connectorPeer = connectorEarnings.peers.find(
-              (cp) => cp.peerId === peer.id
+          if (connectorPeer) {
+            const connectorAsset = connectorPeer.byAsset.find(
+              (a) => a.assetCode === assetCode
             );
-            if (connectorPeer) {
-              const connectorAsset = connectorPeer.byAsset.find(
-                (a) => a.assetCode === assetCode
-              );
-              if (connectorAsset) {
-                expect(
-                  pa.lifetime,
-                  `lifetime mismatch for peer ${peer.id} asset ${assetCode}: ` +
-                    `route=${pa.lifetime} connector=${connectorAsset.claimsReceivedTotal} ` +
-                    '(zero-claim run requires exact equality)'
-                ).toBe(connectorAsset.claimsReceivedTotal);
-              }
+            if (connectorAsset) {
+              expect(
+                pa.lifetime,
+                `lifetime mismatch for peer ${peer.id} asset ${assetCode}: ` +
+                  `route=${pa.lifetime} connector=${connectorAsset.claimsReceivedTotal} ` +
+                  '(zero-claim run requires exact equality)'
+              ).toBe(connectorAsset.claimsReceivedTotal);
             }
           }
         }
-      },
-      30_000
-    );
+      }
+    }, 30_000);
 
     // ── Test 3: Snapshot file exists, has ≥1 well-formed line, mode 0o600 ────
     // AC #1 step 4
-    it(
-      'earnings-snapshots.jsonl exists with ≥1 well-formed JSONL line and mode 0o600',
-      () => {
-        const snapshotPath = join(tmpDir, 'earnings-snapshots.jsonl');
+    it('earnings-snapshots.jsonl exists with ≥1 well-formed JSONL line and mode 0o600', () => {
+      const snapshotPath = join(tmpDir, 'earnings-snapshots.jsonl');
 
-        expect(
-          existsSync(snapshotPath),
-          'earnings-snapshots.jsonl must exist in tmpDir'
-        ).toBe(true);
+      expect(
+        existsSync(snapshotPath),
+        'earnings-snapshots.jsonl must exist in tmpDir'
+      ).toBe(true);
 
-        const mode = statSync(snapshotPath).mode & 0o777;
-        expect(
-          mode,
-          `snapshot file mode must be 0o600 (got 0o${mode.toString(8)})`
-        ).toBe(0o600);
+      const mode = statSync(snapshotPath).mode & 0o777;
+      expect(
+        mode,
+        `snapshot file mode must be 0o600 (got 0o${mode.toString(8)})`
+      ).toBe(0o600);
 
-        const raw = readFileSync(snapshotPath, 'utf-8');
-        const lines = raw.split('\n').filter((l) => l.trim().length > 0);
-        expect(
-          lines.length,
-          'snapshot file must contain ≥1 non-empty line'
-        ).toBeGreaterThanOrEqual(1);
+      const raw = readFileSync(snapshotPath, 'utf-8');
+      const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+      expect(
+        lines.length,
+        'snapshot file must contain ≥1 non-empty line'
+      ).toBeGreaterThanOrEqual(1);
 
-        const entries: {
+      const entries: {
+        ts: string;
+        peerId: string;
+        assetCode: string;
+        claimsReceivedTotal: string;
+      }[] = [];
+      for (const line of lines) {
+        let entry: {
           ts: string;
           peerId: string;
           assetCode: string;
           claimsReceivedTotal: string;
-        }[] = [];
-        for (const line of lines) {
-          let entry: { ts: string; peerId: string; assetCode: string; claimsReceivedTotal: string };
-          try {
-            entry = JSON.parse(line);
-          } catch (e) {
-            throw new Error(
-              `snapshot line failed to parse as JSON: ${line} — ${String(e)}`
-            );
-          }
-          expect(entry).toMatchObject({
-            ts: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
-            peerId: expect.any(String),
-            assetCode: expect.any(String),
-            claimsReceivedTotal: expect.stringMatching(/^-?\d+$/),
-          });
-          entries.push(entry);
-        }
-
-        // Code-review P5: prove the in-container reader sees the same seed the
-        // host wrote. Without this cross-check, Test 3 only proves the host
-        // copy is well-formed; it never proves the bind-mount surfaces the
-        // file inside `townhouse-hs-api`. `docker exec stat` + `docker exec
-        // cat` confirm both presence and byte-identical content. If the
-        // in-container view differs (volume mount drift, permission strip), we
-        // catch it here instead of in a vague "no deltas" symptom later.
+        };
         try {
-          const inContainerStat = execSync(
-            `docker exec ${HS_API_NAME} stat -c "%a %s" /.townhouse/earnings-snapshots.jsonl`,
-            { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }
-          ).trim();
-          // stat format: "<octal-mode> <size>"; mode is 3 digits (no leading 0).
-          const [modeStr, sizeStr] = inContainerStat.split(/\s+/);
-          expect(
-            modeStr,
-            `in-container snapshot mode must be 600 (got ${modeStr ?? '<empty>'})`
-          ).toBe('600');
-          const hostSize = statSync(snapshotPath).size;
-          expect(
-            Number(sizeStr),
-            `in-container snapshot size (${sizeStr}) must equal host size (${hostSize})`
-          ).toBe(hostSize);
+          entry = JSON.parse(line);
         } catch (e) {
           throw new Error(
-            'P5 cross-check failed: cannot read snapshot inside ' +
-              `${HS_API_NAME} — bind mount may be broken. ` +
-              (e instanceof Error ? e.message : String(e))
+            `snapshot line failed to parse as JSON: ${line} — ${String(e)}`
           );
         }
+        expect(entry).toMatchObject({
+          ts: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+          peerId: expect.any(String),
+          assetCode: expect.any(String),
+          claimsReceivedTotal: expect.stringMatching(/^-?\d+$/),
+        });
+        entries.push(entry);
+      }
 
-        // Cross-check: at least one snapshot entry must reference our seeded
-        // timestamp (proves the seed survived the boot — the writer would not
-        // have ticked in <14 min so any entry we see IS the seed or a
-        // duplicate of it).
+      // Code-review P5: prove the in-container reader sees the same seed the
+      // host wrote. Without this cross-check, Test 3 only proves the host
+      // copy is well-formed; it never proves the bind-mount surfaces the
+      // file inside `townhouse-hs-api`. `docker exec stat` + `docker exec
+      // cat` confirm both presence and byte-identical content. If the
+      // in-container view differs (volume mount drift, permission strip), we
+      // catch it here instead of in a vague "no deltas" symptom later.
+      try {
+        const inContainerStat = execSync(
+          `docker exec ${HS_API_NAME} stat -c "%a %s" /.townhouse/earnings-snapshots.jsonl`,
+          { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }
+        ).trim();
+        // stat format: "<octal-mode> <size>"; mode is 3 digits (no leading 0).
+        const [modeStr, sizeStr] = inContainerStat.split(/\s+/);
         expect(
-          entries.some((e) => e.ts === seedTimestamp),
-          `snapshot file must contain the seeded ts ${seedTimestamp}; ` +
-            `found tss: ${entries.map((e) => e.ts).join(', ')}`
-        ).toBe(true);
-      },
-      15_000
-    );
+          modeStr,
+          `in-container snapshot mode must be 600 (got ${modeStr ?? '<empty>'})`
+        ).toBe('600');
+        const hostSize = statSync(snapshotPath).size;
+        expect(
+          Number(sizeStr),
+          `in-container snapshot size (${sizeStr}) must equal host size (${hostSize})`
+        ).toBe(hostSize);
+      } catch (e) {
+        throw new Error(
+          'P5 cross-check failed: cannot read snapshot inside ' +
+            `${HS_API_NAME} — bind mount may be broken. ` +
+            (e instanceof Error ? e.message : String(e))
+        );
+      }
+
+      // Cross-check: at least one snapshot entry must reference our seeded
+      // timestamp (proves the seed survived the boot — the writer would not
+      // have ticked in <14 min so any entry we see IS the seed or a
+      // duplicate of it).
+      expect(
+        entries.some((e) => e.ts === seedTimestamp),
+        `snapshot file must contain the seeded ts ${seedTimestamp}; ` +
+          `found tss: ${entries.map((e) => e.ts).join(', ')}`
+      ).toBe(true);
+    }, 15_000);
 
     // ── Test 4: External peer type fallback ───────────────────────────────────
     // AC #1 step 6
-    it(
-      'external peer absent from nodes.yaml appears with type "external" in earnings response',
-      async () => {
-        expect(externalPeerId, 'externalPeerId must be set in beforeAll').toBeTruthy();
+    it('external peer absent from nodes.yaml appears with type "external" in earnings response', async () => {
+      expect(
+        externalPeerId,
+        'externalPeerId must be set in beforeAll'
+      ).toBeTruthy();
 
-        // Poll /api/earnings up to 15s for the external peer to surface.
-        // The connector may not immediately include a zero-claim peer in
-        // /admin/earnings.json; polling accounts for eventual consistency.
-        // Code-review P20: tolerate transient fetch/json errors during the
-        // poll loop (e.g. a 502 while the connector container is restarting).
-        // A single transient error must NOT abort the test — it should retry
-        // until the deadline so flakes during chain-of-events scenarios don't
-        // mask real failures.
-        const deadline = Date.now() + 15_000;
-        let ext: Record<string, unknown> | undefined;
+      // Poll /api/earnings up to 15s for the external peer to surface.
+      // The connector may not immediately include a zero-claim peer in
+      // /admin/earnings.json; polling accounts for eventual consistency.
+      // Code-review P20: tolerate transient fetch/json errors during the
+      // poll loop (e.g. a 502 while the connector container is restarting).
+      // A single transient error must NOT abort the test — it should retry
+      // until the deadline so flakes during chain-of-events scenarios don't
+      // mask real failures.
+      const deadline = Date.now() + 15_000;
+      let ext: Record<string, unknown> | undefined;
 
-        while (Date.now() < deadline) {
-          try {
-            const res = await fetchWithTimeout(EARNINGS_URL, 5_000, '/api/earnings Test 4 poll');
-            const body = await res.json() as Record<string, unknown>;
-            const latestPeers = body['peers'] as Record<string, unknown>[];
-            ext = latestPeers.find((p) => p['id'] === externalPeerId);
-            if (ext) break;
-          } catch (e) {
-            // Log + continue; transient errors are expected during connector
-            // restarts or chain-of-events races.
-             
-            console.warn(
-              `[Test 4 poll] transient error (continuing): ${e instanceof Error ? e.message : String(e)}`
-            );
-          }
-          await sleep(2_000);
-        }
+      while (Date.now() < deadline) {
+        try {
+          const res = await fetchWithTimeout(
+            EARNINGS_URL,
+            5_000,
+            '/api/earnings Test 4 poll'
+          );
+          const body = (await res.json()) as Record<string, unknown>;
+          const latestPeers = body['peers'] as Record<string, unknown>[];
+          ext = latestPeers.find((p) => p['id'] === externalPeerId);
+          if (ext) break;
+        } catch (e) {
+          // Log + continue; transient errors are expected during connector
+          // restarts or chain-of-events races.
 
-        // Always verify connector roster + nodes.yaml absence regardless of
-        // whether the external peer surfaced in /api/earnings — these
-        // assertions are cheap and confirm the precondition the gate cares
-        // about (peer registered, not in yaml).
-        const connectorPeers = await adminClient.getPeers();
-        expect(
-          connectorPeers.some((p) => p.id === externalPeerId),
-          `external peer ${externalPeerId} must be registered in connector getPeers()`
-        ).toBe(true);
-
-        const yaml = await readNodesYaml(join(tmpDir, 'nodes.yaml'));
-        expect(
-          yaml.entries.map((e) => e.id).includes(externalPeerId),
-          `external peer ${externalPeerId} must NOT be in nodes.yaml`
-        ).toBe(false);
-
-        // Code-review P3: AC #1 step 6 mandates `type === 'external'`. The
-        // 4B.2 fallback path (peer not in /api/earnings.peers[]) proves only
-        // the precondition (connector roster + yaml absence), not the
-        // resolver fall-through. Surface this as an explicit
-        // BLOCKED-PARTIAL failure with a SKIP_AC_STEP_6_BLOCKED env var
-        // escape hatch — so CI sees a red signal that documents the gap,
-        // and so the gate operator can mark the gap explicitly when
-        // running with OQ-1 sub-path B.3.c.
-        if (!ext) {
-          const escape = isTruthyEnv(process.env['SKIP_AC_STEP_6_BLOCKED']);
-          if (escape) {
-             
-            console.warn(
-              `⚠️  Test 4 BLOCKED-PARTIAL accepted via SKIP_AC_STEP_6_BLOCKED=1: ` +
-                `external peer ${externalPeerId} absent from /api/earnings after ` +
-                `15s. Precondition asserted (connector roster + yaml absence). ` +
-                `4B.2 finding documented in Review Findings.`
-            );
-            return;
-          }
-          throw new Error(
-            `Test 4 BLOCKED-PARTIAL (AC #1 step 6): external peer ${externalPeerId} ` +
-              `absent from /api/earnings.peers[] after 15s polling. ` +
-              `Connector does not surface zero-claim peers in earnings.json ` +
-              `(4B.2 finding). Drive a real claim to the external peer (OQ-1 ` +
-              `B.3.a/B.3.b) to exercise the type:'external' assertion live. ` +
-              `Run with SKIP_AC_STEP_6_BLOCKED=1 to accept the documented gap.`
+          console.warn(
+            `[Test 4 poll] transient error (continuing): ${e instanceof Error ? e.message : String(e)}`
           );
         }
+        await sleep(2_000);
+      }
 
-        // Happy path: the external peer surfaced in /api/earnings.
-        expect(
-          ext['type'],
-          'external peer type must be "external"'
-        ).toBe('external');
-        expect(
-          typeof ext['byAsset'],
-          'external peer byAsset must be an object'
-        ).toBe('object');
-        expect(
-          ext['lastClaimAt'],
-          'external peer lastClaimAt must be null (no claim has hit it)'
-        ).toBeNull();
-      },
-      30_000
-    );
+      // Always verify connector roster + nodes.yaml absence regardless of
+      // whether the external peer surfaced in /api/earnings — these
+      // assertions are cheap and confirm the precondition the gate cares
+      // about (peer registered, not in yaml).
+      const connectorPeers = await adminClient.getPeers();
+      expect(
+        connectorPeers.some((p) => p.id === externalPeerId),
+        `external peer ${externalPeerId} must be registered in connector getPeers()`
+      ).toBe(true);
+
+      const yaml = await readNodesYaml(join(tmpDir, 'nodes.yaml'));
+      expect(
+        yaml.entries.map((e) => e.id).includes(externalPeerId),
+        `external peer ${externalPeerId} must NOT be in nodes.yaml`
+      ).toBe(false);
+
+      // Code-review P3: AC #1 step 6 mandates `type === 'external'`. The
+      // 4B.2 fallback path (peer not in /api/earnings.peers[]) proves only
+      // the precondition (connector roster + yaml absence), not the
+      // resolver fall-through. Surface this as an explicit
+      // BLOCKED-PARTIAL failure with a SKIP_AC_STEP_6_BLOCKED env var
+      // escape hatch — so CI sees a red signal that documents the gap,
+      // and so the gate operator can mark the gap explicitly when
+      // running with OQ-1 sub-path B.3.c.
+      if (!ext) {
+        const escape = isTruthyEnv(process.env['SKIP_AC_STEP_6_BLOCKED']);
+        if (escape) {
+          console.warn(
+            `⚠️  Test 4 BLOCKED-PARTIAL accepted via SKIP_AC_STEP_6_BLOCKED=1: ` +
+              `external peer ${externalPeerId} absent from /api/earnings after ` +
+              `15s. Precondition asserted (connector roster + yaml absence). ` +
+              `4B.2 finding documented in Review Findings.`
+          );
+          return;
+        }
+        throw new Error(
+          `Test 4 BLOCKED-PARTIAL (AC #1 step 6): external peer ${externalPeerId} ` +
+            `absent from /api/earnings.peers[] after 15s polling. ` +
+            `Connector does not surface zero-claim peers in earnings.json ` +
+            `(4B.2 finding). Drive a real claim to the external peer (OQ-1 ` +
+            `B.3.a/B.3.b) to exercise the type:'external' assertion live. ` +
+            `Run with SKIP_AC_STEP_6_BLOCKED=1 to accept the documented gap.`
+        );
+      }
+
+      // Happy path: the external peer surfaced in /api/earnings.
+      expect(ext['type'], 'external peer type must be "external"').toBe(
+        'external'
+      );
+      expect(
+        typeof ext['byAsset'],
+        'external peer byAsset must be an object'
+      ).toBe('object');
+      expect(
+        ext['lastClaimAt'],
+        'external peer lastClaimAt must be null (no claim has hit it)'
+      ).toBeNull();
+    }, 30_000);
 
     // ── Test 5: Re-fetch consistency + connector canary close-out ─────────────
     // AC #2 + 3
-    it(
-      're-fetched /api/earnings is schema-valid and consistent with live connector state',
-      async () => {
-        // Code-review P16: bounded fetch.
-        const res = await fetchWithTimeout(EARNINGS_URL, 10_000, 'GET /api/earnings #2');
-        expect(res.status, 'HTTP re-fetch must return 200').toBe(200);
+    it('re-fetched /api/earnings is schema-valid and consistent with live connector state', async () => {
+      // Code-review P16: bounded fetch.
+      const res = await fetchWithTimeout(
+        EARNINGS_URL,
+        10_000,
+        'GET /api/earnings #2'
+      );
+      expect(res.status, 'HTTP re-fetch must return 200').toBe(200);
 
-        const body = await res.json() as unknown;
-        expectMatchesSchema(body);
+      const body = (await res.json()) as unknown;
+      expectMatchesSchema(body);
 
-        const b = body as Record<string, unknown>;
-        // Code-review P2: accept both status values; widening matches Test 1.
-        expect(['ok', 'connector_unavailable']).toContain(b['status']);
+      const b = body as Record<string, unknown>;
+      // Code-review P2: accept both status values; widening matches Test 1.
+      expect(['ok', 'connector_unavailable']).toContain(b['status']);
 
-        // uptimeSeconds must be monotonically non-decreasing between the two
-        // fetches (it's the connector's wall-clock uptime in whole seconds).
-        const prevUptime = (earningsBody['uptimeSeconds'] as number | undefined) ?? 0;
-        const newUptime = b['uptimeSeconds'] as number;
+      // uptimeSeconds must be monotonically non-decreasing between the two
+      // fetches (it's the connector's wall-clock uptime in whole seconds).
+      const prevUptime =
+        (earningsBody['uptimeSeconds'] as number | undefined) ?? 0;
+      const newUptime = b['uptimeSeconds'] as number;
+      expect(
+        newUptime,
+        'uptimeSeconds must be ≥ first fetch value'
+      ).toBeGreaterThanOrEqual(prevUptime);
+
+      // Direct connector probe: the connector must still be reachable and
+      // its peer roster must be consistent with what the route returned.
+      // Skip the deeper cross-check if the connector flipped to unavailable
+      // between fetches (legitimate banner state — P2 widening accepts it).
+      if (b['status'] === 'ok') {
+        const connectorEarnings = await adminClient.getEarnings();
         expect(
-          newUptime,
-          'uptimeSeconds must be ≥ first fetch value'
-        ).toBeGreaterThanOrEqual(prevUptime);
+          connectorEarnings.peers,
+          'connector earnings.peers must be defined'
+        ).toBeDefined();
 
-        // Direct connector probe: the connector must still be reachable and
-        // its peer roster must be consistent with what the route returned.
-        // Skip the deeper cross-check if the connector flipped to unavailable
-        // between fetches (legitimate banner state — P2 widening accepts it).
-        if (b['status'] === 'ok') {
-          const connectorEarnings = await adminClient.getEarnings();
-          expect(connectorEarnings.peers, 'connector earnings.peers must be defined').toBeDefined();
-
-          // Code-review P6: strict cross-check, not tautological. The route
-          // surfaces the connector-side peerId in `peers[].id`. If the route
-          // surfaces the town peer (addedPeerId from P17), the connector MUST
-          // confirm presence — without an OR fallback that reuses the same
-          // iterable. Without this, the previous assertion `cp.peerId ===
-          // addedNodeId || routePeers.some(...)` was always true inside the
-          // outer `if (routePeers.some(...))` branch.
-          const routePeers = b['peers'] as { id: string }[];
-          if (routePeers.some((p) => p.id === addedPeerId)) {
-            expect(
-              connectorEarnings.peers.some((cp) => cp.peerId === addedPeerId),
-              `town peer ${addedPeerId} present in route /api/earnings must ` +
-                'also be present in connector /admin/earnings.json'
-            ).toBe(true);
-          }
+        // Code-review P6: strict cross-check, not tautological. The route
+        // surfaces the connector-side peerId in `peers[].id`. If the route
+        // surfaces the town peer (addedPeerId from P17), the connector MUST
+        // confirm presence — without an OR fallback that reuses the same
+        // iterable. Without this, the previous assertion `cp.peerId ===
+        // addedNodeId || routePeers.some(...)` was always true inside the
+        // outer `if (routePeers.some(...))` branch.
+        const routePeers = b['peers'] as { id: string }[];
+        if (routePeers.some((p) => p.id === addedPeerId)) {
+          expect(
+            connectorEarnings.peers.some((cp) => cp.peerId === addedPeerId),
+            `town peer ${addedPeerId} present in route /api/earnings must ` +
+              'also be present in connector /admin/earnings.json'
+          ).toBe(true);
         }
+      }
 
-        // Apex containers still up — name-based (stable) not id-based (transient).
-        const running = dockerPs();
-        expect(
-          running,
-          'townhouse-hs-connector must still be running'
-        ).toContain(HS_CONNECTOR_NAME);
-        expect(
-          running,
-          'townhouse-hs-api must still be running'
-        ).toContain(HS_API_NAME);
+      // Apex containers still up — name-based (stable) not id-based (transient).
+      const running = dockerPs();
+      expect(running, 'townhouse-hs-connector must still be running').toContain(
+        HS_CONNECTOR_NAME
+      );
+      expect(running, 'townhouse-hs-api must still be running').toContain(
+        HS_API_NAME
+      );
 
-        // townhouse-hs-anon volume must still exist (not removed by any operation).
-        expect(
-          volumeExists(HS_ANON_VOLUME),
-          'townhouse-hs-anon volume must still exist'
-        ).toBe(true);
+      // townhouse-hs-anon volume must still exist (not removed by any operation).
+      expect(
+        volumeExists(HS_ANON_VOLUME),
+        'townhouse-hs-anon volume must still exist'
+      ).toBe(true);
 
-        // Contract canary: already run as Task 2.4 pre-flight before this gate.
-        // Per story Task 9.4 guidance: avoid re-running a nested vitest from
-        // inside a vitest test. Confirmed 43/43 passing in pre-flight; documented
-        // in Review Findings.
-      },
-      30_000
-    );
+      // Contract canary: already run as Task 2.4 pre-flight before this gate.
+      // Per story Task 9.4 guidance: avoid re-running a nested vitest from
+      // inside a vitest test. Confirmed 43/43 passing in pre-flight; documented
+      // in Review Findings.
+    }, 30_000);
   }
 );

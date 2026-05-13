@@ -46,7 +46,10 @@ const peerSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    type: { type: 'string', enum: ['town', 'mill', 'dvm', 'external'] as const },
+    type: {
+      type: 'string',
+      enum: ['town', 'mill', 'dvm', 'external'] as const,
+    },
     byAsset: routingFeesSchema,
     lastClaimAt: {
       oneOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }],
@@ -66,7 +69,14 @@ const recentClaimSchema = {
     direction: { type: 'string', enum: ['inbound', 'outbound'] as const },
     at: { type: 'string', format: 'date-time' },
   },
-  required: ['peerId', 'assetCode', 'assetScale', 'amount', 'direction', 'at'] as const,
+  required: [
+    'peerId',
+    'assetCode',
+    'assetScale',
+    'amount',
+    'direction',
+    'at',
+  ] as const,
   // Open to future connector-shipped fields per D2 decision (2026-05-13).
 } as const;
 
@@ -95,7 +105,14 @@ export const earningsResponseSchema: FastifySchema = {
         eventsRelayed: { type: 'integer', minimum: 0 },
         uptimeSeconds: { type: 'integer', minimum: 0 },
       },
-      required: ['status', 'apex', 'peers', 'recentClaims', 'eventsRelayed', 'uptimeSeconds'],
+      required: [
+        'status',
+        'apex',
+        'peers',
+        'recentClaims',
+        'eventsRelayed',
+        'uptimeSeconds',
+      ],
       additionalProperties: false,
     },
   },

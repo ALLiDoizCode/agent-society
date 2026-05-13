@@ -46,9 +46,9 @@ export interface PerAsset {
 
 /** Per-peer earnings entry in the aggregator output. */
 export interface NodeEarnings {
-  id: string;                         // == connector peerId
-  type: NodeType | 'external';        // PeerTypeResolver attribution
-  byAsset: Record<string, PerAsset>;  // keyed by assetCode
+  id: string; // == connector peerId
+  type: NodeType | 'external'; // PeerTypeResolver attribution
+  byAsset: Record<string, PerAsset>; // keyed by assetCode
   /** Max `lastClaimAt` across this peer's assets, or `null` if none. Added in 47.4. */
   lastClaimAt: string | null;
 }
@@ -66,7 +66,7 @@ export type AggregatedEarningsStatus = 'ok' | 'connector_unavailable';
 export interface AggregatedEarnings {
   status: AggregatedEarningsStatus;
   apex: {
-    routingFees: Record<string, PerAsset>;  // keyed by assetCode
+    routingFees: Record<string, PerAsset>; // keyed by assetCode
   };
   peers: NodeEarnings[];
   /** Pass-through from connector `recentClaims`. Empty array on connector outage. */
@@ -206,7 +206,10 @@ export async function aggregateEarnings(
               a.claimsReceivedTotal,
               input.logger
             );
-            byAsset[a.assetCode] = { lifetime: a.claimsReceivedTotal, ...deltas };
+            byAsset[a.assetCode] = {
+              lifetime: a.claimsReceivedTotal,
+              ...deltas,
+            };
           })
         );
 

@@ -332,7 +332,8 @@ describe('validateConfig', () => {
         rpcUrl: 'http://127.0.0.1:8545',
         registryAddress: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
         tokenAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
-        keyId: '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6',
+        keyId:
+          '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6',
       },
     ];
     const config = validateConfig(raw);
@@ -374,7 +375,8 @@ describe('validateConfig', () => {
         rpcUrl: 'http://127.0.0.1:8545',
         registryAddress: 'not-a-hex-address',
         tokenAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
-        keyId: '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6',
+        keyId:
+          '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6',
       },
     ];
     expect(() => validateConfig(raw)).toThrow(

@@ -266,7 +266,9 @@ export class ConnectorAdminClient {
       }
       for (const asset of p['byAsset'] as unknown[]) {
         if (typeof asset !== 'object' || asset === null) {
-          throw new Error('Connector admin API: invalid earnings response shape');
+          throw new Error(
+            'Connector admin API: invalid earnings response shape'
+          );
         }
         const a = asset as Record<string, unknown>;
         if (
@@ -277,7 +279,9 @@ export class ConnectorAdminClient {
           typeof a['netBalance'] !== 'string' ||
           (a['lastClaimAt'] !== null && typeof a['lastClaimAt'] !== 'string')
         ) {
-          throw new Error('Connector admin API: invalid earnings response shape');
+          throw new Error(
+            'Connector admin API: invalid earnings response shape'
+          );
         }
       }
     }

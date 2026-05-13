@@ -42,24 +42,30 @@ export function registerEarningsRoutes(
   app: FastifyInstance,
   deps: ApiDeps
 ): void {
-  app.get('/api/earnings', { schema: earningsResponseSchema }, async (request, reply) => {
-    let yaml;
-    try {
-      yaml = await readNodesYaml(resolveNodesYamlPath(deps));
-    } catch (err) {
-      request.log.error(
-        { err: err instanceof Error ? err.message : String(err) },
-        'earnings: nodes.yaml read/validate failed'
-      );
-      return reply.status(500).send({ error: 'nodes_yaml_invalid' });
+  app.get(
+    '/api/earnings',
+    { schema: earningsResponseSchema },
+    async (request, reply) => {
+      let yaml;
+      try {
+        yaml = await readNodesYaml(resolveNodesYamlPath(deps));
+      } catch (err) {
+        request.log.error(
+          { err: err instanceof Error ? err.message : String(err) },
+          'earnings: nodes.yaml read/validate failed'
+        );
+        return reply.status(500).send({ error: 'nodes_yaml_invalid' });
+      }
+      const peerTypeResolver = new PeerTypeResolver(yaml);
+      const deltaComputer = createDeltaComputer({
+        snapshotPath: resolveSnapshotPath(deps),
+      });
+      return aggregateEarnings({
+        connectorAdmin: deps.connectorAdmin,
+        peerTypeResolver,
+        deltaComputer,
+        logger: request.log,
+      });
     }
-    const peerTypeResolver = new PeerTypeResolver(yaml);
-    const deltaComputer = createDeltaComputer({ snapshotPath: resolveSnapshotPath(deps) });
-    return aggregateEarnings({
-      connectorAdmin: deps.connectorAdmin,
-      peerTypeResolver,
-      deltaComputer,
-      logger: request.log,
-    });
-  });
+  );
 }

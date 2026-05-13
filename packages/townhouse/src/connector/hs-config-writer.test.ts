@@ -150,7 +150,10 @@ describe('writeHsConnectorConfig', () => {
       string,
       unknown
     >;
-    const chainProviders = parsed['chainProviders'] as Record<string, unknown>[];
+    const chainProviders = parsed['chainProviders'] as Record<
+      string,
+      unknown
+    >[];
     expect(Array.isArray(chainProviders)).toBe(true);
     expect(chainProviders.length).toBeGreaterThanOrEqual(1);
     const first = chainProviders[0] ?? {};
@@ -171,16 +174,22 @@ describe('writeHsConnectorConfig', () => {
         rpcUrl: 'https://mainnet.base.org',
         registryAddress: '0xaaaa1725E7734CE288F8367e1Bb143E90bb3F0512',
         tokenAddress: '0xbbbbb2315678afecb367f032d93F642f64180aa3',
-        keyId: '0xccccc118294e51e653712a81e05800f419141751be58f605c371e15141b007a6',
+        keyId:
+          '0xccccc118294e51e653712a81e05800f419141751be58f605c371e15141b007a6',
       },
     ];
 
-    const { yamlPath } = writeHsConnectorConfig(tmpDir, config, { force: true });
+    const { yamlPath } = writeHsConnectorConfig(tmpDir, config, {
+      force: true,
+    });
     const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<
       string,
       unknown
     >;
-    const chainProviders = parsed['chainProviders'] as Record<string, unknown>[];
+    const chainProviders = parsed['chainProviders'] as Record<
+      string,
+      unknown
+    >[];
     expect(chainProviders).toHaveLength(1);
     expect(chainProviders[0]?.['chainId']).toBe('evm:base:8453');
     expect(chainProviders[0]?.['rpcUrl']).toBe('https://mainnet.base.org');

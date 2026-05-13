@@ -25,7 +25,12 @@ const validFixture = {
   status: 'ok',
   apex: {
     routingFees: {
-      USD: { lifetime: '1000000', today: '10000', month: '50000', year: '1000000' },
+      USD: {
+        lifetime: '1000000',
+        today: '10000',
+        month: '50000',
+        year: '1000000',
+      },
     },
   },
   peers: [
@@ -33,7 +38,12 @@ const validFixture = {
       id: 'peer-town-01',
       type: 'town',
       byAsset: {
-        USD: { lifetime: '500000', today: '5000', month: '25000', year: '500000' },
+        USD: {
+          lifetime: '500000',
+          today: '5000',
+          month: '25000',
+          year: '500000',
+        },
       },
       lastClaimAt: '2026-05-13T12:00:00.000Z',
     },
@@ -41,7 +51,12 @@ const validFixture = {
       id: 'peer-unknown-99',
       type: 'external',
       byAsset: {
-        ETH: { lifetime: '1000000000000000000', today: '0', month: '0', year: '0' },
+        ETH: {
+          lifetime: '1000000000000000000',
+          today: '0',
+          month: '0',
+          year: '0',
+        },
       },
       lastClaimAt: null,
     },
@@ -107,7 +122,12 @@ describe('earningsResponseSchema', () => {
       ...validFixture,
       apex: {
         routingFees: {
-          USD: { lifetime: '1.5e3', today: '10000', month: '50000', year: '1000000' },
+          USD: {
+            lifetime: '1.5e3',
+            today: '10000',
+            month: '50000',
+            year: '1000000',
+          },
         },
       },
     };

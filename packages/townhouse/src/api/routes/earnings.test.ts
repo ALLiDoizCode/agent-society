@@ -23,7 +23,11 @@ import { registerEarningsRoutes } from './earnings.js';
 import { earningsResponseSchema } from '../schemas/earnings.js';
 import type { ApiDeps } from '../types.js';
 import type { ConnectorAdminClient } from '../../connector/index.js';
-import type { EarningsResponse, AssetEarnings, MetricsResponse } from '../../connector/types.js';
+import type {
+  EarningsResponse,
+  AssetEarnings,
+  MetricsResponse,
+} from '../../connector/types.js';
 import type { AggregatedEarnings } from '../../earnings/aggregator.js';
 import type { SnapshotEntry } from '../../earnings/snapshot-writer.js';
 
@@ -35,7 +39,9 @@ import type { SnapshotEntry } from '../../earnings/snapshot-writer.js';
 const ajv = new Ajv();
 addFormats(ajv);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const validateResponseShape = ajv.compile((earningsResponseSchema.response as any)[200]);
+const validateResponseShape = ajv.compile(
+  (earningsResponseSchema.response as any)[200]
+);
 function expectMatchesSchema(body: unknown): void {
   const ok = validateResponseShape(body);
   if (!ok) {
@@ -77,8 +83,11 @@ function assetEntry(code: string, received: string): AssetEarnings {
 function makeDeps(opts: MockOpts, tmpHome: string): ApiDeps {
   // Seed snapshot file if entries provided.
   if (opts.snapshotEntries && opts.snapshotEntries.length > 0) {
-    const lines = opts.snapshotEntries.map((e) => JSON.stringify(e)).join('\n') + '\n';
-    writeFileSync(join(tmpHome, 'earnings-snapshots.jsonl'), lines, { encoding: 'utf-8' });
+    const lines =
+      opts.snapshotEntries.map((e) => JSON.stringify(e)).join('\n') + '\n';
+    writeFileSync(join(tmpHome, 'earnings-snapshots.jsonl'), lines, {
+      encoding: 'utf-8',
+    });
   }
 
   const connectorAdmin = {
@@ -129,7 +138,9 @@ function writeNodesYaml(
       lastSeenAt: null,
     })),
   };
-  writeFileSync(join(tmpHome, 'nodes.yaml'), yamlStringify(doc), { mode: 0o600 });
+  writeFileSync(join(tmpHome, 'nodes.yaml'), yamlStringify(doc), {
+    mode: 0o600,
+  });
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -166,7 +177,12 @@ describe('GET /api/earnings', () => {
       peers: [
         {
           peerId: 'peer-town-01',
-          byAsset: [{ ...assetEntry('USD', '500'), lastClaimAt: '2026-05-13T12:00:00Z' }],
+          byAsset: [
+            {
+              ...assetEntry('USD', '500'),
+              lastClaimAt: '2026-05-13T12:00:00Z',
+            },
+          ],
         },
       ],
     };
@@ -174,8 +190,22 @@ describe('GET /api/earnings', () => {
       uptimeSeconds: 3600,
       aggregate: { packetsForwarded: 1234, packetsRejected: 0, bytesSent: 0 },
       peers: [
-        { peerId: 'peer-town-01', connected: true, packetsForwarded: 500, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
-        { peerId: 'peer-other', connected: true, packetsForwarded: 734, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
+        {
+          peerId: 'peer-town-01',
+          connected: true,
+          packetsForwarded: 500,
+          packetsRejected: 0,
+          bytesSent: 0,
+          lastPacketAt: null,
+        },
+        {
+          peerId: 'peer-other',
+          connected: true,
+          packetsForwarded: 734,
+          packetsRejected: 0,
+          bytesSent: 0,
+          lastPacketAt: null,
+        },
       ],
       timestamp: '',
     };
@@ -239,13 +269,22 @@ describe('GET /api/earnings', () => {
       connectorFees: [],
       recentClaims: [],
       timestamp: { iso: '' },
-      peers: [{ peerId: 'peer-unknown-99', byAsset: [assetEntry('USD', '77')] }],
+      peers: [
+        { peerId: 'peer-unknown-99', byAsset: [assetEntry('USD', '77')] },
+      ],
     };
     const metrics: MetricsResponse = {
       uptimeSeconds: 0,
       aggregate: { packetsForwarded: 42, packetsRejected: 0, bytesSent: 0 },
       peers: [
-        { peerId: 'peer-unknown-99', connected: true, packetsForwarded: 42, packetsRejected: 0, bytesSent: 0, lastPacketAt: null },
+        {
+          peerId: 'peer-unknown-99',
+          connected: true,
+          packetsForwarded: 42,
+          packetsRejected: 0,
+          bytesSent: 0,
+          lastPacketAt: null,
+        },
       ],
       timestamp: '',
     };
@@ -275,9 +314,24 @@ describe('GET /api/earnings', () => {
 
     // Seed snapshot: today/month/year boundaries for peer-town-01/USD.
     const snapshotEntries: SnapshotEntry[] = [
-      { ts: '2026-05-13T00:00:00.000Z', peerId: 'peer-town-01', assetCode: 'USD', claimsReceivedTotal: '900' },
-      { ts: '2026-05-01T00:00:00.000Z', peerId: 'peer-town-01', assetCode: 'USD', claimsReceivedTotal: '500' },
-      { ts: '2026-01-01T00:00:00.000Z', peerId: 'peer-town-01', assetCode: 'USD', claimsReceivedTotal: '100' },
+      {
+        ts: '2026-05-13T00:00:00.000Z',
+        peerId: 'peer-town-01',
+        assetCode: 'USD',
+        claimsReceivedTotal: '900',
+      },
+      {
+        ts: '2026-05-01T00:00:00.000Z',
+        peerId: 'peer-town-01',
+        assetCode: 'USD',
+        claimsReceivedTotal: '500',
+      },
+      {
+        ts: '2026-01-01T00:00:00.000Z',
+        peerId: 'peer-town-01',
+        assetCode: 'USD',
+        claimsReceivedTotal: '100',
+      },
     ];
 
     const earnings: EarningsResponse = {
@@ -295,7 +349,10 @@ describe('GET /api/earnings', () => {
     await app.ready();
 
     // Freeze clock at 2026-05-13T15:00:00Z so boundaries are deterministic.
-    vi.useFakeTimers({ now: new Date('2026-05-13T15:00:00.000Z'), toFake: ['Date'] });
+    vi.useFakeTimers({
+      now: new Date('2026-05-13T15:00:00.000Z'),
+      toFake: ['Date'],
+    });
     try {
       const res = await app.inject({ method: 'GET', url: '/api/earnings' });
       expect(res.statusCode).toBe(200);
@@ -305,9 +362,9 @@ describe('GET /api/earnings', () => {
       expect(body.status).toBe('ok');
       const usd = body.peers[0].byAsset['USD'];
       expect(usd.lifetime).toBe('1000');
-      expect(usd.today).toBe('100');    // 1000 - 900
-      expect(usd.month).toBe('500');    // 1000 - 500
-      expect(usd.year).toBe('900');     // 1000 - 100
+      expect(usd.today).toBe('100'); // 1000 - 900
+      expect(usd.month).toBe('500'); // 1000 - 500
+      expect(usd.year).toBe('900'); // 1000 - 100
     } finally {
       vi.useRealTimers();
     }
@@ -320,7 +377,12 @@ describe('GET /api/earnings', () => {
     writeNodesYaml(tmpHome, []);
 
     const snapshotEntries: SnapshotEntry[] = [
-      { ts: '2026-05-13T00:00:00.000Z', peerId: '__apex__', assetCode: 'USD', claimsReceivedTotal: '1000' },
+      {
+        ts: '2026-05-13T00:00:00.000Z',
+        peerId: '__apex__',
+        assetCode: 'USD',
+        claimsReceivedTotal: '1000',
+      },
     ];
 
     const earnings: EarningsResponse = {
@@ -337,13 +399,16 @@ describe('GET /api/earnings', () => {
     registerEarningsRoutes(app, deps);
     await app.ready();
 
-    vi.useFakeTimers({ now: new Date('2026-05-13T15:00:00.000Z'), toFake: ['Date'] });
+    vi.useFakeTimers({
+      now: new Date('2026-05-13T15:00:00.000Z'),
+      toFake: ['Date'],
+    });
     try {
       const res = await app.inject({ method: 'GET', url: '/api/earnings' });
       expect(res.statusCode).toBe(200);
       const body = res.json() as AggregatedEarnings;
       expectMatchesSchema(body);
-      expect(body.apex.routingFees['USD'].today).toBe('1000');  // 2000 - 1000
+      expect(body.apex.routingFees['USD'].today).toBe('1000'); // 2000 - 1000
       expect(body.apex.routingFees['USD'].lifetime).toBe('2000');
     } finally {
       vi.useRealTimers();

@@ -16,7 +16,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { promises as fsPromises, mkdtempSync, rmSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  promises as fsPromises,
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -64,7 +71,10 @@ function emptyEarnings(): EarningsResponse {
   };
 }
 
-function assetEntry(assetCode: string, claimsReceivedTotal: string): AssetEarnings {
+function assetEntry(
+  assetCode: string,
+  claimsReceivedTotal: string
+): AssetEarnings {
   return {
     assetCode,
     assetScale: 6,
@@ -186,7 +196,9 @@ describe('SnapshotWriter', () => {
   it('[case 4] re-entrancy guard: second concurrent tick is skipped', async () => {
     const snapshotPath = join(tmpHome, 'earnings-snapshots.jsonl');
     let resolveFirst!: () => void;
-    const firstStarted = new Promise<void>((resolve) => { resolveFirst = resolve; });
+    const firstStarted = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
     let firstResolved = false;
 
     const getEarnings = vi.fn(async () => {
@@ -197,9 +209,14 @@ describe('SnapshotWriter', () => {
     });
 
     const connector = makeConnector();
-    (connector.getEarnings as ReturnType<typeof vi.fn>).mockImplementation(getEarnings);
+    (connector.getEarnings as ReturnType<typeof vi.fn>).mockImplementation(
+      getEarnings
+    );
 
-    const writer = new SnapshotWriter({ connectorAdmin: connector, snapshotPath });
+    const writer = new SnapshotWriter({
+      connectorAdmin: connector,
+      snapshotPath,
+    });
 
     const p1 = writer.tick();
     await firstStarted; // First tick is in-flight
@@ -278,7 +295,12 @@ describe('SnapshotWriter', () => {
     for (let i = 0; i < 100; i++) {
       const ts = new Date(now.getTime() - i * 24 * 3_600_000).toISOString(); // daily, going back
       lines.push(
-        JSON.stringify({ ts, peerId: 'p1', assetCode: 'USD', claimsReceivedTotal: String(i) })
+        JSON.stringify({
+          ts,
+          peerId: 'p1',
+          assetCode: 'USD',
+          claimsReceivedTotal: String(i),
+        })
       );
     }
     // Pad the file to exceed watermark (256 KB) by repeating entries.
@@ -318,7 +340,14 @@ describe('SnapshotWriter', () => {
     const lines: string[] = [];
     for (let i = 0; i < 10; i++) {
       const ts = new Date(Date.now() - i * 3_600_000).toISOString();
-      lines.push(JSON.stringify({ ts, peerId: 'p1', assetCode: 'USD', claimsReceivedTotal: String(i) }));
+      lines.push(
+        JSON.stringify({
+          ts,
+          peerId: 'p1',
+          assetCode: 'USD',
+          claimsReceivedTotal: String(i),
+        })
+      );
     }
     writeFileSync(snapshotPath, lines.join('\n') + '\n', { mode: 0o600 });
 
@@ -358,11 +387,25 @@ describe('SnapshotWriter', () => {
     const oldTs = '2025-01-01T00:00:00.000Z'; // older than 13 months from 2026-05-12
     const recentTs = '2026-05-11T10:00:00.000Z';
     for (let i = 0; i < 3500; i++) {
-      rows.push(JSON.stringify({ ts: recentTs, peerId: 'p1', assetCode: 'USD', claimsReceivedTotal: String(i) }));
+      rows.push(
+        JSON.stringify({
+          ts: recentTs,
+          peerId: 'p1',
+          assetCode: 'USD',
+          claimsReceivedTotal: String(i),
+        })
+      );
     }
     // Insert a malformed line and an old entry to trigger pruning + repair.
     rows.push('not-valid-json');
-    rows.push(JSON.stringify({ ts: oldTs, peerId: 'p1', assetCode: 'USD', claimsReceivedTotal: '0' }));
+    rows.push(
+      JSON.stringify({
+        ts: oldTs,
+        peerId: 'p1',
+        assetCode: 'USD',
+        claimsReceivedTotal: '0',
+      })
+    );
 
     writeFileSync(snapshotPath, rows.join('\n') + '\n', { mode: 0o600 });
 
@@ -429,7 +472,9 @@ describe('SnapshotWriter', () => {
     }
 
     // Verify that at least some peer-0000 entries exist (round-trip correctness).
-    const peer0Lines = (lines as { peerId: string }[]).filter((l) => l.peerId === 'peer-0000');
+    const peer0Lines = (lines as { peerId: string }[]).filter(
+      (l) => l.peerId === 'peer-0000'
+    );
     expect(peer0Lines).toHaveLength(2); // USD + ETH
   });
 
@@ -439,10 +484,12 @@ describe('SnapshotWriter', () => {
       const snapshotPath = join(tmpHome, 'earnings-snapshots.jsonl');
       let tickCount = 0;
       const connector = makeConnector();
-      (connector.getEarnings as ReturnType<typeof vi.fn>).mockImplementation(async () => {
-        tickCount++;
-        return emptyEarnings();
-      });
+      (connector.getEarnings as ReturnType<typeof vi.fn>).mockImplementation(
+        async () => {
+          tickCount++;
+          return emptyEarnings();
+        }
+      );
 
       const writer = new SnapshotWriter({
         connectorAdmin: connector,
