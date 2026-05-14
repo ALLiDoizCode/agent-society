@@ -6,6 +6,7 @@ import { Banner } from './components/Banner.js';
 import { ApexStripSlot } from './components/ApexStripSlot.js';
 import { PeerTableSlot } from './components/PeerTableSlot.js';
 import { FooterSlot } from './components/FooterSlot.js';
+import { Badge } from './components/Badge.js';
 import { COPY } from './copy.js';
 
 export interface AppProps {
@@ -31,6 +32,7 @@ export default function App(props: AppProps): React.ReactElement {
         peers={data.peers}
         eventsRelayed={data.eventsRelayed}
       />
+      <Badge apex={data.apex} peers={data.peers} uptimeSeconds={data.uptimeSeconds} />
       <Banner bannerKey={bannerKey} />
       <ApexStripSlot apex={data.apex} peers={data.peers} />
       <PeerTableSlot peers={data.peers} />

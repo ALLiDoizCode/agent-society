@@ -7,7 +7,7 @@
 
 ## 80ch Reference Grid
 
-Row budget at 80×24: hero 3 rows + qualifier 1 row + apex slot 1 row + peer slot 4 rows + footer slot 1 row = 10 rows used, 14 rows free.
+Row budget at 80×24: hero 3 rows + qualifier 1 row + badge 1 row (conditional) + apex slot 1 row + peer slot 4 rows + footer slot 1 row = 11 rows used (badge visible), 13 rows free.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐  row 0 (border only for illustration; not rendered)
@@ -15,9 +15,10 @@ Row budget at 80×24: hero 3 rows + qualifier 1 row + apex slot 1 row + peer slo
 │ $0.00          $0.00           $0.00           $0.00                         │  row 2 — values (green if >0, default if 0)
 │ ·······  7d                                                                  │  row 3 — sparkline (collapses at <60ch)
 │ MONTH $0.00 · 0 events relayed · you're early                                │  row 4 — empty-state qualifier (hidden when any month>0)
-│                                                                              │  row 5 — [ApexStripSlot reserved for 48.2]
-│                                                                              │  rows 6–9 — [PeerTableSlot reserved for 48.2]
-│                                                                              │  row 10 — [FooterSlot reserved for 48.4]
+│ you're early                                                                 │  row 5 — [Badge] (conditional — hides when lifetime ≥ $1.00 AND uptime ≥ 7d)
+│                                                                              │  row 6 — [ApexStripSlot reserved for 48.2]
+│                                                                              │  rows 7–10 — [PeerTableSlot reserved for 48.2]
+│                                                                              │  row 11 — [FooterSlot reserved for 48.4]
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -27,6 +28,7 @@ TODAY          MONTH           YEAR            LIFETIME
 $0.00          $0.00           $0.00           $0.00
 ·······  7d
 MONTH $0.00 · 0 events relayed · you're early
+you're early
 ```
 
 ---
@@ -40,6 +42,7 @@ TODAY              MONTH              YEAR               LIFETIME
 $0.00              $0.00              $0.00              $0.00
 ▁▂▃▄▅▆▇█▁▂▃▄▅▆  7d
 MONTH $0.00 · 0 events relayed · you're early
+you're early
 ```
 
 ---
@@ -84,6 +87,7 @@ Three stub components ship in 48.1 as empty fragments. Future stories mount real
 
 | Slot component      | Reserved for | Row budget |
 |---------------------|--------------|------------|
+| `<Badge />`         | Story 48.3 "you're early" badge | 1 row (conditional) |
 | `<ApexStripSlot />` | Story 48.2 apex routing strip | 1 row |
 | `<PeerTableSlot />` | Story 48.2 per-peer earnings table | 4 rows |
 | `<FooterSlot />`    | Story 48.4 activity ticker | 1 row |
@@ -110,4 +114,5 @@ Full detail in UX-DR7: `_bmad-output/design/townhouse-tui-per-asset-row.md`.
 - Canonical metric tiers + 80×24 row budget: `townhouse-hs-v1-plan-2026-05-07.md:104-154`
 - Empty-state copy: `_bmad-output/design/empty-state-copy.md` (UX-DR2)
 - Per-asset row stacking: `_bmad-output/design/townhouse-tui-per-asset-row.md` (UX-DR7)
+- "You're early" badge: `_bmad-output/design/townhouse-tui-badge-spec.md` (UX-DR3)
 - Story spec: `_bmad-output/implementation-artifacts/48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation.md`

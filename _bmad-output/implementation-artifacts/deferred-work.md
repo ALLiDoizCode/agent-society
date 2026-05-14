@@ -1,4 +1,8 @@
 
+## Deferred from: code review of 48-3-youre-early-badge (2026-05-14)
+
+- UX-DR1 row-budget completeness — `_bmad-output/design/townhouse-tui-wireframe.md:10` documents only the badge-visible case (11/13). The non-visible case (10/14) is not stated. Cosmetic doc gap; no impact on code or design intent. Defer until UX-DR1 sees its next structural edit. [_bmad-output/design/townhouse-tui-wireframe.md:10]
+
 ## Deferred from: code review of 48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation (2026-05-13)
 
 - W1: No automated tmux capture-pane fixture. AC #7 reads as automated ("spawn under `tmux new-session -d -s test`, assert `\x1b[?1049h` NOT emitted"); dev relegated to manual Task 10.5 (`[ ]` unchecked at close). Add `__integration__/tmux-altscreen.test.ts` once a docker-based tmux runner is wired into CI. [packages/townhouse/src/__integration__/ — missing fixture]

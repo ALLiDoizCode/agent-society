@@ -28,10 +28,7 @@ MONTH $0.00 · {N} events relayed · you're early
 
 Where `{N}` is the integer `eventsRelayed` from `GET /api/earnings`.
 
-**Rotation variants** (used by Story 48.3 badge animation — ship here so Sally reviews one library):
-- `you're early`
-- `warming up`
-- `first packet en route`
+**Note:** The trailing "you're early" in the qualifier is the static empty-state hero copy (Story 48.1). The rotated variants are the badge's territory (Story 48.3 — see § "You're Early Badge (Story 48.3)").
 
 ---
 
@@ -84,6 +81,19 @@ The apex routing-fee strip and per-peer table components ship in Story 48.2.
 no peers yet — run 'townhouse node add town'
 ```
 
+## You're Early Badge (Story 48.3)
+
+The `<Badge />` component renders one of three rotated strings when `lifetime < $1.00 OR uptime < 7d`. The rotation is driven by wall-clock time (30-second cadence — see UX-DR3). Once both triggers clear, the badge disappears silently.
+
+**Rotation variants:**
+- `you're early`
+- `warming up`
+- `first packet en route`
+
+Sourced from `COPY.heroEarlyRotation` (defined in `tui/copy.ts:3`).
+
+---
+
 ## Future-State Placeholders
 
 The following copy entries ship in this doc NOW so Sally can review one library — the TUI components that render them land in 48.4. The strings MUST be present in `copy.ts` today (even if the components using them are in future stories) so the copy-sync test passes.
@@ -135,6 +145,7 @@ The `copy-sync.test.ts` test enforces this by asserting that every leaf string i
 ## Cross-References
 
 - Wireframe layout: `_bmad-output/design/townhouse-tui-wireframe.md` (UX-DR1)
+- Badge spec: `_bmad-output/design/townhouse-tui-badge-spec.md` (UX-DR3)
 - TUI copy module: `packages/townhouse/src/tui/copy.ts`
 - Copy-sync test: `packages/townhouse/src/tui/copy-sync.test.ts`
 - Story spec: `_bmad-output/implementation-artifacts/48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation.md` AC #4, AC #9
