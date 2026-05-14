@@ -90,8 +90,24 @@ Three stub components ship in 48.1 as empty fragments. Future stories mount real
 
 ---
 
+## Per-Peer Table Degrade Ladder (Story 48.2)
+
+The `<PeerTableSlot />` (4-row budget) degrades column-by-column as terminal width shrinks:
+
+| Width range | Behavior |
+|-------------|----------|
+| ≥80ch       | Full 5-column layout: PEER · TYPE · ASSET · NET (MONTH) · LAST CLAIM |
+| 70–79ch     | Full layout, column widths proportionally narrower |
+| <70ch       | TYPE column truncates to first 3 chars via `slice(0,3)` (`tow` / `mil` / `dvm` / `ext`); LAST CLAIM drops ` ago` suffix |
+| <60ch       | LAST CLAIM column dropped entirely; 4 columns survive |
+
+Full detail in UX-DR7: `_bmad-output/design/townhouse-tui-per-asset-row.md`.
+
+---
+
 ## Cross-References
 
 - Canonical metric tiers + 80×24 row budget: `townhouse-hs-v1-plan-2026-05-07.md:104-154`
 - Empty-state copy: `_bmad-output/design/empty-state-copy.md` (UX-DR2)
+- Per-asset row stacking: `_bmad-output/design/townhouse-tui-per-asset-row.md` (UX-DR7)
 - Story spec: `_bmad-output/implementation-artifacts/48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation.md`

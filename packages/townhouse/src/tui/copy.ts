@@ -9,9 +9,14 @@ export const COPY = {
     connectorUnavailable: `Connector not reachable — showing last known values. Retrying in 2s.`,
     fetchFailed: `Last refresh failed — retrying.`,
   },
+  apex: {
+    routingPrefix: `↳ apex routing: `,
+    routingEmpty: `(enable mill to route)`,
+  },
+  peerTable: {
+    empty: `no peers yet — run 'townhouse node add town'`,
+  },
   future: {
-    apexRoutingEmpty: `(enable mill to route)`,
-    peerTableEmpty: `no peers yet — run 'townhouse node add town'`,
     recentClaimsEmpty: `no settlements yet — press [a] when activity arrives`,
   },
 } as const;

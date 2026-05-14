@@ -32,8 +32,8 @@ export default function App(props: AppProps): React.ReactElement {
         eventsRelayed={data.eventsRelayed}
       />
       <Banner bannerKey={bannerKey} />
-      <ApexStripSlot />
-      <PeerTableSlot />
+      <ApexStripSlot apex={data.apex} peers={data.peers} />
+      <PeerTableSlot peers={data.peers} />
       <FooterSlot />
     </Box>
   );

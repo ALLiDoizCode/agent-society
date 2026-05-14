@@ -65,19 +65,28 @@ Last refresh failed — retrying.
 
 ---
 
-## Future-State Placeholders
+## Apex + Per-Peer Table Copy (Story 48.2)
 
-The following copy entries ship in this doc NOW so Sally can review one library — the TUI components that render them land in 48.2 / 48.4. The strings MUST be present in `copy.ts` today (even if the components using them are in future stories) so the copy-sync test passes.
+The apex routing-fee strip and per-peer table components ship in Story 48.2.
 
-**Apex routing empty** (Story 48.2 `<ApexStripSlot />`):
+**Apex routing prefix** (prefix for every apex strip row):
+```
+↳ apex routing: 
+```
+
+**Apex routing empty** (shown when `apex.month === 0` AND no Mill peer exists):
 ```
 (enable mill to route)
 ```
 
-**Per-peer table empty** (Story 48.2 `<PeerTableSlot />`):
+**Per-peer table empty** (shown when `peers.length === 0`):
 ```
 no peers yet — run 'townhouse node add town'
 ```
+
+## Future-State Placeholders
+
+The following copy entries ship in this doc NOW so Sally can review one library — the TUI components that render them land in 48.4. The strings MUST be present in `copy.ts` today (even if the components using them are in future stories) so the copy-sync test passes.
 
 **Recent claims empty** (Story 48.4 `<FooterSlot />`):
 ```
@@ -116,8 +125,9 @@ The `copy-sync.test.ts` test enforces this by asserting that every leaf string i
 | `COPY.qualifierEventsWords` | `events relayed` |
 | `COPY.banners.connectorUnavailable` | `Connector not reachable — showing last known values. Retrying in 2s.` |
 | `COPY.banners.fetchFailed` | `Last refresh failed — retrying.` |
-| `COPY.future.apexRoutingEmpty` | `(enable mill to route)` |
-| `COPY.future.peerTableEmpty` | `no peers yet — run 'townhouse node add town'` |
+| `COPY.apex.routingPrefix` | `↳ apex routing: ` |
+| `COPY.apex.routingEmpty` | `(enable mill to route)` |
+| `COPY.peerTable.empty` | `no peers yet — run 'townhouse node add town'` |
 | `COPY.future.recentClaimsEmpty` | `no settlements yet — press [a] when activity arrives` |
 
 ---
