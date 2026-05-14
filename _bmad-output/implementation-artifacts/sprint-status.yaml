@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-13 (Epic 47 retrospective → done; epic-47-retro-2026-05-13.md committed. 4 new action items A5'–A8' carry forward to Epic 48: compose-template ↔ generator contract test (widens Epic 46 retro A3'), connector × townhouse smoke test on publish (preempts BUG-2-class latents), D3 real-claim driver plan documented for Epic 50, patch-volume calibration heuristic in close-out checklist.)
+# last_updated: 2026-05-14 (Story 48.1 code review complete — 24 patches applied across 9 files, 1070/1070 townhouse tests green, +19 over the 1051 baseline. Story flipped review → done; PR-level merge gates remain: manual smoke matrix (80×24, tmux, pipe), Sally UX-DR1/UX-DR2 sign-off (AC #8 / NFR19). Deferred items recorded in deferred-work.md.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -552,8 +552,8 @@ development_status:
   # MERGE GATE on Story 48.1: PR cannot merge without
   # _bmad-output/design/empty-state-copy.md populated + Sally sign-off
   # (UX-DR2 enforced as AC; NFR19).
-  epic-48: backlog
-  48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation: backlog  # CRITICAL PATH; sized L; merge gate on empty-state copy library
+  epic-48: in-progress
+  48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation: done  # CRITICAL PATH; sized L; merge gate on empty-state copy library — story file created 2026-05-13; code review 2026-05-13/14 applied 24 patches (P1–P27 minus P8/P22-partial/P23-deferred); 1070/1070 townhouse tests green; manual smoke + Sally UX-DR1/UX-DR2 sign-off remain as PR-level gates per AC #8
   48-2-two-bucket-earnings-display: backlog
   48-3-youre-early-badge: backlog
   48-4-activity-ticker-footer-and-activity-overlay: backlog

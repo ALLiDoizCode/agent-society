@@ -66,6 +66,7 @@ import {
   saveWallet,
   loadWallet,
 } from './wallet/index.js';
+import { shouldRenderInk } from './tui/tty-detect.js';
 
 /**
  * Error thrown when `main()` is invoked with `--help`. Callers (tests) can
@@ -89,7 +90,7 @@ Usage:
   townhouse status [-c <path>]                   Show node status
   townhouse metrics [-c <path>]                  Show connector metrics
   townhouse wallet show [-c <path>] [--password <pw>]  Show derived addresses
-  townhouse hs up [--password <pw>] [-c <path>]                Boot apex (connector + .anyone HS)
+  townhouse hs up [--password <pw>] [-c <path>]                Boot apex (connector + .anyone HS) (launches dashboard TUI in TTY mode)
   townhouse hs down [--rotate-keys] [-c <path>]               Stop apex (--rotate-keys deletes .anyone keypair)
   townhouse node add [<type>] [--json] [-c <path>]    Provision a child node (default: town)
   townhouse node remove <id> [--yes] [--json] [-c <path>]   Deprovision a child node
@@ -1071,6 +1072,19 @@ async function handleHsUp(
     // hostname from the connector already includes the .anyone suffix.
     // ribbon.start('live', hostname) prints: "Apex live at <hostname>" as the FINAL stdout line.
     ribbon.start('live', hostname);
+
+    // Story 48.1: foreground Ink TUI when stdout is a TTY.
+    // Dynamic import keeps Ink + React out of non-TTY startup path (faster --help).
+    // On non-TTY the process exits naturally after this block (Story 45.4 AC #11).
+    if (shouldRenderInk()) {
+      const { mountTui } = await import('./tui/index.js');
+      // P27 (D1): thread HS_TOWNHOUSE_API_URL env override into the TUI so
+      // operators on a non-default Fastify port don't see eternal fetch_failed.
+      const apiUrlOverride = process.env['HS_TOWNHOUSE_API_URL'];
+      const mountOpts = apiUrlOverride !== undefined ? { apiUrl: apiUrlOverride } : {};
+      const instance = mountTui(mountOpts);
+      await instance.waitUntilExit();
+    }
   } catch (err: unknown) {
     const { exitCode } = renderFailure(err);
     process.exitCode = exitCode;
