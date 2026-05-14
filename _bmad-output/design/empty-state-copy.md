@@ -94,13 +94,60 @@ Sourced from `COPY.heroEarlyRotation` (defined in `tui/copy.ts:3`).
 
 ---
 
-## Future-State Placeholders
+## Activity Ticker + Overlay Copy (Story 48.4)
 
-The following copy entries ship in this doc NOW so Sally can review one library — the TUI components that render them land in 48.4. The strings MUST be present in `copy.ts` today (even if the components using them are in future stories) so the copy-sync test passes.
+The `<ActivityTicker />` (footer slot) and `<ActivityOverlay />` modal ship in Story 48.4.
 
-**Recent claims empty** (Story 48.4 `<FooterSlot />`):
+**Activity ticker prefix** (static label preceding the most recent claim line):
+```
+recent: 
+```
+
+**Activity ticker empty** (shown when `recentClaims.length === 0`):
 ```
 no settlements yet — press [a] when activity arrives
+```
+
+**Activity ticker keybind hint** (appended to the populated ticker line):
+```
+ [a] activity
+```
+
+**Activity overlay title prefix** (combined with `Math.min(claims.length, MAX_BUFFER_SIZE)` and the literal ` of ${MAX_BUFFER_SIZE}` suffix at render time, producing `Activity — last N of 200`):
+```
+Activity — last 
+```
+
+The `200` cap is sourced from `MAX_BUFFER_SIZE` in `use-activity-buffer.ts` (single source of truth — there is intentionally **no** `titleSuffix` COPY token so the cap cannot drift).
+
+**Activity overlay empty hint** (shown in body when `claims.length === 0`):
+```
+(no activity yet)
+```
+
+**Activity overlay scroll hint** (bottom hint row when `claims.length > 0`):
+```
+j/k to scroll · q to close
+```
+
+**Activity overlay scroll hint — empty** (bottom hint row when `claims.length === 0`; `j`/`k` are no-ops at length 0, so the hint degrades):
+```
+q to close
+```
+
+**Direction label — inbound** (used in overlay row format):
+```
+in
+```
+
+**Direction label — outbound** (used in overlay row format):
+```
+out
+```
+
+**Direction label — unknown** (used in both ticker arrow and overlay row when `direction` is neither `'inbound'` nor `'outbound'` — defensive against future wire enum drift):
+```
+?
 ```
 
 ---
@@ -138,7 +185,16 @@ The `copy-sync.test.ts` test enforces this by asserting that every leaf string i
 | `COPY.apex.routingPrefix` | `↳ apex routing: ` |
 | `COPY.apex.routingEmpty` | `(enable mill to route)` |
 | `COPY.peerTable.empty` | `no peers yet — run 'townhouse node add town'` |
-| `COPY.future.recentClaimsEmpty` | `no settlements yet — press [a] when activity arrives` |
+| `COPY.activityTicker.prefix` | `recent: ` |
+| `COPY.activityTicker.empty` | `no settlements yet — press [a] when activity arrives` |
+| `COPY.activityTicker.keybind` | ` [a] activity` |
+| `COPY.activityOverlay.titlePrefix` | `Activity — last ` |
+| `COPY.activityOverlay.emptyHint` | `(no activity yet)` |
+| `COPY.activityOverlay.scrollHint` | `j/k to scroll · q to close` |
+| `COPY.activityOverlay.scrollHintEmpty` | `q to close` |
+| `COPY.activityOverlay.directionInbound` | `in` |
+| `COPY.activityOverlay.directionOutbound` | `out` |
+| `COPY.activityOverlay.directionUnknown` | `?` |
 
 ---
 
@@ -146,6 +202,7 @@ The `copy-sync.test.ts` test enforces this by asserting that every leaf string i
 
 - Wireframe layout: `_bmad-output/design/townhouse-tui-wireframe.md` (UX-DR1)
 - Badge spec: `_bmad-output/design/townhouse-tui-badge-spec.md` (UX-DR3)
+- Activity overlay spec: `_bmad-output/design/townhouse-tui-activity-overlay-spec.md` (UX-DR6)
 - TUI copy module: `packages/townhouse/src/tui/copy.ts`
 - Copy-sync test: `packages/townhouse/src/tui/copy-sync.test.ts`
 - Story spec: `_bmad-output/implementation-artifacts/48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation.md` AC #4, AC #9

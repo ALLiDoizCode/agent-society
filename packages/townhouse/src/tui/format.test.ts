@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { formatUsdc, formatRelativeTime } from './format.js';
+import { formatUsdc, formatUsdcMicro, formatRelativeTime } from './format.js';
 
 describe('formatUsdc', () => {
   const origEnv = process.env['NODE_ENV'];
@@ -58,6 +58,38 @@ describe('formatUsdc', () => {
 
   it('suppresses negative sign on negative zero', () => {
     expect(formatUsdc('-0', 6)).toBe('$0.00');
+  });
+});
+
+describe('formatUsdcMicro', () => {
+  const origEnv = process.env['NODE_ENV'];
+
+  afterEach(() => {
+    if (origEnv === undefined) {
+      delete process.env['NODE_ENV'];
+    } else {
+      process.env['NODE_ENV'] = origEnv;
+    }
+  });
+
+  it('formats a standard USDC micropayment at 4 decimals', () => {
+    expect(formatUsdcMicro('12000', 6)).toBe('$0.0120');
+  });
+
+  it('formats a negative micropayment', () => {
+    expect(formatUsdcMicro('-12000', 6)).toBe('-$0.0120');
+  });
+
+  it('returns $?.???? on malformed input in production', () => {
+    process.env['NODE_ENV'] = 'production';
+    expect(formatUsdcMicro('bad', 6)).toBe('$?.????');
+  });
+
+  it('truncates the fifth+ digit (does NOT round to nearest) — P5 boundary', () => {
+    // 19999 at scale 6 = 0.019999 → truncate (NOT round) at 4 decimals → $0.0199.
+    // A future contributor "fixing" to Math.round would silently shift every
+    // displayed amount.
+    expect(formatUsdcMicro('19999', 6)).toBe('$0.0199');
   });
 });
 

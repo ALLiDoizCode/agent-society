@@ -139,7 +139,7 @@ describe('Hardcoded copy smoke check (AC #9)', () => {
 
     const files = [...collectTsx(tuiDir), ...collectTsx(componentsDir)];
 
-    const FORBIDDEN_RE = /["'`](you're early|warming up|first packet en route|Fetching earnings|Connector not reachable|Last refresh failed|↳ apex routing|enable mill to route|no peers yet — run)/i;
+    const FORBIDDEN_RE = /["'`](you're early|warming up|first packet en route|Fetching earnings|Connector not reachable|Last refresh failed|↳ apex routing|enable mill to route|no peers yet — run|recent: |\[a\] activity|no settlements yet|j\/k to scroll|Activity — last|\(no activity yet\))/i;
     for (const file of files) {
       const content = readFileSync(file, 'utf-8');
       expect(

@@ -7,7 +7,7 @@
 
 ## 80ch Reference Grid
 
-Row budget at 80×24: hero 3 rows + qualifier 1 row + badge 1 row (conditional) + apex slot 1 row + peer slot 4 rows + footer slot 1 row = 11 rows used (badge visible), 13 rows free.
+Row budget at 80×24: hero 3 rows + qualifier 1 row + badge 1 row (conditional) + apex slot 1 row + peer slot 5 rows (header + 4 data) + footer slot 1 row = 12 rows used (badge visible), 12 rows free. Badge non-visible case = 10 rows used.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐  row 0 (border only for illustration; not rendered)
@@ -16,9 +16,10 @@ Row budget at 80×24: hero 3 rows + qualifier 1 row + badge 1 row (conditional) 
 │ ·······  7d                                                                  │  row 3 — sparkline (collapses at <60ch)
 │ MONTH $0.00 · 0 events relayed · you're early                                │  row 4 — empty-state qualifier (hidden when any month>0)
 │ you're early                                                                 │  row 5 — [Badge] (conditional — hides when lifetime ≥ $1.00 AND uptime ≥ 7d)
-│                                                                              │  row 6 — [ApexStripSlot reserved for 48.2]
-│                                                                              │  rows 7–10 — [PeerTableSlot reserved for 48.2]
-│                                                                              │  row 11 — [FooterSlot reserved for 48.4]
+│ ↳ apex routing: $0.01 USDC                                                   │  row 6 — [ApexStripSlot — Story 48.2]
+│ PEER     TYPE  ASSET  NET (MONTH)  LAST CLAIM                                │  row 7 — [PeerTableSlot header — Story 48.2]
+│ town-01  town  USDC   $0.01        5m ago                                    │  rows 8–11 — [PeerTableSlot data rows — Story 48.2]
+│ recent: town-01 ← $0.0120 USDC · 5m ago [a] activity                        │  row 12 — [FooterSlot — ActivityTicker — Story 48.4]
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -29,6 +30,10 @@ $0.00          $0.00           $0.00           $0.00
 ·······  7d
 MONTH $0.00 · 0 events relayed · you're early
 you're early
+↳ apex routing: $0.01 USDC
+PEER     TYPE  ASSET  NET (MONTH)  LAST CLAIM
+town-01  town  USDC   $0.01        5m ago
+recent: town-01 ← $0.0120 USDC · 5m ago [a] activity
 ```
 
 ---
@@ -43,6 +48,10 @@ $0.00              $0.00              $0.00              $0.00
 ▁▂▃▄▅▆▇█▁▂▃▄▅▆  7d
 MONTH $0.00 · 0 events relayed · you're early
 you're early
+↳ apex routing: $0.01 USDC
+PEER          TYPE  ASSET  NET (MONTH)  LAST CLAIM
+town-01       town  USDC   $0.01        5m ago
+recent: town-01 → $0.0008 USDC · 2m ago [a] activity
 ```
 
 ---
@@ -90,7 +99,9 @@ Three stub components ship in 48.1 as empty fragments. Future stories mount real
 | `<Badge />`         | Story 48.3 "you're early" badge | 1 row (conditional) |
 | `<ApexStripSlot />` | Story 48.2 apex routing strip | 1 row |
 | `<PeerTableSlot />` | Story 48.2 per-peer earnings table | 4 rows |
-| `<FooterSlot />`    | Story 48.4 activity ticker | 1 row |
+| `<FooterSlot />`    | Story 48.4 — `<ActivityTicker />` (1 row, always rendered when dashboard is visible; replaced by `<ActivityOverlay />` when `[a]` pressed) | 1 row |
+
+**Note:** The `<ActivityOverlay />` modal is "outside" the slot table — it renders INSTEAD OF the entire dashboard layout when `[a]` is pressed (App.tsx conditional return, not a slot child). See UX-DR6.
 
 ---
 
@@ -115,4 +126,5 @@ Full detail in UX-DR7: `_bmad-output/design/townhouse-tui-per-asset-row.md`.
 - Empty-state copy: `_bmad-output/design/empty-state-copy.md` (UX-DR2)
 - Per-asset row stacking: `_bmad-output/design/townhouse-tui-per-asset-row.md` (UX-DR7)
 - "You're early" badge: `_bmad-output/design/townhouse-tui-badge-spec.md` (UX-DR3)
+- Activity overlay: `_bmad-output/design/townhouse-tui-activity-overlay-spec.md` (UX-DR6)
 - Story spec: `_bmad-output/implementation-artifacts/48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation.md`

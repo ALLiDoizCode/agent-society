@@ -16,7 +16,18 @@ export const COPY = {
   peerTable: {
     empty: `no peers yet — run 'townhouse node add town'`,
   },
-  future: {
-    recentClaimsEmpty: `no settlements yet — press [a] when activity arrives`,
+  activityTicker: {
+    prefix: `recent: `,
+    empty: `no settlements yet — press [a] when activity arrives`,
+    keybind: ` [a] activity`,
+  },
+  activityOverlay: {
+    titlePrefix: `Activity — last `,
+    emptyHint: `(no activity yet)`,
+    scrollHint: `j/k to scroll · q to close`,
+    scrollHintEmpty: `q to close`,
+    directionInbound: `in`,
+    directionOutbound: `out`,
+    directionUnknown: `?`,
   },
 } as const;

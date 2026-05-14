@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-14 (Story 48.3 code review complete — 1 patch applied (boundary test for asymmetric uptime==604_800 / lifetime==0 case), 1 deferred (UX-DR1 row-budget doc completeness), 11 dismissed; Badge suite 14 → 15 tests; townhouse total 1109 → 1110 (one pre-existing snapshot-writer timing flake passes in isolation); all 13 ACs MET; Sally UX-DR3 sign-off remains PR-level gate per AC #10; status → done.)
+# last_updated: 2026-05-14 (Story 48.4 created — backlog → ready-for-dev. Sized M. Replaces FooterSlot stub with ActivityTicker (single-row footer) + new ActivityOverlay modal (j/k scroll, q/ESC close, 200-entry ring buffer via useActivityBuffer hook). 14 ACs, 19 tasks, +22–30 test delta target over 1110 baseline. Net-new artifact UX-DR6 (activity overlay spec). 3 documented deviations from epic spec: HH:MM:SS timestamp format, arrow+literal direction rendering, formatUsdcMicro 4-decimal amount.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -556,7 +556,7 @@ development_status:
   48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation: done  # CRITICAL PATH; sized L; merge gate on empty-state copy library — story file created 2026-05-13; code review 2026-05-13/14 applied 24 patches (P1–P27 minus P8/P22-partial/P23-deferred); 1070/1070 townhouse tests green; manual smoke + Sally UX-DR1/UX-DR2 sign-off remain as PR-level gates per AC #8
   48-2-two-bucket-earnings-display: done  # sized M; code review 2026-05-14: 10 patches applied + 2 dismissed PM decisions; +25 net tests (1070→1095); ApexStrip + PeerTable mounts; UX-DR7 created; formatRelativeTime; copy promotions; import-boundary allow-list; Sally sign-off pending at PR-level per AC #13
   48-3-youre-early-badge: done  # sized S; mounts amber+bold badge between HeroBand and Banner; triggers `lifetime < $1.00 OR uptime < 7d`; 30s wall-clock-driven rotation over COPY.heroEarlyRotation; no new deps/COPY/schema; UX-DR3 created in PR; code review 2026-05-14: 1 patch applied (asymmetric uptime-threshold boundary test), 1 deferred (UX-DR1 row-budget doc completeness), 11 dismissed; Badge 14→15 tests; townhouse total 1109→1110; all 13 ACs MET; Sally UX-DR3 sign-off remains PR-level gate per AC #10
-  48-4-activity-ticker-footer-and-activity-overlay: backlog
+  48-4-activity-ticker-footer-and-activity-overlay: review
   48-5-drill-subcommands: backlog  # townhouse channels/metrics/logs/peer/health
   48-6-sats-power-user-flag: backlog  # undocumented --units=sats power-user flag
   48-7-live-e2e-gate-operator-dashboard: backlog  # Epic 45 retro A4 — must complete before Epic 48 flips to done
