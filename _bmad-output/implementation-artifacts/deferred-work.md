@@ -371,3 +371,18 @@ _Six cross-repo patches (P3, P4, P5, P6, P7, Q1) shipped in lock-step via [conne
 - Hardcoded compose volume names in `cleanupContainersAndVolumes` (`townhouse-hs-anon`, `townhouse-hs-{town,mill,dvm}-data`) assume compose-template stability — silent leak if templates rename. Label-based volume discipline would fix this cross-test. [`packages/townhouse/src/__integration__/townhouse-earnings-e2e.test.ts:150-160`]
 - UTC midnight rollover crossing during long `beforeAll` could shift the snapshot baseline mid-run; the seed's `ts` is captured once but the route reads wall-clock for UTC boundaries — pre-existing snapshot system design, not gate-introduced. [`packages/townhouse/src/__integration__/townhouse-earnings-e2e.test.ts:200-213`]
 - SOCKS5 dial-loop log noise when the synthetic external peer's `wss://gate-external.example` is dialed through the connector's HS-mode transport — connector behavior; suppressing requires a `transport: 'direct'` option on `registerPeer` (per connector v3.6.2 PR #69's per-peer transport selection). Outside this story scope. [`packages/townhouse/src/__integration__/townhouse-earnings-e2e.test.ts:382-388`]
+
+## Deferred from: code review of 48-5-drill-subcommands (2026-05-15)
+
+- `/health` route mixes `process.uptime()` (host-API) with package version — semantically misleading, but satisfies AC #7 as written. [packages/townhouse/src/api/build-app.ts:89-94]
+- `createRequire('../../package.json')` is fragile across build-output layouts but matches existing townhouse pattern; module-load failure surfaces immediately in tests. [packages/townhouse/src/api/build-app.ts:74-80]
+- `handlePeerDetail` collapses 503/timeouts/auth-fail into a single "endpoint unavailable" message; spec'd UX per AC #4. [packages/townhouse/src/cli/drill-commands.ts:1026-1034, 1070, 1090]
+- `lastActivity` no ISO validation — non-ISO string renders `?` per `formatRelativeTime` contract; contract drift detection belongs at the connector boundary. [packages/townhouse/src/cli/drill-commands.ts:707, 1098]
+- `emitJsonError` doesn't await stdout drain — Node flushes on natural exit (no sync `process.exit(1)` in these paths); false positive in practice. [packages/townhouse/src/cli/drill-commands.ts:657-660]
+- `AbortSignal.timeout` for `probeHostApi` body-read — Node 20+ fetch respects signal abort on the response stream; non-issue in practice. [packages/townhouse/src/cli/drill-commands.ts:1129-1148]
+- `channels` table widths break on Unicode wide chars / `truncate16` may split UTF-16 surrogate pairs — channelId/peerId/chain are hex/ASCII strings in practice. [packages/townhouse/src/cli/drill-commands.ts:649-651, 711-718]
+- `computeOverall` treats `n/a` as healthy (asymmetric vs `degraded`) — intentional per spec; `n/a` means "feature off", not "broken". [packages/townhouse/src/cli/drill-commands.ts:1225-1236]
+- `handlePeerDetail` may TypeError on `peer.ilpAddresses === undefined` if connector contract drifts — connector contract canary covers; out-of-scope for this story. [packages/townhouse/src/cli/drill-commands.ts:1053-1057]
+- AC #9 PARTIAL — help-text constants `CHANNELS_HELP`/`LOGS_HELP`/`PEER_HELP`/`HEALTH_HELP` exported from `drill-commands.ts` but cli.ts duplicates the lines inline; cosmetic dual-source-of-truth. [packages/townhouse/src/cli.ts:206-209]
+- AC #10 PARTIAL — `channels` placement in HELP_TEXT not between `init` and `metrics` per spec ordering; cosmetic. [packages/townhouse/src/cli.ts:206-209]
+- AC #13 deferred per spec — live smoke run gated to PR close-out, not the in-session review.

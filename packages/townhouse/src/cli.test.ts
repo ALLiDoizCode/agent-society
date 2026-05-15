@@ -1015,4 +1015,81 @@ logging:
       }
     });
   });
+
+  // ── Story 48.5: Drill subcommand routing ──────────────────────────────────────
+
+  describe('drill subcommand routing (Story 48.5)', () => {
+    it('channels routes to handleChannels — calls /admin/channels and prints CHANNEL column', async () => {
+      const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('/admin/channels')) {
+          return { ok: true, json: async () => [] };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        await main(['channels']);
+        const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        expect(output).toContain('No channels open');
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('logs requires a positional node-id and exits 1 when missing', async () => {
+      await main(['logs']);
+      const errOutput = consoleErrorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(errOutput).toContain('Usage: townhouse logs');
+      expect(process.exitCode).toBe(1);
+    });
+
+    it('logs --lines with non-integer value exits 1', async () => {
+      await main(['logs', 'connector', '--lines', 'abc']);
+      const errOutput = consoleErrorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(errOutput).toContain('--lines must be an integer');
+      expect(process.exitCode).toBe(1);
+    });
+
+    it('peer requires a positional id and exits 1 when missing', async () => {
+      await main(['peer']);
+      const errOutput = consoleErrorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(errOutput).toContain('Usage: townhouse peer');
+      expect(process.exitCode).toBe(1);
+    });
+
+    it('health runs without args and calls connector /health probe', async () => {
+      const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('/admin/hs-hostname')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ hostname: 'abc123.anon', publishedAt: '2026-05-14T10:00:00.000Z' }),
+          };
+        }
+        if (url.includes('/health')) {
+          return {
+            ok: true,
+            json: async () => ({
+              status: 'healthy',
+              uptime: 100,
+              startedAt: '2026-05-14T00:00:00.000Z',
+              version: '0.1.0-rc5',
+            }),
+          };
+        }
+        if (url.includes('/api/nodes')) {
+          return { ok: true, json: async () => ({ nodes: [] }) };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        await main(['health']);
+        const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        expect(output).toContain('Overall:');
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  });
 });
