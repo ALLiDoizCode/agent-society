@@ -28,7 +28,7 @@ export default function App(props: AppProps): React.ReactElement {
       if (key.ctrl || key.meta) return;
       if (input === 'a' || input === 'A') setOverlayOpen(true);
     },
-    { isActive: !overlayOpen },
+    { isActive: !overlayOpen && state.phase !== 'loading' },
   );
 
   if (state.phase === 'loading') {

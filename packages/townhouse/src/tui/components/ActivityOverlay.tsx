@@ -1,5 +1,5 @@
 import { Box, Text, useStdout, useInput } from 'ink';
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import type { RecentClaim } from '../types.js';
 import { formatUsdcMicro } from '../format.js';
 import { COPY } from '../copy.js';
@@ -71,6 +71,13 @@ export function ActivityOverlay({
 
   const [scroll, setScroll] = useState(0);
   const maxScroll = Math.max(0, claims.length - visibleRows);
+
+  // Reconcile scroll when maxScroll shrinks under it — terminal resize that grows
+  // `visibleRows` (or any future shrink of `claims`) would otherwise leave the slice
+  // pointing past the data, hiding the newest entries until the operator presses k.
+  useEffect(() => {
+    if (scroll > maxScroll) setScroll(maxScroll);
+  }, [maxScroll, scroll]);
 
   useInput((input, key) => {
     // ESC must be checked BEFORE the ctrl/meta guard — Ink's input parser sets
