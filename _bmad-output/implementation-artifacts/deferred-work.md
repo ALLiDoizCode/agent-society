@@ -386,3 +386,26 @@ _Six cross-repo patches (P3, P4, P5, P6, P7, Q1) shipped in lock-step via [conne
 - AC #9 PARTIAL — help-text constants `CHANNELS_HELP`/`LOGS_HELP`/`PEER_HELP`/`HEALTH_HELP` exported from `drill-commands.ts` but cli.ts duplicates the lines inline; cosmetic dual-source-of-truth. [packages/townhouse/src/cli.ts:206-209]
 - AC #10 PARTIAL — `channels` placement in HELP_TEXT not between `init` and `metrics` per spec ordering; cosmetic. [packages/townhouse/src/cli.ts:206-209]
 - AC #13 deferred per spec — live smoke run gated to PR close-out, not the in-session review.
+
+## Deferred from: code review of 48-6-sats-power-user-flag (2026-05-15)
+
+- `addDecimalStrings` validates only `b`, not `a` — asymmetric defense pattern copied verbatim from `HeroBand.tsx`; fixing here diverges from the source helper. [packages/townhouse/src/cli/status-earnings.ts:16-23]
+- `addDecimalStrings` silently drops malformed values without logging — same HeroBand-parity concern; cross-cutting cleanup belongs in a shared utility so both the TUI and CLI surfaces diagnose schema drift uniformly. [packages/townhouse/src/cli/status-earnings.ts:16-23]
+- `--rate` silently discarded when `--units` is `usdc` or unspecified — operator misuse (typoed `--units`); not spec-required and adds no correctness defect, but a warn-on-discard would catch the common typo. [packages/townhouse/src/cli.ts:1422-1434]
+- `usdcMicroToSats` accepts rounded-but-unsafe rates from direct callers — `resolveSatsRate` is the only caller in the cli flow and defends with `Number.isSafeInteger`; direct-caller defense-in-depth (relevant if the helper is reused in TUI/JSON-export/library paths). [packages/townhouse/src/cli/status-earnings.ts:52-60]
+- AC #10 close-out — smoke run against live apex + Story Close-Out Checklist boxes (Tasks 10.1-10.8, 11.1-11.2) are operator-side gates before flipping sprint-status to `done`; this Review Findings entry fulfills 11.1.
+
+## Deferred from: second-pass code review of 48-6-sats-power-user-flag (2026-05-15)
+
+- Stdout label "Earnings (USDC): unavailable" maps local config errors to "connector unavailable" — stderr breadcrumb (P1) gives operator the disambiguation signal, but the stdout label still reads as a network-side fault. Full fix would extend `AggregatedEarnings.status` enum with a `'local_error'` variant and add a render branch — cross-cutting refactor. [packages/townhouse/src/cli/status-earnings.ts:84-86]
+- Test name "fractional USDC truncates (floor division)" mislabels truncation-toward-zero on negative inputs — BigInt division truncates toward zero, then sign is re-applied. For positives, truncate==floor; for negatives they differ (floor(-150000/1000000) is -1; truncation is 0). Behavior is correct and tested, only the doc/test-name needs cleanup. [packages/townhouse/src/cli/status-earnings.test.ts:111]
+- `resolveEarnings` catch swallows ALL throws on a contract assumption about `aggregateEarnings` — comment encodes the contract but the type system doesn't enforce it. If `aggregateEarnings` ever grows a non-connector failure mode, breadcrumb message could mislead. [packages/townhouse/src/cli.ts:438-444]
+- P1 breadcrumb on local config corruption does NOT set `process.exitCode` — shell pipelines (`townhouse status && ...`) cannot detect a stale `nodes.yaml`. Matches existing graceful-degradation pattern, but inconsistent with `--units=sats` no-rate path which DOES set exitCode=1 on a comparable local error. Debatable UX choice. [packages/townhouse/src/cli.ts:438-444]
+
+## Deferred from: smoke-run blockers during 48.6 close-out (2026-05-15)
+
+- **Dev-tree `townhouse hs up` is broken** — two cumulative build-toolchain bugs surfaced when attempting AC #10 smoke run:
+  1. tsup emits duplicate `import { createRequire } from "module"` in `dist/chunk-*.js` (one auto-prepended at line 1, one from `build-app.ts:13` import — both survive into the bundle → `SyntaxError: Identifier 'createRequire' has already been declared`). Reproduces on a pristine `epic-48` build with zero 48.6 changes (verified by stashing and rebuilding). Workaround: `sed -i '<line>d' dist/chunk-*.js` to remove the duplicate.
+  2. `_pkgVersion` resolves `'../../package.json'` relative to the dist chunk path, not the source. Fix in source would change `build-app.ts:18` from `createRequire(import.meta.url)('../../package.json')` to use a build-time inlined version, or `'../package.json'` if always shipped under `dist/`. Workaround: `sed -i 's|"\.\./\.\./package\.json"|"../package.json"|g' dist/chunk-*.js`.
+  3. `dist/image-manifest.json` is only produced by the npm-publish CI workflow, so `townhouse hs up` always fails in dev with "HS mode requires a digest-pinned image manifest". The user's installed rc5 manifest is `{}` empty (pre-existing rc5 tarball bug — town#43 lineage). Workaround for smoke: use the dev-infra script + mock-connector fixture instead.
+  These three together block every dev-tree story that needs to verify HS-mode behavior end-to-end. Cross-cutting; should be filed as its own story under Epic 22 (Restore Green CI) or a new build-hardening epic.

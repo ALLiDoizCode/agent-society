@@ -60,6 +60,11 @@ import {
   NODE_LIST_HELP,
 } from './cli/node-commands.js';
 import { dispatchDrillCommand } from './cli/drill-commands.js';
+import { renderEarningsSection, resolveSatsRate } from './cli/status-earnings.js';
+import { aggregateEarnings, type AggregatedEarnings } from './earnings/aggregator.js';
+import { readNodesYaml } from './state/nodes-yaml.js';
+import { PeerTypeResolver } from './registry/peer-type-resolver.js';
+import { createDeltaComputer } from './earnings/snapshot-reader.js';
 import {
   WalletManager,
   encryptWallet,
@@ -423,9 +428,46 @@ async function handleWalletShow(
   walletManager.lock();
 }
 
+async function resolveEarnings(adminUrl: string, configPath: string): Promise<AggregatedEarnings> {
+  const base = dirname(configPath);
+  try {
+    const yaml = await readNodesYaml(join(base, 'nodes.yaml'));
+    return await aggregateEarnings({ connectorAdmin: new ConnectorAdminClient(adminUrl), peerTypeResolver: new PeerTypeResolver(yaml), deltaComputer: createDeltaComputer({ snapshotPath: join(base, 'earnings-snapshots.jsonl') }) });
+  } catch (err) {
+    // Distinguish local config/snapshot errors from connector outage:
+    // aggregateEarnings handles connector failures internally, so anything
+    // surfaced here is a nodes.yaml / snapshot-file / resolver problem.
+    console.error(`Earnings unavailable: ${formatLocalEarningsError(err)}`);
+    return { status: 'connector_unavailable', apex: { routingFees: {} }, peers: [], recentClaims: [], eventsRelayed: 0, uptimeSeconds: 0 };
+  }
+}
+
+// Render a one-line breadcrumb from a thrown error, collapsing Zod issue
+// lists (multi-line JSON) into `path: message` segments joined by `; `.
+function formatLocalEarningsError(err: unknown): string {
+  if (
+    err !== null &&
+    typeof err === 'object' &&
+    'issues' in err &&
+    Array.isArray((err as { issues: unknown }).issues)
+  ) {
+    const issues = (err as { issues: Array<{ path?: unknown; message?: unknown }> }).issues;
+    const parts = issues
+      .map((i) => {
+        const path = Array.isArray(i.path) && i.path.length > 0 ? i.path.join('.') : '<root>';
+        const msg = typeof i.message === 'string' ? i.message : 'invalid';
+        return `${path}: ${msg}`;
+      })
+      .join('; ');
+    if (parts) return parts;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
 async function handleStatus(
   docker: Docker,
-  config: TownhouseConfig
+  config: TownhouseConfig,
+  opts: { units: 'usdc' | 'sats'; satsPerUsdc?: number; configPath: string } = { units: 'usdc', configPath: DEFAULT_CONFIG_PATH }
 ): Promise<void> {
   const orchestrator = new DockerOrchestrator(docker, config, undefined, {
     profile: 'dev',
@@ -481,6 +523,11 @@ async function handleStatus(
     console.log('');
     console.log('Connector Metrics: unavailable');
   }
+
+  if (opts.units === 'sats' && opts.satsPerUsdc === undefined) return;
+  const earnings = await resolveEarnings(`http://127.0.0.1:${config.connector.adminPort}`, opts.configPath);
+  for (const line of renderEarningsSection({ earnings, units: opts.units, satsPerUsdc: opts.satsPerUsdc }))
+    console.log(line);
 }
 
 // handleMetrics moved to cli/drill-commands.ts (Story 48.5)
@@ -1318,6 +1365,8 @@ export async function main(
       'json-compact': { type: 'boolean' },
       lines: { type: 'string' },
       follow: { type: 'boolean', short: 'f' },
+      units: { type: 'string' },
+      rate: { type: 'string' },
     },
     strict: false,
     allowPositionals: true,
@@ -1401,10 +1450,17 @@ export async function main(
       break;
     }
     case 'status': {
-      const configPath = (values.config as string) ?? DEFAULT_CONFIG_PATH;
-      const config = loadConfig(configPath);
-      const docker = dockerInstance ?? new Docker();
-      await handleStatus(docker, config);
+      const configPath = (values['config'] as string) ?? DEFAULT_CONFIG_PATH;
+      const rawUnits = (values['units'] as string | undefined) ?? 'usdc';
+      if (rawUnits !== 'usdc' && rawUnits !== 'sats') { console.error(`--units must be 'usdc' or 'sats'`); process.exitCode = 1; break; }
+      let satsPerUsdc: number | undefined;
+      if (rawUnits === 'sats') {
+        const r = resolveSatsRate(values as Record<string, unknown>, process.env);
+        if ('error' in r) { console.error(r.error); process.exitCode = 1; }
+        else { satsPerUsdc = r.rate; }
+      }
+      const units = rawUnits as 'usdc' | 'sats';
+      await handleStatus(dockerInstance ?? new Docker(), loadConfig(configPath), { units, satsPerUsdc, configPath });
       break;
     }
     case 'up': {
