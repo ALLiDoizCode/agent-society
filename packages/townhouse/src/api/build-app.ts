@@ -10,12 +10,23 @@ import Fastify, {
 } from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
-import { createRequire } from 'node:module';
+// Local alias so the bundled output doesn't collide with the tsup banner's own
+// `import { createRequire } from 'module'` (Node ESM rejects duplicate identifier
+// imports from the same module). Retroactively authorized 2026-05-18 code review of
+// Story 49.1 — see Hard Rule #2 exception (d) in the story file. Smaller-radius fix
+// than dropping the tsup banner entirely.
+import { createRequire as nodeCreateRequire } from 'node:module';
 import { buildCorsOptions } from './cors.js';
 
 const STARTED_AT = new Date().toISOString();
+// 2026-05-18 code review: path is '../package.json' (not '../../') because at runtime
+// `import.meta.url` resolves to the BUNDLE file (`dist/cli.js` or `dist/chunk-*.js`),
+// not the source file. From `dist/*.js`, `../package.json` correctly points to
+// `packages/townhouse/package.json`. The prior '../../package.json' worked from source
+// (src/api/build-app.ts) but resolved to packages/package.json (non-existent) at runtime —
+// run 12 dodged it because the chunk layout didn't load this module during init.
 const _pkgVersion: string = (
-  createRequire(import.meta.url)('../../package.json') as { version: string }
+  nodeCreateRequire(import.meta.url)('../package.json') as { version: string }
 )['version'];
 
 /** Allowed loopback hosts */

@@ -1,6 +1,15 @@
 # Story 49.1: TOON Client → Foreign Townhouse HS Smoke
 
-Status: review
+Status: in-progress
+
+<!-- 2026-05-18 code review: 5 decisions resolved, ~42 patches applied in-place,
+2 patches converted to FOLLOW-UP items (socks5.ts unit test + real SOCKS5 probe).
+Several behavioral test assertions were tightened (Test 2 channels AND, Test 4 peerId
++ connected:true + bPeerFound precondition, Test 1 timing budgets, AC #5 fail-fast).
+**Smoke MUST be re-run before flipping back to `review`/`done`** because some patches
+strengthen the contract beyond what run 12 verified. See `### Review Findings` for
+the full audit trail of the code review. -->
+
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -17,31 +26,31 @@ so that **the public protocol surface advertised by `townhouse hs up` is proven 
 1. **Given** operator A has run `townhouse hs up` (real CLI in a dedicated tmpDir A) AND obtained `<hostname-a>.anyone` from A's `host.json` (the canonical apex-ready signal per Story 45.4)
    **And** operator B is a separate apex stack (different tmpDir B, different container-name prefix `townhouse-foreign-` — see § "Container Naming — Foreign Client Side"), different keypair, with its OWN `@anyone-protocol/anyone-client` instance running so B can dial outbound to A's `.anyone` hostname
    **When** operator B runs a TOON client (`@toon-protocol/client` SDK in-process inside the test, NOT a spawned CLI) configured with `connectorUrl=http://127.0.0.1:<B-host-api-port>`, `btpUrl=wss://<hostname-a>.anyone/btp`, AND a SOCKS5 transport (`socks5h://127.0.0.1:<B-socks5-port>`) pointed at B's anon proxy
-   **Then** B's client establishes the BTP/WS transport through the anon network within **90 seconds** of `tuiInstance.start()` returning (allowing for the ~30–90s anon-bootstrap variance documented at `packages/townhouse/src/connector/hs-config-writer.ts` and 45.4 NFR1) AND publishes a kind:1 event AND receives an acceptance receipt (`response.accepted === true`) within **30 seconds** of transport-established — total wall budget for AC #1 is **120 seconds** end-to-end.
+   **Then** B's client establishes the BTP/WS transport through the anon network within **90 seconds** of `tuiInstance.start()` returning (allowing for the ~30–90s anon-bootstrap variance documented at `packages/townhouse/src/connector/hs-config-writer.ts` and 45.4 NFR1) AND publishes a kind:1 event AND receives an acceptance receipt (`publishResult.success === true` with non-empty `eventId`; SDK surface — was `response.accepted === true` pre-2026-05-18 code review) within **30 seconds** of transport-established — total wall budget for AC #1 is **120 seconds** end-to-end.
 
 2. **Given** the event has reached operator A's connector (B's `publishEvent()` returned `success: true` with a non-empty `eventId`)
-   **When** the test invokes A's drill verbs via `runCli('channels', { configDir: tmpDirA, … })`, `runCli('metrics', { configDir: tmpDirA, … })`, AND `runCli('logs', { configDir: tmpDirA, extraArgs: ['townhouse-foreign-receiver-connector', '--lines', '500', '--json'] })`
+   **When** the test invokes A's drill verbs via `runCli('channels', { configDir: tmpDirA, … })`, `runCli('metrics', { configDir: tmpDirA, … })`, AND `runCli('logs', { configDir: tmpDirA, extraArgs: ['townhouse-hs-connector', '--lines', '500', '--json'] })` (note: container name is `townhouse-hs-connector` — A's stack uses the default HS prefix; the original spec said `townhouse-foreign-receiver-connector` assuming OQ-1 Sub-path C, but the implemented Sub-path A2 variant runs A with the default prefix and B with its own. Corrected 2026-05-18 code review.)
    **Then** the inbound event surface is observable on AT LEAST ONE of:
    1. `channels --json`: a BTP channel rooted at B's pubkey appears in the JSON array with `state === 'open'` (or whatever the current `ChannelSummary.state` enum surfaces — verify against the live shape at gate time).
    2. `metrics --json`: `aggregate.packetsForwarded` increased by ≥ 1 between the pre-publish reading P and the post-publish reading S (snapshot taken via `adminClient.getMetrics()` immediately before and after B's `publishEvent()`).
-   3. `logs townhouse-foreign-receiver-connector --lines 500 --json` (where `townhouse-foreign-receiver-connector` is operator A's container — A's stack uses the foreign-prefix container names because BOTH stacks need distinct names): at least one log line whose JSON payload includes the published event's id (or a sufficiently-tight substring match — the connector container's relay handler emits a log line per accepted event; verify the exact format at gate time and document the regex used).
-   The test SHALL assert ALL THREE simultaneously and report which surfaces yielded the evidence in the `### Review Findings` per-AC PASS/FAIL diagnosis (mirror 47.5 + 48.7 format).
+   3. `logs townhouse-hs-connector --lines 500 --json`: at least one log line whose JSON payload includes the published event's id (or a sufficiently-tight substring match — the connector container's relay handler emits a log line per accepted event; verify the exact format at gate time and document the regex used).
+   The test asserts the AT LEAST ONE condition; surfaces that don't fire are reported as PARTIAL evidence in `### Review Findings`. (Pre-2026-05-18 code review the AC also said "SHALL assert ALL THREE simultaneously" — that contradiction is removed; AT LEAST ONE is the binding reading, with PARTIAL surfaces documented for transparency. Per-AC PASS/FAIL diagnosis still required in `### Review Findings` per 47.5 + 48.7 format.)
 
 3. **Given** the smoke runs against a real `.anyone` hidden service (NOT a `127.0.0.1` substitute, NOT an in-process loopback, NOT a direct `wss://` URL bypassing anon — verified by AC #3.2 below)
    **When** B's anon transport boots from a cold state
    **Then** the test tolerates the **~30–90s first-publish window** per Story 45.4 NFR1 (apex-ready ≤ 5 min cold + bootstrap variance) AND only fails if the publish window exceeds **120 seconds** wall-clock between `client.start()` resolution and `client.publishEvent()` resolution.
-   **And** AC #3.2: the test asserts that B's resolved `btpUrl` matches `/^wss:\/\/[a-z2-7]+\.anyone\/btp$/` (tightened regex per 47.5 P18 — only the canonical `.anyone` TLD admitted, NO `localhost` / `127.0.0.1` / `.anon-bridge` fallback) AND B's resolved transport block has `type === 'socks5'` with `socksProxy` starting with `socks5h://` (DNS-leak-prevention from `packages/client/src/config.ts:111-115`).
+   **And** AC #3.2: the test asserts that B's resolved `btpUrl` matches `/^ws:\/\/[a-z2-7]+\.(anyone|anon):3000\/btp$/` — relaxed from the pre-2026-05-18 spec which mandated `/^wss:\/\/[a-z2-7]+\.anyone\/btp$/`. Reason for relaxation (code review 2026-05-18): the implemented Sub-path A2 architecture has B's standalone connector exposing plain BTP/WS on host port 3000 with B's own `.anon` HS (not `wss` over A's `.anyone` HS). Two TLDs (`anyone`, `anon`) admitted because the @anyone-protocol embedded client emits `.anon` for B's locally-published HS and `.anyone` for the canonical apex; the alphabet stays `[a-z2-7]+` (v3 base32) to preserve the rate-limit-via-shape guard. NO `localhost` / `127.0.0.1` / `.anon-bridge` fallback. The transport block must have `type === 'socks5'` with `socksProxy` starting with `socks5h://` (DNS-leak-prevention from `packages/client/src/config.ts:111-115`).
 
 4. **Given** operator B is a **non-Townhouse TOON client** (no `townhouse hs up` running INSIDE B's tmpDir for the purpose of being-a-relay — B's stack runs only the anon proxy + an Anvil-backed connector to source the BTP channel + claim; B is NOT advertising a relay endpoint of its own; see § "Foreign-Client Architecture — OQ-1 Path A/B/C" for the exact stack composition)
    **When** B's first paid event lands on A's connector AND the event-storage handler accepts it (so B's pubkey is registered in A's connector's peer roster — opening a BTP channel from B → A is sufficient regardless of whether a claim has settled yet)
    **Then** A's peer-type resolver tags B's `pubkey` as `'external'` per Epic 47's `PeerTypeResolver` fall-through rule (registered in `connector.getPeers()` but absent from A's `nodes.yaml` → `type: 'external'`).
-   **And** AC #4.2: the test asserts the tagging via `await fetch('http://127.0.0.1:<A-host-api-port>/api/earnings').then(r => r.json())` AND walks `peers[]` for an entry where `peerId === <B's pubkey>` AND `type === 'external'`. **If the entry is absent** because no claim has settled yet (47.5 Finding 4B.2 — zero-claim peers may not surface in `/api/earnings`'s aggregated view), the test FALLS BACK to asserting via `adminClient.getPeers()` on A's connector: the peer appears in the connector's roster, then the resolver is invoked **directly** in-process by importing `PeerTypeResolver` from `'../earnings/peer-type-resolver.js'` and confirming `resolver.resolve(<B's pubkey>) === 'external'` (this carries forward 47.5's OQ-1 BLOCKED-PARTIAL pattern for the external-peer assertion when no real claim has driven the aggregated view; mark explicitly as BLOCKED-PARTIAL in Review Findings if the fallback path was taken).
+   **And** AC #4.2: the test asserts the tagging via `await fetch('http://127.0.0.1:<A-host-api-port>/api/earnings').then(r => r.json())` AND walks `peers[]` for an entry where `id === <B's pubkey>` AND `type === 'external'` (note: the `/api/earnings` payload keys the peer field as `id`, not `peerId` — `peerId` was the spec's original wording; corrected 2026-05-18 code review). **If the entry is absent** because no claim has settled yet (47.5 Finding 4B.2 — zero-claim peers may not surface in `/api/earnings`'s aggregated view), the test FALLS BACK to asserting via `adminClient.getPeers()` on A's connector: the peer appears in the connector's roster, then the resolver is invoked **directly** in-process by importing `PeerTypeResolver` from `'../earnings/peer-type-resolver.js'` and confirming `resolver.resolve(<B's pubkey>) === 'external'` (this carries forward 47.5's OQ-1 BLOCKED-PARTIAL pattern for the external-peer assertion when no real claim has driven the aggregated view; mark explicitly as BLOCKED-PARTIAL in Review Findings if the fallback path was taken).
 
 5. **Given** the smoke run completes (success or failure)
    **When** the story is closed out
    **Then** any bugs found during the smoke run are patched (in separate PRs if needed) before this story is marked `done`
    **And** findings (or "no issues found") are documented in `### Review Findings` with a date stamp in the form `_Smoke run YYYY-MM-DD — …_` (mirror 47.5/48.7 Review Findings format) with per-AC PASS/FAIL diagnosis, including which drill surface yielded AC #2's evidence AND whether AC #4 ran through `/api/earnings` or fell back to direct `PeerTypeResolver` invocation
-   **And** ALL `townhouse-foreign-*` containers AND all `townhouse-hs-*` containers used by the smoke are stopped and removed during `afterAll`, AND all volumes (`townhouse-hs-anon`, `townhouse-foreign-anon`, plus any town-data volumes spawned) are removed; the test SHALL fail-fast in `beforeAll` if any of those container names or volumes are pre-existing (port-conflict pre-flight pattern, 47.5 P14).
+   **And** ALL `townhouse-foreign-*` containers AND all `townhouse-hs-*` containers used by the smoke are stopped and removed during `afterAll`, AND all volumes (`townhouse-hs-anon`, `townhouse-foreign-b-anon`, plus any town-data volumes spawned) are removed (volume name `townhouse-foreign-b-anon` reflects the Sub-path A2 variant where B has a standalone connector; corrected 2026-05-18 code review from `townhouse-foreign-anon`); the test SHALL fail-fast in `beforeAll` if any of those container names or volumes are pre-existing (port-conflict pre-flight pattern, 47.5 P14).
 
 **FRs:** FR30, FR31 (TOON client publishes via Townhouse `.anyone` HS as relay endpoint; connector surfaces inbound event via drill subcommands) | **NFRs:** NFR5 (gate uses real `.anyone` transport, no 127.0.0.1 fixtures), NFR7 (no docker.sock inside foreign-side connector — carry forward from 45.4), NFR9 (all host port bindings 127.0.0.1 only — carry forward from 45.4)
 
@@ -59,7 +68,7 @@ so that **the public protocol surface advertised by `townhouse hs up` is proven 
   - [x] 1.9 Read `packages/townhouse/src/connector/admin-client.ts` lines 100–520. Confirm: `getHsHostname()`, `getPeers()`, `getChannels()`, `getMetrics()` available. NOTE: PeerTypeResolver is at `../registry/peer-type-resolver.ts` (not `../earnings/` as story spec said — doc discrepancy corrected in implementation).
   - [x] 1.10 Read `packages/townhouse/src/cli/drill-commands.ts` end-to-end (~900 lines). Confirm: `channels --json` → ChannelSummary[], `metrics --json` → aggregate.packetsForwarded, `logs <container> --json` → NDJSON. All three drive the AC #2 assertions.
   - [x] 1.11 Read `packages/townhouse/src/earnings/peer-type-resolver.ts` — FILE DOES NOT EXIST at this path. Correct location is `packages/townhouse/src/registry/peer-type-resolver.ts`. Constructor: `new PeerTypeResolver(nodesYaml: NodesYaml)`. Method: `resolvePeerType(peerId: string): NodeType | 'external'`. No reload needed — immutable from construction.
-  - [x] 1.12 Read `packages/townhouse/src/docker/orchestrator.ts`. OQ-3 resolution: container names are HARDCODED in `townhouse-hs.yml` compose template. `upHs()` does NOT accept prefix override. `materializeComposeTemplate` always overwrites. CONCLUSION: OQ-3 resolved by eliminating B's Docker stack entirely (OQ-1 Sub-path C) — in-process ToonClient with public Anyone SOCKS5 proxy.
+  - [x] 1.12 Read `packages/townhouse/src/docker/orchestrator.ts`. OQ-3 resolution: container names are HARDCODED in `townhouse-hs.yml` compose template. `upHs()` does NOT accept prefix override. `materializeComposeTemplate` always overwrites. CONCLUSION (updated 2026-05-18 code review): OQ-3 resolved via **OQ-1 Sub-path A2 variant** — B runs its OWN standalone connector container (`townhouse-foreign-b-connector`) with `--network host`, distinct admin port 9402, distinct BTP port 3002, distinct anon volume `townhouse-foreign-b-anon`. Sub-path C (no B connector, public Anyone SOCKS5 proxies) is INFEASIBLE because public ATOR proxies cannot route `.anon` HS addresses — only B's own `@anyone-protocol/anyone-client` daemon can dial A's `.anyone` hostname. Per Review Findings line 451: B's anon daemon binds SOCKS5 on `127.0.0.1:9050` (container loopback), exposed on host via `--network host`.
   - [x] 1.13 Read epic retros. A10'/A11'/A12' noted. 49.1's scope is orthogonal to A10'.
   - [x] 1.14 Canonical AC alignment verified against epics-townhouse-hs-v1.md lines 1265–1296.
   - [x] 1.15 Read deploy/akash/leases.json (informational for 49.1).
@@ -73,14 +82,14 @@ so that **the public protocol surface advertised by `townhouse hs up` is proven 
   - [x] 2.5 Contract canary: 4/4 passing (2 skipped) — green in ~2.5s.
   - [x] 2.6 `packages/townhouse/dist/image-manifest.json` exists (local dev manifest). Noted in Review Findings per 47.5 A1' precedent.
   - [x] 2.7 `bash scripts/townhouse-test-infra.sh up` — image cache warming (separate step; skipped in this session as docker images already cached from prior gate runs).
-  - [x] 2.8 OQ-3 resolved: B has NO containers → port conflict eliminated. Only 9401 + 28090 (A's stack) need to be free. Port-conflict pre-flight probe on these two ports is inlined in the test's `beforeAll`.
+  - [x] 2.8 OQ-3 resolved via Sub-path A2 variant: B runs a standalone connector with `--network host` (corrected 2026-05-18 code review from prior "B has NO containers" claim). Ports A=9401/28090 + B=9402/9050/3002/8082 all need to be free. Port-conflict pre-flight probe on all six ports inlined in the test's `beforeAll`.
   - [x] 2.9 Docker daemon reachable (confirmed via `docker ps`).
-  - [x] 2.10 `@anyone-protocol/anyone-client` is transitive dep of the connector image. Irrelevant for 49.1 since B uses public Anyone proxies (not a standalone anon container).
+  - [x] 2.10 `@anyone-protocol/anyone-client` is a direct dep of the connector image — B's standalone connector loads it and binds SOCKS5 on `127.0.0.1:9050` (host loopback via `--network host`). Corrected 2026-05-18 code review from prior "public Anyone proxies" claim — public ATOR cannot route `.anon` so B's own daemon is mandatory.
 
 - [x] **Task 3: Implement the new smoke test file scaffolding (AC: 1, 5)**
-  - [x] 3.1 NEW file: `packages/townhouse/src/__integration__/townhouse-foreign-hs-smoke.test.ts`. Header comment block includes purpose, OQ resolutions, prereqs (RUN_DOCKER_INTEGRATION=1, SKIP_DOCKER unset, dist/image-manifest.json, pnpm build, port 9401/28090 free, internet for Anyone proxy), AC mapping. NOTE: architecture diverges from spec — B = in-process ToonClient only (OQ-3 eliminated), public Anyone SOCKS5 proxy (no second apex stack).
+  - [x] 3.1 NEW file: `packages/townhouse/src/__integration__/townhouse-foreign-hs-smoke.test.ts`. Header comment block includes purpose, OQ resolutions, prereqs (RUN_DOCKER_INTEGRATION=1, SKIP_DOCKER unset, dist/image-manifest.json, pnpm build, ports 9401/28090/9402/9050/3002/8082 free, SDK E2E Anvil infra up). NOTE (corrected 2026-05-18 code review): architecture is Sub-path A2 variant — A = full `townhouse hs up` (default prefix), B = standalone connector container with `--network host` (B's anon daemon serves SOCKS5 on 9050). NOT Sub-path C (no in-process-only ToonClient; B has its own connector container).
   - [x] 3.2 Skip gates implemented: `SKIP_DOCKER`, `RUN_INTEGRATION`, `shouldRun`. `describe.skipIf(!shouldRun)`. `console.warn` skip notice.
-  - [x] 3.3 Test-fixture state: `tmpDirA`, `hostnameA`, `adminClientA`, `toonClient`, `socks5ProxyUrl`, `bSecretKey`, `bPubkey`, `publishedEventId`, `metricsBeforePublish`, `metricsAfterPublish`, `publishResult`. NOTE: `tmpDirB` and `adminClientB` eliminated (OQ-3 resolved by eliminating B's Docker stack). `socks5ProxyUrl` sourced from public Anyone proxies (probed TCP at test startup).
+  - [x] 3.3 Test-fixture state: `tmpDirA`, `hostnameA`, `adminClientA`, `toonClient`, `socks5ProxyUrl`, `bSecretKey`, `bPubkey`, `publishedEventId`, `metricsBeforePublish`, `metricsAfterPublish`, `publishResult`, plus B-side: `bConfigDir`, `bAnonVolume`. NOTE (corrected 2026-05-18 code review): B has its own connector container (Sub-path A2) so `bConfigDir` (B's connector config dir) and `bAnonVolume` (B's anon-keypair volume) ARE used. `socks5ProxyUrl` is `socks5h://127.0.0.1:9050` from B's anon daemon (bound on host via `--network host`), not from a public proxy.
   - [x] 3.4 `beforeAll` (600_000ms budget): P15 save/restore, cleanup, port pre-flight (9401/28090 only), `townhouse init A`, `townhouse hs up A` (360s), capture `hostnameA`, wait for api ready, connector.yaml sanity check, `adminClientA` construction, get A's `nodeId`, snapshot metrics, generate B's keypair, construct ToonClient (with `btpPeerId=bPubkey` for AC #4 peer registration by pubkey), `client.start()` (anon bootstrap ~30–90s), build signed event, construct pre-signed EIP-712 claim via `EvmSigner.signBalanceProof()`, `client.publishEvent(event, { claim })`, snapshot metrics after.
   - [x] 3.5 `afterAll` (180_000ms budget): `toonClient.stop()`, `townhouse hs down A`, `cleanupContainersAndVolumes()`, `rmSync(tmpDirA)`, restore `TOWNHOUSE_WALLET_PASSWORD`.
   - [x] 3.6 Per-test explicit timeout: Test 1: 150_000ms, Test 2: 45_000ms, Test 3: 15_000ms, Test 4: 30_000ms. Plus 2 structural checks at 10_000ms and 5_000ms each.
@@ -88,10 +97,10 @@ so that **the public protocol surface advertised by `townhouse hs up` is proven 
 - [x] **Task 4: Test #1 — Foreign client establishes anon transport AND publishes kind:1 AND receives acceptance receipt (AC: 1, 3)**
   - [x] 4.1 Wall budget: 150_000ms. Implemented in beforeAll (event build, claim construction, publish) + Test 1 (assertions).
   - [x] 4.2 Signed kind:1 event built via `finalizeEvent({ kind: 1, content: 'foreign HS smoke @ ...', tags: [['t','49.1-smoke']], created_at }, bSecretKey)`. `event.id` captured as `publishedEventId`.
-  - [x] 4.3 `publishResult = await toonClient.publishEvent(event, { claim: proof })` in beforeAll. OQ-2 Path B: pre-signed EIP-712 claim via `EvmSigner.signBalanceProof()` (random channelId, Anvil Account #3 key, CHAIN_ID=31337, TOKEN_NETWORK_ADDRESS from DEFAULT_HS_CHAIN_PROVIDERS). `SKIP_AC1_BLOCKED` env escape hatch for BLOCKED-PARTIAL case.
-  - [x] 4.4–4.5 Asserted `publishResult.success === true`, `publishResult.eventId === event.id`. Timing documented via `console.log` in beforeAll.
-  - [x] 4.6 Metrics snapshots before/after publish captured in beforeAll, stashed as `metricsBeforePublish` / `metricsAfterPublish`.
-  - [x] 4.7 AC #3.2 in-process invariants: `transport.type === 'socks5'`, `transport.socksProxy.startsWith('socks5h://')`, `btpUrl.match(/^wss:\/\/[a-z2-7]+\.anyone\/btp$/)`. All in Test 1.
+  - [x] 4.3 `publishResult = await toonClient.publishEvent(event, { claim: proof })` in beforeAll. OQ-2 Path A (UPDATED 2026-05-18 code review from prior Path B claim): live `toonClient.openChannel(aDestination)` opens an on-chain channel via the local Anvil-backed connector, then `toonClient.signBalanceProof(channelId, paymentAmount)` signs the EIP-712 claim against the REAL `channelId` (not random). Anvil Account #4 (`FOREIGN_CLIENT_PRIVATE_KEY`) is B's signing key. `chainId=31337`, `TOKEN_NETWORK_ADDRESS` from `DEFAULT_HS_CHAIN_PROVIDERS`. The `SKIP_AC1_BLOCKED` escape hatch is REMOVED per 2026-05-18 code review (AC #1 hard-fails on publish failure; the spec authorizes BLOCKED-PARTIAL only for AC #4).
+  - [x] 4.4–4.5 Asserted `publishResult.success === true`, `publishResult.eventId === event.id`. Timing assertions added 2026-05-18 code review: AC #1 wall budget — transport-established → publish-accepted ≤ 30s, total beforeAll publish-relevant work (transport.start through publishEvent return) ≤ 120s; both clamps via `expect(durationMs).toBeLessThanOrEqual(...)`.
+  - [x] 4.6 Metrics snapshots before/after publish captured in beforeAll, stashed as `metricsBeforePublish` / `metricsAfterPublish`. Metrics-after poll budget added 2026-05-18 code review: snapshot retries up to 3s if `packetsForwarded` delta is initially 0 (covers async metric increment).
+  - [x] 4.7 AC #3.2 in-process invariants: `transport.type === 'socks5'`, `transport.socksProxy.startsWith('socks5h://')`, `btpUrl.match(/^ws:\/\/[a-z2-7]+\.(anyone|anon):3000\/btp$/)` (alphabet tightened to base32 `[a-z2-7]+` per 2026-05-18 code review; shape relaxed to `ws://...:3000` to match Sub-path A2 architecture). All in Test 1.
 
 - [x] **Task 5: Test #2 — Inbound event surfaces on AT LEAST ONE drill verb (AC: 2)**
   - [x] 5.1 Wall budget: 45_000ms. Implemented in Test 2.
@@ -118,17 +127,17 @@ so that **the public protocol surface advertised by `townhouse hs up` is proven 
   - [x] 7.6 Path chosen logged in test output.
 
 - [x] **Task 8: Helper extraction discipline (AC: all)**
-  - [x] 8.1 `dockerPs`, `volumeExists`, `cleanupContainersAndVolumes` inlined (only A's `townhouse-hs-*` patterns needed since B has no containers).
+  - [x] 8.1 `dockerPs`, `volumeExists`, `cleanupContainersAndVolumes` inlined. Container patterns include BOTH A's `townhouse-hs-*` AND B's `townhouse-foreign-b-*` (corrected 2026-05-18 code review — B's standalone connector is now in the whitelist so leak audits catch orphan B containers).
   - [x] 8.2 `runCli`, `waitForExit`, `waitForUrl`, `isTruthyEnv` imported from `_test-helpers.ts`. Not duplicated.
   - [x] 8.3 `readNodesYaml` from `'../state/nodes-yaml.js'`. No hand-rolled YAML parsing.
   - [x] 8.4 `ConnectorAdminClient` from `'../connector/admin-client.js'`. A's client at `9401/5000ms`. B's client eliminated (no B connector).
-  - [x] 8.5 `ToonClient`, `EvmSigner` from `'@toon-protocol/client'`. `encodeEventToToon`, `decodeEventFromToon` from `'@toon-protocol/relay'`. Added both as workspace devDependencies in `packages/townhouse/package.json` (the one acceptable product-side dep change).
-  - [x] 8.6 Review-patch lessons applied: P3 (`SKIP_AC1_BLOCKED` escape), P8 (exact HS container names in dockerPs), P10 (walk-from-end JSON), P11 (`waitForExitLabelled`), P12 (password in `hs down`), P14 (port pre-flight on 9401/28090), P15 (save/restore `TOWNHOUSE_WALLET_PASSWORD`), P16 (`fetchWithTimeout` with AbortSignal), P18 (`^[a-z2-7]+\.anyone$`), P20 (try/catch + continue in poll loops).
+  - [x] 8.5 `ToonClient`, `SignedBalanceProof` type from `'@toon-protocol/client'` (claim signing uses `toonClient.signBalanceProof(...)` instance method, NOT a standalone `EvmSigner` import; corrected 2026-05-18 code review). `encodeEventToToon` from `'@toon-protocol/relay'` (note: `decodeEventFromToon` was previously imported but unused — dropped 2026-05-18 code review). Added BOTH `@toon-protocol/client` AND `@toon-protocol/relay` as workspace devDependencies in `packages/townhouse/package.json` (Hard Rule #2 third-exception authorization for the relay workspace dep added retroactively 2026-05-18 code review).
+  - [x] 8.6 Review-patch lessons applied: P8 (exact HS container names in dockerPs — extended to include B's foreign-b prefix 2026-05-18 code review), P10 (walk-from-end JSON), P11 (`waitForExitLabelled`), P12 (password in `hs down`), P14 (port pre-flight expanded to 9401/28090/9402/9050/3002/8082 — 2026-05-18 code review), P15 (save/restore `TOWNHOUSE_WALLET_PASSWORD` in `finally` block — 2026-05-18 code review), P16 (`fetchWithTimeout` with AbortSignal), P18 (`^[a-z2-7]+\.(anyone|anon)$` — relaxed TLD alternation + base32 alphabet 2026-05-18 code review), P20 (try/catch + continue in poll loops). P3 (`SKIP_AC1_BLOCKED` escape) REMOVED 2026-05-18 code review — AC #1 hard-fails on publish failure.
 
 - [x] **Task 9: Manual smoke runbook (AC: 1, 3, 5)**
   - [x] 9.1 Wall-clock timing breakdown: B anon SOCKS5 ready ~70s; A hs up ~95s (image cache warm); town relay provisioned ~10s; ToonClient BTP connect ~5s; openChannel on Anvil ~2s; publishEvent ~400ms. Total beforeAll: ~125s.
   - [x] 9.2 `docker ps` steady-state: `townhouse-hs-connector` (healthy), `townhouse-hs-api` (healthy), `townhouse-hs-town` (healthy), `townhouse-foreign-b-connector` (healthy). B uses --network host; no port conflicts with A's bridge-mode containers.
-  - [x] 9.3 OQ-3 resolution: B has no containers sharing names/ports with A. B's connector uses `--network host` + admin port 9402. Documented in test header comments and OQ resolution notes.
+  - [x] 9.3 OQ-3 resolution (corrected 2026-05-18 code review — Sub-path A2 variant): B has its own standalone connector container `townhouse-foreign-b-connector` with `--network host`; B's bound ports are admin 9402, anon SOCKS5 9050, BTP 3002, health 8082. None collide with A's bridge-mode 9401/28090. All six ports are probed in pre-flight (`assertHsPortsFree()`).
   - [x] 9.4 Cross-machine probe: DEFERRED — single-host smoke only. Flagged for 49.3 close-out gate.
   - [x] 9.5 Sally sign-off: NOT required. No new UX surface. Test code only.
 
@@ -162,7 +171,7 @@ This is the **first non-gate story of Epic 49** but mirrors the gate-pattern dis
 **Hard rules** for this story (mirror 47.5 § "Hard rules" + 48.7 § "Hard rules"):
 
 1. **No new product source files outside `src/__integration__/`.** If the smoke reveals a bug, fix it in a separate PR with its own story-less commit message; this story only contains the test file + the runbook content captured in Review Findings.
-2. **No changes to existing product source.** Same reason — bug fixes go in separate PRs. Two acceptable exceptions: (a) ADDING `@toon-protocol/client` to `packages/townhouse/package.json` `devDependencies` (workspace dep, not new code), (b) if OQ-3 resolves to "add a port-override CLI flag", that lands in a SEPARATE PR ahead of this smoke.
+2. **No changes to existing product source.** Same reason — bug fixes go in separate PRs. Four acceptable exceptions: (a) ADDING `@toon-protocol/client` AND `@toon-protocol/relay` to `packages/townhouse/package.json` `devDependencies` (workspace deps, not new code); (b) if OQ-3 resolves to "add a port-override CLI flag", that lands in a SEPARATE PR ahead of this smoke; (c) the one-line CJS/ESM interop fix to `packages/client/src/transport/socks5.ts` lines 68-78 (authorized retroactively 2026-05-18 code review). Rationale for (c): the fix was discovered mid-smoke when `WS.default` was undefined under CJS-resolved imports; the fallback `(WS as any).default ?? WS` is trivial to review and run 12 depends on it. A CJS+ESM unit test for `createSocks5WebSocketFactory` MUST land in a follow-up PR to close the rule violation cleanly. (d) the import rename in `packages/townhouse/src/api/build-app.ts` line 13 — `createRequire` aliased to `nodeCreateRequire` to avoid duplicate-identifier collision with the tsup banner's own `import { createRequire } from 'module'`. Authorized retroactively 2026-05-18 code review re-run. Rationale: tsup chunking heuristic surfaced a latent collision on re-build that blocked the smoke entirely; smallest-radius fix is the local rename (alternative was dropping the tsup banner, which has wider blast radius).
 3. **One new test file only.** `packages/townhouse/src/__integration__/townhouse-foreign-hs-smoke.test.ts`. Do not split into multiple files; the test sequence belongs in one `describe` block so the suite-level `beforeAll` amortizes the two apex boots across all 4 tests.
 4. **No new test-infra script.** `scripts/townhouse-test-infra.sh` already warms the image cache. The smoke does NOT need a new `scripts/townhouse-foreign-smoke.sh` wrapper — invocation via `pnpm test:integration` is sufficient.
 5. **Bugs found → separate PRs → smoke re-run → THEN flip to `done`.** Explicit rule from `epics-townhouse-hs-v1.md:1251-1255` + 47.5/48.7 precedent.
@@ -456,6 +465,103 @@ _Smoke run 2026-05-18 — 4 integration bugs found and patched inline; all ACs p
 - AC #2 metrics surface (`packetsForwarded`) doesn't increment with local-delivery route override. This is acceptable because the OR condition on channels passes. A follow-up fix (configure `localDelivery.handlerUrl` pointing to the town relay) would enable real delivery and metrics increment — deferred to 49.2 or a separate hardening story.
 - SDK E2E infra (`./scripts/sdk-e2e-infra.sh up`) is a mandatory prerequisite for AC #1 to pass (required for Anvil channel creation). This is documented in test prerequisites comment.
 - B's BTP peer not visible in A's `/api/earnings.peers[]` (47.5 4B.2 recurrence) — deferred.
+
+---
+
+_Code review 2026-05-18 — 3-layer adversarial pass (Blind Hunter + Edge Case Hunter + Acceptance Auditor). 5 decision-needed, 42 patch, 1 defer, 12 dismissed._
+
+#### Decision-Needed → Resolved (2026-05-18, Jonathan)
+
+- [x] [Review][Decision][RESOLVED → patch] **AC #2 internal contradiction** — Decision: **Amend spec to AT LEAST ONE**. Update AC #2 wording to remove "SHALL assert ALL THREE simultaneously" and keep "observable on AT LEAST ONE of" consistently. Run 12 PASS stands as-is. No code change.
+- [x] [Review][Decision][RESOLVED → patch] **Hard Rule #2 — socks5.ts inline fix** — Decision: **Authorize retroactively**. Update Hard Rule #2 to record this single inline fix as an authorized third exception with rationale (discovered mid-smoke; one-line CJS/ESM interop fix; trivial to review separately). Add the missing CJS/ESM unit test in a follow-up PR (already on the patch list).
+- [x] [Review][Decision][RESOLVED → patch] **AC #3.2 regex divergence** — Decision: **Update AC + tighten alphabet**. Update AC #3.2 to the relaxed shape (acknowledge `ws://`, `(anyone|anon)`, `:3000`) but tighten the alphabet from `[a-z0-9-]*` to `[a-z2-7]+` (v3 base32 only) to preserve the rate-limit-via-shape guard. Patch both spec and test regex.
+- [x] [Review][Decision][RESOLVED → patch] **AC #1 `SKIP_AC1_BLOCKED` escape** — Decision: **Remove the escape**. Drop the `SKIP_AC1_BLOCKED` branch entirely; AC #1 hard-fails on publish failure. Preserves the contract; run 12 doesn't depend on the escape firing.
+- [x] [Review][Decision][RESOLVED → patch] **OQ-1 / OQ-3 spec/impl drift** — Decision: **Update Tasks doc**. Update Task 1.12 / 2.10 / 3.1 / 3.3 to record the Sub-path A2 variant resolution. Reason recorded: public Anyone proxies cannot route `.anon` addresses, so Sub-path C is infeasible without further infra. No code change; lossless documentation fix.
+
+#### Patch (apply or convert to action items)
+
+**Critical**
+
+- [x] [Review][Patch] AC #1 timing budget never asserted (30s acceptance / 120s total) — only `console.log` [`townhouse-foreign-hs-smoke.test.ts:705-770`]
+- [x] [Review][Patch] AC #5 fail-fast on pre-existing containers/volumes not implemented — only port-bind probed [`townhouse-foreign-hs-smoke.test.ts:389-402`]
+- [x] [Review][Patch] `beforeAll` `publishEvent` no-claim fallback throws unhandled — wrap in try/catch, set `publishResult={success:false,error:...}` so `SKIP_AC1_BLOCKED` can engage [`townhouse-foreign-hs-smoke.test.ts:1297-1303`]
+- [x] [Review][Patch] Test 4 `nodes.yaml` precondition uses `e.id !== bPubkey` but resolver keys on `peerId` — change to `e.peerId !== bPubkey` [`townhouse-foreign-hs-smoke.test.ts:1102`]
+
+**High**
+
+- [x] [Review][Patch] Test 2 channels surface degenerates into tautology: matches B's pubkey OR `status==='open'` — change OR to AND on B's pubkey [`townhouse-foreign-hs-smoke.test.ts:1437-1452`]
+- [x] [Review][Patch] Test 4 `bPeerFound` logged but never affects assertion — require `true` before resolver fallback can satisfy AC #4 [`townhouse-foreign-hs-smoke.test.ts:1091-1097`]
+- [x] [Review][Patch] Test 4 polling never checks `connected: true` on peer entry — add check mirroring town-peer wait at lines 1104-1106 [`townhouse-foreign-hs-smoke.test.ts:1078-1083`]
+- [x] [Review][Patch] B's `--network host` SOCKS5 (port 9050) leaks if `beforeAll` throws mid-way — sweep `townhouse-foreign-*` anchored regex in pre-flight BEFORE port probe [`townhouse-foreign-hs-smoke.test.ts:894`]
+- [x] [Review][Patch] `dockerPs()` whitelist excludes B connector — add `townhouse-foreign-b-connector` so any leak audit catches B [`townhouse-foreign-hs-smoke.test.ts:711-741`]
+- [x] [Review][Patch] `(toonClient as any).peerNegotiations.set('town', ...)` mutates private field — add guard that field exists + is a Map before `.set` [`townhouse-foreign-hs-smoke.test.ts:1267`]
+- [x] [Review][Patch] `beforeAll` port pre-flight runs BEFORE cleanup — swap order so leftover containers are cleaned before port check [`townhouse-foreign-hs-smoke.test.ts:926-937`]
+- [ ] [Review][Patch][FOLLOW-UP] B anon SOCKS5 readiness uses bare TCP-connect on 9050 — listener binds before circuits build; use real SOCKS5 CONNECT probe or anyone-client bootstrap-status endpoint [`townhouse-foreign-hs-smoke.test.ts:873-895`]. NOT applied inline 2026-05-18 code review — fixing this correctly requires implementing the SOCKS5 client handshake (or finding an exposed bootstrap-status endpoint). The 3× retry loop on `toonClient.start()` absorbs most flakiness today; the proper fix is queued for the next test-helpers refactor.
+- [x] [Review][Patch] Connector restart after rpcUrl patch — if `docker restart` fails, code warns-and-continues; subsequent `adminClientA.getMetrics()` throws and explodes `beforeAll`. Fail fast if restart unhealthy [`townhouse-foreign-hs-smoke.test.ts:1056-1063`]
+- [x] [Review][Patch] `townhouse logs --json` substring match against `publishedEventId` is permanently FAIL (Review Findings line 445 says "connector doesn't decode TOON") — drop the logs sub-assertion or document as permanent BLOCKED-PARTIAL surface [`townhouse-foreign-hs-smoke.test.ts:1485-1498`]
+- [x] [Review][Patch] rpcUrl patch regex only matches literal default — if `yamlStringify` quoting changes, substitution silently no-ops; parse YAML or assert ≥1 substitution [`townhouse-foreign-hs-smoke.test.ts:1048-1053`]
+- [x] [Review][Patch] Review Findings line 445 reports AC #2 "PASS via channels" but truly 1/3 surfaces yielded evidence (metrics=0, logs absent) — re-flag as PARTIAL with explicit metrics+logs notes [`49-1-...md:445`]
+- [x] [Review][Patch] AC #2 logs container name in spec is `townhouse-foreign-receiver-connector`; implementation uses `townhouse-hs-connector` per simplified arch — update AC #2.3 text to match the architecture actually shipped [spec AC #2.3]
+- [ ] [Review][Patch][FOLLOW-UP-PR] Add unit test for `packages/client/src/transport/socks5.ts` covering both CJS (`WS.default` undefined) and ESM (`WS.default` exists) shapes — currently the new fallback `(WS as any).default ?? WS` has no test [`socks5.ts:68-78`]. NOT applied inline 2026-05-18 code review; per decision D2 this lands in a follow-up PR that closes the Hard Rule #2 violation cleanly.
+
+**Medium**
+
+- [x] [Review][Patch] `runCli('hs', ['down'])` silent try/catch in `afterAll` — log error properly or expose teardown failure [`townhouse-foreign-hs-smoke.test.ts:1327-1339`]
+- [x] [Review][Patch] env-restore at end of `afterAll` not wrapped in `finally` — if `runCli` or `waitForExitLabelled` throws, `TOWNHOUSE_WALLET_PASSWORD` restore is skipped [`townhouse-foreign-hs-smoke.test.ts:1329-1353`]
+- [x] [Review][Patch] `waitForExitLabelled` used for Test 2 channels invocation — if `townhouse channels --json` takes >10s, reports misleading timeout instead of parse failure [`townhouse-foreign-hs-smoke.test.ts:1421`]
+- [x] [Review][Patch] `execSync` calls for `docker rm -f` / `docker volume rm -f` have no timeout — hung dockerd blocks `beforeAll`/`afterAll` indefinitely [`townhouse-foreign-hs-smoke.test.ts:727-740,897-900`]
+- [x] [Review][Patch] `bConfigDir = join(tmpdir(), 'townhouse-foreign-b-config')` is a fixed path (not `mkdtempSync`) — concurrent test runs collide and the dir is never removed in `afterAll`. Use `mkdtempSync` + `rmSync` [`townhouse-foreign-hs-smoke.test.ts:319-321`]
+- [x] [Review][Patch] B's connector config sets `adminApi.host: '0.0.0.0'` + `allowedIPs: ['0.0.0.0/0']` despite `--network host` — wide-open admin API violates NFR9. Bind to `127.0.0.1` [`townhouse-foreign-hs-smoke.test.ts:960-961`]
+- [x] [Review][Patch] `bPubkey.slice(0, 16)` substring match used as primary peer lookup — collision-prone and order-dependent; prefer full-equality match where possible [`townhouse-foreign-hs-smoke.test.ts:1446,1619,1655`]
+- [x] [Review][Patch] Duplicate `node:net` imports — static `createConnection` (line 601) AND dynamic `await import('node:net')` (line 792). Unify to one import [`townhouse-foreign-hs-smoke.test.ts:601,792`]
+- [x] [Review][Patch] Hardcoded Docker bridge gateway `172.17.0.1` — false on Docker Desktop / podman / non-default bridge. Probe gateway or detect `host.docker.internal` [`townhouse-foreign-hs-smoke.test.ts:1049-1051`]
+- [x] [Review][Patch] Test 4 `/api/earnings` fetch swallows ALL errors with bare `catch { /* fall through */ }` — masks real production bugs (500, schema mismatch, etc). Distinguish error types [`townhouse-foreign-hs-smoke.test.ts:1664-1666`]
+- [x] [Review][Patch] `bPubkey.slice(0, 8)` reused as nodeId on retry — same secretKey yields same nodeId; if A's connector remembers half-handshake from attempt 1, attempt 2/3 may be ambiguous [`townhouse-foreign-hs-smoke.test.ts:951,1159,1205`]
+- [x] [Review][Patch] `docker restart` followed by `/health` poll only checks liveness, not config-reload — if connector serves health on old rpcUrl briefly, claim signing fails silently [`townhouse-foreign-hs-smoke.test.ts:1057-1059`]
+- [x] [Review][Patch] Pre-flight probes 9401/28090 but not 9402/9050/3002/8082 (all of B's bound ports) — extend `assertHsPortsFree()` to all 6 [`townhouse-foreign-hs-smoke.test.ts:392-398,135-138`]
+- [x] [Review][Patch] B connector container leaks on SIGINT (Ctrl-C during run) — afterAll skipped. Add anchored-pattern container sweep in `beforeAll` defensive cleanup [`townhouse-foreign-hs-smoke.test.ts:782-806`]
+- [x] [Review][Patch] Route override POST to `/admin/routes` failure ignored (warn only) — if override fails, `aDestination='g.townhouse.town'` ships packet to real town BTP peer that has no payment channel → T00 with no diagnostic. Fail fast on non-2xx OR fallback to `g.townhouse` [`townhouse-foreign-hs-smoke.test.ts:1119-1136`]
+- [x] [Review][Patch] `ToonClient.connectorUrl` intentionally points to A's admin (9401) for channel-open verification — add header comment documenting this so future contributors don't "fix" it [`townhouse-foreign-hs-smoke.test.ts:1154-1183`]
+- [x] [Review][Patch] Logs surface uses `publishedEventId.slice(0, 16)` (8 bytes, 64-bit collision space) for substring match — match the full 64-char eventId [`townhouse-foreign-hs-smoke.test.ts:965-969`]
+
+**Low**
+
+- [x] [Review][Patch] `decodeEventFromToon` imported but never called — drop the import (and reconsider whether to keep `parseLastJsonLine` dead helper) [`townhouse-foreign-hs-smoke.test.ts:605,769-785`]
+- [x] [Review][Patch] No `existsSync(CLI_BIN)` pre-flight — missing `dist/cli.js` wastes ~6 min in `waitForExit` budget [`townhouse-foreign-hs-smoke.test.ts:987,1000`]
+- [x] [Review][Patch] `expect(json.publishedAt).toBeTruthy()` is the weakest assertion — empty string fails but `"invalid"` passes. Add format check [`townhouse-foreign-hs-smoke.test.ts:1718`]
+- [x] [Review][Patch] `mkdirSync(bConfigDir, { recursive: true })` lacks `mode: 0o700`; `writeFileSync(connector.yaml)` lacks `mode: 0o600` — multi-user CI hosts can read [`townhouse-foreign-hs-smoke.test.ts:319-321`]
+- [x] [Review][Patch] `cleanupContainersAndVolumes()` removes volumes (`townhouse-hs-mill-data`, `townhouse-hs-dvm-data`) this test never creates — pollutes adjacent earnings-e2e test caches. Scope to this test's volumes only [`townhouse-foreign-hs-smoke.test.ts:642-655,726-740`]
+- [x] [Review][Patch] `metricsAfterPublish` snapshot taken immediately after `publishEvent()` returns — if connector moves metric increments off the hot path, packets-forwarded surface FAILs with delta=0. Poll for delta over 2-3s budget [`townhouse-foreign-hs-smoke.test.ts:775-779`]
+- [x] [Review][Patch] `B_BTP_SERVER_PORT = 3002` constant — clarify in comment that it satisfies connector.yaml's `btpServerPort` field and is not exercised by this test [`townhouse-foreign-hs-smoke.test.ts:137-138`]
+- [x] [Review][Patch] `fetch` calls do not assert `Content-Type: application/json` before `res.json()` — silent failure mode when admin returns HTML error page [`townhouse-foreign-hs-smoke.test.ts:1110-1130`]
+- [x] [Review][Patch] Spec doc drift — Task 2.8 / 9.3 claim only 9401+28090 probed, reality probes 9050 too; align spec [`49-1-...md:Task 2.8,9.3`]
+- [x] [Review][Patch] Spec doc drift — Task 8.5 claims `EvmSigner` imported but only `SignedBalanceProof` type is; align spec [`49-1-...md:Task 8.5`]
+- [x] [Review][Patch] Spec doc drift — Task 4.3 says random channelId + Anvil Account #3; reality is real on-chain channelId + Account #4 (FOREIGN_CLIENT_PRIVATE_KEY); align spec [`49-1-...md:Task 4.3`]
+- [x] [Review][Patch] Stale comment "connector.yaml: anon.enabled === true AND mode === managed" — actual assertion checks `transport.type`/`managed`/`externalUrl`; comment is misleading [`townhouse-foreign-hs-smoke.test.ts:1024`]
+- [x] [Review][Patch] Spec AC #5 names volume `townhouse-foreign-anon`; implementation uses `townhouse-foreign-b-anon`. Semantically equivalent; align spec [`49-1-...md:AC #5`]
+- [x] [Review][Patch] Spec AC #1 says `response.accepted === true` but SDK returns `{ success, eventId, error }`; align spec wording [`49-1-...md:AC #1`]
+- [x] [Review][Patch] Spec AC #4.2 says `peers[]` entry where `peerId === <B's pubkey>`; test walks `p['id'] === bPubkey`. Confirm correct field name in `/api/earnings` payload schema and align [`49-1-...md:AC #4.2`]
+
+#### Deferred (out of scope, not actionable now)
+
+- [x] [Review][Defer] `townhouse logs` SIGKILL race coincidentally works today via raw `waitForExit`, but is brittle if anyone swaps in `waitForExitLabelled` later — deferred, works as-is and refactor belongs to a broader teardown-helper cleanup [`townhouse-foreign-hs-smoke.test.ts:947-962`]
+
+#### Dismissed (12 — recorded for audit)
+
+- Test 1 redundant `expect(publishResult.success).toBe(true)` after early-return — harmless on close read
+- B's `chainProviders: []` in connector.yaml — test passed, no behavior change
+- `/admin/routes` accepts arbitrary overrides — NFR9 loopback binding already covers
+- Cosmetic Step 7 numbering / Step numbering inconsistencies
+- Metrics return-undefined risk — vitest beforeAll throws cleanly if `getMetrics()` fails
+- `paymentAmount = bytes * 10n` magic number — test-only payment rate
+- Hostname-regex `.anyone-evil` edge — anchored `$` makes it correct
+- `console.log` density in CI — broad concern, not story-specific
+- Repeated `eslint-disable` + `as any` for private field access — broader codebase smell
+- `@toon-protocol/relay` not in authorized Hard Rule #2 exceptions — de minimis (workspace dep, no new code)
+- `aDestination` string typo not validated — test-controlled input
+- `runCli` logs stderr `inherit` noisy in CI — would need `_test-helpers.ts` extension (Hard Rule #2)
+
+---
 
 ## Story Close-Out Checklist
 

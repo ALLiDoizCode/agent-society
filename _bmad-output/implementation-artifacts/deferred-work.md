@@ -1,4 +1,8 @@
 
+## Deferred from: code review of 49-1-toon-client-foreign-townhouse-hs-smoke (2026-05-18)
+
+- `townhouse logs` SIGKILL race in Test 2 — outer 15s timer + `waitForExit`'s own SIGKILL fire near-simultaneously; the child exits with `code=null` (killed-by-signal). The current raw `waitForExit` swallows this fine, but if anyone later swaps to `waitForExitLabelled`, the labelled wrapper throws on null exit and would mis-classify normal teardown as a failure. Works as-is today; the right fix is a broader teardown-helper refactor that consolidates SIGKILL ownership, outside the scope of a single story. [`packages/townhouse/src/__integration__/townhouse-foreign-hs-smoke.test.ts:947-962`]
+
 ## Deferred from: Epic 49 re-scope (2026-05-18) — Aggregated Pilot Telemetry
 
 Epic 49 was originally scoped as a 7-story "Telemetry & Validation Gate" — pilot operators opt in to anonymous weekly earnings pings; the median across all pilot operators fires a $1.00 / $0.10 / <$0.10 validation gate at pilot day-30 that decides v1.0 marketing copy. Receiver server at `telemetry.toon-protocol.dev` behind Cloudflare (IP-stripping at the edge per NFR5 "no PII") and Let's Encrypt SSL.
