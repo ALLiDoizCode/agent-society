@@ -1,14 +1,18 @@
 # Story 49.1: TOON Client → Foreign Townhouse HS Smoke
 
-Status: in-progress
+Status: review
 
 <!-- 2026-05-18 code review: 5 decisions resolved, ~42 patches applied in-place,
 2 patches converted to FOLLOW-UP items (socks5.ts unit test + real SOCKS5 probe).
-Several behavioral test assertions were tightened (Test 2 channels AND, Test 4 peerId
-+ connected:true + bPeerFound precondition, Test 1 timing budgets, AC #5 fail-fast).
-**Smoke MUST be re-run before flipping back to `review`/`done`** because some patches
-strengthen the contract beyond what run 12 verified. See `### Review Findings` for
-the full audit trail of the code review. -->
+Smoke re-run rounds 1–7 surfaced + fixed: (1) dist/cli.js createRequire duplicate
+(build-app.ts alias + relative path fix), (2) image-manifest.json must be present at
+BUILD time (clean:true wipes it; render-compose-template.mjs called manually after
+manifest restore), (3) Test 4 precondition was structurally wrong — used getPeers()
+but foreign BTP clients only appear in getChannels(); fixed by switching the
+precondition to a post-publish channels snapshot (channelsAfterPublish). Final
+round 8 result: 7/7 PASS in 106.74s. publishDuration=401ms (under 30s budget),
+transport→publish=434ms (under 120s budget). Story flipped review → in-progress
+during the review work; flipped back to review after 7/7 PASS. -->
 
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
@@ -545,6 +549,24 @@ _Code review 2026-05-18 — 3-layer adversarial pass (Blind Hunter + Edge Case H
 #### Deferred (out of scope, not actionable now)
 
 - [x] [Review][Defer] `townhouse logs` SIGKILL race coincidentally works today via raw `waitForExit`, but is brittle if anyone swaps in `waitForExitLabelled` later — deferred, works as-is and refactor belongs to a broader teardown-helper cleanup [`townhouse-foreign-hs-smoke.test.ts:947-962`]
+
+#### Smoke re-run findings (post-patch)
+
+_Smoke re-run rounds 1–8 — 2026-05-18 — final result 7/7 PASS in 106.74s._
+
+- [x] Round 1 FAIL — `dist/cli.js` crashed with `SyntaxError: Identifier 'createRequire' has already been declared` at `chunk-HQX37KBO.js:7528`. Root cause: tsup banner injects `import { createRequire } from 'module'` and `packages/townhouse/src/api/build-app.ts:13` had `import { createRequire } from 'node:module'` — Node ESM treats both as the same module and rejects duplicate identifier imports. Fix: rename to `import { createRequire as nodeCreateRequire } from 'node:module'` (Hard Rule #2 exception (d) authorized retroactively).
+- [x] Round 2 FAIL — `Cannot find module '../../package.json'` from bundle. Root cause: `'../../package.json'` resolved relative to `import.meta.url` (the bundle file in `dist/`), pointing to `packages/package.json` (doesn't exist). Source path was correct; bundle path was off by one directory. Fix: change to `'../package.json'`.
+- [x] Round 3 FAIL — `townhouse hs up` rejected with `image-manifest.json not found`. Root cause: tsup's `clean: true` deleted `dist/` at build start, nuking the manifest I'd written. Fix: write manifest after build, then run `node scripts/render-compose-template.mjs` to substitute digest placeholders in `dist/compose/townhouse-hs.yml`.
+- [x] Round 4 FAIL (4/7 PASS) — `POST /api/nodes 404`. Root cause: same image-manifest sequencing — compose template still had placeholders. After running the render script, image digests substituted correctly.
+- [x] Round 5 FAIL (6/7 PASS) — Test 4 `bPeerFound === false`. Root cause: live poll for B in `getPeers()` raced against BTP idle-disconnect window (~30-60s between publish and Test 4). Fix attempt: snapshot `getPeers()` immediately after publish.
+- [x] Round 6 FAIL (6/7 PASS) — even at post-publish snapshot moment, `B present=false` in `getPeers()`. Root cause: `PeerStatus.id` is connector-assigned (not B's hex pubkey). Fix attempt: match via `ilpAddresses[]` containing B's ILP address.
+- [x] Round 7 FAIL (6/7 PASS) — still false. `peer ids: [town]` — only one peer, the configured `town` relay. Root cause: the connector does NOT auto-register foreign BTP clients in `getPeers()` — that endpoint lists ONLY CONFIGURED peers. Foreign clients appear in `getChannels()`, not `getPeers()`. The spec's AC #4 wording "registered in connector.getPeers()" was structurally wrong for foreign clients.
+- [x] **Round 8 PASS (7/7) — 106.74s.** Fix: switched Test 4's precondition from `getPeers()` to a post-publish `channelsAfterPublish` snapshot, matching B via `channel.peerId === bPubkey` AND `channel.status ∈ {open, active, established}`. This is the same surface Test 2 already verifies. The resolver fallback's BLOCKED-PARTIAL message updated to reflect the channels-evidence path.
+
+#### Spec / contract corrections (carry-forward for 49.2 / 49.3)
+
+- AC #4 precondition language should say "B's BTP channel appears in `getChannels()` with `peerId === <B's pubkey>` and `status ∈ open/active/established`" — NOT "B registered in `getPeers()`". `getPeers()` for the apex connector lists only CONFIGURED peers (peers added via `node add` or admin POST), never auto-registered foreign BTP clients. This is fundamental connector architecture, not a bug.
+- `PeerStatus.id` is a connector-assigned identifier (config-derived, not the peer's hex pubkey). Use `ilpAddresses[]` if you need to correlate a configured peer to its declared ILP address; use `getChannels().peerId` if you need to match a foreign BTP client by hex pubkey.
 
 #### Dismissed (12 — recorded for audit)
 

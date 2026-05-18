@@ -440,6 +440,10 @@ describe.skipIf(!shouldRun)(
     const socks5ProxyUrl = B_SOCKS5_PROXY_URL;  // B's anon daemon on host (--network host)
     let bSecretKey: Uint8Array;
     let bPubkey: string;
+    // B's ILP address declared at ToonClient construction — used to identify B's
+    // entry in A's getPeers() via ilpAddresses[] (PeerStatus.id is connector-
+    // assigned, not B's hex pubkey). 2026-05-18 code review round 2.
+    let bIlpAddress = '';
     let publishedEventId: string;
     let metricsBeforePublish: Awaited<ReturnType<ConnectorAdminClient['getMetrics']>>;
     let metricsAfterPublish: Awaited<ReturnType<ConnectorAdminClient['getMetrics']>>;
@@ -451,6 +455,17 @@ describe.skipIf(!shouldRun)(
     let transportEstablishedAt = 0; // ms after ToonClient.start() resolved
     let publishCompletedAt = 0; // ms after publishEvent resolved
     let publishStartedAt = 0; // ms when publishEvent was invoked
+    // Channels + peers snapshots taken in beforeAll IMMEDIATELY after publishEvent.
+    // 2026-05-18 code review round 3: BTP-channel registration uses a different
+    // identifier than peer registration on A's connector. Channels expose
+    // `peerId === bPubkey` (hex match works); peers (`getPeers()`) only list
+    // CONFIGURED peers (e.g. 'town' added via `node add town`) — foreign BTP
+    // clients are NEVER in getPeers() regardless of connection state. So:
+    //   - `channelsAfterPublish` is the authoritative evidence that B's BTP
+    //     channel reached A's connector (mirrors Test 2's channels surface).
+    //   - `peersAfterPublish` is informational only (does NOT contain B).
+    let channelsAfterPublish: Awaited<ReturnType<ConnectorAdminClient['getChannels']>> = [];
+    let peersAfterPublish: Awaited<ReturnType<ConnectorAdminClient['getPeers']>> = [];
     let bConfigDir: string | null = null;
     let priorWalletPassword: string | undefined;
 
@@ -716,13 +731,14 @@ describe.skipIf(!shouldRun)(
       // against A's connector after openChannel(). B's own connector exists only to host
       // the anon SOCKS5 daemon — it doesn't sign claims for this flow. Do NOT "fix" this
       // to point at B's admin (9402) without first reading the openChannel flow.
+      bIlpAddress = `g.toon.foreign.${bPubkey.slice(0, 8)}`;
       toonClient = new ToonClient({
         connectorUrl: CONNECTOR_ADMIN_URL,
         secretKey: bSecretKey,
         evmPrivateKey: FOREIGN_CLIENT_PRIVATE_KEY,
         ilpInfo: {
           pubkey: bPubkey,
-          ilpAddress: `g.toon.foreign.${bPubkey.slice(0, 8)}`,
+          ilpAddress: bIlpAddress,
           btpEndpoint: `ws://${hostnameA}:3000/btp`,
           assetCode: 'USD',
           assetScale: 6,
@@ -768,7 +784,7 @@ describe.skipIf(!shouldRun)(
               evmPrivateKey: FOREIGN_CLIENT_PRIVATE_KEY,
               ilpInfo: {
                 pubkey: bPubkey,
-                ilpAddress: `g.toon.foreign.${bPubkey.slice(0, 8)}`,
+                ilpAddress: bIlpAddress,
                 btpEndpoint: `ws://${hostnameA}:3000/btp`,
                 assetCode: 'USD',
                 assetScale: 6,
@@ -914,6 +930,34 @@ describe.skipIf(!shouldRun)(
       console.log(
         `[49.1] Metrics after: packetsForwarded=${metricsAfterPublish.aggregate.packetsForwarded} (before=${metricsBeforeForwarded})`
       );
+
+      // Step 20: Snapshot BOTH channels and peers IMMEDIATELY after publish.
+      // 2026-05-18 code review round 3: channels is the authoritative surface
+      // for "B's BTP channel reached A's connector" — peers only contains
+      // CONFIGURED peers (e.g. `town`), never auto-registered foreign BTP clients.
+      try {
+        channelsAfterPublish = await adminClientA.getChannels();
+        peersAfterPublish = await adminClientA.getPeers();
+        const bChanSnap = channelsAfterPublish.find(
+          (c) =>
+            typeof c.peerId === 'string' &&
+            c.peerId.toLowerCase() === bPubkey.toLowerCase()
+        );
+        console.log(
+          `[49.1] Channels snapshot after publish: ${channelsAfterPublish.length} entries; ` +
+            `B channel (peerId=${bPubkey.slice(0, 16)}...) present=${!!bChanSnap}, status=${bChanSnap?.status ?? 'n/a'}`
+        );
+        console.log(
+          `[49.1] Peers snapshot after publish: ${peersAfterPublish.length} entries; ` +
+            `peer ids: [${peersAfterPublish.map((p) => p.id).join(', ')}] ` +
+            `(NOTE: getPeers() lists only CONFIGURED peers; foreign BTP clients ` +
+            `appear in getChannels() not getPeers())`
+        );
+      } catch (e) {
+        console.warn(
+          `[49.1] Failed to snapshot getChannels()/getPeers() after publish: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
     }, 1080_000);  // 18 min: B anon daemon (~4 min) + A apex boot (~5 min) + town relay (~3 min) + 6 min slack
 
     afterAll(async () => {
@@ -1220,36 +1264,36 @@ describe.skipIf(!shouldRun)(
     it(
       "A's peer-type resolver tags B's pubkey as 'external' (AC #4)",
       async () => {
-        // Poll A's connector peers for B's pubkey (BTP handshake registers B).
-        // 2026-05-18 code review: require full pubkey equality AND connected:true
-        // (substring match was collision-prone; "registered but disconnected" peers
-        // would have made the resolver fallback trivially pass with an empty map).
-        const deadline = Date.now() + 15_000;
-        let bPeerFound = false;
+        // 2026-05-18 code review (round 3): the AC #4 precondition is "B's BTP
+        // channel reached A's connector with non-trivial state". The authoritative
+        // surface for this is `getChannels()` — `getPeers()` lists only CONFIGURED
+        // peers (`town`, never foreign BTP clients). The original spec wording
+        // "registered in connector.getPeers()" was incorrect for foreign clients;
+        // 2026-05-18 review aligns to the actual connector behavior.
+        // Use the post-publish snapshot (captured at the guaranteed-connected
+        // moment) to avoid the idle-disconnect race window.
+        const bChannelSnap = channelsAfterPublish.find(
+          (c) =>
+            typeof c.peerId === 'string' &&
+            c.peerId.toLowerCase() === bPubkey.toLowerCase() &&
+            ['open', 'active', 'established'].includes(c.status ?? '')
+        );
+        const bChannelReachedA = bChannelSnap !== undefined;
 
-        while (Date.now() < deadline) {
-          try {
-            const peers = await adminClientA.getPeers();
-            // The connector registers B by btpPeerId which we set to bPubkey
-            bPeerFound = peers.some(
-              (p) => p.id === bPubkey && (p as { connected?: boolean }).connected === true
-            );
-            if (bPeerFound) break;
-          } catch {
-            /* P20: retry on transient error */
-          }
-          await sleep(2_000);
-        }
+        console.log(
+          `[49.1 Test 4] B's BTP channel in post-publish snapshot ` +
+            `(peerId=${bPubkey.slice(0, 16)}..., open/active/established): ${bChannelReachedA}` +
+            (bChannelSnap ? `, status=${bChannelSnap.status}` : '')
+        );
 
-        if (!bPeerFound) {
-          // BLOCKED-PARTIAL is only authorized when /api/earnings was queried and B was
-          // genuinely absent (47.5 4B.2). If B never even reached A's connector roster
-          // with connected=true, the AC #4 contract is not met — the resolver test would
-          // pass trivially against an empty map and AC #4 would be vacuously green.
-          console.warn(
-            `⚠️  B pubkey not found in A's getPeers() with connected=true after 15s. ` +
-              `BTP handshake may not have registered B by pubkey, or the channel disconnected. ` +
-              `Continuing to /api/earnings PRIMARY path; if fallback fires, AC #4 will be reported as BLOCKED-PARTIAL.`
+        if (!bChannelReachedA) {
+          // B's BTP channel never reached A. AC #4 cannot be meaningfully
+          // verified (the resolver fallback would pass trivially because the
+          // nodes.yaml is empty, but that's not evidence of the contract).
+          throw new Error(
+            `AC #4 FAIL: B's BTP channel never reached A's connector in an open/active/established state at publish-accept time. ` +
+              `channels: ${channelsAfterPublish.length} entries; peerIds: [${channelsAfterPublish.map((c) => (c.peerId ?? '').slice(0, 16)).join(', ')}]. ` +
+              `The resolver fallback would be vacuous without channel evidence.`
           );
         }
 
@@ -1310,23 +1354,14 @@ describe.skipIf(!shouldRun)(
         }
 
         if (!primaryPassed) {
-          // The resolver fallback is vacuous if B never genuinely connected to A's
-          // connector — nodes.yaml is empty, so PeerTypeResolver.resolvePeerType(X)
-          // returns 'external' for ANY input X, including pubkeys that never reached
-          // the roster. Require bPeerFound (with connected=true) as a precondition.
-          // 2026-05-18 code review: this closes the AC #4 vacuous-pass loophole.
-          expect(
-            bPeerFound,
-            `AC #4 FAIL: B's pubkey was never registered with connected=true in A's connector roster, ` +
-              `so the resolver fallback is vacuous. ` +
-              `(Either the BTP handshake never registered B, or the channel disconnected before AC #4 ran.)`
-          ).toBe(true);
-
-          // 47.5 4B.2 finding: zero-claim peers may not surface in /api/earnings.peers[].
-          // B reached the roster but the aggregated /api/earnings view dropped it.
+          // The resolver fallback is meaningful BECAUSE bChannelReachedA is already
+          // true (asserted above): B genuinely reached A's connector via a BTP
+          // channel, so when the resolver returns 'external' for B's pubkey, that's
+          // genuine fall-through behavior on a peer that did make contact — not a
+          // vacuous pass against an empty input. 2026-05-18 code review round 3.
           console.warn(
             '⚠️  Test 4 BLOCKED-PARTIAL (47.5 4B.2 recurrence): ' +
-              'B reached A\'s connector roster (getPeers connected=true) but is absent ' +
+              'B\'s BTP channel reached A\'s connector (channels snapshot confirmed) but is absent ' +
               'from /api/earnings.peers[]. Falling back to direct PeerTypeResolver invocation.'
           );
 
