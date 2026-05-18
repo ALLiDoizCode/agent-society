@@ -72,13 +72,15 @@ The decomposition below derives requirements from the consolidated planning doc 
 - **FR28:** Drill-down details SHALL be served as separate CLI verbs (out of TUI scope): `townhouse channels`, `townhouse metrics`, `townhouse logs`, `townhouse peer <id>`, `townhouse health`
 - **FR29:** `townhouse status --units=sats` SHALL exist as an undocumented power-user flag for sats-denominated display; USDC remains the canonical hero display
 
-**Telemetry (v0.1 Validation Gate)**
+**End-to-End TOON-Client → Townhouse HS Loop (Epic 49 — re-scoped 2026-05-18)**
 
-- **FR30:** The system SHALL send anonymous telemetry pings via `POST https://telemetry.toon-protocol.dev/v1/townhouse-pulse` every 7 days from operator first-boot timestamp (jittered ±6h) when telemetry is opted in
-- **FR31:** The telemetry payload SHALL conform to a zod-validated schemaVersion=1 contract carrying: operator hash (sha256 of pubkey + STATIC_SALT), townhouseVersion, weekNumber, enabledNodes[], earnings (apex + perPeer with `'external'` allowed in the type union), metrics (eventsRelayed, uptimeSeconds, peerCount), flags (isTestnet, chainProfile)
-- **FR32:** During `townhouse init`, the system SHALL prompt for telemetry opt-in with disclosure copy explaining what is sent; pilot operators SHALL be informed during recruitment that opt-in is required for participation
-- **FR33:** The system SHALL provide `townhouse telemetry on|off|status` for runtime control of telemetry state
-- **FR34:** Failed telemetry POSTs SHALL be retained in a local retry buffer (`~/.townhouse/telemetry.json` `pendingPings[]`) and retried with exponential backoff (1h, 4h, 1d, 3d), then dropped after 4 weeks; operators SHALL never block on telemetry
+- **FR30:** A TOON client running on a foreign host SHALL be able to target a Townhouse operator's `.anyone` HS endpoint as its relay (`relay=<hostname>.anyone`) and publish a Nostr event over the established anon transport
+- **FR31:** The Townhouse operator's connector SHALL surface inbound events from foreign TOON clients via the existing drill subcommands (`townhouse drill channels`, `townhouse drill logs --tail`) — no new TUI surface is required
+- **FR32:** When a foreign TOON client's ILP-paid packet settles, the resulting claim SHALL appear in the operator's earnings data plane (`townhouse drill metrics` AND `GET /api/earnings`) within 2 snapshot intervals
+- **FR33:** The earnings delta observed across one settlement loop SHALL equal the settled claim amount within 1 USDC-cent rounding tolerance — no silent drops, no double-counting; non-Townhouse callers bucket as `'external'` per Epic 47's peer-type resolver
+- **FR34:** A live E2E gate script (`scripts/townhouse-e2e-real-hs.sh`) SHALL exercise the full loop unattended against real `.anyone` transport (not `127.0.0.1` fixtures) and exit non-zero on any AC miss
+
+> **Aggregated Pilot Telemetry (FR30–FR34 prior wording)** — the prior bullets (telemetry POST, zod payload, opt-in flow, `townhouse telemetry on|off|status`, retry buffer) were archived on 2026-05-18 to `_bmad-output/implementation-artifacts/deferred-work.md` § "Epic 49-future: Aggregated Pilot Telemetry". Re-entry gated on N ≥ 10 opted-in operators.
 
 **Cross-Repo (Connector Upstream)**
 
@@ -98,15 +100,15 @@ The decomposition below derives requirements from the consolidated planning doc 
 
 **Security & Privacy**
 
-- **NFR5:** Telemetry payload SHALL contain no PII — no IP (Cloudflare strips), no hostname, no `.anyone` address, no wallet pubkey unhashed, no claim IDs, no peer counterparty pubkeys
-- **NFR6:** Telemetry server SHALL be behind Cloudflare (DDoS + IP stripping) with Let's Encrypt SSL
+- **NFR5:** The Epic 49 live E2E gate SHALL run against real `.anyone` transport (NOT a `127.0.0.1` substitute or in-process loopback). Prior NFR5 ("telemetry payload no PII") archived with the Epic 49 re-scope on 2026-05-18 (see deferred-work.md).
+- **NFR6:** The Epic 49 live E2E gate SHALL run on CI `workflow_dispatch` only (manual trigger) — not on every PR. Real `.anyone` bootstrap (~60–120s/side) is too slow for PR-time. Prior NFR6 ("Cloudflare + Let's Encrypt on telemetry server") archived with the Epic 49 re-scope.
 - **NFR7:** The connector container SHALL NOT mount or have access to `/var/run/docker.sock`; only the host-side `townhouse-api` Fastify process owns the socket
-- **NFR8:** All operator-secret files SHALL be written with mode `0o600`: `nodes.yaml`, `earnings-snapshots.jsonl`, `wallet.enc`, `telemetry.json`, `host.json`
+- **NFR8:** All operator-secret files SHALL be written with mode `0o600`: `nodes.yaml`, `earnings-snapshots.jsonl`, `wallet.enc`, `host.json` (`telemetry.json` retired with Epic 49 re-scope; returns with Epic 49-future)
 - **NFR9:** All host-side ports SHALL bind to `127.0.0.1` only — never `0.0.0.0`
 
 **Reliability**
 
-- **NFR10:** Telemetry server downtime SHALL NOT block operators — local retry-buffer with exponential backoff (1h, 4h, 1d, 3d) and 4-week max retention
+- **NFR10:** Across one full Epic 49 settlement loop, the earnings reconciliation tolerance SHALL be ≤ 1 USDC-cent (`|earnings_delta − claim_amount| ≤ 1¢`). Prior NFR10 ("telemetry retry buffer") archived with the Epic 49 re-scope.
 - **NFR11:** Earnings snapshot write SHALL recover from mid-write truncation — next boot reads to the last well-formed JSONL line without crashing
 - **NFR12:** Earnings snapshot retention SHALL be ≥13 months for YEAR-over-YEAR delta computation across calendar boundaries
 
@@ -120,7 +122,7 @@ The decomposition below derives requirements from the consolidated planning doc 
 **Quality Gate**
 
 - **NFR17:** Pre-publish quality gate SHALL require all of: unit + integration green, connector contract canary green at the digest pinned in source (NOT `:latest`), image-contract test green at pinned digest, real-CLI E2E green via `scripts/townhouse-test-infra.sh`, Playwright `e2e:real` green, cosign signature verification green
-- **NFR18:** Validation gate decision (v1.0 launch fork) SHALL fire on actual telemetry data, not subjective judgment — median weekly USDC across the 5 v0.1 pilot operators determines marketing copy: ≥$1.00 (full earnings hero), $0.10–$1.00 (demoted), <$0.10 (delay launch)
+- **NFR18:** The Epic 49 live E2E gate SHALL exit with a PASS/FAIL code; non-zero on any AC miss, with relevant connector + drill logs captured to `./e2e-real-hs-logs/<timestamp>/`. Prior NFR18 ("median-weekly-USDC validation fork") archived with the Epic 49 re-scope.
 - **NFR19:** Empty-state copy library SHALL ship in the same PR as the TUI scaffold story — not as a follow-up ticket
 
 ### Additional Requirements
@@ -138,7 +140,7 @@ Derived from the planning doc's Architecture Anchors (§4) and Technology Stack 
 **Sequencing Constraints**
 
 - `nodes.yaml` write happens BEFORE connector registration (`POST /admin/peers`). Drift window resolves in the safe direction: peer in yaml but not yet registered = harmless, reconciler catches it.
-- Telemetry instrumentation (TH-21.17.14) ships BEFORE pilot recruitment fires (Mary's 2026-05-25 outreach launch). Validation gate cannot fire on subjective data.
+- Epic 49 live E2E gate (`scripts/townhouse-e2e-real-hs.sh`) SHALL run green on a published rc tag BEFORE pilot recruitment fires (Mary's 2026-05-25 outreach launch). Telemetry instrumentation deferred to Epic 49-future; pilot recruitment pitch revised independently (see deferred-work.md § "Open downstream questions").
 
 **Technology Stack (project-wide constraints from `project-context.md`)**
 
@@ -158,9 +160,9 @@ Derived from the planning doc's Architecture Anchors (§4) and Technology Stack 
 - This epic depends on connector PRs CR-2 (multi-arch verify) and CR-3 (cosign signing). Both gate v1.0 publish.
 - This epic delivers CR-4 (the release contract doc) to both repos.
 
-**Telemetry Server Infrastructure (open thread)**
+**Telemetry Server Infrastructure (deferred — was open thread)**
 
-- Telemetry endpoint hosting (`telemetry.toon-protocol.dev`), Cloudflare account, Grafana dashboard — owners not yet assigned.
+- Telemetry endpoint hosting (`telemetry.toon-protocol.dev`), Cloudflare account, Grafana dashboard — open thread closed by Epic 49 re-scope on 2026-05-18. These owners are no longer blocking; they return with Epic 49-future (see deferred-work.md § "Epic 49-future: Aggregated Pilot Telemetry").
 
 ### UX Design Requirements
 
@@ -217,11 +219,11 @@ Every functional requirement maps to exactly one epic. NFRs and UX-DRs may be cr
 | FR27 | Epic 48 | 2-second silent refresh tick |
 | FR28 | Epic 48 | Drill subcommands (`channels`, `metrics`, `logs`, `peer`, `health`) |
 | FR29 | Epic 48 | `--units=sats` undocumented flag |
-| FR30 | Epic 49 | Weekly telemetry POST to `/v1/townhouse-pulse` (jittered ±6h) |
-| FR31 | Epic 49 | Zod-validated payload schemaVersion=1 |
-| FR32 | Epic 49 | Opt-in flow during `townhouse init` (required for pilot) |
-| FR33 | Epic 49 | `townhouse telemetry on\|off\|status` |
-| FR34 | Epic 49 | Local retry buffer with exponential backoff |
+| FR30 | Epic 49 | TOON client publishes via Townhouse `.anyone` HS as relay endpoint (foreign client) |
+| FR31 | Epic 49 | Connector surfaces inbound event/packet via existing drill subcommands |
+| FR32 | Epic 49 | ILP-paid packet settles → earnings delta visible within 2 snapshot intervals |
+| FR33 | Epic 49 | Earnings delta == settled claim amount ± rounding tolerance (no silent drops) |
+| FR34 | Epic 49 | Live E2E gate (`scripts/townhouse-e2e-real-hs.sh`) runs full loop unattended |
 | FR35 | Epic 44 | CR-1: connector `GET /admin/hs-hostname` |
 | FR36 | Epic 44 | CR-2: connector multi-arch images |
 | FR37 | Epic 44 | CR-3: connector cosign keyless OIDC signing |
@@ -235,12 +237,12 @@ Every functional requirement maps to exactly one epic. NFRs and UX-DRs may be cr
 | NFR2 | Epic 45 | Idempotent re-up |
 | NFR3 | Epic 48 | TUI 2s refresh latency |
 | NFR4 | Epic 47 | Snapshot read perf <100ms (9500-entry fixture) |
-| NFR5 | Epic 49 | Telemetry payload no PII |
-| NFR6 | Epic 49 | Cloudflare + Let's Encrypt SSL on telemetry server |
+| NFR5 | Epic 49 | Live E2E gate uses real `.anyone` transport (no 127.0.0.1 fixtures) |
+| NFR6 | Epic 49 | Gate runs on CI `workflow_dispatch` only (not per-PR; real anon bootstrap too slow) |
 | NFR7 | Epic 45 | No docker.sock inside connector container |
 | NFR8 | Cross-cutting (Epic 45, 3, 6) | All operator secrets at file mode 0o600 |
 | NFR9 | Epic 45 | All host ports bind to 127.0.0.1 only |
-| NFR10 | Epic 49 | Telemetry retry buffer (1h, 4h, 1d, 3d, drop after 4w) |
+| NFR10 | Epic 49 | Earnings reconciliation tolerance ≤ 1 USDC-cent across one settlement loop |
 | NFR11 | Epic 47 | Snapshot mid-write truncation recovery |
 | NFR12 | Epic 47 | Snapshot retention ≥13 months |
 | NFR13 | Epic 48 | TUI renders correctly at 80×24 |
@@ -248,7 +250,7 @@ Every functional requirement maps to exactly one epic. NFRs and UX-DRs may be cr
 | NFR15 | Cross-cutting | Node.js >=20, TypeScript ^5.3, ESM-only |
 | NFR16 | Epic 44 | Connector v3.5.0 backward-compatible with v3.3.3+ admin API surface |
 | NFR17 | Cross-cutting | Pre-publish quality gate (6 green checks) |
-| NFR18 | Epic 49 | Validation gate fires on telemetry data ($1.00 / $0.10 / <$0.10 forks) |
+| NFR18 | Epic 49 | Gate emits PASS/FAIL exit code; non-zero on any AC miss |
 | NFR19 | Epic 48 | Empty-state copy library ships in same PR as TUI scaffold |
 
 **UX Design Requirements**
@@ -310,20 +312,22 @@ Drew opens a TUI (`townhouse hs up` when stdout is a TTY) showing the hero earni
 **UX-DRs:** UX-DR1, UX-DR2, UX-DR3, UX-DR6, UX-DR7
 **Depends on:** Epic 47
 
-### Epic 49: Telemetry & Validation Gate
+### Epic 49: End-to-End TOON-Client → Townhouse HS Loop
 
-Pilot operators opt in to anonymous earnings telemetry; their weekly pings (jittered ±6h) feed the validation-gate dataset that decides v1.0 marketing copy at the $1.00 / $0.10 / <$0.10 weekly-USDC thresholds. The payload carries no PII (no IP — Cloudflare strips, no hostname, no `.anyone` address, no unhashed wallet pubkey, no claim IDs, no peer counterparty pubkeys). Telemetry-server outages never block operators — local retry buffer with exponential backoff (1h, 4h, 1d, 3d, drop after 4 weeks). For the v0.1 pilot, opt-in is required for participation (Mary makes this explicit during recruitment). For the public release, telemetry is genuinely optional. This epic branches from Epic 47 (needs earnings data) but is independent of Epic 48 (TUI not required).
+Any TOON client (operator A's, operator B's, third-party) targets a Townhouse operator's `.anyone` hidden-service endpoint and publishes a Nostr event carrying an ILP-paid packet. The Townhouse operator observes (a) the inbound event/packet on the connector via existing drill subcommands AND (b) the earnings credit appears in the local earnings data plane within 2 snapshot intervals, reconciling to the settled claim amount ± rounding tolerance. This proves the full revenue loop closes on real infrastructure — real `.anyone` transport, real connector, real claim — not Anvil fixtures, not a synthetic harness. The Townhouse HS is the destination, the TOON client is the origin, earnings are the receipt. Re-scoped 2026-05-18 from the prior 7-story "Telemetry & Validation Gate" — that scope (aggregated cross-operator telemetry, Cloudflare-fronted receiver, $1.00/$0.10/<$0.10 validation fork) was archived to `_bmad-output/implementation-artifacts/deferred-work.md` § "Epic 49-future: Aggregated Pilot Telemetry" with re-entry gated on N ≥ 10 opted-in operators.
+
+**Settlement-chain scope:** EVM + Solana on Akash devnets (Akash-Anvil + Akash-Solana per `deploy/akash/leases.json`); Solana leg via Mill swap peer. Mina out of scope (no Akash deployment, not on v0.1 revenue path).
 
 **FRs covered:** FR30, FR31, FR32, FR33, FR34
 **NFRs:** NFR5, NFR6, NFR10, NFR18
 **UX-DRs:** —
-**Depends on:** Epic 47 (NOT Epic 48)
+**Depends on:** Epic 45 (`.anyone` reachable HS), Epic 47 (earnings data plane), Epic 48 (drill subcommands), Epic 12 + Epic 13 (Mill swap peer for SOL leg). Epic 46 (peer registration) required for Mill peer in the SOL leg.
 
 ### Cross-Cutting Constraints
 
 These NFRs and UX-DRs apply across multiple epics and are not owned by any single one:
 
-- **NFR8** — file mode `0o600` on every operator-secret file (`nodes.yaml` → Epic 46, `earnings-snapshots.jsonl` → Epic 47, `wallet.enc` → Epic 45, `telemetry.json` → Epic 49, `host.json` → Epic 45)
+- **NFR8** — file mode `0o600` on every operator-secret file (`nodes.yaml` → Epic 46, `earnings-snapshots.jsonl` → Epic 47, `wallet.enc` → Epic 45, `host.json` → Epic 45). `telemetry.json` retired with Epic 49 re-scope (2026-05-18); returns with Epic 49-future per deferred-work.md.
 - **NFR15** — Node.js >=20, TypeScript ^5.3, ESM-only (project tech stack baseline; applies to every package)
 - **NFR17** — Pre-publish quality gate (6 green checks: unit + integration, contract canary, image-contract, real-CLI E2E, Playwright e2e:real, cosign verify) — gates `npm publish` for the entire townhouse package
 - **UX-DR5** — Failure-state copy library spans Epic 45 (anon timeout, port collision, missing docker.sock), Epic 46 (image pull failure, registration drift), and Epic 48 (rendering when API is unreachable)
@@ -1258,251 +1262,112 @@ So that rendering, refresh-tick, drill subcommands, and empty-state copy are vis
 
 ---
 
-## Epic 49: Telemetry & Validation Gate
+## Epic 49: End-to-End TOON-Client → Townhouse HS Loop
 
-Pilot operators opt in to anonymous earnings telemetry; their weekly pings (jittered ±6h) feed the validation-gate dataset that decides v1.0 marketing copy. No PII is collected. This epic branches from Epic 47 (needs earnings data) but is independent of Epic 48 (TUI not required).
+Any TOON client (operator A's, operator B's, third-party) targets a Townhouse operator's `.anyone` HS endpoint, publishes a Nostr event carrying an ILP-paid packet, and the operator observes (a) the inbound event on the connector via existing drill subcommands AND (b) the earnings credit on their local data plane. Three stories. Re-scoped 2026-05-18 from the prior 7-story "Telemetry & Validation Gate"; old stories archived to `_bmad-output/implementation-artifacts/deferred-work.md` § "Epic 49-future: Aggregated Pilot Telemetry".
 
-### Story 49.1: Telemetry Payload Schema + Zod Validator
+**Settlement-chain scope (decided 2026-05-18):** Gate runs against **EVM + Solana on Akash devnets** (Akash-Anvil + Akash-Solana, already deployed — see `deploy/akash/leases.json`). EVM settles directly via the connector's USDC adapter; Solana settles via the **Mill swap peer** (Epic 12 / 13) mediating EVM-USDC → SOL-USDC. Mina is out of scope — no Akash deployment exists today and Mina is not on the v0.1 pilot revenue path.
 
-As a townhouse engineer,
-I want a versioned, zod-validated telemetry payload schema,
-So that the validation-gate dataset is type-safe end-to-end and any future schema bump is auditable.
+### Story 49.1: TOON Client → Foreign Townhouse HS Smoke
+
+As a TOON-client developer (Jonathan, Drew, or any third party),
+I want to publish a Nostr event via another operator's `.anyone` HS endpoint and see it logged on their connector,
+So that I prove the public protocol surface advertised by `townhouse hs up` is actually reachable by foreign clients — not just by tests in the same process.
 
 **Acceptance Criteria:**
 
-**Given** the schema file at `packages/townhouse/src/telemetry/schema.ts`
-**When** zod validation runs on a payload
-**Then** the schema enforces `schemaVersion: 1` (literal) AND the full payload shape: `operatorIdHash`, `townhouseVersion`, `weekNumber`, `enabledNodes: ('town' | 'mill' | 'dvm')[]`, `earnings.apex.usdcCents: number`, `earnings.perPeer: [{ type, usdcCents }]`, `metrics.eventsRelayed/uptimeSeconds/peerCount`, `flags.isTestnet/chainProfile`
+**Given** operator A has run `townhouse hs up` and obtained `<hostname-a>.anyone`
+**When** operator B (different machine OR different container, different keypair, separate anon transport) runs a TOON client configured with `relay=<hostname-a>.anyone`
+**Then** B's client establishes the anon transport AND publishes a kind:1 event AND receives an acceptance receipt within 30 seconds of transport-established.
 
-**Given** the `'external'` peer-type case
-**When** the zod literal union is checked
-**Then** `'external'` is included in `perPeer[].type` so non-Townhouse peers connecting through the operator's connector are NOT dropped from the dataset
+**Given** the event reaches operator A's connector
+**When** A runs `townhouse drill channels` or `townhouse drill logs --tail`
+**Then** the inbound event is surfaced (event id, kind, source-peer pubkey hash, arrival timestamp) on the drill surface that Epic 48 already ships — no new TUI work required.
 
-**Given** the `operatorIdHash` field
-**When** computed
-**Then** value = `sha256(operatorPubkey + STATIC_SALT)` — non-reversible, deterministic across runs (unit test asserts same input → same hash)
+**Given** the smoke runs against a real `.anyone` hidden service (NOT a `127.0.0.1` substitute or in-process loopback)
+**When** the bootstrap window is observed
+**Then** the smoke tolerates the ~30–90s first-publish window (per Story 45.4) AND only fails if the window exceeds 120s.
 
-**Given** the payload contains no PII (NFR5)
-**When** the schema is reviewed
-**Then** there are NO fields for: IP, hostname, `.anyone` address, unhashed wallet pubkey, claim IDs, peer counterparty pubkeys
+**Given** operator B is a non-Townhouse TOON client (no `townhouse hs up` running on B's side; just a raw SDK/client process)
+**When** B's event lands on A's connector
+**Then** A's peer-type resolver tags B's pubkey as `'external'` (per Epic 47) — non-Townhouse callers are first-class.
 
-**Given** unit tests at `packages/townhouse/src/telemetry/__tests__/schema.test.ts`
-**When** run
-**Then** valid payloads pass round-trip AND invalid payloads (wrong types, missing required fields, unknown enum values) fail with descriptive errors
-
-**FRs:** FR31 | **NFRs:** NFR5
+**FRs:** FR30, FR31 | **NFRs:** NFR5
 
 ---
 
-### Story 49.2: Opt-In Flow + Disclosure Copy + State File
+### Story 49.2: Paid Packet → Earnings Receipt (EVM + SOL on Akash)
 
-As a pilot operator,
-I want a clear opt-in prompt during `townhouse init` with disclosure copy explaining what is sent,
-So that I understand the deal before running a node and the pilot dataset is collected with informed consent.
+As the Townhouse operator,
+I want a TOON client's ILP-paid packet to land on my connector and the resulting claim to appear in my earnings data plane on both EVM and Solana settlement chains via the Akash-hosted devnets,
+So that the revenue loop is proven end-to-end on shared real infrastructure — not local 127.0.0.1 chain fixtures — for the two chains v0.1 actually transacts on.
 
 **Acceptance Criteria:**
 
-**Given** the operator runs `townhouse init` for the first time
-**When** the CLI reaches the telemetry step
-**Then** the prompt displays the locked disclosure copy: `"You're joining the v0.1 pilot. Townhouse will send anonymous earnings telemetry (peer-id hash, USDC/day, uptime — no IP, no wallet) so we can validate the economics before public launch. This is required for pilot participation. Type 'agree' to continue."`
+**Given** Story 49.1's smoke has succeeded AND the connector is configured against Akash-Anvil (EVM RPC from `deploy/akash/leases.json` → `anvil.url`)
+**When** operator B publishes a paid event with ILP packet `chain=evm`, non-zero claim amount C
+**Then** the EVM USDC settlement lands AND `townhouse drill metrics` on A reports `earnings.apex.usdcCents` increase ≥ C within 2 snapshot intervals (≤ 2h wall-clock OR fast-forwarded via fixture clock).
 
-**Given** the operator types `agree`
-**When** the response is captured
-**Then** `~/.townhouse/telemetry.json` is created with `{ optedIn: true, firstBootAt: <ISO-8601>, lastPingAt: null, pendingPings: [] }` and file mode `0o600`
+**Given** Akash-Solana is reachable (RPC from `deploy/akash/leases.json` → `solana.url`) AND a Mill peer is running locally to A (`townhouse node add mill`) mediating EVM↔SOL
+**When** operator B publishes a paid event with ILP packet `chain=sol`, non-zero claim amount C
+**Then** Mill performs the EVM-USDC → SOL-USDC swap AND the SOL settlement lands AND A's earnings aggregator reflects the credit under `earnings.perPeer` with `type: 'mill'` within 2 snapshot intervals.
 
-**Given** the operator types anything other than `agree`
-**When** the response is captured
-**Then** `optedIn: false` is written; the operator continues but no pings are sent
+**Given** the pre-publish snapshot reading P and the post-settle snapshot reading S for either chain
+**When** the delta D = S − P is computed
+**Then** `|D − C| ≤ 1 USDC-cent` rounding tolerance — no silent drops, no double-counting, no off-by-one. SOL leg tolerance accounts for Mill's documented swap-fee skim (delta against `C × (1 − mill_fee_bps)` ± 1¢).
 
-**Given** v0.1 pilot recruitment (Mary's outreach)
-**When** the operator is recruited
-**Then** Mary's recruitment template states explicitly that pilot operators must opt in (process AC, not code AC)
+**Given** the host API at `GET /api/earnings`
+**When** queried post-settlement
+**Then** the same delta is observable through the JSON surface (parity with `drill metrics`) for both EVM and SOL legs.
 
-**Given** the post-pilot phase (v1.0 public release)
-**When** the disclosure copy is reviewed
-**Then** the "required for pilot participation" sentence is replaced with optional language (story for v1.0 release, tracked as a follow-up commit)
+**Given** B is a non-Townhouse TOON client
+**When** A's earnings aggregator runs
+**Then** B's EVM claim appears under `earnings.perPeer` with `type: 'external'`; B's SOL claim (post-Mill swap) appears with `type: 'mill'`. Neither is dropped, neither is silently merged into apex.
 
-**FRs:** FR32 | **NFRs:** NFR8
+**Given** A also has a Town peer (registered via `townhouse node add town`)
+**When** that Town peer separately receives a paid EVM event from B
+**Then** that claim lands under `earnings.perPeer` with `type: 'town'` and is distinct from both the apex bucket and the mill-mediated SOL bucket.
+
+**Given** Akash-Anvil OR Akash-Solana is unreachable at gate-time
+**When** the gate boots
+**Then** the gate fails fast with a clear "Akash <chain> RPC unreachable at <url>" message AND points the operator at `scripts/akash-status.sh` for re-deploy guidance — does NOT silently fall back to local `127.0.0.1` chain fixtures.
+
+**FRs:** FR32, FR33 | **NFRs:** NFR5, NFR10
 
 ---
 
-### Story 49.3: Telemetry HTTP Client + Retry Buffer
+### Story 49.3: Live E2E Gate — Real-`.anyone` Loop on Akash EVM + SOL
 
-As the telemetry subsystem,
-I want a scheduled HTTP client that POSTs payloads weekly with local retry on failure,
-So that telemetry server outages don't block operators and pilot data is never lost to a transient 502.
+As a townhouse release engineer closing out Epic 49,
+I want a single unattended script that runs the full TOON-client → HS → connector → Mill → earnings loop against real `.anyone` transport AND the Akash-hosted EVM + Solana devnets,
+So that the loop is provably green on shared real infrastructure before pilot recruitment and before any v1.0 publish.
 
 **Acceptance Criteria:**
 
-**Given** an opted-in operator
-**When** the apex process is running
-**Then** a scheduler fires every 7 days from `firstBootAt` (jittered ±6h) AND POSTs the current payload to `https://telemetry.toon-protocol.dev/v1/townhouse-pulse`
+**Given** the gate script `scripts/townhouse-e2e-real-hs.sh`
+**When** invoked with no arguments (default chain profile = `evm+sol`)
+**Then** it (a) reads the Akash-Anvil and Akash-Solana endpoints from `deploy/akash/leases.json`, (b) probes both for liveness via `scripts/akash-status.sh`, (c) stands up two `.anyone`-HS endpoints (real two-host OR two Docker containers running real anon transport — implementation choice documented in the script header), (d) executes Story 49.1's smoke, (e) executes Story 49.2's EVM leg, (f) executes Story 49.2's SOL leg (Mill-mediated), and (g) exits 0 iff all succeed.
 
-**Given** the POST succeeds (HTTP 2xx)
-**When** the response returns
-**Then** `lastPingAt` is updated in `telemetry.json` AND the payload is NOT added to `pendingPings[]`
+**Given** the operator wants to scope the gate
+**When** invoked with `--chain=evm` OR `--chain=sol`
+**Then** only that chain's leg of Story 49.2 runs; default remains `evm+sol`. No `--chain=mina` option exists (out of scope per Epic 49 settlement-chain scope decision; would require an Akash Mina SDL deployment first).
 
-**Given** the POST fails (network error or non-2xx)
+**Given** any AC from Story 49.1 or 49.2 (either chain leg) fails
 **When** the failure is detected
-**Then** the payload is appended to `pendingPings[]` with backoff metadata `{ payload, firstFailedAt, nextAttemptAt }`
+**Then** the gate exits non-zero AND prints which AC failed AND which chain leg failed AND captures relevant connector + drill + Mill logs to `./e2e-real-hs-logs/<timestamp>/` for triage.
 
-**Given** a payload is in `pendingPings[]`
-**When** the retry backoff schedule fires (1h, 4h, 1d, 3d after first failure)
-**Then** the client re-POSTs
+**Given** Akash-Anvil OR Akash-Solana is unreachable at gate-time (`scripts/akash-status.sh` returns non-2xx for the relevant URL)
+**When** the gate runs
+**Then** the gate fails fast at the probe step with actionable output (e.g., "Akash-Anvil at <url> returned 503 — redeploy via `scripts/akash-deploy.sh anvil`") — does NOT silently fall back to local `127.0.0.1` Anvil/Solana fixtures.
 
-**Given** a payload's `firstFailedAt` is more than 4 weeks old
-**When** the next retry would fire
-**Then** the payload is dropped from `pendingPings[]` with a `~/.townhouse/telemetry-dropped.log` entry
+**Given** the gate is wired into CI
+**When** scheduled
+**Then** it runs on `workflow_dispatch` ONLY (manual trigger) — never on every PR. The real `.anyone` bootstrap (~60–120s per side) plus Akash devnet RTT (~50–200ms per RPC call) makes it too slow for PR-time. The gate runs on every published rc tag before pilot recruitment fires.
 
-**Given** the telemetry subsystem
-**When** the apex process is operating
-**Then** at no point does any operator-facing operation (CLI, TUI, host API) block waiting on telemetry
+**Given** the gate completes
+**When** the story is marked done
+**Then** findings (or "no issues found") are documented in `### Review Findings` with a date stamp AND any spec-vs-implementation drift is captured in `_bmad-output/implementation-artifacts/49-3-live-e2e-gate-real-anyone-loop.md`. The gate output AND Akash lease state at gate-time are committed to `_bmad-output/implementation-artifacts/v0.1-pilot-readiness.md` as the v0.1 readiness artifact.
 
-**Given** the opt-out hard-stop
-**When** `optedIn: false`
-**Then** the HTTP client is NEVER instantiated (unit test asserts `fetch` is not called when opted out)
-
-**FRs:** FR30, FR34 | **NFRs:** NFR10
+**FRs:** FR34 | **NFRs:** NFR5, NFR6, NFR18
 
 ---
-
-### Story 49.4: `townhouse telemetry on|off|status` CLI
-
-As an operator who changed my mind,
-I want CLI verbs to toggle telemetry on/off and see current state,
-So that I can opt out at any time after the initial init prompt.
-
-**Acceptance Criteria:**
-
-**Given** the CLI command `townhouse telemetry status`
-**When** invoked
-**Then** the CLI prints `optedIn: true|false`, `firstBootAt`, `lastPingAt`, AND the count of pending retries
-
-**Given** `townhouse telemetry off`
-**When** invoked on an opted-in operator
-**Then** `telemetry.json.optedIn` is set to `false` AND `pendingPings[]` is cleared AND the next scheduled tick is a no-op
-
-**Given** `townhouse telemetry on`
-**When** invoked on an opted-out operator
-**Then** the CLI prints the disclosure copy AND prompts for `agree` (same as init flow) AND on `agree` flips `optedIn: true` AND records `firstBootAt: <now>`
-
-**Given** any of these CLI verbs
-**When** invoked with `--json`
-**Then** machine-readable JSON output is emitted
-
-**FRs:** FR33
-
----
-
-### Story 49.5: Telemetry Receiver Server + Cloudflare + Grafana Dashboard
-
-As the project,
-I want a hosted receiver service for telemetry pings with no PII collection at the edge and a dashboard counting weekly active pings,
-So that the validation-gate dataset accumulates over the 30-day pilot and we detect telemetry-server outages before they corrupt the dataset.
-
-**Acceptance Criteria:**
-
-**Given** the telemetry endpoint `https://telemetry.toon-protocol.dev/v1/townhouse-pulse`
-**When** an operator POSTs a payload
-**Then** the request terminates at Cloudflare (DDoS mitigation + IP stripping — origin server never sees client IP) AND uses Let's Encrypt SSL
-
-**Given** the payload arrives at the origin server
-**When** persisted
-**Then** ONLY the validated payload fields are stored — Cloudflare-stripped IP is not re-derived AND no request headers are persisted alongside the payload
-
-**Given** the receiver service
-**When** it accepts a payload
-**Then** it validates against the same zod schema (Story 49.1) AND rejects non-conforming payloads with HTTP 400 (so a schema-version drift is observable)
-
-**Given** the Grafana dashboard
-**When** rendered
-**Then** it shows weekly active pings (count of unique `operatorIdHash` per week) AND a 30% week-over-week drop alert that pages the on-call
-
-**Given** the open-thread infrastructure question
-**When** this story is scheduled
-**Then** the owner of the Cloudflare account, the domain `telemetry.toon-protocol.dev`, AND the Grafana hosting is named in the story description (block this story until owners are identified)
-
-**Given** server downtime
-**When** the receiver is unreachable
-**Then** clients retry per Story 49.3 — never lose data
-
-**FRs:** FR30 (server side) | **NFRs:** NFR5, NFR6
-
----
-
-### Story 49.6: Pilot Day-30 Decision Artifact
-
-As the project,
-I want a documented decision at pilot day-30 that fires the validation gate against real data,
-So that v1.0 marketing copy is grounded in pilot earnings, not subjective judgment.
-
-**Acceptance Criteria:**
-
-**Given** the v0.1 pilot has been running for 30 days
-**When** the day-30 query fires
-**Then** the script queries telemetry for the 5 pilot operators' week-4 records AND computes `total_usdc_cents = earnings.apex.usdcCents + sum(earnings.perPeer.usdcCents)` per operator
-
-**Given** the per-operator totals
-**When** the median is computed
-**Then** the median weekly USDC across the 5 operators is the validation-gate input
-
-**Given** the validation forks
-**When** the median is compared to thresholds
-**Then** EXACTLY ONE branch fires:
-- `median ≥ $1.00/wk` → ship full earnings hero. Marketing: "Earn passive USDC from your homelab."
-- `$0.10 ≤ median < $1.00/wk` → demote earnings panel. Hero becomes "events relayed + earnings sub-counter." Marketing: "Run yields, be early."
-- `median < $0.10/wk` → DELAY public launch. Earnings UI secondary. Hero pivots to "events relayed + uptime." Marketing: "Be early to the network."
-
-**Given** the decision
-**When** it is made
-**Then** the decision AND raw data are committed to `_bmad-output/v0.1-pilot-results.md` (public, auditable record)
-
-**Given** the decision artifact
-**When** read
-**Then** it includes: per-operator weekly USDC, the median, the threshold-fork decision, and any caveats (e.g., one operator had testnet flagged — counted/not-counted, reasoning)
-
-**FRs:** — (process AC)
-**NFRs:** NFR18
-
----
-
-### Story 49.7: Live E2E Gate — Telemetry & Validation
-
-As a **townhouse release engineer** closing out Epic 49 (and through it, the v0.1 pilot launch readiness),
-I want to run the complete telemetry user journey end-to-end against the deployed receiver server with real Cloudflare + Grafana wiring,
-So that the opt-in flow, payload shape, retry buffer, and CLI controls are verified against the same surface pilot operators will hit — and the validation-gate dataset is provably populated before pilot day-30 (Epic 45 retro A4).
-
-**Acceptance Criteria:**
-
-**Given** a fresh `~/.townhouse/` state AND the deployed telemetry receiver at `telemetry.toon-protocol.dev` is reachable
-**When** the operator runs `townhouse init`
-**Then** the opt-in disclosure copy renders correctly, the consent prompt is required, AND the operator's choice persists to `~/.townhouse/telemetry.json` with mode `0o600`.
-
-**Given** the operator opted in
-**When** the gate forces an immediate telemetry POST (bypassing the ±6h jitter via a debug flag or fixture-clock)
-**Then** the receiver server logs a successful payload write AND the Grafana dashboard reflects the new record within 5 minutes
-**And** the payload contains NO PII (verified at the receiver side: no IP — Cloudflare strips, no hostname, no `.anyone` address, no unhashed wallet pubkey, no claim IDs, no peer counterparty pubkeys).
-
-**Given** `townhouse telemetry status`
-**When** invoked
-**Then** the CLI reports the correct opt-in state, last successful POST timestamp, and retry-buffer depth (49.4 verified live).
-
-**Given** `townhouse telemetry off`
-**When** invoked
-**Then** subsequent ticks emit no network traffic; `telemetry on` re-enables; idempotent on repeat invocations (49.4 verified live).
-
-**Given** a simulated receiver outage (block `telemetry.toon-protocol.dev` at the firewall level for one full tick window)
-**When** the next tick fires
-**Then** the payload is enqueued to the retry buffer; backoff schedule (1h, 4h, 1d, 3d) is observable in logs; drop-after-4-weeks behavior is asserted by fast-forwarding the fixture clock (49.3 verified live — NFR10).
-
-**Given** the day-30 decision script (49.6)
-**When** run against the live receiver's test-fixture dataset
-**Then** the script reads the records, computes the median, fires exactly ONE threshold branch ($1.00 / $0.10 / <$0.10), and writes the artifact to `_bmad-output/v0.1-pilot-results.md` (49.6 verified live).
-
-**Given** the gate run completes
-**When** the story is closed out
-**Then** any bugs found during the gate run are patched (in separate PRs if needed) before this story is marked done
-**And** findings (or "no issues found") are documented in `### Review Findings` with a date stamp
-**And** Mary signs off that the disclosure copy + opt-in flow are pilot-ready.
-
-**FRs:** FR30–FR34 (full epic validation) | **NFRs:** NFR5, NFR6, NFR10, NFR18

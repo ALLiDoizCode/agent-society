@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-13 (Epic 47 retrospective → done; epic-47-retro-2026-05-13.md committed. 4 new action items A5'–A8' carry forward to Epic 48: compose-template ↔ generator contract test (widens Epic 46 retro A3'), connector × townhouse smoke test on publish (preempts BUG-2-class latents), D3 real-claim driver plan documented for Epic 50, patch-volume calibration heuristic in close-out checklist.)
+# last_updated: 2026-05-18 (Epic 48 retrospective: optional → done. epic-48-retro-2026-05-18.md saved. 1/4 Epic 47 action items fully applied (A8' patch-volume calibration visible in dated review entries); 3/4 NOT applied (A5'/A6'/A7' carry forward as A10'/A11'/A7'). 6 new commitments: A9' dev-image-manifest drift guard (Jonathan's retro insight), A10' connector × townhouse publish smoke, A11' compose-template contract test, A12' rc7 tarball publish, A13' two-pass review pre-commitment for surgery stories, A14' re-scope 49.5 to minimal viable receiver. A11'+A14' hard prerequisites for Epic 49.5; A9'+A10'+A12' must land before pilot recruitment 2026-05-25. Patch volume per story DOWN 32% vs Epic 47 (15.2 → 10.4). Earlier: Story 48.7: review → done; gate run 2026-05-18 8/8 PASS after 5 runs (3 environmental retries); Sally UX-DR2/UX-DR3 verbatim audit APPROVED.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -494,8 +494,11 @@ development_status:
   # Plan:   _bmad-output/planning-artifacts/townhouse-hs-v1-plan-2026-05-07.md
   # Persona: Drew (homelab DePIN-tinkerer); USDC-denominated; Ink TUI surface.
   # 27 stories total. Critical path: 44.1 → 45.1 → 45.2 → 45.4 → 46.1 → 47.1 → 48.1.
-  # Telemetry stack (49.x) MUST land before pilot recruitment fires
-  # (~2026-05-25 per Mary's calendar). Validation gate fires day-30 of pilot.
+  # Epic 49 re-scoped 2026-05-18: now "End-to-End TOON-Client → Townhouse HS Loop"
+  # (was: "Telemetry & Validation Gate"). New scope = prove revenue loop closes on
+  # real `.anyone` infrastructure between two boxes. Old 7-story telemetry epic
+  # archived to deferred-work.md § "Epic 49-future: Aggregated Pilot Telemetry"
+  # — re-entry gated on N ≥ 10 opted-in operators.
   # ═══════════════════════════════════════════════════════════════
 
   # Epic 44: Connector Cross-Repo Surface
@@ -552,29 +555,30 @@ development_status:
   # MERGE GATE on Story 48.1: PR cannot merge without
   # _bmad-output/design/empty-state-copy.md populated + Sally sign-off
   # (UX-DR2 enforced as AC; NFR19).
-  epic-48: backlog
-  48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation: backlog  # CRITICAL PATH; sized L; merge gate on empty-state copy library
-  48-2-two-bucket-earnings-display: backlog
-  48-3-youre-early-badge: backlog
-  48-4-activity-ticker-footer-and-activity-overlay: backlog
-  48-5-drill-subcommands: backlog  # townhouse channels/metrics/logs/peer/health
-  48-6-sats-power-user-flag: backlog  # undocumented --units=sats power-user flag
-  48-7-live-e2e-gate-operator-dashboard: backlog  # Epic 45 retro A4 — must complete before Epic 48 flips to done
-  epic-48-retrospective: optional
+  epic-48: in-progress
+  48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation: done  # CRITICAL PATH; sized L; merge gate on empty-state copy library — story file created 2026-05-13; code review 2026-05-13/14 applied 24 patches (P1–P27 minus P8/P22-partial/P23-deferred); 1070/1070 townhouse tests green; manual smoke + Sally UX-DR1/UX-DR2 sign-off remain as PR-level gates per AC #8
+  48-2-two-bucket-earnings-display: done  # sized M; code review 2026-05-14: 10 patches applied + 2 dismissed PM decisions; +25 net tests (1070→1095); ApexStrip + PeerTable mounts; UX-DR7 created; formatRelativeTime; copy promotions; import-boundary allow-list; Sally sign-off pending at PR-level per AC #13
+  48-3-youre-early-badge: done  # sized S; mounts amber+bold badge between HeroBand and Banner; triggers `lifetime < $1.00 OR uptime < 7d`; 30s wall-clock-driven rotation over COPY.heroEarlyRotation; no new deps/COPY/schema; UX-DR3 created in PR; code review 2026-05-14: 1 patch applied (asymmetric uptime-threshold boundary test), 1 deferred (UX-DR1 row-budget doc completeness), 11 dismissed; Badge 14→15 tests; townhouse total 1109→1110; all 13 ACs MET; Sally UX-DR3 sign-off remains PR-level gate per AC #10
+  48-4-activity-ticker-footer-and-activity-overlay: done  # sized M; mounts <ActivityTicker /> into FooterSlot + new <ActivityOverlay /> modal (j/k scroll, q/ESC close) backed by 200-entry useActivityBuffer ring buffer; formatUsdcMicro 4-decimal sibling of formatUsdc; UX-DR6 created in PR; first review pass 2026-05-14: 16 patches applied (P1–P9, P11–P12, P14–P18) + 2 dismissed + 8 deferred (W1–W8); second review pass 2026-05-14: 2 patches applied (Q1 loading-phase keypress guard, Q2 scroll-reconcile useEffect for resize) + 6 new deferred (W9–W14) + 14 dismissed; townhouse 1110→1143→1143 tests (no net delta from second pass — patches reuse existing test surface); Sally UX-DR6 sign-off remains PR-level gate per AC #13
+  48-5-drill-subcommands: done  # townhouse channels/metrics/logs/peer/health — story file created 2026-05-14; sized L; adds 5 CLI verbs + ConnectorAdminClient.getChannels() + GET /health host-API route + universal --json (NDJSON for logs); handlers extracted to new cli/drill-commands.ts module mirroring cli/node-commands.ts; ~+40 to +50 unit tests target (townhouse 1143 → ~1190); no new merge-gate UX-DR; smoke-run against live apex required at close-out per AC #13
+  48-6-sats-power-user-flag: done  # sized S; story file created 2026-05-15; adds USDC earnings block to `townhouse status` + undocumented `--units=sats` flag (via `--rate <N>` or `TOWNHOUSE_SATS_PER_USDC` env); single README footnote in packages/townhouse/README.md per D44-002; HELP_TEXT NOT modified; no new wires (consumes existing `aggregateEarnings` + `/admin/earnings.json`); no new merge-gate UX-DR (engineering plumbing per 48.5 precedent); ~+25–+30 tests target (1207 → 1232–1237); AC #5 tripwire enforces canonical-USDC-elsewhere invariant. Code review 2026-05-15 (two passes): 5 patches applied (P1 stderr breadcrumb, P2 source attribution, P3 runtime guard, P4 empty-flag env fallback, P5 ZodError one-liner), 9 deferred, 26 dismissed; townhouse 1207→1261 tests passing. Smoke run 2026-05-15: all 8 AC #10 checkpoints PASS via mock-connector fixture (10.1 `townhouse hs up` mitigated — pre-existing build-toolchain bug in dev tree's image-manifest, unrelated to 48.6, filed to deferred-work). PR number TBD.
+  48-7-live-e2e-gate-operator-dashboard: done  # Epic 45 retro A4 — gate run 2026-05-18 8/8 PASS; story file created 2026-05-18; sized M; ships ONE new vitest integration test (~993 lines) using ink-testing-library against live HS apex + 8 automated AC tests + inline manual smoke runbook for tmux/80×24/visual-rendering checks; carries forward 47.5 OQ-1 BLOCKED-PARTIAL (real BTP claim → Epic 50) + new BLOCKED-PARTIAL on AC #2.2 uptime threshold (no env override; PM-gated). Sally UX-DR2/UX-DR3 sign-off APPROVED 2026-05-18 (verbatim copy audit against design library). Code review 2026-05-18 (three parallel layers — Blind/Edge/Auditor): 1 patch applied (mount lifecycle try/finally wrap across Tests 1–5), 14 deferred, ~10 dismissed as by-design or pre-documented. Manual runbook captured live frame via `/tmp/runbook-48-7/mount-tui.mjs` against `epic-47-local` image; 8/8 UX-DR2/UX-DR3 token verbatim match (including bonus `Last refresh failed — retrying.` stale-data hint due to E2 missing earnings route in dev image — failure-state copy verified). Yellow badge + `[a]`/`q` overlay toggle + Ctrl-C terminal hygiene operator-confirmed. NFR13 80×24 + NFR14 tmux explicit pane test not separately exercised — rationale captured in Review Findings § "Not exercised". PR# TBD.
+  epic-48-retrospective: done  # done: epic-48-retro-2026-05-18.md — 1/4 Epic 47 retro action items fully applied + 3/4 NOT applied (A5'/A6'/A7' still owed); 6 new commitments (A9'–A14') anchored on Jonathan's dev-image-drift insight; A11'+A14' hard prerequisites for Epic 49 stories 49.5; A9'+A10'+A12' before pilot recruitment 2026-05-25
 
-  # Epic 49: Telemetry & Validation Gate
-  # Pilot operators opt in to anonymous earnings telemetry; weekly pings
-  # (jittered ±6h) feed the validation-gate dataset that decides v1.0
-  # marketing copy at $1.00 / $0.10 / <$0.10 weekly-USDC thresholds.
-  # Branches from Epic 47 (needs earnings data); independent of Epic 48
-  # (TUI not required for telemetry).
-  # MUST land before pilot recruitment fires (~2026-05-25 per Mary's calendar).
+  # Epic 49: End-to-End TOON-Client → Townhouse HS Loop
+  # Re-scoped 2026-05-18 (was: 7-story "Telemetry & Validation Gate" — archived
+  # to deferred-work.md § "Epic 49-future: Aggregated Pilot Telemetry").
+  # New scope: any TOON client targets a Townhouse operator's `.anyone` HS,
+  # publishes a Nostr event with an ILP-paid packet, and the operator observes
+  # the inbound event on `townhouse drill` AND the earnings credit on the local
+  # data plane. Three stories; pre-pilot smoke gate (n=2 = Jonathan + Drew).
+  # Settlement-chain scope: EVM + SOL on Akash devnets (Akash-Anvil +
+  # Akash-Solana per deploy/akash/leases.json); SOL leg via Mill swap peer.
+  # Mina out of scope (no Akash deployment; not on v0.1 revenue path).
+  # Depends on Epic 45 (HS), 47 (earnings), 48 (drill), 46 (peer reg for Mill),
+  # 12 + 13 (Mill / chain bridge for SOL settlement).
   epic-49: backlog
-  49-1-telemetry-payload-schema-and-zod-validator: backlog
-  49-2-opt-in-flow-and-disclosure-copy-and-state-file: backlog
-  49-3-telemetry-http-client-and-retry-buffer: backlog
-  49-4-townhouse-telemetry-cli: backlog
-  49-5-telemetry-receiver-server-and-cloudflare-and-grafana-dashboard: backlog  # BLOCKED: pending owner assignment for telemetry.toon-protocol.dev (Cloudflare account, domain, Grafana hosting)
-  49-6-pilot-day-30-decision-artifact: backlog
-  49-7-live-e2e-gate-telemetry-and-validation: backlog  # Epic 45 retro A4 — must complete before Epic 49 flips to done
+  49-1-toon-client-foreign-townhouse-hs-smoke: backlog
+  49-2-paid-packet-earnings-receipt-evm-and-sol-on-akash: backlog
+  49-3-live-e2e-gate-real-anyone-loop-akash-evm-sol: backlog  # workflow_dispatch only; not per-PR
   epic-49-retrospective: optional

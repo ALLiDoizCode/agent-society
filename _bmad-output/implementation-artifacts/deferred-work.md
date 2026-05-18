@@ -1,4 +1,80 @@
 
+## Deferred from: Epic 49 re-scope (2026-05-18) — Aggregated Pilot Telemetry
+
+Epic 49 was originally scoped as a 7-story "Telemetry & Validation Gate" — pilot operators opt in to anonymous weekly earnings pings; the median across all pilot operators fires a $1.00 / $0.10 / <$0.10 validation gate at pilot day-30 that decides v1.0 marketing copy. Receiver server at `telemetry.toon-protocol.dev` behind Cloudflare (IP-stripping at the edge per NFR5 "no PII") and Let's Encrypt SSL.
+
+**Why deferred:** v0.1 pilot reality is n=2 (Jonathan + Drew). A median of two data points is not a validation gate, it's an anecdote. The Cloudflare/Let's Encrypt/receiver-server toil tax (Story 49.5 was BLOCKED pending owner assignment for Cloudflare account + domain + Grafana hosting) buys nothing at n=2. The new Epic 49 instead targets the actual blocking job: prove the revenue loop closes end-to-end on real `.anyone` infrastructure between two boxes.
+
+**Re-entry criteria for Epic 49-future (Aggregated Pilot Telemetry):**
+- ≥ 10 opted-in operators are on the recruitment calendar (n=2 → n=5 → n=10 is the noise-floor heuristic; medians below n≈10 are too noisy to fork v1.0 marketing on)
+- Cloudflare account owner named for `telemetry.toon-protocol.dev`
+- Domain owner named for `telemetry.toon-protocol.dev`
+- Grafana hosting owner named (Story 49.5 BLOCKER)
+- Disclosure copy reviewed against the then-current pilot framing
+- FR30–FR34 / NFR5 / NFR6 / NFR10 / NFR18 numbers may be renumbered or repurposed at re-staging time (they were rewritten for the new Epic 49 on 2026-05-18)
+
+**Archived stories** (full AC bodies preserved in git history at `_bmad-output/planning-artifacts/epics-townhouse-hs-v1.md` pre-2026-05-18; see `git log --follow -p`):
+
+- **49.1 (deferred)** — Telemetry Payload Schema + Zod Validator. Versioned, zod-validated payload at `packages/townhouse/src/telemetry/schema.ts`; fields: `operatorIdHash`, `townhouseVersion`, `weekNumber`, `enabledNodes`, `earnings.apex.usdcCents`, `earnings.perPeer`, `metrics`, `flags`. `operatorIdHash = sha256(operatorPubkey + STATIC_SALT)`. No PII fields (no IP, no hostname, no `.anyone` address, no unhashed wallet pubkey, no claim IDs, no peer counterparty pubkeys). Includes `'external'` in `perPeer[].type` literal union.
+
+- **49.2 (deferred)** — Opt-In Flow + Disclosure Copy + State File. Locked disclosure copy: *"You're joining the v0.1 pilot. Townhouse will send anonymous earnings telemetry (peer-id hash, USDC/day, uptime — no IP, no wallet) so we can validate the economics before public launch. This is required for pilot participation. Type 'agree' to continue."* State file `~/.townhouse/telemetry.json` mode 0o600 with `{ optedIn, firstBootAt, lastPingAt, pendingPings }`. v1.0 release replaces "required" with optional language.
+
+- **49.3 (deferred)** — Telemetry HTTP Client + Retry Buffer. Weekly scheduled POST to `https://telemetry.toon-protocol.dev/v1/townhouse-pulse` jittered ±6h from `firstBootAt`. Retry backoff: 1h, 4h, 1d, 3d after first failure; drop after 4 weeks with `~/.townhouse/telemetry-dropped.log` entry. Telemetry never blocks operator-facing operations. Hard-stop: when `optedIn: false`, HTTP client is never instantiated.
+
+- **49.4 (deferred)** — `townhouse telemetry on|off|status` CLI. Three verbs; `--json` machine-readable output; `off` clears pending pings and disables scheduler; `on` re-prompts the disclosure copy and requires `agree`.
+
+- **49.5 (deferred — was BLOCKED)** — Telemetry Receiver Server + Cloudflare + Grafana Dashboard. Server at `telemetry.toon-protocol.dev/v1/townhouse-pulse`; Cloudflare IP-stripping at edge (origin never sees client IP — enforces NFR5); Let's Encrypt SSL; same zod schema validation as client (Story 49.1) — schema drift returns HTTP 400; Grafana dashboard renders weekly active pings + 30% WoW drop alert. Block was pending owner assignment for Cloudflare account + domain + Grafana hosting.
+
+- **49.6 (deferred)** — Pilot Day-30 Decision Artifact. Day-30 script queries telemetry for opted-in operators' week-4 records; computes per-operator `total_usdc_cents = earnings.apex.usdcCents + sum(earnings.perPeer.usdcCents)`; median is the gate input. Exactly ONE branch fires: `median ≥ $1.00/wk` → full earnings hero ("Earn passive USDC from your homelab."); `$0.10 ≤ median < $1.00/wk` → demote earnings panel ("Run yields, be early."); `median < $0.10/wk` → DELAY public launch, hero pivots to "events relayed + uptime" ("Be early to the network."). Result + raw data committed to `_bmad-output/v0.1-pilot-results.md`.
+
+- **49.7 (deferred)** — Live E2E Gate — Telemetry & Validation. End-to-end gate against deployed `telemetry.toon-protocol.dev`: fresh `~/.townhouse/`, opt-in flow, immediate POST (jitter-bypass), Grafana write within 5min, NO PII verified at receiver side, retry buffer behavior, day-30 script against fixture dataset. Mary signs off disclosure copy + opt-in flow as pilot-ready.
+
+**Open downstream questions to resolve before Epic 49-future re-staging:**
+- Should the receiver be hosted on `.anyone` HS instead of Cloudflare/Let's Encrypt? Winston flagged this as the ethos-aligned alternative; trade-off is operator-side connectivity fragility during a paywall-fragile window (party-mode discussion 2026-05-18).
+- Mary's 2026-05-25 recruitment pitch needs revising independent of Epic 49-future timing — current pitch promises "required for pilot participation" but the new Epic 49 doesn't require telemetry. The pitch should be updated to reflect what is actually being asked of pilot operators.
+
+## Deferred from: code review of 48-4-activity-ticker-footer-and-activity-overlay (2026-05-14, second pass)
+
+- W9: `key.escape` closes the overlay even when `key.ctrl` or `key.meta` is also set. The ESC branch short-circuits before the modifier guard (intentional, per the inline comment, to handle Ink's bare-ESC parsing setting `meta=true`). Side-effect: Ctrl-ESC and Alt-ESC also close. Spec AC #5 does not forbid this. Tighten with `if (key.escape && !key.ctrl)` once Ink's per-terminal ESC parsing is understood. [packages/townhouse/src/tui/components/ActivityOverlay.tsx:79-82]
+- W10: `formatRelativeTime(iso, now)` returns `"NaN mo ago"` when `now` is invalid. `iso === null` and `Number.isFinite(ms)` guard the `iso` arg; `now` is implicitly trusted. Only triggered by a test fixture passing `new Date(NaN)` — production default is `new Date()`. Cheap fix: `if (!Number.isFinite(now.getTime())) return '?';` at line 5. [packages/townhouse/src/tui/format.ts:4-17]
+- W11: ActivityOverlay row React `key` includes `scroll + i`, forcing full row remount on every `j`/`k`. The 5-field `claimKeyForReact(c)` is already unique within the visible window. Perf, not correctness. Drop the `-${scroll + i}` suffix. [packages/townhouse/src/tui/components/ActivityOverlay.tsx:111]
+- W12: `useActivityBuffer` runs full Map/sort/trim every 2s tick when `incoming === []` AND buffer non-empty (prolonged connector outage with a settled prior buffer). Same-check bails on `setBuffer` so correctness is preserved; 200 entries of work wasted per tick. Tighten the early-return: `if (incoming.length === 0) return;` at line 20. [packages/townhouse/src/tui/use-activity-buffer.ts:18-34]
+- W13: Direction-unknown rendering is duplicated across two parallel ternaries (`arrowFor` + `directionLabel`), each with its own `directionUnknown` fallback. Future change to one without the other → silent row misalignment. Consolidate into a single `directionMeta(d): { arrow, label }` helper. [packages/townhouse/src/tui/components/ActivityOverlay.tsx:25-35, ActivityTicker.tsx:17-19]
+- W14: Sort tie (two claims sharing `at`) surfaces an arbitrary peer. Stable sort uses wire order; if a tied-`at` claim is buffer-only (not in current wire), ticker and overlay can disagree on the newest. Add a tiebreaker to `sortKey` (`peerId`, arrival index, or composite). Low-frequency event. [packages/townhouse/src/tui/components/ActivityTicker.tsx:26, use-activity-buffer.ts:27]
+
+## Deferred from: code review of 48-4-activity-ticker-footer-and-activity-overlay (2026-05-14)
+
+- W1: `useActivityBuffer` effect dep array omits `buffer`. Spec-prescribed (Task 9.1 sample code uses `}, [incoming]);` verbatim). React's per-render closure refresh means the buffer is read correctly each fire — the "stale closure" concern is a false positive. However, `react-hooks/exhaustive-deps` would flag this if strict. Idiomatic fix: `setBuffer(prev => ...)` with `buffer` removed from merge body. [packages/townhouse/src/tui/use-activity-buffer.ts:34]
+- W2: `formatUsdcMicro('-1', 6)` shows `-$0.0000`. Mirrors pre-existing 48.1 pattern in `formatUsdc`. Both formatters check `value !== 0n` against the raw bigint, not the displayed digits — so negative sub-precision values keep their sign even after truncation rounds them to zero. The "negative-zero collapses correctly" Dev Notes claim is incorrect for sub-precision. Cross-cutting fix; reconcile with `formatUsdc` in a follow-up. [packages/townhouse/src/tui/format.ts:38]
+- W3: `columnsProp === 0` falls through to width 0 because `??` preserves 0. Matches `PeerTable.tsx:54` precedent. Test-contract concern only; production never passes 0. [packages/townhouse/src/tui/components/ActivityOverlay.tsx:51]
+- W4: `formatUsdcMicro` has no defensive guard for non-integer or negative `scale` — `BigInt(NaN)` or `BigInt(-1)` would throw `RangeError`. Wire is frozen at `assetScale: integer >= 0`, so this is theoretical today. Harden if the formatter ever consumes user input. [packages/townhouse/src/tui/format.ts:28-29]
+- W5: `formatTime` requires full-ICU Node build to render `'en-GB'` `HH:MM:SS` deterministically. On `small-icu` Node builds, `'en-GB'` locale data is absent and `toLocaleTimeString` silently falls back to `'en-US'` (`"2:32:08 PM"`), breaking UX-DR6 column alignment. Add an `intl-icu` runtime check to `townhouse hs up` preflight in a follow-up story. [packages/townhouse/src/tui/components/ActivityOverlay.tsx:13]
+- W6: `[a]` → quick `q` race during overlay `useInput` registration cycle. Ink's input dispatch is synchronous on stdin readable, but `useInput` registration is async via `useEffect`. Same-batch `[a][q]` keypresses can drop the `q`. `app-keybindings.test.tsx` already works around with `setTimeout(50ms)` between keys — evidence the race exists. Hard to fix without a global keybinding dispatcher above both surfaces. [packages/townhouse/src/tui/App.tsx:26-32 + ActivityOverlay.tsx:60-72]
+- W7: Keybinding tests rely on `setTimeout` delays not `act()`/flush primitives. `ink-testing-library` does not expose `act()`. Heavy-loaded CI (Anvil + Solana + Mill containers) may flake on the 50ms guards. Fix would need either a longer delay, fake timers (contract change), or a Townhouse-side `flushInk()` helper. [packages/townhouse/src/tui/app-keybindings.test.tsx:430-498]
+- W8: `MIN_OVERLAY_WIDTH = 40` causes row wrapping at narrow terminals. Longest row is ~55 cols; at modal width 40 (the clamp floor), Ink wraps to 2 lines per claim, halving effective `visibleRows` and shifting scroll math. UX-DR6 covers 80ch and 120ch but not <56-col degradation. The `columns=40` test only asserts the title appears — doesn't detect wrapping. Document the <56-col contract in UX-DR6 as a follow-up; <56-col is below Townhouse's documented `80×24` baseline. [packages/townhouse/src/tui/components/ActivityOverlay.tsx:7]
+
+## Deferred from: code review of 48-3-youre-early-badge (2026-05-14)
+
+- UX-DR1 row-budget completeness — `_bmad-output/design/townhouse-tui-wireframe.md:10` documents only the badge-visible case (11/13). The non-visible case (10/14) is not stated. Cosmetic doc gap; no impact on code or design intent. Defer until UX-DR1 sees its next structural edit. [_bmad-output/design/townhouse-tui-wireframe.md:10]
+
+## Deferred from: code review of 48-1-ink-tui-scaffold-with-hero-band-and-empty-state-foundation (2026-05-13)
+
+- W1: No automated tmux capture-pane fixture. AC #7 reads as automated ("spawn under `tmux new-session -d -s test`, assert `\x1b[?1049h` NOT emitted"); dev relegated to manual Task 10.5 (`[ ]` unchecked at close). Add `__integration__/tmux-altscreen.test.ts` once a docker-based tmux runner is wired into CI. [packages/townhouse/src/__integration__/ — missing fixture]
+- W2: `patchConsole: false` may leak connector/docker logs into rendered TUI frame. Spec-mandated for tmux alt-screen avoidance (AC #7 + Dev Notes "tmux Compatibility"). Reconciliation between "no alt-screen" and "no log corruption" needs Sally + a real tmux smoke before decision. [packages/townhouse/src/tui/index.ts:14]
+- W3: `App.tsx` loading branch returns bare `<Text>` outside the column layout, briefly breaking the row-budget reservation (~30ms window pre-first-fetch). Consider rendering hero-with-zeros + a `Banner({ bannerKey: 'loading' })` instead. [packages/townhouse/src/tui/App.tsx:20-22]
+- W4: `Banner` not wrapped in `<Box>` — wraps to 2 rows if copy text exceeds 80ch. Fits today (longest banner ~69 chars); fragile to copy edits. [packages/townhouse/src/tui/components/Banner.tsx:16]
+- W5: `useEarnings` effect deps include `fetchImpl`; passing inline arrow restarts the interval every render. `mountTui({})` doesn't hit this in production; test mocks are stable. Add `useRef` capture once a real caller passes an inline fetcher. [packages/townhouse/src/tui/use-earnings.ts:107]
+- W6: Race between `abortController = null` in `finally` and the next interval tick's `doFetch`. Bounded by `cancelled` flag at fetch entry, so the worst case is a non-aborted in-flight that no longer mutates state. [packages/townhouse/src/tui/use-earnings.ts:41-90]
+- W7: No min-width gate in `shouldRenderInk` — a 20-column terminal renders unreadable layout instead of falling back to non-TTY ribbon-only output. Component-level degrade ladder covers ≥40ch reasonably; entry-gate min-width is a UX call. [packages/townhouse/src/tui/tty-detect.ts]
+- W8: Ribbon vs Ink stdout race window between `ribbon.start('live', hostname)` and `mountTui()`. Ribbon's `'live'` is a one-shot print; not animated. If a future refactor adds ongoing ribbon writes, the two will fight for stdout. [packages/townhouse/src/cli.ts:1074-1083]
+- W9: SIGINT cleanup ordering — Ink's `exitOnCtrlC: true` resolves `waitUntilExit()` and the parent `finally` runs `walletManager.lock()`. Node's default SIGINT could in theory exit-first; observed stable, but no explicit `process.once('SIGINT', deferShutdown)` wrapper. [packages/townhouse/src/cli.ts:1079-1092]
+- W10: `vi.mock('./tui/index.js')` vs dynamic `import('./tui/index.js')` — Vitest path-resolution works by happy coincidence (both specifiers normalize to the same absolute path). A future refactor to `'../tui/...'` or no-extension would silently un-mock. Add `vi.isMockFunction(mountTui)` after the dynamic import to make the contract explicit. [packages/townhouse/src/cli.hs.test.ts:5,23-29]
+- W11: `RecentClaim` re-exported in `tui/types.ts` and seeded in `EMPTY_EARNINGS` but never rendered in this story. Intentional staging for Story 48.4 Activity overlay; revisit when 48.4 lands. [packages/townhouse/src/tui/types.ts:2]
+- W12: `vitest.config.ts` `exclude: ['src/__integration__/**']` doesn't cover hypothetical `.tsx` integration tests. None exist today; tighten the glob if/when needed. [packages/townhouse/vitest.config.ts:6]
+- W13: `CI === 'true'` strict equality misses CI providers using `CI=1` etc. Mirrors the `onboarding-ribbon.ts` precedent per spec Task 1.2; cross-cutting tightening for both files at the same time. [packages/townhouse/src/tui/tty-detect.ts:3]
+- W15 (P23 deferred from patch pass): `copy-sync.test.ts` uses `markdown.includes(value)` — substring match. Anti-pattern doc says "verbatim (backtick-wrapped)" but the test doesn't enforce backticks/fences. Tighten to either `\`<value>\`` inline OR fenced block once the markdown table section is restructured. [packages/townhouse/src/tui/copy-sync.test.ts:34]
+- W14: Production `$?.??` fallback for malformed `formatUsdc` input silently hides upstream bugs. Intentional defensive posture per Task 7.1 — but the cost (silent malformed display vs crash) is asymmetric. Consider emitting a one-shot `console.error` (after the TUI exits) or routing through a telemetry hook. [packages/townhouse/src/tui/format.ts:4-7]
+
 ## Deferred from: code review of 46-4-live-e2e-gate-lazy-peer-node-provisioning (2026-05-11)
 
 - `waitForExit` resolves on the `'exit'` event but Node only guarantees stdout pipe drain by `'close'`. Single-line JSON outputs rarely flake, but a chatty CLI or loaded runner can produce a truncated `lastLine` → `JSON.parse('')` failure. Shared helper used by every integration test. [packages/townhouse/src/__integration__/_test-helpers.ts:127-139]
@@ -329,3 +405,60 @@ _Six cross-repo patches (P3, P4, P5, P6, P7, Q1) shipped in lock-step via [conne
 - Hardcoded compose volume names in `cleanupContainersAndVolumes` (`townhouse-hs-anon`, `townhouse-hs-{town,mill,dvm}-data`) assume compose-template stability — silent leak if templates rename. Label-based volume discipline would fix this cross-test. [`packages/townhouse/src/__integration__/townhouse-earnings-e2e.test.ts:150-160`]
 - UTC midnight rollover crossing during long `beforeAll` could shift the snapshot baseline mid-run; the seed's `ts` is captured once but the route reads wall-clock for UTC boundaries — pre-existing snapshot system design, not gate-introduced. [`packages/townhouse/src/__integration__/townhouse-earnings-e2e.test.ts:200-213`]
 - SOCKS5 dial-loop log noise when the synthetic external peer's `wss://gate-external.example` is dialed through the connector's HS-mode transport — connector behavior; suppressing requires a `transport: 'direct'` option on `registerPeer` (per connector v3.6.2 PR #69's per-peer transport selection). Outside this story scope. [`packages/townhouse/src/__integration__/townhouse-earnings-e2e.test.ts:382-388`]
+
+## Deferred from: code review of 48-5-drill-subcommands (2026-05-15)
+
+- `/health` route mixes `process.uptime()` (host-API) with package version — semantically misleading, but satisfies AC #7 as written. [packages/townhouse/src/api/build-app.ts:89-94]
+- `createRequire('../../package.json')` is fragile across build-output layouts but matches existing townhouse pattern; module-load failure surfaces immediately in tests. [packages/townhouse/src/api/build-app.ts:74-80]
+- `handlePeerDetail` collapses 503/timeouts/auth-fail into a single "endpoint unavailable" message; spec'd UX per AC #4. [packages/townhouse/src/cli/drill-commands.ts:1026-1034, 1070, 1090]
+- `lastActivity` no ISO validation — non-ISO string renders `?` per `formatRelativeTime` contract; contract drift detection belongs at the connector boundary. [packages/townhouse/src/cli/drill-commands.ts:707, 1098]
+- `emitJsonError` doesn't await stdout drain — Node flushes on natural exit (no sync `process.exit(1)` in these paths); false positive in practice. [packages/townhouse/src/cli/drill-commands.ts:657-660]
+- `AbortSignal.timeout` for `probeHostApi` body-read — Node 20+ fetch respects signal abort on the response stream; non-issue in practice. [packages/townhouse/src/cli/drill-commands.ts:1129-1148]
+- `channels` table widths break on Unicode wide chars / `truncate16` may split UTF-16 surrogate pairs — channelId/peerId/chain are hex/ASCII strings in practice. [packages/townhouse/src/cli/drill-commands.ts:649-651, 711-718]
+- `computeOverall` treats `n/a` as healthy (asymmetric vs `degraded`) — intentional per spec; `n/a` means "feature off", not "broken". [packages/townhouse/src/cli/drill-commands.ts:1225-1236]
+- `handlePeerDetail` may TypeError on `peer.ilpAddresses === undefined` if connector contract drifts — connector contract canary covers; out-of-scope for this story. [packages/townhouse/src/cli/drill-commands.ts:1053-1057]
+- AC #9 PARTIAL — help-text constants `CHANNELS_HELP`/`LOGS_HELP`/`PEER_HELP`/`HEALTH_HELP` exported from `drill-commands.ts` but cli.ts duplicates the lines inline; cosmetic dual-source-of-truth. [packages/townhouse/src/cli.ts:206-209]
+- AC #10 PARTIAL — `channels` placement in HELP_TEXT not between `init` and `metrics` per spec ordering; cosmetic. [packages/townhouse/src/cli.ts:206-209]
+- AC #13 deferred per spec — live smoke run gated to PR close-out, not the in-session review.
+
+## Deferred from: code review of 48-6-sats-power-user-flag (2026-05-15)
+
+- `addDecimalStrings` validates only `b`, not `a` — asymmetric defense pattern copied verbatim from `HeroBand.tsx`; fixing here diverges from the source helper. [packages/townhouse/src/cli/status-earnings.ts:16-23]
+- `addDecimalStrings` silently drops malformed values without logging — same HeroBand-parity concern; cross-cutting cleanup belongs in a shared utility so both the TUI and CLI surfaces diagnose schema drift uniformly. [packages/townhouse/src/cli/status-earnings.ts:16-23]
+- `--rate` silently discarded when `--units` is `usdc` or unspecified — operator misuse (typoed `--units`); not spec-required and adds no correctness defect, but a warn-on-discard would catch the common typo. [packages/townhouse/src/cli.ts:1422-1434]
+- `usdcMicroToSats` accepts rounded-but-unsafe rates from direct callers — `resolveSatsRate` is the only caller in the cli flow and defends with `Number.isSafeInteger`; direct-caller defense-in-depth (relevant if the helper is reused in TUI/JSON-export/library paths). [packages/townhouse/src/cli/status-earnings.ts:52-60]
+- AC #10 close-out — smoke run against live apex + Story Close-Out Checklist boxes (Tasks 10.1-10.8, 11.1-11.2) are operator-side gates before flipping sprint-status to `done`; this Review Findings entry fulfills 11.1.
+
+## Deferred from: second-pass code review of 48-6-sats-power-user-flag (2026-05-15)
+
+- Stdout label "Earnings (USDC): unavailable" maps local config errors to "connector unavailable" — stderr breadcrumb (P1) gives operator the disambiguation signal, but the stdout label still reads as a network-side fault. Full fix would extend `AggregatedEarnings.status` enum with a `'local_error'` variant and add a render branch — cross-cutting refactor. [packages/townhouse/src/cli/status-earnings.ts:84-86]
+- Test name "fractional USDC truncates (floor division)" mislabels truncation-toward-zero on negative inputs — BigInt division truncates toward zero, then sign is re-applied. For positives, truncate==floor; for negatives they differ (floor(-150000/1000000) is -1; truncation is 0). Behavior is correct and tested, only the doc/test-name needs cleanup. [packages/townhouse/src/cli/status-earnings.test.ts:111]
+- `resolveEarnings` catch swallows ALL throws on a contract assumption about `aggregateEarnings` — comment encodes the contract but the type system doesn't enforce it. If `aggregateEarnings` ever grows a non-connector failure mode, breadcrumb message could mislead. [packages/townhouse/src/cli.ts:438-444]
+- P1 breadcrumb on local config corruption does NOT set `process.exitCode` — shell pipelines (`townhouse status && ...`) cannot detect a stale `nodes.yaml`. Matches existing graceful-degradation pattern, but inconsistent with `--units=sats` no-rate path which DOES set exitCode=1 on a comparable local error. Debatable UX choice. [packages/townhouse/src/cli.ts:438-444]
+
+## Deferred from: smoke-run blockers during 48.6 close-out (2026-05-15)
+
+- **Dev-tree `townhouse hs up` is broken** — two cumulative build-toolchain bugs surfaced when attempting AC #10 smoke run:
+  1. tsup emits duplicate `import { createRequire } from "module"` in `dist/chunk-*.js` (one auto-prepended at line 1, one from `build-app.ts:13` import — both survive into the bundle → `SyntaxError: Identifier 'createRequire' has already been declared`). Reproduces on a pristine `epic-48` build with zero 48.6 changes (verified by stashing and rebuilding). Workaround: `sed -i '<line>d' dist/chunk-*.js` to remove the duplicate.
+  2. `_pkgVersion` resolves `'../../package.json'` relative to the dist chunk path, not the source. Fix in source would change `build-app.ts:18` from `createRequire(import.meta.url)('../../package.json')` to use a build-time inlined version, or `'../package.json'` if always shipped under `dist/`. Workaround: `sed -i 's|"\.\./\.\./package\.json"|"../package.json"|g' dist/chunk-*.js`.
+  3. `dist/image-manifest.json` is only produced by the npm-publish CI workflow, so `townhouse hs up` always fails in dev with "HS mode requires a digest-pinned image manifest". The user's installed rc5 manifest is `{}` empty (pre-existing rc5 tarball bug — town#43 lineage). Workaround for smoke: use the dev-infra script + mock-connector fixture instead.
+  These three together block every dev-tree story that needs to verify HS-mode behavior end-to-end. Cross-cutting; should be filed as its own story under Epic 22 (Restore Green CI) or a new build-hardening epic.
+
+## Deferred from: code review of 48-7-live-e2e-gate-operator-dashboard (2026-05-18)
+
+All findings target `packages/townhouse/src/__integration__/townhouse-tui-e2e.test.ts` — the Story 48.7 gate test file. Gate passed 8/8 on 2026-05-18; these are test-quality / future-flake hardening items, not gate blockers.
+
+- `addedPeerId.slice(0, 4)` substring at line 835 is trivially satisfied by 'town' in any container name or copy — false-positive risk. Tighten to a full peer-row regex (e.g. `/town\s+town\s+USDC/`).
+- `$0.50` substring at line 839 matches 4 cells (TODAY/MONTH/YEAR/LIFETIME) — cannot isolate MONTH. Anchor with column context: `/MONTH\s+\$0\.50/m`.
+- Snapshot seed uses `assetCode: 'USDC'` at line 283 while 47.5 precedent (`townhouse-earnings-e2e.test.ts:351`) and connector default may use `'USD'`. Dormant in 48.7 (Tests 1-2 don't read seed); fails latently if a future gate-tightening asserts delta values.
+- Tests 4 and 5 use fixed `sleep()` budgets (300ms / 700ms / 1500ms) instead of polling `waitForFrame(predicate, {budget})` — flake-prone under CI load (vitest pool=fork on shared runners). Lines 672, 681, 706, 752, 760.
+- `probePortFree` at line 210 treats 1s connect timeout as "port free" — inverted semantics. A slow-SYN-ACK bound port falsely reports free, causing later `hs up` to fail with a Docker error instead of a friendly preflight message.
+- `cleanupContainersAndVolumes` at lines 132-147 doesn't `docker network rm townhouse-hs-net` — network artifacts persist across runs. Idempotent today but a daemon-version drift could surface routing issues.
+- Cleanup at lines 414-444 doesn't `docker stop -t 5` before `rmSync(tmpDir, { force: true })` — risk of `EBUSY` on overlayfs if containers are still flushing bind-mounted files.
+- Test 7 `lo.process.kill('SIGKILL')` at lines 906-911 leaves dockerode follow-stream pending; no `await waitForExit`. On the next suite iteration, reconnect attempts may collide with cleanup.
+- `instance.lastFrame() ?? ''` pattern (~11 sites) masks `undefined` (no render yet) — diagnostic obscures "Ink failed to mount" vs "frame missing token". Distinguish via `expect(instance.lastFrame()).toBeDefined()` first.
+- Missing 47.5 P5 cross-check: `docker exec ${HS_API_NAME} stat -c "%a %s" /.townhouse/earnings-snapshots.jsonl` to prove the bind mount and seed reached the container.
+- Port pre-flight at lines 214-228 only probes 9401/28090 — misses 9400 (`townhouse-test-infra.sh` Fastify), 28700+ container-internal ports. Pre-warm collision possible if test-infra is left running.
+- `/api/transport` readiness check at lines 340-343 doesn't confirm `/api/earnings` plugin registered. Plugin-order regression would surface as opaque 404 in Test 2.
+- `parseLastJsonLine` at lines 177-193 walks back to first line starting with `{` — could parse a structured log envelope as the success body. Mitigated today by `expect(addBody.ok).toBe(true)` at line 383 but fragile.
+- ActivityTicker disjunction `/no settlements yet|press \[a\] when|activity arrives|\[a\] activity/` at lines 485-487 accepts wildly different ticker states — broad assertion misses regressions where ticker copy renders the wrong empty-state variant.
