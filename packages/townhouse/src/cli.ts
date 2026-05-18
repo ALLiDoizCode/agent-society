@@ -451,7 +451,7 @@ function formatLocalEarningsError(err: unknown): string {
     'issues' in err &&
     Array.isArray((err as { issues: unknown }).issues)
   ) {
-    const issues = (err as { issues: Array<{ path?: unknown; message?: unknown }> }).issues;
+    const issues = (err as { issues: { path?: unknown; message?: unknown }[] }).issues;
     const parts = issues
       .map((i) => {
         const path = Array.isArray(i.path) && i.path.length > 0 ? i.path.join('.') : '<root>';

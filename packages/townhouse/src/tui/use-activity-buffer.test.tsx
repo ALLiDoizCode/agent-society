@@ -16,23 +16,6 @@ function makeClaim(overrides: Partial<RecentClaim> = {}): RecentClaim {
   };
 }
 
-function renderHookBuffer(incoming: RecentClaim[] | undefined): { getBuffer: () => RecentClaim[] } {
-  let captured: RecentClaim[] = [];
-
-  function Probe({ incoming: inc }: { incoming: RecentClaim[] | undefined }): React.ReactElement {
-    const buf = useActivityBuffer(inc);
-    useEffect(() => {
-      captured = buf;
-    }, [buf]);
-    return React.createElement(React.Fragment, null);
-  }
-
-  const { rerender } = render(React.createElement(Probe, { incoming }));
-  void rerender;
-
-  return { getBuffer: () => captured };
-}
-
 describe('useActivityBuffer', () => {
   it('first call returns incoming recentClaims sorted DESC by at', async () => {
     const older = makeClaim({ peerId: 'old', at: '2026-05-14T10:00:00Z' });

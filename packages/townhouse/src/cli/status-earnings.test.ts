@@ -5,7 +5,6 @@ import {
   formatSatsRow,
   renderEarningsSection,
   resolveSatsRate,
-  USDC_SCALE,
 } from './status-earnings.js';
 import type { AggregatedEarnings } from '../earnings/aggregator.js';
 
@@ -97,8 +96,6 @@ describe('computeUsdcScalars', () => {
 // ─── usdcMicroToSats ─────────────────────────────────────────────────────────
 
 describe('usdcMicroToSats', () => {
-  const SCALE = USDC_SCALE; // 6
-
   it('zero USDC → 0 sats', () => {
     expect(usdcMicroToSats('0', 1500)).toBe('0');
   });

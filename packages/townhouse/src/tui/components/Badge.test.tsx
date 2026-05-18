@@ -5,7 +5,6 @@ import { Badge } from './Badge.js';
 import { COPY } from '../copy.js';
 import type { AggregatedEarnings } from '../types.js';
 
-const EMPTY_APEX: AggregatedEarnings['apex'] = { routingFees: {} };
 const EMPTY_PEERS: AggregatedEarnings['peers'] = [];
 
 function makeApex(lifetime: string): AggregatedEarnings['apex'] {
