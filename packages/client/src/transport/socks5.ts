@@ -68,8 +68,15 @@ export function createSocks5WebSocketFactory(
 
   const agent = new SocksProxyAgent(socksProxy);
 
+  // CJS/ESM interop: `require('ws')` returns the WebSocket class directly in CJS
+  // (no `.default` property). `WS.default` would be undefined in that context.
+  // Accept either shape so this factory works in both CJS and ESM environments.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const WSClass = ((WS as any).default ?? WS) as unknown as typeof WSModule.prototype.constructor;
+
   return (url: string) =>
-    new WS.default(url, { agent }) as unknown as WebSocket;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    new (WSClass as any)(url, { agent }) as unknown as WebSocket;
 }
 
 /**

@@ -1,5 +1,5 @@
 # generated: 2026-04-27
-# last_updated: 2026-05-18 (Epic 48 retrospective: optional → done. epic-48-retro-2026-05-18.md saved. 1/4 Epic 47 action items fully applied (A8' patch-volume calibration visible in dated review entries); 3/4 NOT applied (A5'/A6'/A7' carry forward as A10'/A11'/A7'). 6 new commitments: A9' dev-image-manifest drift guard (Jonathan's retro insight), A10' connector × townhouse publish smoke, A11' compose-template contract test, A12' rc7 tarball publish, A13' two-pass review pre-commitment for surgery stories, A14' re-scope 49.5 to minimal viable receiver. A11'+A14' hard prerequisites for Epic 49.5; A9'+A10'+A12' must land before pilot recruitment 2026-05-25. Patch volume per story DOWN 32% vs Epic 47 (15.2 → 10.4). Earlier: Story 48.7: review → done; gate run 2026-05-18 8/8 PASS after 5 runs (3 environmental retries); Sally UX-DR2/UX-DR3 verbatim audit APPROVED.)
+# last_updated: 2026-05-18 (Story 49.1: backlog → ready-for-dev. Story file 49-1-toon-client-foreign-townhouse-hs-smoke.md created (sized L: foreign-client harness + two-apex boot, ~700–900 line test file, 16–22 min wall budget). epic-49 flipped backlog → in-progress per first-story-of-epic rule. 4 ACs across the .anyone-transport smoke loop: (#1) foreign client publishes via .anyone HS, (#2) inbound event surfaces on drill verbs (channels/metrics/logs), (#3) real .anyone transport invariants (regex + socks5h:// scheme + 127.0.0.1 host bindings), (#4) peer-type resolver tags B as 'external' (with 47.5 4B.2 BLOCKED-PARTIAL fallback to direct-resolver invocation). Three OQs surfaced in Dev Notes (OQ-1 foreign-client architecture; OQ-2 publish path; OQ-3 port-conflict resolution). Settlement-chain scope deferred to 49.2. Manual cross-machine probe optional → flagged for 49.3 close-out. Earlier: Epic 48 retrospective: optional → done. epic-48-retro-2026-05-18.md saved. 1/4 Epic 47 action items fully applied (A8' patch-volume calibration visible in dated review entries); 3/4 NOT applied (A5'/A6'/A7' carry forward as A10'/A11'/A7'). 6 new commitments: A9' dev-image-manifest drift guard (Jonathan's retro insight), A10' connector × townhouse publish smoke, A11' compose-template contract test, A12' rc7 tarball publish, A13' two-pass review pre-commitment for surgery stories, A14' re-scope 49.5 to minimal viable receiver. A11'+A14' hard prerequisites for Epic 49.5; A9'+A10'+A12' must land before pilot recruitment 2026-05-25. Patch volume per story DOWN 32% vs Epic 47 (15.2 → 10.4). Earlier: Story 48.7: review → done; gate run 2026-05-18 8/8 PASS after 5 runs (3 environmental retries); Sally UX-DR2/UX-DR3 verbatim audit APPROVED.)
 # project: toon
 # project_key: NOKEY
 # tracking_system: file-system
@@ -577,8 +577,8 @@ development_status:
   # Mina out of scope (no Akash deployment; not on v0.1 revenue path).
   # Depends on Epic 45 (HS), 47 (earnings), 48 (drill), 46 (peer reg for Mill),
   # 12 + 13 (Mill / chain bridge for SOL settlement).
-  epic-49: backlog
-  49-1-toon-client-foreign-townhouse-hs-smoke: backlog
+  epic-49: in-progress
+  49-1-toon-client-foreign-townhouse-hs-smoke: review
   49-2-paid-packet-earnings-receipt-evm-and-sol-on-akash: backlog
   49-3-live-e2e-gate-real-anyone-loop-akash-evm-sol: backlog  # workflow_dispatch only; not per-PR
   epic-49-retrospective: optional

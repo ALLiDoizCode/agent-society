@@ -857,6 +857,12 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@toon-protocol/client':
+        specifier: workspace:^
+        version: link:../client
+      '@toon-protocol/relay':
+        specifier: workspace:^
+        version: link:../relay
       '@types/dockerode':
         specifier: ^3.3.0
         version: 3.3.47
