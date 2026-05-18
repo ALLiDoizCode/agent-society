@@ -494,8 +494,11 @@ development_status:
   # Plan:   _bmad-output/planning-artifacts/townhouse-hs-v1-plan-2026-05-07.md
   # Persona: Drew (homelab DePIN-tinkerer); USDC-denominated; Ink TUI surface.
   # 27 stories total. Critical path: 44.1 → 45.1 → 45.2 → 45.4 → 46.1 → 47.1 → 48.1.
-  # Telemetry stack (49.x) MUST land before pilot recruitment fires
-  # (~2026-05-25 per Mary's calendar). Validation gate fires day-30 of pilot.
+  # Epic 49 re-scoped 2026-05-18: now "End-to-End TOON-Client → Townhouse HS Loop"
+  # (was: "Telemetry & Validation Gate"). New scope = prove revenue loop closes on
+  # real `.anyone` infrastructure between two boxes. Old 7-story telemetry epic
+  # archived to deferred-work.md § "Epic 49-future: Aggregated Pilot Telemetry"
+  # — re-entry gated on N ≥ 10 opted-in operators.
   # ═══════════════════════════════════════════════════════════════
 
   # Epic 44: Connector Cross-Repo Surface
@@ -562,19 +565,20 @@ development_status:
   48-7-live-e2e-gate-operator-dashboard: done  # Epic 45 retro A4 — gate run 2026-05-18 8/8 PASS; story file created 2026-05-18; sized M; ships ONE new vitest integration test (~993 lines) using ink-testing-library against live HS apex + 8 automated AC tests + inline manual smoke runbook for tmux/80×24/visual-rendering checks; carries forward 47.5 OQ-1 BLOCKED-PARTIAL (real BTP claim → Epic 50) + new BLOCKED-PARTIAL on AC #2.2 uptime threshold (no env override; PM-gated). Sally UX-DR2/UX-DR3 sign-off APPROVED 2026-05-18 (verbatim copy audit against design library). Code review 2026-05-18 (three parallel layers — Blind/Edge/Auditor): 1 patch applied (mount lifecycle try/finally wrap across Tests 1–5), 14 deferred, ~10 dismissed as by-design or pre-documented. Manual runbook captured live frame via `/tmp/runbook-48-7/mount-tui.mjs` against `epic-47-local` image; 8/8 UX-DR2/UX-DR3 token verbatim match (including bonus `Last refresh failed — retrying.` stale-data hint due to E2 missing earnings route in dev image — failure-state copy verified). Yellow badge + `[a]`/`q` overlay toggle + Ctrl-C terminal hygiene operator-confirmed. NFR13 80×24 + NFR14 tmux explicit pane test not separately exercised — rationale captured in Review Findings § "Not exercised". PR# TBD.
   epic-48-retrospective: done  # done: epic-48-retro-2026-05-18.md — 1/4 Epic 47 retro action items fully applied + 3/4 NOT applied (A5'/A6'/A7' still owed); 6 new commitments (A9'–A14') anchored on Jonathan's dev-image-drift insight; A11'+A14' hard prerequisites for Epic 49 stories 49.5; A9'+A10'+A12' before pilot recruitment 2026-05-25
 
-  # Epic 49: Telemetry & Validation Gate
-  # Pilot operators opt in to anonymous earnings telemetry; weekly pings
-  # (jittered ±6h) feed the validation-gate dataset that decides v1.0
-  # marketing copy at $1.00 / $0.10 / <$0.10 weekly-USDC thresholds.
-  # Branches from Epic 47 (needs earnings data); independent of Epic 48
-  # (TUI not required for telemetry).
-  # MUST land before pilot recruitment fires (~2026-05-25 per Mary's calendar).
+  # Epic 49: End-to-End TOON-Client → Townhouse HS Loop
+  # Re-scoped 2026-05-18 (was: 7-story "Telemetry & Validation Gate" — archived
+  # to deferred-work.md § "Epic 49-future: Aggregated Pilot Telemetry").
+  # New scope: any TOON client targets a Townhouse operator's `.anyone` HS,
+  # publishes a Nostr event with an ILP-paid packet, and the operator observes
+  # the inbound event on `townhouse drill` AND the earnings credit on the local
+  # data plane. Three stories; pre-pilot smoke gate (n=2 = Jonathan + Drew).
+  # Settlement-chain scope: EVM + SOL on Akash devnets (Akash-Anvil +
+  # Akash-Solana per deploy/akash/leases.json); SOL leg via Mill swap peer.
+  # Mina out of scope (no Akash deployment; not on v0.1 revenue path).
+  # Depends on Epic 45 (HS), 47 (earnings), 48 (drill), 46 (peer reg for Mill),
+  # 12 + 13 (Mill / chain bridge for SOL settlement).
   epic-49: backlog
-  49-1-telemetry-payload-schema-and-zod-validator: backlog
-  49-2-opt-in-flow-and-disclosure-copy-and-state-file: backlog
-  49-3-telemetry-http-client-and-retry-buffer: backlog
-  49-4-townhouse-telemetry-cli: backlog
-  49-5-telemetry-receiver-server-and-cloudflare-and-grafana-dashboard: backlog  # BLOCKED: pending owner assignment for telemetry.toon-protocol.dev (Cloudflare account, domain, Grafana hosting)
-  49-6-pilot-day-30-decision-artifact: backlog
-  49-7-live-e2e-gate-telemetry-and-validation: backlog  # Epic 45 retro A4 — must complete before Epic 49 flips to done
+  49-1-toon-client-foreign-townhouse-hs-smoke: backlog
+  49-2-paid-packet-earnings-receipt-evm-and-sol-on-akash: backlog
+  49-3-live-e2e-gate-real-anyone-loop-akash-evm-sol: backlog  # workflow_dispatch only; not per-PR
   epic-49-retrospective: optional

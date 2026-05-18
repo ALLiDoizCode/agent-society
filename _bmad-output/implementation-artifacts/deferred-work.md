@@ -1,4 +1,38 @@
 
+## Deferred from: Epic 49 re-scope (2026-05-18) — Aggregated Pilot Telemetry
+
+Epic 49 was originally scoped as a 7-story "Telemetry & Validation Gate" — pilot operators opt in to anonymous weekly earnings pings; the median across all pilot operators fires a $1.00 / $0.10 / <$0.10 validation gate at pilot day-30 that decides v1.0 marketing copy. Receiver server at `telemetry.toon-protocol.dev` behind Cloudflare (IP-stripping at the edge per NFR5 "no PII") and Let's Encrypt SSL.
+
+**Why deferred:** v0.1 pilot reality is n=2 (Jonathan + Drew). A median of two data points is not a validation gate, it's an anecdote. The Cloudflare/Let's Encrypt/receiver-server toil tax (Story 49.5 was BLOCKED pending owner assignment for Cloudflare account + domain + Grafana hosting) buys nothing at n=2. The new Epic 49 instead targets the actual blocking job: prove the revenue loop closes end-to-end on real `.anyone` infrastructure between two boxes.
+
+**Re-entry criteria for Epic 49-future (Aggregated Pilot Telemetry):**
+- ≥ 10 opted-in operators are on the recruitment calendar (n=2 → n=5 → n=10 is the noise-floor heuristic; medians below n≈10 are too noisy to fork v1.0 marketing on)
+- Cloudflare account owner named for `telemetry.toon-protocol.dev`
+- Domain owner named for `telemetry.toon-protocol.dev`
+- Grafana hosting owner named (Story 49.5 BLOCKER)
+- Disclosure copy reviewed against the then-current pilot framing
+- FR30–FR34 / NFR5 / NFR6 / NFR10 / NFR18 numbers may be renumbered or repurposed at re-staging time (they were rewritten for the new Epic 49 on 2026-05-18)
+
+**Archived stories** (full AC bodies preserved in git history at `_bmad-output/planning-artifacts/epics-townhouse-hs-v1.md` pre-2026-05-18; see `git log --follow -p`):
+
+- **49.1 (deferred)** — Telemetry Payload Schema + Zod Validator. Versioned, zod-validated payload at `packages/townhouse/src/telemetry/schema.ts`; fields: `operatorIdHash`, `townhouseVersion`, `weekNumber`, `enabledNodes`, `earnings.apex.usdcCents`, `earnings.perPeer`, `metrics`, `flags`. `operatorIdHash = sha256(operatorPubkey + STATIC_SALT)`. No PII fields (no IP, no hostname, no `.anyone` address, no unhashed wallet pubkey, no claim IDs, no peer counterparty pubkeys). Includes `'external'` in `perPeer[].type` literal union.
+
+- **49.2 (deferred)** — Opt-In Flow + Disclosure Copy + State File. Locked disclosure copy: *"You're joining the v0.1 pilot. Townhouse will send anonymous earnings telemetry (peer-id hash, USDC/day, uptime — no IP, no wallet) so we can validate the economics before public launch. This is required for pilot participation. Type 'agree' to continue."* State file `~/.townhouse/telemetry.json` mode 0o600 with `{ optedIn, firstBootAt, lastPingAt, pendingPings }`. v1.0 release replaces "required" with optional language.
+
+- **49.3 (deferred)** — Telemetry HTTP Client + Retry Buffer. Weekly scheduled POST to `https://telemetry.toon-protocol.dev/v1/townhouse-pulse` jittered ±6h from `firstBootAt`. Retry backoff: 1h, 4h, 1d, 3d after first failure; drop after 4 weeks with `~/.townhouse/telemetry-dropped.log` entry. Telemetry never blocks operator-facing operations. Hard-stop: when `optedIn: false`, HTTP client is never instantiated.
+
+- **49.4 (deferred)** — `townhouse telemetry on|off|status` CLI. Three verbs; `--json` machine-readable output; `off` clears pending pings and disables scheduler; `on` re-prompts the disclosure copy and requires `agree`.
+
+- **49.5 (deferred — was BLOCKED)** — Telemetry Receiver Server + Cloudflare + Grafana Dashboard. Server at `telemetry.toon-protocol.dev/v1/townhouse-pulse`; Cloudflare IP-stripping at edge (origin never sees client IP — enforces NFR5); Let's Encrypt SSL; same zod schema validation as client (Story 49.1) — schema drift returns HTTP 400; Grafana dashboard renders weekly active pings + 30% WoW drop alert. Block was pending owner assignment for Cloudflare account + domain + Grafana hosting.
+
+- **49.6 (deferred)** — Pilot Day-30 Decision Artifact. Day-30 script queries telemetry for opted-in operators' week-4 records; computes per-operator `total_usdc_cents = earnings.apex.usdcCents + sum(earnings.perPeer.usdcCents)`; median is the gate input. Exactly ONE branch fires: `median ≥ $1.00/wk` → full earnings hero ("Earn passive USDC from your homelab."); `$0.10 ≤ median < $1.00/wk` → demote earnings panel ("Run yields, be early."); `median < $0.10/wk` → DELAY public launch, hero pivots to "events relayed + uptime" ("Be early to the network."). Result + raw data committed to `_bmad-output/v0.1-pilot-results.md`.
+
+- **49.7 (deferred)** — Live E2E Gate — Telemetry & Validation. End-to-end gate against deployed `telemetry.toon-protocol.dev`: fresh `~/.townhouse/`, opt-in flow, immediate POST (jitter-bypass), Grafana write within 5min, NO PII verified at receiver side, retry buffer behavior, day-30 script against fixture dataset. Mary signs off disclosure copy + opt-in flow as pilot-ready.
+
+**Open downstream questions to resolve before Epic 49-future re-staging:**
+- Should the receiver be hosted on `.anyone` HS instead of Cloudflare/Let's Encrypt? Winston flagged this as the ethos-aligned alternative; trade-off is operator-side connectivity fragility during a paywall-fragile window (party-mode discussion 2026-05-18).
+- Mary's 2026-05-25 recruitment pitch needs revising independent of Epic 49-future timing — current pitch promises "required for pilot participation" but the new Epic 49 doesn't require telemetry. The pitch should be updated to reflect what is actually being asked of pilot operators.
+
 ## Deferred from: code review of 48-4-activity-ticker-footer-and-activity-overlay (2026-05-14, second pass)
 
 - W9: `key.escape` closes the overlay even when `key.ctrl` or `key.meta` is also set. The ESC branch short-circuits before the modifier guard (intentional, per the inline comment, to handle Ink's bare-ESC parsing setting `meta=true`). Side-effect: Ctrl-ESC and Alt-ESC also close. Spec AC #5 does not forbid this. Tighten with `if (key.escape && !key.ctrl)` once Ink's per-terminal ESC parsing is understood. [packages/townhouse/src/tui/components/ActivityOverlay.tsx:79-82]
