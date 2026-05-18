@@ -487,13 +487,22 @@ describe('ConnectorAdminClient', () => {
       fetchMock.mockResolvedValue({
         ok: true,
         json: async () => [
-          { channelId: 42, peerId: 'town', chain: 'evm:1', status: 'open', deposit: '0', lastActivity: '2026-05-14T00:00:00.000Z' },
+          {
+            channelId: 42,
+            peerId: 'town',
+            chain: 'evm:1',
+            status: 'open',
+            deposit: '0',
+            lastActivity: '2026-05-14T00:00:00.000Z',
+          },
         ],
       });
 
       const client = new ConnectorAdminClient('http://localhost:9402');
 
-      await expect(client.getChannels()).rejects.toThrow(/invalid channels response shape/);
+      await expect(client.getChannels()).rejects.toThrow(
+        /invalid channels response shape/
+      );
     });
 
     it('throws when response is not an array', async () => {
@@ -504,7 +513,9 @@ describe('ConnectorAdminClient', () => {
 
       const client = new ConnectorAdminClient('http://localhost:9402');
 
-      await expect(client.getChannels()).rejects.toThrow(/invalid channels response shape/);
+      await expect(client.getChannels()).rejects.toThrow(
+        /invalid channels response shape/
+      );
     });
   });
 });

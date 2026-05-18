@@ -5,7 +5,11 @@ import { DEFAULT_API_URL, DEFAULT_REFRESH_INTERVAL_MS } from './constants.js';
 export type EarningsState =
   | { phase: 'loading'; data: null; bannerKey: null }
   | { phase: 'ok'; data: AggregatedEarnings; bannerKey: null }
-  | { phase: 'stale'; data: AggregatedEarnings; bannerKey: 'connector_unavailable' | 'fetch_failed' };
+  | {
+      phase: 'stale';
+      data: AggregatedEarnings;
+      bannerKey: 'connector_unavailable' | 'fetch_failed';
+    };
 
 export interface UseEarningsOptions {
   apiUrl?: string;

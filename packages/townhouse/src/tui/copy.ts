@@ -1,6 +1,10 @@
 export const COPY = {
   heroEarly: `you're early`,
-  heroEarlyRotation: [`you're early`, `warming up`, `first packet en route`] as const,
+  heroEarlyRotation: [
+    `you're early`,
+    `warming up`,
+    `first packet en route`,
+  ] as const,
   loading: `Fetching earnings…`,
   qualifierPrefix: `MONTH $0.00`,
   qualifierEventsWords: `events relayed`,

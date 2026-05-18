@@ -12,7 +12,9 @@ function sortKey(c: RecentClaim): number {
   return Number.isFinite(ms) ? ms : -Infinity;
 }
 
-export function useActivityBuffer(incoming: RecentClaim[] | undefined): RecentClaim[] {
+export function useActivityBuffer(
+  incoming: RecentClaim[] | undefined
+): RecentClaim[] {
   const [buffer, setBuffer] = useState<RecentClaim[]>([]);
 
   useEffect(() => {
@@ -29,7 +31,11 @@ export function useActivityBuffer(incoming: RecentClaim[] | undefined): RecentCl
 
     const same =
       trimmed.length === buffer.length &&
-      trimmed.every((c, i) => buffer[i] !== undefined && claimKey(c) === claimKey(buffer[i] as RecentClaim));
+      trimmed.every(
+        (c, i) =>
+          buffer[i] !== undefined &&
+          claimKey(c) === claimKey(buffer[i] as RecentClaim)
+      );
     if (!same) setBuffer(trimmed);
   }, [incoming]);
 

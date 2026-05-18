@@ -72,10 +72,14 @@ export class ConnectorAdminClient {
     const response = await this.fetch('/health');
     const body: unknown = await response.json().catch(() => ({}));
     const nodeId =
-      typeof body === 'object' && body !== null && typeof (body as Record<string, unknown>)['nodeId'] === 'string'
+      typeof body === 'object' &&
+      body !== null &&
+      typeof (body as Record<string, unknown>)['nodeId'] === 'string'
         ? ((body as Record<string, unknown>)['nodeId'] as string)
         : undefined;
-    return nodeId !== undefined ? { status: 'healthy', nodeId } : { status: 'healthy' };
+    return nodeId !== undefined
+      ? { status: 'healthy', nodeId }
+      : { status: 'healthy' };
   }
 
   /**

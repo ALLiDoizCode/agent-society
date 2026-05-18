@@ -60,8 +60,14 @@ import {
   NODE_LIST_HELP,
 } from './cli/node-commands.js';
 import { dispatchDrillCommand } from './cli/drill-commands.js';
-import { renderEarningsSection, resolveSatsRate } from './cli/status-earnings.js';
-import { aggregateEarnings, type AggregatedEarnings } from './earnings/aggregator.js';
+import {
+  renderEarningsSection,
+  resolveSatsRate,
+} from './cli/status-earnings.js';
+import {
+  aggregateEarnings,
+  type AggregatedEarnings,
+} from './earnings/aggregator.js';
 import { readNodesYaml } from './state/nodes-yaml.js';
 import { PeerTypeResolver } from './registry/peer-type-resolver.js';
 import { createDeltaComputer } from './earnings/snapshot-reader.js';
@@ -428,17 +434,33 @@ async function handleWalletShow(
   walletManager.lock();
 }
 
-async function resolveEarnings(adminUrl: string, configPath: string): Promise<AggregatedEarnings> {
+async function resolveEarnings(
+  adminUrl: string,
+  configPath: string
+): Promise<AggregatedEarnings> {
   const base = dirname(configPath);
   try {
     const yaml = await readNodesYaml(join(base, 'nodes.yaml'));
-    return await aggregateEarnings({ connectorAdmin: new ConnectorAdminClient(adminUrl), peerTypeResolver: new PeerTypeResolver(yaml), deltaComputer: createDeltaComputer({ snapshotPath: join(base, 'earnings-snapshots.jsonl') }) });
+    return await aggregateEarnings({
+      connectorAdmin: new ConnectorAdminClient(adminUrl),
+      peerTypeResolver: new PeerTypeResolver(yaml),
+      deltaComputer: createDeltaComputer({
+        snapshotPath: join(base, 'earnings-snapshots.jsonl'),
+      }),
+    });
   } catch (err) {
     // Distinguish local config/snapshot errors from connector outage:
     // aggregateEarnings handles connector failures internally, so anything
     // surfaced here is a nodes.yaml / snapshot-file / resolver problem.
     console.error(`Earnings unavailable: ${formatLocalEarningsError(err)}`);
-    return { status: 'connector_unavailable', apex: { routingFees: {} }, peers: [], recentClaims: [], eventsRelayed: 0, uptimeSeconds: 0 };
+    return {
+      status: 'connector_unavailable',
+      apex: { routingFees: {} },
+      peers: [],
+      recentClaims: [],
+      eventsRelayed: 0,
+      uptimeSeconds: 0,
+    };
   }
 }
 
@@ -451,10 +473,14 @@ function formatLocalEarningsError(err: unknown): string {
     'issues' in err &&
     Array.isArray((err as { issues: unknown }).issues)
   ) {
-    const issues = (err as { issues: { path?: unknown; message?: unknown }[] }).issues;
+    const issues = (err as { issues: { path?: unknown; message?: unknown }[] })
+      .issues;
     const parts = issues
       .map((i) => {
-        const path = Array.isArray(i.path) && i.path.length > 0 ? i.path.join('.') : '<root>';
+        const path =
+          Array.isArray(i.path) && i.path.length > 0
+            ? i.path.join('.')
+            : '<root>';
         const msg = typeof i.message === 'string' ? i.message : 'invalid';
         return `${path}: ${msg}`;
       })
@@ -467,7 +493,10 @@ function formatLocalEarningsError(err: unknown): string {
 async function handleStatus(
   docker: Docker,
   config: TownhouseConfig,
-  opts: { units: 'usdc' | 'sats'; satsPerUsdc?: number; configPath: string } = { units: 'usdc', configPath: DEFAULT_CONFIG_PATH }
+  opts: { units: 'usdc' | 'sats'; satsPerUsdc?: number; configPath: string } = {
+    units: 'usdc',
+    configPath: DEFAULT_CONFIG_PATH,
+  }
 ): Promise<void> {
   const orchestrator = new DockerOrchestrator(docker, config, undefined, {
     profile: 'dev',
@@ -525,8 +554,15 @@ async function handleStatus(
   }
 
   if (opts.units === 'sats' && opts.satsPerUsdc === undefined) return;
-  const earnings = await resolveEarnings(`http://127.0.0.1:${config.connector.adminPort}`, opts.configPath);
-  for (const line of renderEarningsSection({ earnings, units: opts.units, satsPerUsdc: opts.satsPerUsdc }))
+  const earnings = await resolveEarnings(
+    `http://127.0.0.1:${config.connector.adminPort}`,
+    opts.configPath
+  );
+  for (const line of renderEarningsSection({
+    earnings,
+    units: opts.units,
+    satsPerUsdc: opts.satsPerUsdc,
+  }))
     console.log(line);
 }
 
@@ -1100,7 +1136,8 @@ async function handleHsUp(
       // P27 (D1): thread HS_TOWNHOUSE_API_URL env override into the TUI so
       // operators on a non-default Fastify port don't see eternal fetch_failed.
       const apiUrlOverride = process.env['HS_TOWNHOUSE_API_URL'];
-      const mountOpts = apiUrlOverride !== undefined ? { apiUrl: apiUrlOverride } : {};
+      const mountOpts =
+        apiUrlOverride !== undefined ? { apiUrl: apiUrlOverride } : {};
       const instance = mountTui(mountOpts);
       await instance.waitUntilExit();
     }
@@ -1452,15 +1489,30 @@ export async function main(
     case 'status': {
       const configPath = (values['config'] as string) ?? DEFAULT_CONFIG_PATH;
       const rawUnits = (values['units'] as string | undefined) ?? 'usdc';
-      if (rawUnits !== 'usdc' && rawUnits !== 'sats') { console.error(`--units must be 'usdc' or 'sats'`); process.exitCode = 1; break; }
+      if (rawUnits !== 'usdc' && rawUnits !== 'sats') {
+        console.error(`--units must be 'usdc' or 'sats'`);
+        process.exitCode = 1;
+        break;
+      }
       let satsPerUsdc: number | undefined;
       if (rawUnits === 'sats') {
-        const r = resolveSatsRate(values as Record<string, unknown>, process.env);
-        if ('error' in r) { console.error(r.error); process.exitCode = 1; }
-        else { satsPerUsdc = r.rate; }
+        const r = resolveSatsRate(
+          values as Record<string, unknown>,
+          process.env
+        );
+        if ('error' in r) {
+          console.error(r.error);
+          process.exitCode = 1;
+        } else {
+          satsPerUsdc = r.rate;
+        }
       }
       const units = rawUnits as 'usdc' | 'sats';
-      await handleStatus(dockerInstance ?? new Docker(), loadConfig(configPath), { units, satsPerUsdc, configPath });
+      await handleStatus(
+        dockerInstance ?? new Docker(),
+        loadConfig(configPath),
+        { units, satsPerUsdc, configPath }
+      );
       break;
     }
     case 'up': {

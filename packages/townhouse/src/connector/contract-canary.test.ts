@@ -729,7 +729,13 @@ describe('getChannels() shape contract', () => {
 
   it('rejects when channelId is missing from an entry (field drift indicator)', async () => {
     mockFetchAt('/admin/channels', [
-      { peerId: 'town', chain: 'evm:1', status: 'open', deposit: '0', lastActivity: '2026-05-14T00:00:00.000Z' },
+      {
+        peerId: 'town',
+        chain: 'evm:1',
+        status: 'open',
+        deposit: '0',
+        lastActivity: '2026-05-14T00:00:00.000Z',
+      },
     ]);
     await expect(client.getChannels()).rejects.toThrow(
       /invalid channels response shape/

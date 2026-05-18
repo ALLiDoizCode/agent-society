@@ -5,9 +5,15 @@ import { fileURLToPath } from 'node:url';
 import { COPY } from './copy.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MARKDOWN_PATH = resolve(__dirname, '../../../../_bmad-output/design/empty-state-copy.md');
+const MARKDOWN_PATH = resolve(
+  __dirname,
+  '../../../../_bmad-output/design/empty-state-copy.md'
+);
 
-function getLeafStrings(obj: unknown, prefix = ''): { key: string; value: string }[] {
+function getLeafStrings(
+  obj: unknown,
+  prefix = ''
+): { key: string; value: string }[] {
   if (typeof obj === 'string') {
     return [{ key: prefix, value: obj }];
   }

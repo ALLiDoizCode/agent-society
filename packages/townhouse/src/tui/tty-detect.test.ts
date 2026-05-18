@@ -8,7 +8,10 @@ describe('shouldRenderInk', () => {
   const origTERM = process.env['TERM'];
 
   afterEach(() => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: origIsTTY, writable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: origIsTTY,
+      writable: true,
+    });
     if (origCI === undefined) {
       delete process.env['CI'];
     } else {
@@ -27,7 +30,10 @@ describe('shouldRenderInk', () => {
   });
 
   it('returns true when TTY is set and no disabling env vars', () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+    });
     delete process.env['CI'];
     delete process.env['NO_TUI'];
     process.env['TERM'] = 'xterm-256color';
@@ -35,25 +41,37 @@ describe('shouldRenderInk', () => {
   });
 
   it('returns false when not a TTY', () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: false, writable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: false,
+      writable: true,
+    });
     expect(shouldRenderInk()).toBe(false);
   });
 
   it('returns false when CI=true', () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+    });
     process.env['CI'] = 'true';
     expect(shouldRenderInk()).toBe(false);
   });
 
   it('returns false when TERM=dumb', () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+    });
     delete process.env['CI'];
     process.env['TERM'] = 'dumb';
     expect(shouldRenderInk()).toBe(false);
   });
 
   it('returns false when NO_TUI=1', () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+    });
     delete process.env['CI'];
     process.env['NO_TUI'] = '1';
     process.env['TERM'] = 'xterm-256color';
@@ -61,7 +79,10 @@ describe('shouldRenderInk', () => {
   });
 
   it('returns false when NO_TUI=true (broadened truthy match)', () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+    });
     delete process.env['CI'];
     process.env['NO_TUI'] = 'true';
     process.env['TERM'] = 'xterm-256color';
@@ -69,7 +90,10 @@ describe('shouldRenderInk', () => {
   });
 
   it('returns true when NO_TUI=0 (explicitly disabled)', () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+    });
     delete process.env['CI'];
     process.env['NO_TUI'] = '0';
     process.env['TERM'] = 'xterm-256color';
@@ -77,7 +101,10 @@ describe('shouldRenderInk', () => {
   });
 
   it('returns true when NO_TUI is empty string', () => {
-    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      writable: true,
+    });
     delete process.env['CI'];
     process.env['NO_TUI'] = '';
     process.env['TERM'] = 'xterm-256color';

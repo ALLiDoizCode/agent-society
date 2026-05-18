@@ -8,11 +8,13 @@ const COMPONENTS_DIR = resolve(__dirname, 'components');
 
 // Allow-list per AC #7: components import only from react/ink/copy/format/types
 // and sibling components. Anything else is a boundary violation.
-const ALLOWED_IMPORT_RE = /^(react|ink(\/[\w-]+)?|\.\.\/(copy|format|types)\.js|\.\/[\w-]+\.js)$/;
+const ALLOWED_IMPORT_RE =
+  /^(react|ink(\/[\w-]+)?|\.\.\/(copy|format|types)\.js|\.\/[\w-]+\.js)$/;
 
 // Match all import-source forms: static (import|from), dynamic (import('...')),
 // across single/double/backtick quotes.
-const IMPORT_RE = /(?:from|import)\s*[`'"]([^`'"]+)[`'"]|import\s*\(\s*[`'"]([^`'"]+)[`'"]\s*\)/g;
+const IMPORT_RE =
+  /(?:from|import)\s*[`'"]([^`'"]+)[`'"]|import\s*\(\s*[`'"]([^`'"]+)[`'"]\s*\)/g;
 
 describe('TUI component import boundary (AC #7)', () => {
   it('component files import only from react/ink/copy/format/types/sibling components', () => {

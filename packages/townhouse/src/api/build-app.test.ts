@@ -6,7 +6,9 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import { buildFastifyApp, LOOPBACK_HOSTS } from './build-app.js';
 
-const _pkg = createRequire(import.meta.url)('../../package.json') as { version: string };
+const _pkg = createRequire(import.meta.url)('../../package.json') as {
+  version: string;
+};
 
 describe('buildFastifyApp (AC-9)', () => {
   it('creates a Fastify instance with no errors', async () => {

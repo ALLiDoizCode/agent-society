@@ -453,552 +453,577 @@ describe.skipIf(!shouldRun)(
 
     // ── Test 1: TUI mounts with hero, ApexStrip, PeerTable, ActivityTicker ─────
     // AC #1 + #2.5
-    it(
-      'TUI mounts with hero/ApexStrip/PeerTable/ActivityTicker on first refresh tick',
-      async () => {
-        const instance = render(
-          createElement(App, {
-            apiUrl: 'http://127.0.0.1:28090',
-            refreshIntervalMs: 500,
-          })
+    it('TUI mounts with hero/ApexStrip/PeerTable/ActivityTicker on first refresh tick', async () => {
+      const instance = render(
+        createElement(App, {
+          apiUrl: 'http://127.0.0.1:28090',
+          refreshIntervalMs: 500,
+        })
+      );
+      tuiInstance = instance;
+      try {
+        // Loading state first — confirms render bootstrap.
+        const loadingFrame = instance.lastFrame() ?? '';
+        expect(loadingFrame).toContain(COPY.loading);
+
+        // Wait for first refresh tick (500ms interval + render slack).
+        await sleep(1_500);
+
+        const frame = instance.lastFrame() ?? '';
+        console.log('[Test 1] lastFrame:\n', frame);
+
+        // HeroBand labels always present.
+        expect(frame).toContain('MONTH');
+        expect(frame).toMatch(/(TODAY|MONTH|YEAR|LIFETIME|LIFE)/);
+
+        // AC #2.5: no Mill peer → upsell MUST render.
+        expect(frame).toContain(COPY.apex.routingEmpty);
+
+        // ActivityTicker footer (zero-claim run: empty message or keybind).
+        expect(frame).toMatch(
+          /no settlements yet|press \[a\] when|activity arrives|\[a\] activity/
         );
-        tuiInstance = instance;
-        try {
-          // Loading state first — confirms render bootstrap.
-          const loadingFrame = instance.lastFrame() ?? '';
-          expect(loadingFrame).toContain(COPY.loading);
 
-          // Wait for first refresh tick (500ms interval + render slack).
-          await sleep(1_500);
-
-          const frame = instance.lastFrame() ?? '';
-          console.log('[Test 1] lastFrame:\n', frame);
-
-          // HeroBand labels always present.
-          expect(frame).toContain('MONTH');
-          expect(frame).toMatch(/(TODAY|MONTH|YEAR|LIFETIME|LIFE)/);
-
-          // AC #2.5: no Mill peer → upsell MUST render.
-          expect(frame).toContain(COPY.apex.routingEmpty);
-
-          // ActivityTicker footer (zero-claim run: empty message or keybind).
-          expect(frame).toMatch(
-            /no settlements yet|press \[a\] when|activity arrives|\[a\] activity/
-          );
-
-          // Badge MUST appear: lifetime < $1.00 AND uptime < 7d → both thresholds met.
-          // Assert at least one heroEarlyRotation string is visible.
-          const badgeVisible = COPY.heroEarlyRotation.some((text) =>
-            frame.includes(text)
-          );
-          expect(badgeVisible, 'Badge (you-re-early rotation) must be visible on fresh apex').toBe(
-            true
-          );
-        } finally {
-          instance.unmount();
-          tuiInstance = null;
-        }
-      },
-      20_000
-    );
+        // Badge MUST appear: lifetime < $1.00 AND uptime < 7d → both thresholds met.
+        // Assert at least one heroEarlyRotation string is visible.
+        const badgeVisible = COPY.heroEarlyRotation.some((text) =>
+          frame.includes(text)
+        );
+        expect(
+          badgeVisible,
+          'Badge (you-re-early rotation) must be visible on fresh apex'
+        ).toBe(true);
+      } finally {
+        instance.unmount();
+        tuiInstance = null;
+      }
+    }, 20_000);
 
     // ── Test 2: Empty-state hero qualifier renders when MONTH is zero ─────────
     // AC #2.1
-    it(
-      'empty-state hero qualifier renders you-re-early, events-relayed, $0.00 when MONTH is zero',
-      async () => {
-        // Pre-condition: zero claims on the live apex. Confirm via direct fetch.
-        const res = await fetchWithTimeout(
-          EARNINGS_URL,
-          10_000,
-          'GET /api/earnings Test 2 pre-condition'
+    it('empty-state hero qualifier renders you-re-early, events-relayed, $0.00 when MONTH is zero', async () => {
+      // Pre-condition: zero claims on the live apex. Confirm via direct fetch.
+      const res = await fetchWithTimeout(
+        EARNINGS_URL,
+        10_000,
+        'GET /api/earnings Test 2 pre-condition'
+      );
+      const body = (await res.json()) as {
+        status: string;
+        peers: unknown[];
+      };
+      expect(
+        ['ok', 'connector_unavailable'],
+        'earnings status must be a known value'
+      ).toContain(body.status);
+
+      const instance = render(
+        createElement(App, {
+          apiUrl: 'http://127.0.0.1:28090',
+          refreshIntervalMs: 500,
+        })
+      );
+      tuiInstance = instance;
+      try {
+        await sleep(1_500);
+        const frame = instance.lastFrame() ?? '';
+        console.log('[Test 2] lastFrame:\n', frame);
+
+        // Qualifier renders: "MONTH $0.00 · N events relayed · you're early"
+        // All three parts must be present on zero-claim run.
+        expect(frame).toContain(COPY.qualifierPrefix); // "MONTH $0.00"
+        expect(frame).toContain(COPY.qualifierEventsWords); // "events relayed"
+
+        // One of the heroEarlyRotation strings must appear (Qualifier + Badge both render it).
+        const earlyVisible = COPY.heroEarlyRotation.some((text) =>
+          frame.includes(text)
         );
-        const body = (await res.json()) as {
-          status: string;
-          peers: unknown[];
-        };
         expect(
-          ['ok', 'connector_unavailable'],
-          'earnings status must be a known value'
-        ).toContain(body.status);
-
-        const instance = render(
-          createElement(App, {
-            apiUrl: 'http://127.0.0.1:28090',
-            refreshIntervalMs: 500,
-          })
-        );
-        tuiInstance = instance;
-        try {
-          await sleep(1_500);
-          const frame = instance.lastFrame() ?? '';
-          console.log('[Test 2] lastFrame:\n', frame);
-
-          // Qualifier renders: "MONTH $0.00 · N events relayed · you're early"
-          // All three parts must be present on zero-claim run.
-          expect(frame).toContain(COPY.qualifierPrefix); // "MONTH $0.00"
-          expect(frame).toContain(COPY.qualifierEventsWords); // "events relayed"
-
-          // One of the heroEarlyRotation strings must appear (Qualifier + Badge both render it).
-          const earlyVisible = COPY.heroEarlyRotation.some((text) =>
-            frame.includes(text)
-          );
-          expect(
-            earlyVisible,
-            'at least one heroEarlyRotation string must appear in empty-state'
-          ).toBe(true);
-        } finally {
-          instance.unmount();
-          tuiInstance = null;
-        }
-      },
-      15_000
-    );
+          earlyVisible,
+          'at least one heroEarlyRotation string must appear in empty-state'
+        ).toBe(true);
+      } finally {
+        instance.unmount();
+        tuiInstance = null;
+      }
+    }, 15_000);
 
     // ── Test 3: "You're early" badge threshold — lifetime-side assertion ──────
     // AC #2.2 (uptime-side is BLOCKED-PARTIAL — no env override exposed)
-    it(
-      'badge appears when lifetime < $1.00 AND disappears when lifetime crosses threshold',
-      async () => {
-        // ── State A: badge SHOWS ──────────────────────────────────────────────
-        // Fresh apex has zero claims → lifetime = 0 < $1.00 → badge triggers.
-        const instanceA = render(
-          createElement(App, {
-            apiUrl: 'http://127.0.0.1:28090',
-            refreshIntervalMs: 500,
-          })
+    it('badge appears when lifetime < $1.00 AND disappears when lifetime crosses threshold', async () => {
+      // ── State A: badge SHOWS ──────────────────────────────────────────────
+      // Fresh apex has zero claims → lifetime = 0 < $1.00 → badge triggers.
+      const instanceA = render(
+        createElement(App, {
+          apiUrl: 'http://127.0.0.1:28090',
+          refreshIntervalMs: 500,
+        })
+      );
+      tuiInstance = instanceA;
+      try {
+        await sleep(1_500);
+        const frameA = instanceA.lastFrame() ?? '';
+        console.log('[Test 3 State A] lastFrame:\n', frameA);
+
+        const badgeA = COPY.heroEarlyRotation.some((text) =>
+          frameA.includes(text)
         );
-        tuiInstance = instanceA;
-        try {
-          await sleep(1_500);
-          const frameA = instanceA.lastFrame() ?? '';
-          console.log('[Test 3 State A] lastFrame:\n', frameA);
+        expect(badgeA, 'badge must be visible when lifetime === 0').toBe(true);
+      } finally {
+        instanceA.unmount();
+        tuiInstance = null;
+      }
 
-          const badgeA = COPY.heroEarlyRotation.some((text) => frameA.includes(text));
-          expect(badgeA, 'badge must be visible when lifetime === 0').toBe(true);
-        } finally {
-          instanceA.unmount();
-          tuiInstance = null;
-        }
-
-        // ── State B: badge HIDES (lifetime >= $1.00) ──────────────────────────
-        // Use fetchImpl stub to inject lifetime = $1.50 USDC (1_500_000 micro).
-        // Uptime-side is BLOCKED-PARTIAL — escalate to PM to expose
-        // TOWNHOUSE_UPTIME_SECONDS_OVERRIDE (Hard Rule #2 compliance required).
-        // P3: SKIP_AC_2_2_UPTIME_BLOCKED env escape for documented gap.
-        const highLifetimeBody = {
-          status: 'ok' as const,
-          apex: { routingFees: {} },
-          peers: [
-            {
-              id: addedPeerId,
-              type: 'town' as const,
-              byAsset: {
-                USDC: {
-                  today: '0',
-                  month: '0',
-                  year: '0',
-                  lifetime: '1500000', // $1.50 — above $1.00 threshold
-                },
+      // ── State B: badge HIDES (lifetime >= $1.00) ──────────────────────────
+      // Use fetchImpl stub to inject lifetime = $1.50 USDC (1_500_000 micro).
+      // Uptime-side is BLOCKED-PARTIAL — escalate to PM to expose
+      // TOWNHOUSE_UPTIME_SECONDS_OVERRIDE (Hard Rule #2 compliance required).
+      // P3: SKIP_AC_2_2_UPTIME_BLOCKED env escape for documented gap.
+      const highLifetimeBody = {
+        status: 'ok' as const,
+        apex: { routingFees: {} },
+        peers: [
+          {
+            id: addedPeerId,
+            type: 'town' as const,
+            byAsset: {
+              USDC: {
+                today: '0',
+                month: '0',
+                year: '0',
+                lifetime: '1500000', // $1.50 — above $1.00 threshold
               },
-              lastClaimAt: null,
             },
-          ],
-          recentClaims: [],
-          eventsRelayed: 0,
-          uptimeSeconds: 60, // < 7d — uptime still triggers, but lifetime does NOT
-        };
+            lastClaimAt: null,
+          },
+        ],
+        recentClaims: [],
+        eventsRelayed: 0,
+        uptimeSeconds: 60, // < 7d — uptime still triggers, but lifetime does NOT
+      };
 
-        const stubFetch: typeof fetch = async () =>
-          new Response(JSON.stringify(highLifetimeBody), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          });
+      const stubFetch: typeof fetch = async () =>
+        new Response(JSON.stringify(highLifetimeBody), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
 
-        const instanceB = render(
-          createElement(App, {
-            fetchImpl: stubFetch,
-            refreshIntervalMs: 500,
-          })
+      const instanceB = render(
+        createElement(App, {
+          fetchImpl: stubFetch,
+          refreshIntervalMs: 500,
+        })
+      );
+      tuiInstance = instanceB;
+      let frameB: string;
+      try {
+        await sleep(1_500);
+        frameB = instanceB.lastFrame() ?? '';
+        console.log('[Test 3 State B] lastFrame:\n', frameB);
+      } finally {
+        instanceB.unmount();
+        tuiInstance = null;
+      }
+
+      // Lifetime >= $1.00 → lifetime does NOT trigger. Uptime < 7d → uptime STILL triggers.
+      // So badge should STILL appear (uptime branch). Document the distinction.
+      // The story's AC #2.2 requires BOTH threshold sides cleared for badge to hide.
+      // With uptimeSeconds=60 (< 7d threshold), badge still renders even though lifetime >= $1.00.
+      // This is the BLOCKED-PARTIAL condition — no way to force uptimeSeconds >= 7d without
+      // an env override (PM-gated per Hard Rule #2).
+      const usingUptimeEscape = isTruthyEnv(
+        process.env['SKIP_AC_2_2_UPTIME_BLOCKED']
+      );
+      if (usingUptimeEscape) {
+        console.warn(
+          '⚠️  Test 3 AC #2.2 uptime-side BLOCKED-PARTIAL accepted via ' +
+            'SKIP_AC_2_2_UPTIME_BLOCKED=1. Badge hides only when BOTH ' +
+            'lifetime >= $1.00 AND uptimeSeconds >= 7d. Uptime override ' +
+            'not exposed — PM follow-up required.'
         );
-        tuiInstance = instanceB;
-        let frameB: string;
-        try {
-          await sleep(1_500);
-          frameB = instanceB.lastFrame() ?? '';
-          console.log('[Test 3 State B] lastFrame:\n', frameB);
-        } finally {
-          instanceB.unmount();
-          tuiInstance = null;
-        }
-
-        // Lifetime >= $1.00 → lifetime does NOT trigger. Uptime < 7d → uptime STILL triggers.
-        // So badge should STILL appear (uptime branch). Document the distinction.
-        // The story's AC #2.2 requires BOTH threshold sides cleared for badge to hide.
-        // With uptimeSeconds=60 (< 7d threshold), badge still renders even though lifetime >= $1.00.
-        // This is the BLOCKED-PARTIAL condition — no way to force uptimeSeconds >= 7d without
-        // an env override (PM-gated per Hard Rule #2).
-        const usingUptimeEscape = isTruthyEnv(
-          process.env['SKIP_AC_2_2_UPTIME_BLOCKED']
+      } else {
+        // Assert lifetime-side only: with high lifetime stub, uptimeSeconds=60
+        // still triggers badge. We verify badge IS visible (uptime still fires)
+        // and note that the lifetime branch independently would NOT trigger.
+        // The combined badge hide requires uptime override (BLOCKED-PARTIAL).
+        const badgeB = COPY.heroEarlyRotation.some((text) =>
+          frameB.includes(text)
         );
-        if (usingUptimeEscape) {
-          console.warn(
-            '⚠️  Test 3 AC #2.2 uptime-side BLOCKED-PARTIAL accepted via ' +
-              'SKIP_AC_2_2_UPTIME_BLOCKED=1. Badge hides only when BOTH ' +
-              'lifetime >= $1.00 AND uptimeSeconds >= 7d. Uptime override ' +
-              'not exposed — PM follow-up required.'
-          );
-        } else {
-          // Assert lifetime-side only: with high lifetime stub, uptimeSeconds=60
-          // still triggers badge. We verify badge IS visible (uptime still fires)
-          // and note that the lifetime branch independently would NOT trigger.
-          // The combined badge hide requires uptime override (BLOCKED-PARTIAL).
-          const badgeB = COPY.heroEarlyRotation.some((text) => frameB.includes(text));
-          expect(
-            badgeB,
-            'AC #2.2 BLOCKED-PARTIAL: badge still shows because uptimeSeconds < 7d; ' +
-              'uptime-side requires TOWNHOUSE_UPTIME_SECONDS_OVERRIDE (PM-gated). ' +
-              'Run with SKIP_AC_2_2_UPTIME_BLOCKED=1 to accept documented gap.'
-          ).toBe(true); // badge still shows (uptime side) — document as BLOCKED-PARTIAL
-        }
-      },
-      30_000
-    );
+        expect(
+          badgeB,
+          'AC #2.2 BLOCKED-PARTIAL: badge still shows because uptimeSeconds < 7d; ' +
+            'uptime-side requires TOWNHOUSE_UPTIME_SECONDS_OVERRIDE (PM-gated). ' +
+            'Run with SKIP_AC_2_2_UPTIME_BLOCKED=1 to accept documented gap.'
+        ).toBe(true); // badge still shows (uptime side) — document as BLOCKED-PARTIAL
+      }
+    }, 30_000);
 
     // ── Test 4: [a] keypress opens Activity overlay; q closes cleanly ─────────
     // AC #2.3
-    it(
-      '[a] keypress opens Activity overlay and q closes cleanly',
-      async () => {
-        const instance = render(
-          createElement(App, {
-            apiUrl: 'http://127.0.0.1:28090',
-            refreshIntervalMs: 500,
-          })
+    it('[a] keypress opens Activity overlay and q closes cleanly', async () => {
+      const instance = render(
+        createElement(App, {
+          apiUrl: 'http://127.0.0.1:28090',
+          refreshIntervalMs: 500,
+        })
+      );
+      tuiInstance = instance;
+      try {
+        // Wait for first tick so phase transitions to 'ok' and useInput becomes active.
+        await sleep(1_500);
+
+        const framePre = instance.lastFrame() ?? '';
+        expect(framePre).not.toContain(COPY.activityOverlay.scrollHint);
+        expect(framePre).not.toContain(COPY.activityOverlay.scrollHintEmpty);
+        console.log('[Test 4 pre-overlay] lastFrame:\n', framePre);
+
+        // Open overlay with [a].
+        instance.stdin.write('a');
+        await sleep(300);
+
+        const frameOpen = instance.lastFrame() ?? '';
+        console.log('[Test 4 overlay-open] lastFrame:\n', frameOpen);
+
+        // ActivityOverlay renders its close hint (distinct from main layout).
+        expect(frameOpen).toMatch(/j\/k to scroll|q to close|no activity yet/);
+
+        // Close with q.
+        instance.stdin.write('q');
+        await sleep(300);
+
+        const frameClose = instance.lastFrame() ?? '';
+        console.log('[Test 4 overlay-closed] lastFrame:\n', frameClose);
+
+        // Main layout returns; overlay hint gone.
+        expect(frameClose).not.toContain(COPY.activityOverlay.scrollHint);
+        expect(frameClose).not.toContain(COPY.activityOverlay.scrollHintEmpty);
+        // Hero band still visible.
+        expect(frameClose).toContain('MONTH');
+
+        // Verify bidirectional toggle: re-open then re-close.
+        instance.stdin.write('a');
+        await sleep(300);
+        expect(instance.lastFrame() ?? '').toMatch(
+          /j\/k to scroll|q to close|no activity yet/
         );
-        tuiInstance = instance;
-        try {
-          // Wait for first tick so phase transitions to 'ok' and useInput becomes active.
-          await sleep(1_500);
-
-          const framePre = instance.lastFrame() ?? '';
-          expect(framePre).not.toContain(COPY.activityOverlay.scrollHint);
-          expect(framePre).not.toContain(COPY.activityOverlay.scrollHintEmpty);
-          console.log('[Test 4 pre-overlay] lastFrame:\n', framePre);
-
-          // Open overlay with [a].
-          instance.stdin.write('a');
-          await sleep(300);
-
-          const frameOpen = instance.lastFrame() ?? '';
-          console.log('[Test 4 overlay-open] lastFrame:\n', frameOpen);
-
-          // ActivityOverlay renders its close hint (distinct from main layout).
-          expect(frameOpen).toMatch(
-            /j\/k to scroll|q to close|no activity yet/
-          );
-
-          // Close with q.
-          instance.stdin.write('q');
-          await sleep(300);
-
-          const frameClose = instance.lastFrame() ?? '';
-          console.log('[Test 4 overlay-closed] lastFrame:\n', frameClose);
-
-          // Main layout returns; overlay hint gone.
-          expect(frameClose).not.toContain(COPY.activityOverlay.scrollHint);
-          expect(frameClose).not.toContain(COPY.activityOverlay.scrollHintEmpty);
-          // Hero band still visible.
-          expect(frameClose).toContain('MONTH');
-
-          // Verify bidirectional toggle: re-open then re-close.
-          instance.stdin.write('a');
-          await sleep(300);
-          expect(instance.lastFrame() ?? '').toMatch(/j\/k to scroll|q to close|no activity yet/);
-          instance.stdin.write('q');
-          await sleep(300);
-          expect(instance.lastFrame() ?? '').not.toContain(COPY.activityOverlay.scrollHint);
-        } finally {
-          instance.unmount();
-          tuiInstance = null;
-        }
-      },
-      15_000
-    );
+        instance.stdin.write('q');
+        await sleep(300);
+        expect(instance.lastFrame() ?? '').not.toContain(
+          COPY.activityOverlay.scrollHint
+        );
+      } finally {
+        instance.unmount();
+        tuiInstance = null;
+      }
+    }, 15_000);
 
     // ── Test 5: 2-second refresh tick observable ───────────────────────────────
     // AC #2.4
-    it(
-      '2-second refresh tick propagates frame changes (fetchImpl swap)',
-      async () => {
-        // Use a shared `currentBody` ref so the first tick always shows
-        // eventsRelayed=0 (no race with callCount) and the mutation propagates
-        // only AFTER frameA is captured (OQ-1 Path A — avoids callCount race).
-        const zeroBody = {
-          status: 'ok' as const,
-          apex: { routingFees: {} },
-          peers: [],
-          recentClaims: [],
-          eventsRelayed: 0,
-          uptimeSeconds: 60,
-        };
-        let currentBody = zeroBody;
+    it('2-second refresh tick propagates frame changes (fetchImpl swap)', async () => {
+      // Use a shared `currentBody` ref so the first tick always shows
+      // eventsRelayed=0 (no race with callCount) and the mutation propagates
+      // only AFTER frameA is captured (OQ-1 Path A — avoids callCount race).
+      const zeroBody = {
+        status: 'ok' as const,
+        apex: { routingFees: {} },
+        peers: [],
+        recentClaims: [],
+        eventsRelayed: 0,
+        uptimeSeconds: 60,
+      };
+      let currentBody = zeroBody;
 
-        const stubFetch: typeof fetch = async () =>
-          new Response(JSON.stringify(currentBody), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          });
+      const stubFetch: typeof fetch = async () =>
+        new Response(JSON.stringify(currentBody), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
 
-        const instance = render(
-          createElement(App, {
-            fetchImpl: stubFetch,
-            refreshIntervalMs: 500,
-          })
+      const instance = render(
+        createElement(App, {
+          fetchImpl: stubFetch,
+          refreshIntervalMs: 500,
+        })
+      );
+      tuiInstance = instance;
+      try {
+        // Wait for first tick (500ms interval + render slack) — currentBody is still zeroBody.
+        await sleep(800);
+        const frameA = instance.lastFrame() ?? '';
+        console.log('[Test 5 frameA] lastFrame:\n', frameA);
+        expect(frameA).toContain('0 events relayed');
+
+        // Mutate body — next tick will see eventsRelayed=42.
+        currentBody = { ...zeroBody, eventsRelayed: 42 };
+        // Wait for the next tick (500ms) + render slack.
+        await sleep(700);
+        const frameB = instance.lastFrame() ?? '';
+        console.log('[Test 5 frameB] lastFrame:\n', frameB);
+
+        expect(frameA, 'frameA and frameB must differ after mutation').not.toBe(
+          frameB
         );
-        tuiInstance = instance;
-        try {
-          // Wait for first tick (500ms interval + render slack) — currentBody is still zeroBody.
-          await sleep(800);
-          const frameA = instance.lastFrame() ?? '';
-          console.log('[Test 5 frameA] lastFrame:\n', frameA);
-          expect(frameA).toContain('0 events relayed');
-
-          // Mutate body — next tick will see eventsRelayed=42.
-          currentBody = { ...zeroBody, eventsRelayed: 42 };
-          // Wait for the next tick (500ms) + render slack.
-          await sleep(700);
-          const frameB = instance.lastFrame() ?? '';
-          console.log('[Test 5 frameB] lastFrame:\n', frameB);
-
-          expect(frameA, 'frameA and frameB must differ after mutation').not.toBe(frameB);
-          expect(frameB).toContain('42 events relayed');
-        } finally {
-          instance.unmount();
-          tuiInstance = null;
-        }
-      },
-      15_000
-    );
+        expect(frameB).toContain('42 events relayed');
+      } finally {
+        instance.unmount();
+        tuiInstance = null;
+      }
+    }, 15_000);
 
     // ── Test 6: Per-asset row layout — multi-chain claims stack as siblings ────
     // AC #2.6
-    it(
-      'PeerTable stacks multi-chain asset rows as siblings under one peer header',
-      async () => {
-        // Use fetchImpl stub with multi-asset peer: USDC + USDC-sol.
-        // HeroBand sums only USDC (hardcoded ASSET = 'USDC' in HeroBand.tsx).
-        // PeerTable's flattenPeers iterates ALL assetCodes → renders two rows.
-        const multiAssetBody = {
-          status: 'ok' as const,
-          apex: { routingFees: {} },
-          peers: [
-            {
-              id: addedPeerId,
-              type: 'town' as const,
-              byAsset: {
-                USDC: {
-                  today: '500000',
-                  month: '500000',
-                  year: '500000',
-                  lifetime: '500000',
-                },
-                'USDC-sol': {
-                  today: '250000',
-                  month: '250000',
-                  year: '250000',
-                  lifetime: '250000',
-                },
+    it('PeerTable stacks multi-chain asset rows as siblings under one peer header', async () => {
+      // Use fetchImpl stub with multi-asset peer: USDC + USDC-sol.
+      // HeroBand sums only USDC (hardcoded ASSET = 'USDC' in HeroBand.tsx).
+      // PeerTable's flattenPeers iterates ALL assetCodes → renders two rows.
+      const multiAssetBody = {
+        status: 'ok' as const,
+        apex: { routingFees: {} },
+        peers: [
+          {
+            id: addedPeerId,
+            type: 'town' as const,
+            byAsset: {
+              USDC: {
+                today: '500000',
+                month: '500000',
+                year: '500000',
+                lifetime: '500000',
               },
-              lastClaimAt: null,
+              'USDC-sol': {
+                today: '250000',
+                month: '250000',
+                year: '250000',
+                lifetime: '250000',
+              },
             },
-          ],
-          recentClaims: [],
-          eventsRelayed: 2,
-          uptimeSeconds: 60,
-        };
+            lastClaimAt: null,
+          },
+        ],
+        recentClaims: [],
+        eventsRelayed: 2,
+        uptimeSeconds: 60,
+      };
 
-        const stubFetch: typeof fetch = async () =>
-          new Response(JSON.stringify(multiAssetBody), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          });
+      const stubFetch: typeof fetch = async () =>
+        new Response(JSON.stringify(multiAssetBody), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
 
-        const instance = render(
-          createElement(App, {
-            fetchImpl: stubFetch,
-            refreshIntervalMs: 500,
-          })
-        );
-        tuiInstance = instance;
-        await sleep(1_500);
-        const frame = instance.lastFrame() ?? '';
-        console.log('[Test 6] lastFrame:\n', frame);
-        instance.unmount();
-        tuiInstance = null;
+      const instance = render(
+        createElement(App, {
+          fetchImpl: stubFetch,
+          refreshIntervalMs: 500,
+        })
+      );
+      tuiInstance = instance;
+      await sleep(1_500);
+      const frame = instance.lastFrame() ?? '';
+      console.log('[Test 6] lastFrame:\n', frame);
+      instance.unmount();
+      tuiInstance = null;
 
-        // Both asset codes must appear in PeerTable.
-        expect(frame).toContain('USDC');
-        expect(frame).toContain('USDC-sol');
+      // Both asset codes must appear in PeerTable.
+      expect(frame).toContain('USDC');
+      expect(frame).toContain('USDC-sol');
 
-        // The peer ID appears exactly once (PeerTable sets peerCell = '' for non-first rows).
-        // We assert the peer-id is present (at least once).
-        expect(frame).toContain(addedPeerId.slice(0, 4)); // 'town' first 4 chars
+      // The peer ID appears exactly once (PeerTable sets peerCell = '' for non-first rows).
+      // We assert the peer-id is present (at least once).
+      expect(frame).toContain(addedPeerId.slice(0, 4)); // 'town' first 4 chars
 
-        // Hero shows the USDC sum only ($0.50 from 500_000 micro).
-        // HeroBand skips USDC-sol since it only sums ASSET='USDC'.
-        expect(frame).toContain('$0.50');
-      },
-      20_000
-    );
+      // Hero shows the USDC sum only ($0.50 from 500_000 micro).
+      // HeroBand skips USDC-sol since it only sums ASSET='USDC'.
+      expect(frame).toContain('$0.50');
+    }, 20_000);
 
     // ── Test 7: Drill subcommands all exit 0 with sane output (AC #4) ─────────
-    it(
-      'drill verbs channels/metrics/logs/peer/health all exit 0 with parseable output',
-      async () => {
-        const drillBase = { configDir: tmpDir, env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD } };
+    it('drill verbs channels/metrics/logs/peer/health all exit 0 with parseable output', async () => {
+      const drillBase = {
+        configDir: tmpDir,
+        env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
+      };
 
-        // channels
-        const ch = runCli('channels', drillBase);
-        const chCode = await waitForExitLabelled(ch.process, 10_000, 'townhouse channels');
-        const chStdout = ch.stdout.join('');
-        console.log('[Test 7 channels]', chStdout.slice(0, 200));
-        expect(chCode).toBe(0);
-        // channels with --json
-        const chj = runCli('channels', { ...drillBase, extraArgs: ['--json'] });
-        const chjCode = await waitForExitLabelled(chj.process, 10_000, 'townhouse channels --json');
-        expect(chjCode).toBe(0);
-        const chjStdout = chj.stdout.join('');
-        // Must be parseable as JSON (array).
-        expect(() => JSON.parse(chjStdout.trim())).not.toThrow();
+      // channels
+      const ch = runCli('channels', drillBase);
+      const chCode = await waitForExitLabelled(
+        ch.process,
+        10_000,
+        'townhouse channels'
+      );
+      const chStdout = ch.stdout.join('');
+      console.log('[Test 7 channels]', chStdout.slice(0, 200));
+      expect(chCode).toBe(0);
+      // channels with --json
+      const chj = runCli('channels', { ...drillBase, extraArgs: ['--json'] });
+      const chjCode = await waitForExitLabelled(
+        chj.process,
+        10_000,
+        'townhouse channels --json'
+      );
+      expect(chjCode).toBe(0);
+      const chjStdout = chj.stdout.join('');
+      // Must be parseable as JSON (array).
+      expect(() => JSON.parse(chjStdout.trim())).not.toThrow();
 
-        // metrics
-        const me = runCli('metrics', drillBase);
-        const meCode = await waitForExitLabelled(me.process, 10_000, 'townhouse metrics');
-        const meStdout = me.stdout.join('');
-        console.log('[Test 7 metrics]', meStdout.slice(0, 200));
-        expect(meCode).toBe(0);
-        // metrics with --json
-        const mej = runCli('metrics', { ...drillBase, extraArgs: ['--json'] });
-        const mejCode = await waitForExitLabelled(mej.process, 10_000, 'townhouse metrics --json');
-        expect(mejCode).toBe(0);
+      // metrics
+      const me = runCli('metrics', drillBase);
+      const meCode = await waitForExitLabelled(
+        me.process,
+        10_000,
+        'townhouse metrics'
+      );
+      const meStdout = me.stdout.join('');
+      console.log('[Test 7 metrics]', meStdout.slice(0, 200));
+      expect(meCode).toBe(0);
+      // metrics with --json
+      const mej = runCli('metrics', { ...drillBase, extraArgs: ['--json'] });
+      const mejCode = await waitForExitLabelled(
+        mej.process,
+        10_000,
+        'townhouse metrics --json'
+      );
+      expect(mejCode).toBe(0);
 
-        // peer <addedPeerId> — use connector-side peerId ('town'), not CLI local id.
-        const pe = runCli('peer', { ...drillBase, extraArgs: [addedPeerId] });
-        const peCode = await waitForExitLabelled(pe.process, 10_000, `townhouse peer ${addedPeerId}`);
-        const peStdout = pe.stdout.join('');
-        console.log('[Test 7 peer]', peStdout.slice(0, 200));
-        expect(peCode).toBe(0);
-        // peer with --json
-        const pej = runCli('peer', { ...drillBase, extraArgs: [addedPeerId, '--json'] });
-        const pejCode = await waitForExitLabelled(pej.process, 10_000, `townhouse peer ${addedPeerId} --json`);
-        expect(pejCode).toBe(0);
-        // peer --json emits pretty-printed multi-line JSON (not NDJSON) — parse full stdout.
-        const pejBody = JSON.parse(pej.stdout.join('').trim()) as { peer: unknown };
-        expect(pejBody).toHaveProperty('peer');
+      // peer <addedPeerId> — use connector-side peerId ('town'), not CLI local id.
+      const pe = runCli('peer', { ...drillBase, extraArgs: [addedPeerId] });
+      const peCode = await waitForExitLabelled(
+        pe.process,
+        10_000,
+        `townhouse peer ${addedPeerId}`
+      );
+      const peStdout = pe.stdout.join('');
+      console.log('[Test 7 peer]', peStdout.slice(0, 200));
+      expect(peCode).toBe(0);
+      // peer with --json
+      const pej = runCli('peer', {
+        ...drillBase,
+        extraArgs: [addedPeerId, '--json'],
+      });
+      const pejCode = await waitForExitLabelled(
+        pej.process,
+        10_000,
+        `townhouse peer ${addedPeerId} --json`
+      );
+      expect(pejCode).toBe(0);
+      // peer --json emits pretty-printed multi-line JSON (not NDJSON) — parse full stdout.
+      const pejBody = JSON.parse(pej.stdout.join('').trim()) as {
+        peer: unknown;
+      };
+      expect(pejBody).toHaveProperty('peer');
 
-        // health
-        const he = runCli('health', drillBase);
-        // health probes can return exit 1 if connector is degraded; assert stdout shows Overall:
-        await waitForExitLabelled(he.process, 10_000, 'townhouse health');
-        const heStdout = he.stdout.join('');
-        console.log('[Test 7 health]', heStdout.slice(0, 300));
-        expect(heStdout).toContain('Overall:');
-        // health with --json
-        const hej = runCli('health', { ...drillBase, extraArgs: ['--json'] });
-        await waitForExitLabelled(hej.process, 10_000, 'townhouse health --json');
-        // health --json emits pretty-printed multi-line JSON — parse full stdout.
-        const hejBody = JSON.parse(hej.stdout.join('').trim()) as { overall: string; probes: unknown[] };
-        expect(hejBody).toHaveProperty('overall');
-        expect(Array.isArray(hejBody.probes)).toBe(true);
+      // health
+      const he = runCli('health', drillBase);
+      // health probes can return exit 1 if connector is degraded; assert stdout shows Overall:
+      await waitForExitLabelled(he.process, 10_000, 'townhouse health');
+      const heStdout = he.stdout.join('');
+      console.log('[Test 7 health]', heStdout.slice(0, 300));
+      expect(heStdout).toContain('Overall:');
+      // health with --json
+      const hej = runCli('health', { ...drillBase, extraArgs: ['--json'] });
+      await waitForExitLabelled(hej.process, 10_000, 'townhouse health --json');
+      // health --json emits pretty-printed multi-line JSON — parse full stdout.
+      const hejBody = JSON.parse(hej.stdout.join('').trim()) as {
+        overall: string;
+        probes: unknown[];
+      };
+      expect(hejBody).toHaveProperty('overall');
+      expect(Array.isArray(hejBody.probes)).toBe(true);
 
-        // logs <addedPeerId> -f: use 'town' service name so resolveContainerName matches
-        // townhouse-hs-town via service-class match (serviceFromContainerName rule 2).
-        const lo = runCli('logs', { ...drillBase, extraArgs: ['-f', addedPeerId] });
-        await sleep(5_000);
-        lo.process.kill('SIGKILL');
-        // At least one character of output (log line or empty stream acceptable).
-        // We don't assert log content — the stream may be empty for a quiescent node.
-        console.log('[Test 7 logs sample]', lo.stdout.join('').slice(0, 200));
-      },
-      45_000
-    );
+      // logs <addedPeerId> -f: use 'town' service name so resolveContainerName matches
+      // townhouse-hs-town via service-class match (serviceFromContainerName rule 2).
+      const lo = runCli('logs', {
+        ...drillBase,
+        extraArgs: ['-f', addedPeerId],
+      });
+      await sleep(5_000);
+      lo.process.kill('SIGKILL');
+      // At least one character of output (log line or empty stream acceptable).
+      // We don't assert log content — the stream may be empty for a quiescent node.
+      console.log('[Test 7 logs sample]', lo.stdout.join('').slice(0, 200));
+    }, 45_000);
 
     // ── Test 8: townhouse status --units=sats --rate 1500 renders sats live ───
     // AC #5
-    it(
-      'status --units=sats renders Earnings (sats @ 1500/USDC): header with no $ in sats section',
-      async () => {
-        const sats = runCli('status', {
-          configDir: tmpDir,
-          env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
-          extraArgs: ['--units=sats', '--rate', '1500'],
-        });
-        const satsCode = await waitForExitLabelled(sats.process, 10_000, 'status --units=sats');
-        const satsStdout = sats.stdout.join('');
-        console.log('[Test 8 sats stdout]', satsStdout);
-        expect(satsCode).toBe(0);
+    it('status --units=sats renders Earnings (sats @ 1500/USDC): header with no $ in sats section', async () => {
+      const sats = runCli('status', {
+        configDir: tmpDir,
+        env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
+        extraArgs: ['--units=sats', '--rate', '1500'],
+      });
+      const satsCode = await waitForExitLabelled(
+        sats.process,
+        10_000,
+        'status --units=sats'
+      );
+      const satsStdout = sats.stdout.join('');
+      console.log('[Test 8 sats stdout]', satsStdout);
+      expect(satsCode).toBe(0);
 
-        // AC #5: check if sats mode is active. When connector is unavailable,
-        // renderEarningsSection returns 'Earnings (USDC): unavailable' regardless
-        // of --units=sats. P3 escape hatch: SKIP_AC_5_CONNECTOR_BLOCKED skips
-        // the full sats assertion when connector earnings are unavailable.
-        const connectorAvailableForSats = satsStdout.includes('Earnings (sats @ 1500/USDC):');
-        const skipAc5 = isTruthyEnv(process.env['SKIP_AC_5_CONNECTOR_BLOCKED']);
+      // AC #5: check if sats mode is active. When connector is unavailable,
+      // renderEarningsSection returns 'Earnings (USDC): unavailable' regardless
+      // of --units=sats. P3 escape hatch: SKIP_AC_5_CONNECTOR_BLOCKED skips
+      // the full sats assertion when connector earnings are unavailable.
+      const connectorAvailableForSats = satsStdout.includes(
+        'Earnings (sats @ 1500/USDC):'
+      );
+      const skipAc5 = isTruthyEnv(process.env['SKIP_AC_5_CONNECTOR_BLOCKED']);
 
-        if (connectorAvailableForSats) {
-          // Happy path: connector available → full sats assertions.
-          expect(satsStdout).toContain('Earnings (sats @ 1500/USDC):');
-          expect(satsStdout).toMatch(/\d+ sats/);
+      if (connectorAvailableForSats) {
+        // Happy path: connector available → full sats assertions.
+        expect(satsStdout).toContain('Earnings (sats @ 1500/USDC):');
+        expect(satsStdout).toMatch(/\d+ sats/);
 
-          // AC #5 tripwire: $ must NOT appear in the earnings section.
-          const idx = satsStdout.indexOf('Earnings (sats @ 1500/USDC):');
-          if (idx !== -1) {
-            const earningsSection = satsStdout.slice(idx);
-            expect(
-              earningsSection,
-              '$ must not appear in the sats earnings section (48.6 AC #5 tripwire)'
-            ).not.toMatch(/\$\d/);
-          }
-        } else if (skipAc5) {
-          console.warn(
-            '⚠️  Test 8 AC #5 BLOCKED-PARTIAL via SKIP_AC_5_CONNECTOR_BLOCKED=1: ' +
-              'connector earnings unavailable from inside townhouse-api container. ' +
-              'sats rendering verified by 48.6 unit tests (1261 passing). ' +
-              'Gate confirms: command exits 0, --units=sats flag accepted, Earnings section present.'
-          );
-          // Assert exit 0 + earnings section present (even if unavailable).
-          expect(satsStdout).toContain('Earnings (USDC): unavailable');
-        } else {
-          throw new Error(
-            'Test 8 AC #5: connector earnings unavailable — sats header not found. ' +
-              'Connector may not support earnings endpoint (requires v3.6.3+). ' +
-              'Run with SKIP_AC_5_CONNECTOR_BLOCKED=1 to accept documented gap.'
-          );
+        // AC #5 tripwire: $ must NOT appear in the earnings section.
+        const idx = satsStdout.indexOf('Earnings (sats @ 1500/USDC):');
+        if (idx !== -1) {
+          const earningsSection = satsStdout.slice(idx);
+          expect(
+            earningsSection,
+            '$ must not appear in the sats earnings section (48.6 AC #5 tripwire)'
+          ).not.toMatch(/\$\d/);
         }
+      } else if (skipAc5) {
+        console.warn(
+          '⚠️  Test 8 AC #5 BLOCKED-PARTIAL via SKIP_AC_5_CONNECTOR_BLOCKED=1: ' +
+            'connector earnings unavailable from inside townhouse-api container. ' +
+            'sats rendering verified by 48.6 unit tests (1261 passing). ' +
+            'Gate confirms: command exits 0, --units=sats flag accepted, Earnings section present.'
+        );
+        // Assert exit 0 + earnings section present (even if unavailable).
+        expect(satsStdout).toContain('Earnings (USDC): unavailable');
+      } else {
+        throw new Error(
+          'Test 8 AC #5: connector earnings unavailable — sats header not found. ' +
+            'Connector may not support earnings endpoint (requires v3.6.3+). ' +
+            'Run with SKIP_AC_5_CONNECTOR_BLOCKED=1 to accept documented gap.'
+        );
+      }
 
-        // USDC default still renders with $ amounts (48.6 AC #1 regression check).
-        const usdc = runCli('status', {
-          configDir: tmpDir,
-          env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
-        });
-        const usdcCode = await waitForExitLabelled(usdc.process, 10_000, 'status (default usdc)');
-        const usdcStdout = usdc.stdout.join('');
-        console.log('[Test 8 usdc stdout]', usdcStdout);
-        expect(usdcCode).toBe(0);
-        // Earnings section MUST appear (even if unavailable).
-        expect(usdcStdout).toContain('Earnings (USDC):');
+      // USDC default still renders with $ amounts (48.6 AC #1 regression check).
+      const usdc = runCli('status', {
+        configDir: tmpDir,
+        env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
+      });
+      const usdcCode = await waitForExitLabelled(
+        usdc.process,
+        10_000,
+        'status (default usdc)'
+      );
+      const usdcStdout = usdc.stdout.join('');
+      console.log('[Test 8 usdc stdout]', usdcStdout);
+      expect(usdcCode).toBe(0);
+      // Earnings section MUST appear (even if unavailable).
+      expect(usdcStdout).toContain('Earnings (USDC):');
 
-        // Confirm apex containers still running (gate integrity check).
-        const running = dockerPs();
-        expect(running).toContain(HS_CONNECTOR_NAME);
-        expect(running).toContain(HS_API_NAME);
-        expect(volumeExists(HS_ANON_VOLUME)).toBe(true);
+      // Confirm apex containers still running (gate integrity check).
+      const running = dockerPs();
+      expect(running).toContain(HS_CONNECTOR_NAME);
+      expect(running).toContain(HS_API_NAME);
+      expect(volumeExists(HS_ANON_VOLUME)).toBe(true);
 
-        // Confirm firstHostname was captured (runtime sanity).
-        expect(firstHostname).toMatch(/^[a-z0-9][a-z0-9-]*\.(anyone|anon)$/);
-      },
-      15_000
-    );
+      // Confirm firstHostname was captured (runtime sanity).
+      expect(firstHostname).toMatch(/^[a-z0-9][a-z0-9-]*\.(anyone|anon)$/);
+    }, 15_000);
   }
 );

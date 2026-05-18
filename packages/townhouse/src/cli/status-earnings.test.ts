@@ -9,7 +9,9 @@ import {
 import type { AggregatedEarnings } from '../earnings/aggregator.js';
 
 // Minimal fixture builders
-function makeEarnings(override: Partial<AggregatedEarnings> = {}): AggregatedEarnings {
+function makeEarnings(
+  override: Partial<AggregatedEarnings> = {}
+): AggregatedEarnings {
   return {
     status: 'ok',
     apex: { routingFees: {} },
@@ -30,12 +32,19 @@ function makePerAsset(lifetime: string, today = '0', month = '0', year = '0') {
 describe('computeUsdcScalars', () => {
   it('returns zeros when no earnings', () => {
     const result = computeUsdcScalars(makeEarnings());
-    expect(result).toEqual({ today: '0', month: '0', year: '0', lifetime: '0' });
+    expect(result).toEqual({
+      today: '0',
+      month: '0',
+      year: '0',
+      lifetime: '0',
+    });
   });
 
   it('sums apex USDC routing fees', () => {
     const earnings = makeEarnings({
-      apex: { routingFees: { USDC: makePerAsset('1000000', '100', '500', '900') } },
+      apex: {
+        routingFees: { USDC: makePerAsset('1000000', '100', '500', '900') },
+      },
     });
     const result = computeUsdcScalars(earnings);
     expect(result.lifetime).toBe('1000000');
@@ -46,7 +55,14 @@ describe('computeUsdcScalars', () => {
 
   it('sums single peer USDC earnings', () => {
     const earnings = makeEarnings({
-      peers: [{ id: 'town-01', type: 'town', byAsset: { USDC: makePerAsset('500000', '50', '200', '400') }, lastClaimAt: null }],
+      peers: [
+        {
+          id: 'town-01',
+          type: 'town',
+          byAsset: { USDC: makePerAsset('500000', '50', '200', '400') },
+          lastClaimAt: null,
+        },
+      ],
     });
     const result = computeUsdcScalars(earnings);
     expect(result.lifetime).toBe('500000');
@@ -54,10 +70,22 @@ describe('computeUsdcScalars', () => {
 
   it('sums apex + multi-peer USDC', () => {
     const earnings = makeEarnings({
-      apex: { routingFees: { USDC: makePerAsset('1000000', '100', '500', '900') } },
+      apex: {
+        routingFees: { USDC: makePerAsset('1000000', '100', '500', '900') },
+      },
       peers: [
-        { id: 'p1', type: 'town', byAsset: { USDC: makePerAsset('200000', '20', '80', '160') }, lastClaimAt: null },
-        { id: 'p2', type: 'mill', byAsset: { USDC: makePerAsset('300000', '30', '120', '240') }, lastClaimAt: null },
+        {
+          id: 'p1',
+          type: 'town',
+          byAsset: { USDC: makePerAsset('200000', '20', '80', '160') },
+          lastClaimAt: null,
+        },
+        {
+          id: 'p2',
+          type: 'mill',
+          byAsset: { USDC: makePerAsset('300000', '30', '120', '240') },
+          lastClaimAt: null,
+        },
       ],
     });
     const result = computeUsdcScalars(earnings);
@@ -70,10 +98,22 @@ describe('computeUsdcScalars', () => {
   it('ignores non-USDC assets', () => {
     const earnings = makeEarnings({
       apex: { routingFees: { ETH: makePerAsset('1000000000000000000') } },
-      peers: [{ id: 'p1', type: 'mill', byAsset: { BTC: makePerAsset('100000000') }, lastClaimAt: null }],
+      peers: [
+        {
+          id: 'p1',
+          type: 'mill',
+          byAsset: { BTC: makePerAsset('100000000') },
+          lastClaimAt: null,
+        },
+      ],
     });
     const result = computeUsdcScalars(earnings);
-    expect(result).toEqual({ today: '0', month: '0', year: '0', lifetime: '0' });
+    expect(result).toEqual({
+      today: '0',
+      month: '0',
+      year: '0',
+      lifetime: '0',
+    });
   });
 
   it('apex-only (no peers) works correctly', () => {
@@ -86,7 +126,14 @@ describe('computeUsdcScalars', () => {
   it('defends against malformed peer byAsset values', () => {
     const earnings = makeEarnings({
       apex: { routingFees: { USDC: makePerAsset('1000000') } },
-      peers: [{ id: 'p1', type: 'town', byAsset: { USDC: makePerAsset('not-a-number') }, lastClaimAt: null }],
+      peers: [
+        {
+          id: 'p1',
+          type: 'town',
+          byAsset: { USDC: makePerAsset('not-a-number') },
+          lastClaimAt: null,
+        },
+      ],
     });
     // malformed peer value is ignored (addDecimalStrings defends)
     expect(computeUsdcScalars(earnings).lifetime).toBe('1000000');
@@ -187,13 +234,19 @@ describe('renderEarningsSection', () => {
 
   it('sats mode + connector down still returns USDC unavailable line', () => {
     const earnings = makeEarnings({ status: 'connector_unavailable' });
-    const lines = renderEarningsSection({ earnings, units: 'sats', satsPerUsdc: 1500 });
+    const lines = renderEarningsSection({
+      earnings,
+      units: 'sats',
+      satsPerUsdc: 1500,
+    });
     expect(lines).toContain('Earnings (USDC): unavailable');
   });
 
   it('USDC mode renders 7-line block with all labels', () => {
     const earnings = makeEarnings({
-      apex: { routingFees: { USDC: makePerAsset('1000000', '1000', '5000', '9000') } },
+      apex: {
+        routingFees: { USDC: makePerAsset('1000000', '1000', '5000', '9000') },
+      },
     });
     const lines = renderEarningsSection({ earnings, units: 'usdc' });
     expect(lines[0]).toBe('');
@@ -207,7 +260,10 @@ describe('renderEarningsSection', () => {
   });
 
   it('USDC mode renders $0.00 for zero earnings', () => {
-    const lines = renderEarningsSection({ earnings: makeEarnings(), units: 'usdc' });
+    const lines = renderEarningsSection({
+      earnings: makeEarnings(),
+      units: 'usdc',
+    });
     expect(lines.filter((l) => l.includes('$0.00')).length).toBe(4);
   });
 
@@ -215,7 +271,11 @@ describe('renderEarningsSection', () => {
     const earnings = makeEarnings({
       apex: { routingFees: { USDC: makePerAsset('1000000') } },
     });
-    const lines = renderEarningsSection({ earnings, units: 'sats', satsPerUsdc: 1500 });
+    const lines = renderEarningsSection({
+      earnings,
+      units: 'sats',
+      satsPerUsdc: 1500,
+    });
     expect(lines[1]).toBe('Earnings (sats @ 1500/USDC):');
     expect(lines.some((l) => l.includes('1,500 sats'))).toBe(true); // $1 USDC at 1500 = 1500 sats
     expect(lines.some((l) => l.includes('$'))).toBe(false);
@@ -225,7 +285,11 @@ describe('renderEarningsSection', () => {
     const earnings = makeEarnings({
       apex: { routingFees: { USDC: makePerAsset('0') } },
     });
-    const lines = renderEarningsSection({ earnings, units: 'sats', satsPerUsdc: 66666 });
+    const lines = renderEarningsSection({
+      earnings,
+      units: 'sats',
+      satsPerUsdc: 66666,
+    });
     const header = lines[1];
     const underline = lines[2];
     expect(underline).toBe('-'.repeat(header.length));
@@ -236,20 +300,40 @@ describe('renderEarningsSection', () => {
   // rather than silently producing `Earnings (sats @ NaN/USDC):` or throwing
   // a low-level message from usdcMicroToSats.
   it('sats mode throws when satsPerUsdc is undefined', () => {
-    const earnings = makeEarnings({ apex: { routingFees: { USDC: makePerAsset('1000000') } } });
-    expect(() => renderEarningsSection({ earnings, units: 'sats' })).toThrow(/positive-integer satsPerUsdc/);
+    const earnings = makeEarnings({
+      apex: { routingFees: { USDC: makePerAsset('1000000') } },
+    });
+    expect(() => renderEarningsSection({ earnings, units: 'sats' })).toThrow(
+      /positive-integer satsPerUsdc/
+    );
   });
 
   it('sats mode throws when satsPerUsdc is zero or negative', () => {
-    const earnings = makeEarnings({ apex: { routingFees: { USDC: makePerAsset('1000000') } } });
-    expect(() => renderEarningsSection({ earnings, units: 'sats', satsPerUsdc: 0 })).toThrow();
-    expect(() => renderEarningsSection({ earnings, units: 'sats', satsPerUsdc: -100 })).toThrow();
+    const earnings = makeEarnings({
+      apex: { routingFees: { USDC: makePerAsset('1000000') } },
+    });
+    expect(() =>
+      renderEarningsSection({ earnings, units: 'sats', satsPerUsdc: 0 })
+    ).toThrow();
+    expect(() =>
+      renderEarningsSection({ earnings, units: 'sats', satsPerUsdc: -100 })
+    ).toThrow();
   });
 
   it('sats mode throws when satsPerUsdc is non-integer', () => {
-    const earnings = makeEarnings({ apex: { routingFees: { USDC: makePerAsset('1000000') } } });
-    expect(() => renderEarningsSection({ earnings, units: 'sats', satsPerUsdc: 1.5 })).toThrow();
-    expect(() => renderEarningsSection({ earnings, units: 'sats', satsPerUsdc: Number.NaN })).toThrow();
+    const earnings = makeEarnings({
+      apex: { routingFees: { USDC: makePerAsset('1000000') } },
+    });
+    expect(() =>
+      renderEarningsSection({ earnings, units: 'sats', satsPerUsdc: 1.5 })
+    ).toThrow();
+    expect(() =>
+      renderEarningsSection({
+        earnings,
+        units: 'sats',
+        satsPerUsdc: Number.NaN,
+      })
+    ).toThrow();
   });
 });
 
@@ -257,7 +341,10 @@ describe('renderEarningsSection', () => {
 
 describe('resolveSatsRate', () => {
   it('CLI flag wins over env var', () => {
-    const result = resolveSatsRate({ rate: '1500' }, { TOWNHOUSE_SATS_PER_USDC: '2500' });
+    const result = resolveSatsRate(
+      { rate: '1500' },
+      { TOWNHOUSE_SATS_PER_USDC: '2500' }
+    );
     expect(result).toEqual({ rate: 1500 });
   });
 
@@ -334,13 +421,18 @@ describe('resolveSatsRate', () => {
   // Empty --rate should not shadow a valid env var (nullish coalescing
   // doesn't fall through on empty string, so the original code mis-rejected).
   it('empty --rate falls through to TOWNHOUSE_SATS_PER_USDC env var', () => {
-    const result = resolveSatsRate({ rate: '' }, { TOWNHOUSE_SATS_PER_USDC: '2500' });
+    const result = resolveSatsRate(
+      { rate: '' },
+      { TOWNHOUSE_SATS_PER_USDC: '2500' }
+    );
     expect(result).toEqual({ rate: 2500 });
   });
 
   it('empty --rate with no env returns the missing-rate error', () => {
     const result = resolveSatsRate({ rate: '' }, {});
     expect('error' in result).toBe(true);
-    expect((result as { error: string }).error).toContain('--units=sats requires --rate');
+    expect((result as { error: string }).error).toContain(
+      '--units=sats requires --rate'
+    );
   });
 });

@@ -49,14 +49,18 @@ export function computeUsdcScalars(earnings: AggregatedEarnings): EarningsRow {
   return { today, month, year, lifetime };
 }
 
-export function usdcMicroToSats(decimalString: string, satsPerUsdc: number): string {
+export function usdcMicroToSats(
+  decimalString: string,
+  satsPerUsdc: number
+): string {
   if (!DECIMAL_RE.test(decimalString)) return '0';
   if (!Number.isInteger(satsPerUsdc) || satsPerUsdc <= 0) {
     throw new Error('satsPerUsdc must be a positive integer');
   }
   const negative = decimalString.startsWith('-');
   const absolute = negative ? decimalString.slice(1) : decimalString;
-  const sats = (BigInt(absolute) * BigInt(satsPerUsdc)) / (10n ** BigInt(USDC_SCALE));
+  const sats =
+    (BigInt(absolute) * BigInt(satsPerUsdc)) / 10n ** BigInt(USDC_SCALE);
   return (negative && sats !== 0n ? '-' : '') + sats.toString();
 }
 
@@ -104,7 +108,9 @@ export function renderEarningsSection(opts: {
     !Number.isInteger(opts.satsPerUsdc) ||
     opts.satsPerUsdc <= 0
   ) {
-    throw new Error("renderEarningsSection: units='sats' requires a positive-integer satsPerUsdc");
+    throw new Error(
+      "renderEarningsSection: units='sats' requires a positive-integer satsPerUsdc"
+    );
   }
   const rate = opts.satsPerUsdc;
   const header = `Earnings (sats @ ${rate}/USDC):`;
@@ -124,11 +130,13 @@ export function resolveSatsRate(
   env: NodeJS.ProcessEnv
 ): { rate: number } | { error: string } {
   // Treat empty --rate as absent so a valid env var can still take effect.
-  const cliRaw = typeof values['rate'] === 'string' ? (values['rate'] as string) : undefined;
+  const cliRaw =
+    typeof values['rate'] === 'string' ? (values['rate'] as string) : undefined;
   const cliRate = cliRaw !== undefined && cliRaw !== '' ? cliRaw : undefined;
   const envRate = env['TOWNHOUSE_SATS_PER_USDC'];
   const raw = cliRate ?? envRate;
-  const source = cliRate !== undefined ? '--rate' : 'TOWNHOUSE_SATS_PER_USDC env var';
+  const source =
+    cliRate !== undefined ? '--rate' : 'TOWNHOUSE_SATS_PER_USDC env var';
 
   if (raw === undefined) {
     return {
@@ -138,7 +146,9 @@ export function resolveSatsRate(
   }
 
   if (!POSITIVE_INT_RE.test(raw)) {
-    return { error: `${source} must be a positive integer (sats per 1 USDC); got: ${JSON.stringify(raw)}` };
+    return {
+      error: `${source} must be a positive integer (sats per 1 USDC); got: ${JSON.stringify(raw)}`,
+    };
   }
 
   const rate = Number(raw);

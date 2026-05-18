@@ -37,7 +37,14 @@ export interface DrillOptions {
 
 export interface ProbeResult {
   source: string;
-  status: 'healthy' | 'unhealthy' | 'unreachable' | 'unknown' | 'starting' | 'n/a' | 'degraded';
+  status:
+    | 'healthy'
+    | 'unhealthy'
+    | 'unreachable'
+    | 'unknown'
+    | 'starting'
+    | 'n/a'
+    | 'degraded';
   error?: string;
   uptime?: number;
   peersConnected?: number;
@@ -63,11 +70,19 @@ function truncate16(s: string): string {
 }
 
 function emitJson(payload: unknown, opts: { compact: boolean }): void {
-  process.stdout.write(JSON.stringify(payload, null, opts.compact ? 0 : 2) + '\n');
+  process.stdout.write(
+    JSON.stringify(payload, null, opts.compact ? 0 : 2) + '\n'
+  );
 }
 
-export function emitJsonError(message: string, code: string, opts: { compact: boolean }): void {
-  process.stdout.write(JSON.stringify({ error: message, code }, null, opts.compact ? 0 : 2) + '\n');
+export function emitJsonError(
+  message: string,
+  code: string,
+  opts: { compact: boolean }
+): void {
+  process.stdout.write(
+    JSON.stringify({ error: message, code }, null, opts.compact ? 0 : 2) + '\n'
+  );
   process.exitCode = 1;
 }
 
@@ -83,7 +98,11 @@ export async function handleChannels(
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     if (opts.json) {
-      emitJsonError(`Failed to fetch connector channels: ${msg}`, 'unreachable', opts);
+      emitJsonError(
+        `Failed to fetch connector channels: ${msg}`,
+        'unreachable',
+        opts
+      );
     } else {
       console.error(`Failed to fetch connector channels: ${msg}`);
       process.exitCode = 1;
@@ -121,32 +140,54 @@ export async function handleChannels(
   }));
 
   const widths = {
-    channel: Math.max(HEADERS.channel.length, ...rows.map((r) => r.channel.length)),
+    channel: Math.max(
+      HEADERS.channel.length,
+      ...rows.map((r) => r.channel.length)
+    ),
     peer: Math.max(HEADERS.peer.length, ...rows.map((r) => r.peer.length)),
     chain: Math.max(HEADERS.chain.length, ...rows.map((r) => r.chain.length)),
-    status: Math.max(HEADERS.status.length, ...rows.map((r) => r.status.length)),
-    deposit: Math.max(HEADERS.deposit.length, ...rows.map((r) => r.deposit.length)),
-    lastActivity: Math.max(HEADERS.lastActivity.length, ...rows.map((r) => r.lastActivity.length)),
+    status: Math.max(
+      HEADERS.status.length,
+      ...rows.map((r) => r.status.length)
+    ),
+    deposit: Math.max(
+      HEADERS.deposit.length,
+      ...rows.map((r) => r.deposit.length)
+    ),
+    lastActivity: Math.max(
+      HEADERS.lastActivity.length,
+      ...rows.map((r) => r.lastActivity.length)
+    ),
   };
 
   const header =
-    HEADERS.channel.padEnd(widths.channel) + '  ' +
-    HEADERS.peer.padEnd(widths.peer) + '  ' +
-    HEADERS.chain.padEnd(widths.chain) + '  ' +
-    HEADERS.status.padEnd(widths.status) + '  ' +
-    HEADERS.deposit.padEnd(widths.deposit) + '  ' +
+    HEADERS.channel.padEnd(widths.channel) +
+    '  ' +
+    HEADERS.peer.padEnd(widths.peer) +
+    '  ' +
+    HEADERS.chain.padEnd(widths.chain) +
+    '  ' +
+    HEADERS.status.padEnd(widths.status) +
+    '  ' +
+    HEADERS.deposit.padEnd(widths.deposit) +
+    '  ' +
     HEADERS.lastActivity;
   console.log(header);
   console.log('-'.repeat(header.length));
 
   for (const row of rows) {
     console.log(
-      row.channel.padEnd(widths.channel) + '  ' +
-      row.peer.padEnd(widths.peer) + '  ' +
-      row.chain.padEnd(widths.chain) + '  ' +
-      row.status.padEnd(widths.status) + '  ' +
-      row.deposit.padEnd(widths.deposit) + '  ' +
-      row.lastActivity
+      row.channel.padEnd(widths.channel) +
+        '  ' +
+        row.peer.padEnd(widths.peer) +
+        '  ' +
+        row.chain.padEnd(widths.chain) +
+        '  ' +
+        row.status.padEnd(widths.status) +
+        '  ' +
+        row.deposit.padEnd(widths.deposit) +
+        '  ' +
+        row.lastActivity
     );
   }
 }
@@ -207,19 +248,35 @@ export async function handleMetrics(
           packetsForwarded: String(pm?.packetsForwarded ?? 0),
           packetsRejected: String(pm?.packetsRejected ?? 0),
           bytesSent: String(pm?.bytesSent ?? 0),
-          lastPacket: pm?.lastPacketAt != null
-            ? formatRelativeTime(pm.lastPacketAt, now)
-            : '—',
+          lastPacket:
+            pm?.lastPacketAt != null
+              ? formatRelativeTime(pm.lastPacketAt, now)
+              : '—',
         };
       });
 
       const widths = {
         peer: Math.max(HEADERS.peer.length, ...rows.map((r) => r.peer.length)),
-        connected: Math.max(HEADERS.connected.length, ...rows.map((r) => r.connected.length)),
-        packetsForwarded: Math.max(HEADERS.packetsForwarded.length, ...rows.map((r) => r.packetsForwarded.length)),
-        packetsRejected: Math.max(HEADERS.packetsRejected.length, ...rows.map((r) => r.packetsRejected.length)),
-        bytesSent: Math.max(HEADERS.bytesSent.length, ...rows.map((r) => r.bytesSent.length)),
-        lastPacket: Math.max(HEADERS.lastPacket.length, ...rows.map((r) => r.lastPacket.length)),
+        connected: Math.max(
+          HEADERS.connected.length,
+          ...rows.map((r) => r.connected.length)
+        ),
+        packetsForwarded: Math.max(
+          HEADERS.packetsForwarded.length,
+          ...rows.map((r) => r.packetsForwarded.length)
+        ),
+        packetsRejected: Math.max(
+          HEADERS.packetsRejected.length,
+          ...rows.map((r) => r.packetsRejected.length)
+        ),
+        bytesSent: Math.max(
+          HEADERS.bytesSent.length,
+          ...rows.map((r) => r.bytesSent.length)
+        ),
+        lastPacket: Math.max(
+          HEADERS.lastPacket.length,
+          ...rows.map((r) => r.lastPacket.length)
+        ),
       };
 
       const headerLine =
@@ -234,18 +291,22 @@ export async function handleMetrics(
       for (const row of rows) {
         console.log(
           `  ${row.peer.padEnd(widths.peer)}  ` +
-          `${row.connected.padEnd(widths.connected)}  ` +
-          `${row.packetsForwarded.padEnd(widths.packetsForwarded)}  ` +
-          `${row.packetsRejected.padEnd(widths.packetsRejected)}  ` +
-          `${row.bytesSent.padEnd(widths.bytesSent)}  ` +
-          row.lastPacket
+            `${row.connected.padEnd(widths.connected)}  ` +
+            `${row.packetsForwarded.padEnd(widths.packetsForwarded)}  ` +
+            `${row.packetsRejected.padEnd(widths.packetsRejected)}  ` +
+            `${row.bytesSent.padEnd(widths.bytesSent)}  ` +
+            row.lastPacket
         );
       }
     }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     if (opts.json) {
-      emitJsonError(`Failed to fetch connector metrics: ${msg}`, 'unreachable', opts);
+      emitJsonError(
+        `Failed to fetch connector metrics: ${msg}`,
+        'unreachable',
+        opts
+      );
     } else {
       console.error(`Failed to fetch connector metrics: ${msg}`);
       process.exitCode = 1;
@@ -262,10 +323,14 @@ interface LogsOpts extends DrillOptions {
 async function resolveContainerName(
   docker: Docker,
   nodeId: string
-): Promise<{ name: string; service: LogService } | { error: string; code: string }> {
+): Promise<
+  { name: string; service: LogService } | { error: string; code: string }
+> {
   let containers: { Names: string[] }[];
   try {
-    containers = await docker.listContainers({ all: false }) as { Names: string[] }[];
+    containers = (await docker.listContainers({ all: false })) as {
+      Names: string[];
+    }[];
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     return {
@@ -274,7 +339,9 @@ async function resolveContainerName(
     };
   }
 
-  const allNames = containers.flatMap((c) => c.Names.map((n) => n.replace(/^\//, '')));
+  const allNames = containers.flatMap((c) =>
+    c.Names.map((n) => n.replace(/^\//, ''))
+  );
 
   // Rule 1: verbatim match if starts with CONTAINER_PREFIX. Verify it actually
   // exists in the running container set so a typo like `townhouse-conector`
@@ -334,7 +401,10 @@ async function resolveContainerName(
 
   const first = unique[0];
   if (first === undefined) {
-    return { error: `Internal error resolving container name for "${nodeId}"`, code: 'internal' };
+    return {
+      error: `Internal error resolving container name for "${nodeId}"`,
+      code: 'internal',
+    };
   }
   return first;
 }
@@ -380,7 +450,9 @@ export async function handleLogs(
       if (opts.json) {
         process.stdout.write(JSON.stringify(evt) + '\n');
       } else {
-        process.stdout.write(`${evt.ts} [${evt.service}] ${evt.level}: ${evt.msg}\n`);
+        process.stdout.write(
+          `${evt.ts} [${evt.service}] ${evt.level}: ${evt.msg}\n`
+        );
       }
     }
   } catch (error: unknown) {
@@ -495,7 +567,9 @@ export async function handlePeerDetail(
   // Earnings section
   if (earningsRaw === null) {
     console.log('Earnings:');
-    console.log('  (earnings endpoint unavailable: connector is not settlement-configured)');
+    console.log(
+      '  (earnings endpoint unavailable: connector is not settlement-configured)'
+    );
   } else if (peerEarnings === null || peerEarnings.byAsset.length === 0) {
     console.log('Earnings:');
     console.log('  (no settlement activity yet)');
@@ -515,7 +589,9 @@ export async function handlePeerDetail(
   // Channels section
   if (channelsRaw === null) {
     console.log('Channels:');
-    console.log('  (channels endpoint unavailable: connector is not settlement-configured)');
+    console.log(
+      '  (channels endpoint unavailable: connector is not settlement-configured)'
+    );
   } else if (peerChannels.length === 0) {
     console.log('Channels:');
     console.log('  (no channels open)');
@@ -533,7 +609,9 @@ export async function handlePeerDetail(
 
 const PROBE_TIMEOUT_MS = 3000;
 
-async function probeConnector(adminClient: ConnectorAdminClient): Promise<ProbeResult> {
+async function probeConnector(
+  adminClient: ConnectorAdminClient
+): Promise<ProbeResult> {
   try {
     // The townhouse host has only the admin port (9401) reachable, not the
     // connector's healthCheckPort (8080, internal). The admin server's /health
@@ -556,7 +634,11 @@ async function probeHostApi(
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     if (!response.ok) {
-      return { source: 'api', status: 'unhealthy', error: `HTTP ${response.status}` };
+      return {
+        source: 'api',
+        status: 'unhealthy',
+        error: `HTTP ${response.status}`,
+      };
     }
     const body = (await response.json()) as {
       status: string;
@@ -589,50 +671,71 @@ async function probeNodes(
     if (!resp.ok) {
       // Surface enumeration failure as a sentinel probe so it counts toward
       // computeOverall instead of silently disappearing as "no nodes".
-      return [{
-        source: 'nodes',
-        status: 'unknown',
-        error: `failed to enumerate nodes: HTTP ${resp.status}`,
-      }];
+      return [
+        {
+          source: 'nodes',
+          status: 'unknown',
+          error: `failed to enumerate nodes: HTTP ${resp.status}`,
+        },
+      ];
     }
     const body = (await resp.json()) as { nodes?: { id: string }[] };
     nodes = body.nodes ?? [];
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
-    return [{
-      source: 'nodes',
-      status: 'unknown',
-      error: `failed to enumerate nodes: ${msg}`,
-    }];
+    return [
+      {
+        source: 'nodes',
+        status: 'unknown',
+        error: `failed to enumerate nodes: ${msg}`,
+      },
+    ];
   }
 
   return Promise.all(
     nodes.map(async (node) => {
       try {
-        const resp = await fetchImpl(`${apiUrl}/api/nodes/${encodeURIComponent(node.id)}/health`, {
-          signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-        });
+        const resp = await fetchImpl(
+          `${apiUrl}/api/nodes/${encodeURIComponent(node.id)}/health`,
+          {
+            signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+          }
+        );
         if (!resp.ok) {
-          return { source: `node:${node.id}`, status: 'unhealthy' as const, error: `HTTP ${resp.status}` };
+          return {
+            source: `node:${node.id}`,
+            status: 'unhealthy' as const,
+            error: `HTTP ${resp.status}`,
+          };
         }
         const body = (await resp.json()) as { status?: string };
         const s = body.status;
         const status: ProbeResult['status'] =
-          s === 'healthy' ? 'healthy'
-          : s === 'unhealthy' ? 'unhealthy'
-          : s === 'starting' ? 'starting'
-          : s === 'degraded' ? 'degraded'
-          : 'unknown';
+          s === 'healthy'
+            ? 'healthy'
+            : s === 'unhealthy'
+              ? 'unhealthy'
+              : s === 'starting'
+                ? 'starting'
+                : s === 'degraded'
+                  ? 'degraded'
+                  : 'unknown';
         return { source: `node:${node.id}`, status };
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
-        return { source: `node:${node.id}`, status: 'unreachable' as const, error: msg };
+        return {
+          source: `node:${node.id}`,
+          status: 'unreachable' as const,
+          error: msg,
+        };
       }
     })
   );
 }
 
-async function probeAnyone(adminClient: ConnectorAdminClient): Promise<ProbeResult> {
+async function probeAnyone(
+  adminClient: ConnectorAdminClient
+): Promise<ProbeResult> {
   try {
     const result = await adminClient.getHsHostname();
     if (result.hostname !== null) {
@@ -671,7 +774,11 @@ function computeOverall(
   probes: ProbeResult[]
 ): 'healthy' | 'degraded' | 'unhealthy' {
   const statuses = probes.map((p) => p.status);
-  if (statuses.some((s) => s === 'unhealthy' || s === 'unreachable' || s === 'unknown')) {
+  if (
+    statuses.some(
+      (s) => s === 'unhealthy' || s === 'unreachable' || s === 'unknown'
+    )
+  ) {
     return 'unhealthy';
   }
   // A per-node `degraded` probe must surface at the rollup; otherwise a
@@ -692,19 +799,25 @@ export async function handleHealth(
   // Build a 3-second-timeout version of the admin client for connector probe.
   // Read baseUrl through the public getter so a future field rename surfaces
   // as a type error instead of a silent fallback to the hardcoded port.
-  const healthClient = opts.adminClient ?? new ConnectorAdminClient(
-    adminClient.getBaseUrl(),
-    PROBE_TIMEOUT_MS
+  const healthClient =
+    opts.adminClient ??
+    new ConnectorAdminClient(adminClient.getBaseUrl(), PROBE_TIMEOUT_MS);
+
+  const [connectorProbe, apiProbe, nodeProbes, anyoneProbe] = await Promise.all(
+    [
+      probeConnector(healthClient),
+      probeHostApi(apiUrl, fetchImpl),
+      probeNodes(apiUrl, fetchImpl),
+      probeAnyone(healthClient),
+    ]
   );
 
-  const [connectorProbe, apiProbe, nodeProbes, anyoneProbe] = await Promise.all([
-    probeConnector(healthClient),
-    probeHostApi(apiUrl, fetchImpl),
-    probeNodes(apiUrl, fetchImpl),
-    probeAnyone(healthClient),
-  ]);
-
-  const probes: ProbeResult[] = [connectorProbe, apiProbe, ...nodeProbes, anyoneProbe];
+  const probes: ProbeResult[] = [
+    connectorProbe,
+    apiProbe,
+    ...nodeProbes,
+    anyoneProbe,
+  ];
   const overall = computeOverall(probes);
 
   if (opts.json) {
@@ -715,7 +828,9 @@ export async function handleHealth(
       if (probe.error) console.log(`  error: ${probe.error}`);
       if (probe.uptime !== undefined) console.log(`  uptime: ${probe.uptime}s`);
       if (probe.peersConnected !== undefined)
-        console.log(`  peers: ${probe.peersConnected}/${probe.totalPeers ?? '?'} connected`);
+        console.log(
+          `  peers: ${probe.peersConnected}/${probe.totalPeers ?? '?'} connected`
+        );
       if (probe.startedAt) console.log(`  startedAt: ${probe.startedAt}`);
       if (probe.version) console.log(`  version: ${probe.version}`);
       if (probe.hostname) console.log(`  hostname: ${probe.hostname}`);
@@ -778,7 +893,10 @@ export async function dispatchDrillCommand(
     case 'logs': {
       const nodeId = positionals[1];
       if (!nodeId) {
-        usageError('Usage: townhouse logs <node-id> [--lines N] [-f|--follow] [--json]', 'usage');
+        usageError(
+          'Usage: townhouse logs <node-id> [--lines N] [-f|--follow] [--json]',
+          'usage'
+        );
         return true;
       }
       const linesRaw = values['lines'] as string | undefined;
@@ -787,12 +905,18 @@ export async function dispatchDrillCommand(
       let lines = 50;
       if (linesRaw !== undefined) {
         if (!/^\d+$/.test(linesRaw)) {
-          usageError('--lines must be an integer between 0 and 10000', 'bad-flag');
+          usageError(
+            '--lines must be an integer between 0 and 10000',
+            'bad-flag'
+          );
           return true;
         }
         lines = Number(linesRaw);
         if (lines < 0 || lines > 10000) {
-          usageError('--lines must be an integer between 0 and 10000', 'bad-flag');
+          usageError(
+            '--lines must be an integer between 0 and 10000',
+            'bad-flag'
+          );
           return true;
         }
       }
@@ -806,7 +930,11 @@ export async function dispatchDrillCommand(
         usageError('Usage: townhouse peer <id> [--json]', 'usage');
         return true;
       }
-      await handlePeerDetail(new ConnectorAdminClient(adminUrl), peerId, baseOpts);
+      await handlePeerDetail(
+        new ConnectorAdminClient(adminUrl),
+        peerId,
+        baseOpts
+      );
       return true;
     }
     case 'health': {

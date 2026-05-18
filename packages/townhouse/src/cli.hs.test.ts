@@ -823,12 +823,15 @@ describe('CLI hs subcommand', () => {
       // immediate-await case without timing. Instead we assert the flag is
       // set by the time main() returns (which only happens after await).
       let waitUntilExitCalled = false;
-      vi.mocked(mountTui).mockImplementation(() => ({
-        waitUntilExit: () => {
-          waitUntilExitCalled = true;
-          return Promise.resolve();
-        },
-      }) as ReturnType<typeof mountTui>);
+      vi.mocked(mountTui).mockImplementation(
+        () =>
+          ({
+            waitUntilExit: () => {
+              waitUntilExitCalled = true;
+              return Promise.resolve();
+            },
+          }) as ReturnType<typeof mountTui>
+      );
 
       await main(
         ['hs', 'up', '-c', configPath],

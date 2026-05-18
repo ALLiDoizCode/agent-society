@@ -734,7 +734,9 @@ logging:
         json: async () => ({
           uptimeSeconds: 60,
           peers: [],
-          connectorFees: [{ assetCode: 'USDC', assetScale: 6, total: totalUsdc }],
+          connectorFees: [
+            { assetCode: 'USDC', assetScale: 6, total: totalUsdc },
+          ],
           recentClaims: [],
           timestamp: '2026-05-15T10:00:00.000Z',
         }),
@@ -744,9 +746,29 @@ logging:
     function makeStatusFetchMock(earningsTotal: string) {
       return vi.fn().mockImplementation(async (url: string) => {
         if (url.includes('/admin/metrics.json'))
-          return { ok: true, json: async () => ({ uptimeSeconds: 60, aggregate: { packetsForwarded: 10, packetsRejected: 0, bytesSent: 500 }, peers: [], timestamp: '2026-05-15T10:00:00.000Z' }) };
+          return {
+            ok: true,
+            json: async () => ({
+              uptimeSeconds: 60,
+              aggregate: {
+                packetsForwarded: 10,
+                packetsRejected: 0,
+                bytesSent: 500,
+              },
+              peers: [],
+              timestamp: '2026-05-15T10:00:00.000Z',
+            }),
+          };
         if (url.includes('/admin/peers'))
-          return { ok: true, json: async () => ({ nodeId: 'canary', peerCount: 0, connectedCount: 0, peers: [] }) };
+          return {
+            ok: true,
+            json: async () => ({
+              nodeId: 'canary',
+              peerCount: 0,
+              connectedCount: 0,
+              peers: [],
+            }),
+          };
         if (url.includes('/admin/earnings.json'))
           return makeEarningsFetchResponse(earningsTotal);
         return { ok: true, json: async () => ({}) };
@@ -761,7 +783,9 @@ logging:
       try {
         writeFileSync(configPath, makeConfig({ town: true }), 'utf-8');
         await main(['status', '-c', configPath]);
-        const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        const output = consoleSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
         expect(output).toContain('TODAY');
         expect(output).toContain('MONTH');
         expect(output).toContain('YEAR');
@@ -782,7 +806,9 @@ logging:
       try {
         writeFileSync(configPath, makeConfig({ town: true }), 'utf-8');
         await main(['status', '-c', configPath]);
-        const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        const output = consoleSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
         expect(output).toContain('Earnings (USDC):');
         expect(output.split('$0.00').length - 1).toBe(4); // 4 rows
       } finally {
@@ -798,8 +824,17 @@ logging:
       vi.stubGlobal('fetch', makeStatusFetchMock('1000000'));
       try {
         writeFileSync(configPath, makeConfig({ town: true }), 'utf-8');
-        await main(['status', '--units=sats', '--rate', '1500', '-c', configPath]);
-        const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        await main([
+          'status',
+          '--units=sats',
+          '--rate',
+          '1500',
+          '-c',
+          configPath,
+        ]);
+        const output = consoleSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
         expect(output).toContain('Earnings (sats @ 1500/USDC):');
         expect(output).toContain('1,500 sats');
         expect(output).not.toContain('$');
@@ -817,8 +852,12 @@ logging:
       try {
         writeFileSync(configPath, makeConfig({ town: true }), 'utf-8');
         await main(['status', '--units=sats', '-c', configPath]);
-        const errOutput = consoleErrorSpy.mock.calls.map((c) => String(c[0])).join('\n');
-        const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        const errOutput = consoleErrorSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
+        const output = consoleSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
         expect(errOutput).toContain('--rate');
         expect(process.exitCode).toBe(1);
         expect(output).toContain('Node Status');
@@ -838,7 +877,9 @@ logging:
       try {
         writeFileSync(configPath, makeConfig({ town: true }), 'utf-8');
         await main(['status', '--units=sats', '-c', configPath]);
-        const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        const output = consoleSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
         expect(output).toContain('@ 2500/USDC');
       } finally {
         vi.unstubAllEnvs();
@@ -853,7 +894,9 @@ logging:
       try {
         writeFileSync(configPath, makeConfig({ town: true }), 'utf-8');
         await main(['status', '--units=foo', '-c', configPath]);
-        const errOutput = consoleErrorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        const errOutput = consoleErrorSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
         expect(errOutput).toContain('--units must be');
         expect(process.exitCode).toBe(1);
       } finally {
@@ -866,17 +909,28 @@ logging:
       const dir = makeTempDir();
       const configPath = join(dir, 'config.yaml');
       // Malformed nodes.yaml (schema error, not ENOENT) forces resolveEarnings' catch.
-      writeFileSync(join(dir, 'nodes.yaml'), 'entries: "not-an-array"\n', 'utf-8');
+      writeFileSync(
+        join(dir, 'nodes.yaml'),
+        'entries: "not-an-array"\n',
+        'utf-8'
+      );
       vi.stubGlobal('fetch', makeStatusFetchMock('1000000'));
       try {
         writeFileSync(configPath, makeConfig({ town: true }), 'utf-8');
         await main(['status', '-c', configPath]);
-        const stderr = consoleErrorSpy.mock.calls.map((c) => String(c[0])).join('\n');
-        const stdout = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        const stderr = consoleErrorSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
+        const stdout = consoleSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
         // Breadcrumb on stderr so the operator can debug the local fault
         expect(stderr).toContain('Earnings unavailable');
         // ZodError-style errors should render as a one-liner, not multi-line JSON
-        const breadcrumbLine = stderr.split('\n').find((l) => l.startsWith('Earnings unavailable')) ?? '';
+        const breadcrumbLine =
+          stderr
+            .split('\n')
+            .find((l) => l.startsWith('Earnings unavailable')) ?? '';
         expect(breadcrumbLine).not.toContain('{');
         expect(breadcrumbLine).not.toContain('[');
         // Still degrades to the canonical 'unavailable' line on stdout
@@ -894,7 +948,9 @@ logging:
       try {
         writeFileSync(configPath, makeConfig({ town: true }), 'utf-8');
         await main(['metrics', '--units=sats', '-c', configPath]);
-        const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        const output = consoleSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
         expect(output).not.toContain('sats');
         expect(output).toContain('Packets forwarded');
       } finally {
@@ -1217,7 +1273,9 @@ logging:
       vi.stubGlobal('fetch', fetchMock);
       try {
         await main(['channels']);
-        const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        const output = consoleSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
         expect(output).toContain('No channels open');
       } finally {
         vi.unstubAllGlobals();
@@ -1226,21 +1284,27 @@ logging:
 
     it('logs requires a positional node-id and exits 1 when missing', async () => {
       await main(['logs']);
-      const errOutput = consoleErrorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      const errOutput = consoleErrorSpy.mock.calls
+        .map((c) => String(c[0]))
+        .join('\n');
       expect(errOutput).toContain('Usage: townhouse logs');
       expect(process.exitCode).toBe(1);
     });
 
     it('logs --lines with non-integer value exits 1', async () => {
       await main(['logs', 'connector', '--lines', 'abc']);
-      const errOutput = consoleErrorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      const errOutput = consoleErrorSpy.mock.calls
+        .map((c) => String(c[0]))
+        .join('\n');
       expect(errOutput).toContain('--lines must be an integer');
       expect(process.exitCode).toBe(1);
     });
 
     it('peer requires a positional id and exits 1 when missing', async () => {
       await main(['peer']);
-      const errOutput = consoleErrorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      const errOutput = consoleErrorSpy.mock.calls
+        .map((c) => String(c[0]))
+        .join('\n');
       expect(errOutput).toContain('Usage: townhouse peer');
       expect(process.exitCode).toBe(1);
     });
@@ -1251,7 +1315,10 @@ logging:
           return {
             ok: true,
             status: 200,
-            json: async () => ({ hostname: 'abc123.anon', publishedAt: '2026-05-14T10:00:00.000Z' }),
+            json: async () => ({
+              hostname: 'abc123.anon',
+              publishedAt: '2026-05-14T10:00:00.000Z',
+            }),
           };
         }
         if (url.includes('/health')) {
@@ -1273,7 +1340,9 @@ logging:
       vi.stubGlobal('fetch', fetchMock);
       try {
         await main(['health']);
-        const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        const output = consoleSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
         expect(output).toContain('Overall:');
       } finally {
         vi.unstubAllGlobals();

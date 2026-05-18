@@ -7,7 +7,13 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type Docker from 'dockerode';
-import type { ChannelSummary, MetricsResponse, PeerStatus, PeerEarnings, EarningsResponse } from '../connector/types.js';
+import type {
+  ChannelSummary,
+  MetricsResponse,
+  PeerStatus,
+  PeerEarnings,
+  EarningsResponse,
+} from '../connector/types.js';
 import type { ConnectorAdminClient } from '../connector/admin-client.js';
 import {
   handleChannels,
@@ -77,35 +83,44 @@ const EARNINGS_BODY: EarningsResponse = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
 
-function makeMockClient(overrides: Partial<{
-  getChannels: () => Promise<ChannelSummary[]>;
-  getMetrics: () => Promise<MetricsResponse>;
-  getPeers: () => Promise<PeerStatus[]>;
-  getEarnings: () => Promise<EarningsResponse>;
-  getHealth: () => Promise<unknown>;
-  pingAdminLive: () => Promise<unknown>;
-  getHsHostname: () => Promise<unknown>;
-}>): ConnectorAdminClient {
+function makeMockClient(
+  overrides: Partial<{
+    getChannels: () => Promise<ChannelSummary[]>;
+    getMetrics: () => Promise<MetricsResponse>;
+    getPeers: () => Promise<PeerStatus[]>;
+    getEarnings: () => Promise<EarningsResponse>;
+    getHealth: () => Promise<unknown>;
+    pingAdminLive: () => Promise<unknown>;
+    getHsHostname: () => Promise<unknown>;
+  }>
+): ConnectorAdminClient {
   const client = {
     getChannels: overrides.getChannels ?? vi.fn().mockResolvedValue([]),
     getMetrics: overrides.getMetrics ?? vi.fn().mockResolvedValue(METRICS_BODY),
     getPeers: overrides.getPeers ?? vi.fn().mockResolvedValue([PEER_STATUS]),
-    getEarnings: overrides.getEarnings ?? vi.fn().mockResolvedValue(EARNINGS_BODY),
-    getHealth: overrides.getHealth ?? vi.fn().mockResolvedValue({
-      status: 'healthy',
-      uptime: 3600,
-      peersConnected: 1,
-      totalPeers: 1,
-      timestamp: '2026-05-14T12:00:00.000Z',
-    }),
-    pingAdminLive: overrides.pingAdminLive ?? vi.fn().mockResolvedValue({
-      status: 'healthy',
-      nodeId: 'townhouse-hs-connector',
-    }),
-    getHsHostname: overrides.getHsHostname ?? vi.fn().mockResolvedValue({
-      hostname: 'abc123.anon',
-      publishedAt: '2026-05-14T10:00:00.000Z',
-    }),
+    getEarnings:
+      overrides.getEarnings ?? vi.fn().mockResolvedValue(EARNINGS_BODY),
+    getHealth:
+      overrides.getHealth ??
+      vi.fn().mockResolvedValue({
+        status: 'healthy',
+        uptime: 3600,
+        peersConnected: 1,
+        totalPeers: 1,
+        timestamp: '2026-05-14T12:00:00.000Z',
+      }),
+    pingAdminLive:
+      overrides.pingAdminLive ??
+      vi.fn().mockResolvedValue({
+        status: 'healthy',
+        nodeId: 'townhouse-hs-connector',
+      }),
+    getHsHostname:
+      overrides.getHsHostname ??
+      vi.fn().mockResolvedValue({
+        hostname: 'abc123.anon',
+        publishedAt: '2026-05-14T10:00:00.000Z',
+      }),
     getBaseUrl: () => 'http://127.0.0.1:9401',
     baseUrl: 'http://127.0.0.1:9401',
   } as unknown as ConnectorAdminClient;
@@ -153,8 +168,14 @@ function getStderr(): string {
 describe('handleChannels', () => {
   describe('human mode', () => {
     it('prints table header with CHANNEL column when channels are present', async () => {
-      const client = makeMockClient({ getChannels: vi.fn().mockResolvedValue([CHANNEL_1]) });
-      await handleChannels(client, { json: false, jsonCompact: false, now: NOW });
+      const client = makeMockClient({
+        getChannels: vi.fn().mockResolvedValue([CHANNEL_1]),
+      });
+      await handleChannels(client, {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStdout()).toContain('CHANNEL');
       expect(getStdout()).toContain('PEER');
       expect(getStdout()).toContain('CHAIN');
@@ -164,15 +185,27 @@ describe('handleChannels', () => {
     });
 
     it('prints truncated channelId and peerId', async () => {
-      const client = makeMockClient({ getChannels: vi.fn().mockResolvedValue([CHANNEL_1]) });
-      await handleChannels(client, { json: false, jsonCompact: false, now: NOW });
+      const client = makeMockClient({
+        getChannels: vi.fn().mockResolvedValue([CHANNEL_1]),
+      });
+      await handleChannels(client, {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       // channelId 'channel-id-long-enough' is >16 chars → truncated
       expect(getStdout()).toContain('channel-id-long-');
     });
 
     it('prints "No channels open" when empty', async () => {
-      const client = makeMockClient({ getChannels: vi.fn().mockResolvedValue([]) });
-      await handleChannels(client, { json: false, jsonCompact: false, now: NOW });
+      const client = makeMockClient({
+        getChannels: vi.fn().mockResolvedValue([]),
+      });
+      await handleChannels(client, {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStdout()).toContain('No channels open');
     });
 
@@ -180,7 +213,11 @@ describe('handleChannels', () => {
       const client = makeMockClient({
         getChannels: vi.fn().mockRejectedValue(new Error('connection refused')),
       });
-      await handleChannels(client, { json: false, jsonCompact: false, now: NOW });
+      await handleChannels(client, {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStderr()).toContain('Failed to fetch connector channels');
       expect(process.exitCode).toBe(1);
     });
@@ -188,8 +225,14 @@ describe('handleChannels', () => {
 
   describe('json mode', () => {
     it('emits ChannelSummary[] as JSON array', async () => {
-      const client = makeMockClient({ getChannels: vi.fn().mockResolvedValue([CHANNEL_1]) });
-      await handleChannels(client, { json: true, jsonCompact: false, now: NOW });
+      const client = makeMockClient({
+        getChannels: vi.fn().mockResolvedValue([CHANNEL_1]),
+      });
+      await handleChannels(client, {
+        json: true,
+        jsonCompact: false,
+        now: NOW,
+      });
       const parsed = JSON.parse(getStdout()) as ChannelSummary[];
       expect(Array.isArray(parsed)).toBe(true);
       expect(parsed[0]!.channelId).toBe(CHANNEL_1.channelId);
@@ -199,7 +242,11 @@ describe('handleChannels', () => {
       const client = makeMockClient({
         getChannels: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')),
       });
-      await handleChannels(client, { json: true, jsonCompact: false, now: NOW });
+      await handleChannels(client, {
+        json: true,
+        jsonCompact: false,
+        now: NOW,
+      });
       const parsed = JSON.parse(getStdout()) as { error: string; code: string };
       expect(parsed.code).toBe('unreachable');
       expect(typeof parsed.error).toBe('string');
@@ -207,8 +254,14 @@ describe('handleChannels', () => {
     });
 
     it('exit code is 0 on success', async () => {
-      const client = makeMockClient({ getChannels: vi.fn().mockResolvedValue([]) });
-      await handleChannels(client, { json: true, jsonCompact: false, now: NOW });
+      const client = makeMockClient({
+        getChannels: vi.fn().mockResolvedValue([]),
+      });
+      await handleChannels(client, {
+        json: true,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(process.exitCode).toBeUndefined();
     });
   });
@@ -220,21 +273,35 @@ describe('handleMetrics', () => {
   describe('human mode', () => {
     it('prints aggregate block verbatim with "Packets forwarded" label', async () => {
       const client = makeMockClient({});
-      await handleMetrics(client, { json: false, jsonCompact: false, now: NOW });
+      await handleMetrics(client, {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStdout()).toContain('Packets forwarded');
       expect(getStdout()).toContain('100');
     });
 
     it('prints per-peer table with PACKETS FWD column', async () => {
       const client = makeMockClient({});
-      await handleMetrics(client, { json: false, jsonCompact: false, now: NOW });
+      await handleMetrics(client, {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStdout()).toContain('PACKETS FWD');
       expect(getStdout()).toContain('PEER');
     });
 
     it('prints "No peers connected" when peers array is empty', async () => {
-      const client = makeMockClient({ getPeers: vi.fn().mockResolvedValue([]) });
-      await handleMetrics(client, { json: false, jsonCompact: false, now: NOW });
+      const client = makeMockClient({
+        getPeers: vi.fn().mockResolvedValue([]),
+      });
+      await handleMetrics(client, {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStdout()).toContain('No peers connected');
     });
 
@@ -242,7 +309,11 @@ describe('handleMetrics', () => {
       const client = makeMockClient({
         getMetrics: vi.fn().mockRejectedValue(new Error('timeout')),
       });
-      await handleMetrics(client, { json: false, jsonCompact: false, now: NOW });
+      await handleMetrics(client, {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStderr()).toContain('Failed to fetch connector metrics');
       expect(process.exitCode).toBe(1);
     });
@@ -281,9 +352,9 @@ describe('handleMetrics', () => {
 
 describe('handleLogs', () => {
   it('resolves townhouse- prefixed container names verbatim', async () => {
-    const listContainersMock = vi.fn().mockResolvedValue([
-      { Names: ['/townhouse-connector'] },
-    ]);
+    const listContainersMock = vi
+      .fn()
+      .mockResolvedValue([{ Names: ['/townhouse-connector'] }]);
 
     // Call 'end' handler synchronously when it's registered so the while loop exits immediately
     const mockStream2 = {
@@ -328,10 +399,12 @@ describe('handleLogs', () => {
 
   it('emits ambiguous-node error when multiple containers match a bare service tag', async () => {
     const mockDocker = {
-      listContainers: vi.fn().mockResolvedValue([
-        { Names: ['/townhouse-town-01'] },
-        { Names: ['/townhouse-town-02'] },
-      ]),
+      listContainers: vi
+        .fn()
+        .mockResolvedValue([
+          { Names: ['/townhouse-town-01'] },
+          { Names: ['/townhouse-town-02'] },
+        ]),
     } as unknown as Docker;
 
     await handleLogs(mockDocker, 'town', {
@@ -347,7 +420,9 @@ describe('handleLogs', () => {
 
   it('emits docker-unavailable error when Docker daemon is unreachable (json mode)', async () => {
     const mockDocker = {
-      listContainers: vi.fn().mockRejectedValue(new Error('connect ENOENT /var/run/docker.sock')),
+      listContainers: vi
+        .fn()
+        .mockRejectedValue(new Error('connect ENOENT /var/run/docker.sock')),
     } as unknown as Docker;
 
     await handleLogs(mockDocker, 'connector', {
@@ -363,9 +438,9 @@ describe('handleLogs', () => {
   });
 
   it('resolves bare service tag to townhouse-<tag> when unambiguous', async () => {
-    const listMock = vi.fn().mockResolvedValue([
-      { Names: ['/townhouse-connector'] },
-    ]);
+    const listMock = vi
+      .fn()
+      .mockResolvedValue([{ Names: ['/townhouse-connector'] }]);
 
     // Call 'end' handler synchronously when it's registered so while loop exits immediately
     const mockStream = {
@@ -401,7 +476,11 @@ describe('handlePeerDetail', () => {
   describe('human mode', () => {
     it('prints peer header and ILP address section', async () => {
       const client = makeMockClient({});
-      await handlePeerDetail(client, 'town', { json: false, jsonCompact: false, now: NOW });
+      await handlePeerDetail(client, 'town', {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStdout()).toContain('Peer: town');
       expect(getStdout()).toContain('g.toon.town');
       expect(getStdout()).toContain('Routes: 3');
@@ -409,30 +488,50 @@ describe('handlePeerDetail', () => {
 
     it('prints connected status', async () => {
       const client = makeMockClient({});
-      await handlePeerDetail(client, 'town', { json: false, jsonCompact: false, now: NOW });
+      await handlePeerDetail(client, 'town', {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStdout()).toContain('Connected: yes');
     });
 
     it('prints earnings per asset', async () => {
       const client = makeMockClient({});
-      await handlePeerDetail(client, 'town', { json: false, jsonCompact: false, now: NOW });
+      await handlePeerDetail(client, 'town', {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStdout()).toContain('USDC');
       expect(getStdout()).toContain('received 1000');
     });
 
     it('prints unknown-peer error and sets exitCode=1 when peer not found', async () => {
-      const client = makeMockClient({ getPeers: vi.fn().mockResolvedValue([]) });
-      await handlePeerDetail(client, 'unknown-peer-id', { json: false, jsonCompact: false, now: NOW });
+      const client = makeMockClient({
+        getPeers: vi.fn().mockResolvedValue([]),
+      });
+      await handlePeerDetail(client, 'unknown-peer-id', {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStderr()).toContain('Unknown peer "unknown-peer-id"');
       expect(process.exitCode).toBe(1);
     });
 
     it('shows degraded earnings section when earnings endpoint returns 503', async () => {
       const client = makeMockClient({
-        getEarnings: vi.fn().mockRejectedValue(new Error('503 Service Unavailable')),
+        getEarnings: vi
+          .fn()
+          .mockRejectedValue(new Error('503 Service Unavailable')),
         getChannels: vi.fn().mockResolvedValue([]),
       });
-      await handlePeerDetail(client, 'town', { json: false, jsonCompact: false, now: NOW });
+      await handlePeerDetail(client, 'town', {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStdout()).toContain('earnings endpoint unavailable');
       expect(process.exitCode).toBeUndefined();
     });
@@ -441,7 +540,11 @@ describe('handlePeerDetail', () => {
       const client = makeMockClient({
         getChannels: vi.fn().mockResolvedValue([]),
       });
-      await handlePeerDetail(client, 'town', { json: false, jsonCompact: false, now: NOW });
+      await handlePeerDetail(client, 'town', {
+        json: false,
+        jsonCompact: false,
+        now: NOW,
+      });
       expect(getStdout()).toContain('no channels open');
     });
   });
@@ -451,16 +554,30 @@ describe('handlePeerDetail', () => {
       const client = makeMockClient({
         getChannels: vi.fn().mockResolvedValue([CHANNEL_1]),
       });
-      await handlePeerDetail(client, 'town', { json: true, jsonCompact: false, now: NOW });
-      const parsed = JSON.parse(getStdout()) as { peer: PeerStatus; earnings: PeerEarnings | null; channels: ChannelSummary[] };
+      await handlePeerDetail(client, 'town', {
+        json: true,
+        jsonCompact: false,
+        now: NOW,
+      });
+      const parsed = JSON.parse(getStdout()) as {
+        peer: PeerStatus;
+        earnings: PeerEarnings | null;
+        channels: ChannelSummary[];
+      };
       expect(parsed.peer.id).toBe('town');
       expect(typeof parsed.earnings).toBe('object');
       expect(Array.isArray(parsed.channels)).toBe(true);
     });
 
     it('emits error envelope with code=unknown-peer for missing peer', async () => {
-      const client = makeMockClient({ getPeers: vi.fn().mockResolvedValue([]) });
-      await handlePeerDetail(client, 'ghost', { json: true, jsonCompact: false, now: NOW });
+      const client = makeMockClient({
+        getPeers: vi.fn().mockResolvedValue([]),
+      });
+      await handlePeerDetail(client, 'ghost', {
+        json: true,
+        jsonCompact: false,
+        now: NOW,
+      });
       const parsed = JSON.parse(getStdout()) as { code: string };
       expect(parsed.code).toBe('unknown-peer');
       expect(process.exitCode).toBe(1);
@@ -471,7 +588,11 @@ describe('handlePeerDetail', () => {
         getEarnings: vi.fn().mockRejectedValue(new Error('503')),
         getChannels: vi.fn().mockResolvedValue([]),
       });
-      await handlePeerDetail(client, 'town', { json: true, jsonCompact: false, now: NOW });
+      await handlePeerDetail(client, 'town', {
+        json: true,
+        jsonCompact: false,
+        now: NOW,
+      });
       const parsed = JSON.parse(getStdout()) as { earnings: null };
       expect(parsed.earnings).toBeNull();
     });
@@ -491,8 +612,12 @@ describe('handleHealth', () => {
   describe('human mode', () => {
     it('prints each probe source and Overall status', async () => {
       const client = makeMockClient({});
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: async () => HEALTHY_API_RESPONSE })
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => HEALTHY_API_RESPONSE,
+        })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) });
 
       await handleHealth(client, {
@@ -512,8 +637,12 @@ describe('handleHealth', () => {
 
     it('prints Overall: healthy when all probes pass', async () => {
       const client = makeMockClient({});
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: async () => HEALTHY_API_RESPONSE })
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => HEALTHY_API_RESPONSE,
+        })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) });
 
       await handleHealth(client, {
@@ -534,7 +663,8 @@ describe('handleHealth', () => {
         pingAdminLive: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')),
         getHsHostname: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')),
       });
-      const fetchMock = vi.fn()
+      const fetchMock = vi
+        .fn()
         .mockRejectedValueOnce(new Error('ECONNREFUSED'))
         .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) });
 
@@ -554,8 +684,12 @@ describe('handleHealth', () => {
   describe('json mode', () => {
     it('emits { overall, probes } JSON object', async () => {
       const client = makeMockClient({});
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: async () => HEALTHY_API_RESPONSE })
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => HEALTHY_API_RESPONSE,
+        })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) });
 
       await handleHealth(client, {
@@ -567,7 +701,10 @@ describe('handleHealth', () => {
         adminClient: client,
       });
 
-      const parsed = JSON.parse(getStdout()) as { overall: string; probes: unknown[] };
+      const parsed = JSON.parse(getStdout()) as {
+        overall: string;
+        probes: unknown[];
+      };
       expect(typeof parsed.overall).toBe('string');
       expect(Array.isArray(parsed.probes)).toBe(true);
       expect(parsed.probes.length).toBeGreaterThanOrEqual(2);
@@ -575,10 +712,16 @@ describe('handleHealth', () => {
 
     it('overall=degraded and exit 0 when .anyone hostname is still starting', async () => {
       const client = makeMockClient({
-        getHsHostname: vi.fn().mockResolvedValue({ hostname: null, publishedAt: null }),
+        getHsHostname: vi
+          .fn()
+          .mockResolvedValue({ hostname: null, publishedAt: null }),
       });
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: async () => HEALTHY_API_RESPONSE })
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => HEALTHY_API_RESPONSE,
+        })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) });
 
       await handleHealth(client, {
@@ -597,10 +740,18 @@ describe('handleHealth', () => {
 
     it('.anyone probe shows n/a when anon is disabled', async () => {
       const client = makeMockClient({
-        getHsHostname: vi.fn().mockRejectedValue(new Error('connector is anon-disabled (HTTP 503)')),
+        getHsHostname: vi
+          .fn()
+          .mockRejectedValue(
+            new Error('connector is anon-disabled (HTTP 503)')
+          ),
       });
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce({ ok: true, json: async () => HEALTHY_API_RESPONSE })
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => HEALTHY_API_RESPONSE,
+        })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) });
 
       await handleHealth(client, {
@@ -612,8 +763,12 @@ describe('handleHealth', () => {
         adminClient: client,
       });
 
-      const parsed = JSON.parse(getStdout()) as { probes: { source: string; status: string }[] };
-      const anyoneProbe = parsed.probes.find((p) => p.source === 'anyone-hostname');
+      const parsed = JSON.parse(getStdout()) as {
+        probes: { source: string; status: string }[];
+      };
+      const anyoneProbe = parsed.probes.find(
+        (p) => p.source === 'anyone-hostname'
+      );
       expect(anyoneProbe?.status).toBe('n/a');
     });
   });

@@ -1,7 +1,10 @@
 const DECIMAL_RE = /^-?\d+$/;
 const MICRO_FRACTIONAL_DIGITS = 4;
 
-export function formatRelativeTime(iso: string | null, now: Date = new Date()): string {
+export function formatRelativeTime(
+  iso: string | null,
+  now: Date = new Date()
+): string {
   if (iso === null) return '—';
   const ms = Date.parse(iso);
   if (!Number.isFinite(ms)) return '?';
@@ -21,7 +24,9 @@ export function formatUsdcMicro(decimalString: string, scale: number): string {
   if (!DECIMAL_RE.test(decimalString)) {
     const env = process.env['NODE_ENV'];
     if (env === 'development' || env === 'test') {
-      throw new Error(`formatUsdcMicro: invalid decimal string: ${JSON.stringify(decimalString)}`);
+      throw new Error(
+        `formatUsdcMicro: invalid decimal string: ${JSON.stringify(decimalString)}`
+      );
     }
     return '$?.????';
   }
@@ -36,7 +41,9 @@ export function formatUsdcMicro(decimalString: string, scale: number): string {
   const remainder = value % divisor;
 
   const fractionalStr = remainder.toString().padStart(scale, '0');
-  const cents = fractionalStr.slice(0, MICRO_FRACTIONAL_DIGITS).padEnd(MICRO_FRACTIONAL_DIGITS, '0');
+  const cents = fractionalStr
+    .slice(0, MICRO_FRACTIONAL_DIGITS)
+    .padEnd(MICRO_FRACTIONAL_DIGITS, '0');
 
   const formatted = `$${whole.toString()}.${cents}`;
   return negative && value !== 0n ? `-${formatted}` : formatted;
@@ -46,7 +53,9 @@ export function formatUsdc(decimalString: string, scale: number): string {
   if (!DECIMAL_RE.test(decimalString)) {
     const env = process.env['NODE_ENV'];
     if (env === 'development' || env === 'test') {
-      throw new Error(`formatUsdc: invalid decimal string: ${JSON.stringify(decimalString)}`);
+      throw new Error(
+        `formatUsdc: invalid decimal string: ${JSON.stringify(decimalString)}`
+      );
     }
     return '$?.??';
   }
