@@ -409,3 +409,22 @@ _Six cross-repo patches (P3, P4, P5, P6, P7, Q1) shipped in lock-step via [conne
   2. `_pkgVersion` resolves `'../../package.json'` relative to the dist chunk path, not the source. Fix in source would change `build-app.ts:18` from `createRequire(import.meta.url)('../../package.json')` to use a build-time inlined version, or `'../package.json'` if always shipped under `dist/`. Workaround: `sed -i 's|"\.\./\.\./package\.json"|"../package.json"|g' dist/chunk-*.js`.
   3. `dist/image-manifest.json` is only produced by the npm-publish CI workflow, so `townhouse hs up` always fails in dev with "HS mode requires a digest-pinned image manifest". The user's installed rc5 manifest is `{}` empty (pre-existing rc5 tarball bug — town#43 lineage). Workaround for smoke: use the dev-infra script + mock-connector fixture instead.
   These three together block every dev-tree story that needs to verify HS-mode behavior end-to-end. Cross-cutting; should be filed as its own story under Epic 22 (Restore Green CI) or a new build-hardening epic.
+
+## Deferred from: code review of 48-7-live-e2e-gate-operator-dashboard (2026-05-18)
+
+All findings target `packages/townhouse/src/__integration__/townhouse-tui-e2e.test.ts` — the Story 48.7 gate test file. Gate passed 8/8 on 2026-05-18; these are test-quality / future-flake hardening items, not gate blockers.
+
+- `addedPeerId.slice(0, 4)` substring at line 835 is trivially satisfied by 'town' in any container name or copy — false-positive risk. Tighten to a full peer-row regex (e.g. `/town\s+town\s+USDC/`).
+- `$0.50` substring at line 839 matches 4 cells (TODAY/MONTH/YEAR/LIFETIME) — cannot isolate MONTH. Anchor with column context: `/MONTH\s+\$0\.50/m`.
+- Snapshot seed uses `assetCode: 'USDC'` at line 283 while 47.5 precedent (`townhouse-earnings-e2e.test.ts:351`) and connector default may use `'USD'`. Dormant in 48.7 (Tests 1-2 don't read seed); fails latently if a future gate-tightening asserts delta values.
+- Tests 4 and 5 use fixed `sleep()` budgets (300ms / 700ms / 1500ms) instead of polling `waitForFrame(predicate, {budget})` — flake-prone under CI load (vitest pool=fork on shared runners). Lines 672, 681, 706, 752, 760.
+- `probePortFree` at line 210 treats 1s connect timeout as "port free" — inverted semantics. A slow-SYN-ACK bound port falsely reports free, causing later `hs up` to fail with a Docker error instead of a friendly preflight message.
+- `cleanupContainersAndVolumes` at lines 132-147 doesn't `docker network rm townhouse-hs-net` — network artifacts persist across runs. Idempotent today but a daemon-version drift could surface routing issues.
+- Cleanup at lines 414-444 doesn't `docker stop -t 5` before `rmSync(tmpDir, { force: true })` — risk of `EBUSY` on overlayfs if containers are still flushing bind-mounted files.
+- Test 7 `lo.process.kill('SIGKILL')` at lines 906-911 leaves dockerode follow-stream pending; no `await waitForExit`. On the next suite iteration, reconnect attempts may collide with cleanup.
+- `instance.lastFrame() ?? ''` pattern (~11 sites) masks `undefined` (no render yet) — diagnostic obscures "Ink failed to mount" vs "frame missing token". Distinguish via `expect(instance.lastFrame()).toBeDefined()` first.
+- Missing 47.5 P5 cross-check: `docker exec ${HS_API_NAME} stat -c "%a %s" /.townhouse/earnings-snapshots.jsonl` to prove the bind mount and seed reached the container.
+- Port pre-flight at lines 214-228 only probes 9401/28090 — misses 9400 (`townhouse-test-infra.sh` Fastify), 28700+ container-internal ports. Pre-warm collision possible if test-infra is left running.
+- `/api/transport` readiness check at lines 340-343 doesn't confirm `/api/earnings` plugin registered. Plugin-order regression would surface as opaque 404 in Test 2.
+- `parseLastJsonLine` at lines 177-193 walks back to first line starting with `{` — could parse a structured log envelope as the success body. Mitigated today by `expect(addBody.ok).toBe(true)` at line 383 but fragile.
+- ActivityTicker disjunction `/no settlements yet|press \[a\] when|activity arrives|\[a\] activity/` at lines 485-487 accepts wildly different ticker states — broad assertion misses regressions where ticker copy renders the wrong empty-state variant.
