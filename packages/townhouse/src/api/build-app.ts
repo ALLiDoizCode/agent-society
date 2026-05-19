@@ -19,15 +19,28 @@ import { createRequire as nodeCreateRequire } from 'node:module';
 import { buildCorsOptions } from './cors.js';
 
 const STARTED_AT = new Date().toISOString();
-// 2026-05-18 code review: path is '../package.json' (not '../../') because at runtime
-// `import.meta.url` resolves to the BUNDLE file (`dist/cli.js` or `dist/chunk-*.js`),
-// not the source file. From `dist/*.js`, `../package.json` correctly points to
-// `packages/townhouse/package.json`. The prior '../../package.json' worked from source
-// (src/api/build-app.ts) but resolved to packages/package.json (non-existent) at runtime —
-// run 12 dodged it because the chunk layout didn't load this module during init.
-const _pkgVersion: string = (
-  nodeCreateRequire(import.meta.url)('../package.json') as { version: string }
-)['version'];
+// Resolve `package.json` defensively. At runtime `import.meta.url` points at the
+// bundled output (e.g. `dist/cli.js`), where `../package.json` resolves to
+// `packages/townhouse/package.json`. If tsup ever chunks this module deeper
+// (e.g. `dist/api/build-app.js`), `../../package.json` is needed. Try the
+// expected path first, then the deeper-chunk fallback. Pass 2 code review
+// 2026-05-18 hardening per P37 — keeps the file working across bundle layouts
+// instead of silently MODULE_NOT_FOUND-ing at boot under a future tsup config change.
+const _localRequire = nodeCreateRequire(import.meta.url);
+function _loadPackageJson(): { version: string } {
+  for (const rel of ['../package.json', '../../package.json']) {
+    try {
+      return _localRequire(rel) as { version: string };
+    } catch {
+      // try next candidate
+    }
+  }
+  throw new Error(
+    "build-app.ts: could not resolve package.json from '../package.json' or '../../package.json'. " +
+      'Bundle layout may have changed — update the resolution ladder.'
+  );
+}
+const _pkgVersion: string = _loadPackageJson()['version'];
 
 /** Allowed loopback hosts */
 export const LOOPBACK_HOSTS = ['127.0.0.1', '::1', 'localhost'];

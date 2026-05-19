@@ -68,11 +68,28 @@ export function createSocks5WebSocketFactory(
 
   const agent = new SocksProxyAgent(socksProxy);
 
-  // CJS/ESM interop: `require('ws')` returns the WebSocket class directly in CJS
-  // (no `.default` property). `WS.default` would be undefined in that context.
-  // Accept either shape so this factory works in both CJS and ESM environments.
+  // CJS/ESM interop: `require('ws')` can return any of three shapes depending on
+  // the bundler/loader: the class directly (pure CJS); `{ default: WSClass, ... }`
+  // (esModuleInterop=true / synthetic default); or `{ WebSocket: WSClass, ... }`
+  // (named export, no default). Walk the ladder so this factory works in all
+  // three environments. Pass 2 code review 2026-05-18: previous `(WS as any).default ?? WS`
+  // would accept a namespace object as a "constructor" and throw cryptically.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const WSClass = ((WS as any).default ?? WS) as unknown as typeof WSModule.prototype.constructor;
+  const ws = WS as any;
+  const WSClass = (
+    typeof ws === 'function'
+      ? ws
+      : typeof ws.default === 'function'
+        ? ws.default
+        : typeof ws.WebSocket === 'function'
+          ? ws.WebSocket
+          : null
+  ) as unknown as typeof WSModule.prototype.constructor;
+  if (WSClass === null) {
+    throw new Error(
+      "createSocks5WebSocketFactory: require('ws') did not yield a constructor on .default, .WebSocket, or the module root."
+    );
+  }
 
   return (url: string) =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

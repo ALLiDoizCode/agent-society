@@ -137,8 +137,26 @@ const B_SOCKS5_PROXY_URL = 'socks5h://127.0.0.1:9050';  // B's anon daemon on ho
 const B_BTP_SERVER_PORT = 3002;  // distinct from A's internal BTP port 3000
 const B_HEALTH_PORT = 8082;      // distinct from A's health port 8080
 
-// Connector image digest (from dist/image-manifest.json, hand-patched from docker pull)
-const CONNECTOR_IMAGE = 'ghcr.io/toon-protocol/connector@sha256:fe7aa9e8ccca781a4625cc7186f9e34d626a91cd492d24b07de454793ef7e35b';
+// Connector image — Pass 2 code review (P17): read from the SAME image-manifest as A's
+// stack rather than hardcoding a digest. Hardcoded digests drifted vs the manifest,
+// creating silent split-brain (A and B running different binaries). Resolved at runtime
+// because dist/ sits outside tsconfig rootDir (no static JSON import).
+function loadConnectorImageFromManifest(): string {
+  const thisFile = fileURLToPath(import.meta.url);
+  const manifestPath = join(dirname(thisFile), '..', '..', 'dist', 'image-manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as {
+    images: Record<string, { name: string; digest: string }>;
+  };
+  const entry = manifest.images['connector'];
+  if (!entry || typeof entry.name !== 'string' || typeof entry.digest !== 'string') {
+    throw new Error(
+      `dist/image-manifest.json missing images.connector{name,digest}. ` +
+        `Re-run \`gh run download <id> --name image-manifest -D packages/townhouse/dist/\`.`
+    );
+  }
+  return `${entry.name}@${entry.digest}`;
+}
+const CONNECTOR_IMAGE = loadConnectorImageFromManifest();
 
 // OQ-2 UPDATED: Use real Anvil (sdk-e2e-infra.sh up) with real on-chain channel.
 // Prerequisites: ./scripts/sdk-e2e-infra.sh up (Anvil at localhost:18545 with deployed contracts)
@@ -155,10 +173,17 @@ const ANVIL_RPC = 'http://127.0.0.1:18545';  // host-side URL
 function dockerBridgeGateway(): string {
   try {
     const out = execSync(
-      `docker network inspect bridge --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}'`,
+      `docker network inspect bridge --format '{{range .IPAM.Config}}{{.Gateway}}\n{{end}}'`,
       { encoding: 'utf-8', timeout: 5_000 }
     ).trim();
-    if (out) return out;
+    if (out) {
+      // Pass 2 code review (P16): on dual-stack hosts, IPAM.Config has both IPv4
+      // and IPv6 entries. Pick the first IPv4. Falls back to default 172.17.0.1
+      // if nothing parses (Docker Desktop / podman quirks).
+      const lines = out.split('\n').map((s) => s.trim()).filter(Boolean);
+      const ipv4 = lines.find((s) => /^\d+\.\d+\.\d+\.\d+$/.test(s));
+      if (ipv4) return ipv4;
+    }
   } catch {
     /* fall through to default */
   }
@@ -166,9 +191,11 @@ function dockerBridgeGateway(): string {
 }
 
 // B's EVM account (Account #4 — distinct from A's Account #3 = DEFAULT_HS_CHAIN_PROVIDERS.keyId)
-// Using Account #4 so B's channels don't conflict with A's own key
+// Using Account #4 so B's channels don't conflict with A's own key.
+// TEST KEY — Anvil deterministic account #3. NOT a real wallet. Safe to commit. (Pass 2 P23)
 const FOREIGN_CLIENT_PRIVATE_KEY =
   '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a';
+// TEST KEY — Anvil deterministic address paired with FOREIGN_CLIENT_PRIVATE_KEY. (Pass 2 P23)
 const FOREIGN_CLIENT_EVM_ADDRESS = '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65';
 
 // A's EVM address (from DEFAULT_HS_CHAIN_PROVIDERS.keyId = Account #3)
@@ -258,20 +285,37 @@ async function waitForExitLabelled(
 // the structured output schema rather than a walk-from-end heuristic.
 // 2026-05-18 code review: probePortFree now uses the statically-imported createConnection
 // (was previously a dynamic import; static is simpler and the import was already present).
-async function probePortFree(
-  port: number,
-  host = '127.0.0.1'
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = createConnection({ port, host });
+function probePortFree(port: number, host = '127.0.0.1'): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    let socket: ReturnType<typeof createConnection>;
+    try {
+      socket = createConnection({ port, host });
+    } catch {
+      // Pass 2 code review (P31): sync error (EMFILE / EACCES / ENETUNREACH).
+      // Treat as "cannot determine — assume bound" (safer false-FAIL than false-PASS).
+      resolve(false);
+      return;
+    }
+    let resolved = false;
     const settle = (free: boolean) => {
-      socket.removeAllListeners();
+      if (resolved) return;
+      resolved = true;
       socket.destroy();
+      socket.removeAllListeners();
       resolve(free);
     };
-    socket.once('connect', () => settle(false));
-    socket.once('error', () => settle(true));
-    socket.setTimeout(1_000, () => settle(true));
+    socket.once('connect', () => settle(false)); // Connected → port is BOUND
+    socket.once('error', (err: NodeJS.ErrnoException) => {
+      // ECONNREFUSED = nothing listening = FREE. Any other error code is ambiguous → treat as BOUND.
+      settle(err.code === 'ECONNREFUSED');
+    });
+    socket.setTimeout(1_000, () => {
+      // Pass 2 code review (P12): timeout on loopback connect indicates a STALLED holder
+      // (process accepted SYN but never finished handshake — iptables DROP, hung syscall,
+      // ip_conntrack saturation). Treat as BOUND (false), NOT free. Better to false-FAIL
+      // the pre-flight than to false-PASS and confuse the actual port-conflict error later.
+      settle(false);
+    });
   });
 }
 
@@ -308,9 +352,14 @@ function assertNoPreExistingHsContainersOrVolumes(): void {
       encoding: 'utf-8',
       timeout: 10_000,
     });
-  } catch {
-    // If docker is unreachable, beforeAll will fail loudly elsewhere
-    return;
+  } catch (err) {
+    // Pass 2 code review (P9/A13/E7): AC #5 mandates fail-fast. Don't paper over a
+    // docker hiccup here — a non-reachable docker daemon would cause every
+    // subsequent assertion in this preflight to be a no-op, masking pre-existing
+    // resources from a prior crashed run.
+    throw new Error(
+      `Docker unreachable for pre-flight check (docker ps -a): ${(err as Error).message}`
+    );
   }
   const liveContainerSet = new Set(psOut.trim().split('\n').filter(Boolean));
   for (const name of allContainers) {
@@ -322,8 +371,10 @@ function assertNoPreExistingHsContainersOrVolumes(): void {
       encoding: 'utf-8',
       timeout: 10_000,
     });
-  } catch {
-    return;
+  } catch (err) {
+    throw new Error(
+      `Docker unreachable for pre-flight check (docker volume ls): ${(err as Error).message}`
+    );
   }
   const liveVolumeSet = new Set(volOut.trim().split('\n').filter(Boolean));
   for (const vol of allVolumes) {
@@ -381,7 +432,10 @@ async function startBConnector(configYaml: string): Promise<string> {
   // Per-run B-config dir (mkdtempSync) avoids collision with concurrent runs.
   const bConfigDir = mkdtempSync(join(tmpdir(), 'townhouse-foreign-b-config-'));
   // mkdtempSync already returns 0o700 on POSIX, but explicit chmod is harmless on top.
-  writeFileSync(join(bConfigDir, 'connector.yaml'), configYaml, { encoding: 'utf-8', mode: 0o600 });
+  // Pass 2 code review (P15): mode 0o644 (not 0o600) so the in-container `node` user
+  // (uid 1000) can read this file when the connector image runs with `--user node`.
+  // Host-side privilege isn't a concern — this is a test fixture in a tmpdir.
+  writeFileSync(join(bConfigDir, 'connector.yaml'), configYaml, { encoding: 'utf-8', mode: 0o644 });
 
   // Run B's connector with --network host so its anon SOCKS5 is on host 127.0.0.1:9050
   execSync(
@@ -395,6 +449,39 @@ async function startBConnector(configYaml: string): Promise<string> {
       ${CONNECTOR_IMAGE}`,
     { stdio: 'pipe', timeout: 60_000 }
   );
+
+  // Pass 2 code review (P14): docker run -d exits 0 once the container is CREATED,
+  // even if it crashes on startup. Wait briefly and verify the container is actually running
+  // before returning — surfaces image-pull failures, bad mounts, entrypoint crashes
+  // as a fast, actionable error rather than a 240s waitForBSocks5 timeout downstream.
+  await new Promise((r) => setTimeout(r, 1500));
+  let state: string;
+  try {
+    state = execSync(
+      `docker inspect ${B_CONNECTOR_NAME} --format '{{.State.Status}}'`,
+      { encoding: 'utf-8', timeout: 5_000 }
+    ).trim();
+  } catch (err) {
+    throw new Error(
+      `B's connector container (${B_CONNECTOR_NAME}) docker inspect failed: ${(err as Error).message}. ` +
+        `Container may have crashed on startup. Try \`docker logs ${B_CONNECTOR_NAME}\` for diagnosis.`
+    );
+  }
+  if (state !== 'running') {
+    let crashLog = '';
+    try {
+      crashLog = execSync(`docker logs --tail 50 ${B_CONNECTOR_NAME}`, {
+        encoding: 'utf-8',
+        timeout: 5_000,
+      }).trim();
+    } catch {
+      crashLog = '(could not capture docker logs)';
+    }
+    throw new Error(
+      `B's connector container (${B_CONNECTOR_NAME}) is in state '${state}' (expected 'running') ` +
+        `after docker run -d. Last 50 lines of logs:\n${crashLog}`
+    );
+  }
   return bConfigDir;
 }
 
@@ -452,6 +539,7 @@ describe.skipIf(!shouldRun)(
       error: 'beforeAll did not complete (publishResult never assigned)',
     };
     // Timing measurements (set in beforeAll, asserted in Test 1 for AC #1 wall budgets)
+    let tStartFirstOuter = 0; // ms when FIRST ToonClient.start() was invoked (Pass 2 P-DN2)
     let transportEstablishedAt = 0; // ms after ToonClient.start() resolved
     let publishCompletedAt = 0; // ms after publishEvent resolved
     let publishStartedAt = 0; // ms when publishEvent was invoked
@@ -491,11 +579,12 @@ describe.skipIf(!shouldRun)(
         );
       }
 
-      // Step 3: Port pre-flight (P14) — A's bridge-mode 9401/28090 AND B's host-mode
+      // Step 3a: Port pre-flight (P14) — A's bridge-mode 9401/28090 AND B's host-mode
       // 9402/9050/3002/8082 all probed. Single helper since 2026-05-18 code review.
       await assertHsPortsFree();
 
-      // Step 3: Generate B's keypair first (needed for nodeId in connector.yaml)
+      // Step 3b: Generate B's keypair first (needed for nodeId in connector.yaml).
+      // Pass 2 code review (P13): renumbered from duplicate "Step 3" to 3a/3b.
       bSecretKey = generateSecretKey();
       bPubkey = getPublicKey(bSecretKey);
       console.log(`[49.1] B pubkey: ${bPubkey.slice(0, 16)}...`);
@@ -543,7 +632,8 @@ describe.skipIf(!shouldRun)(
       // Step 6: Create tmpDir for A
       tmpDirA = mkdtempSync(join(tmpdir(), 'townhouse-foreign-A-'));
 
-      // Step 7: townhouse init A
+      // Step 7a: townhouse init A. Pass 2 code review (P13): renumbered from
+      // duplicate "Step 7" to 7a/7b.
       const init = runCli('init', {
         configDir: tmpDirA,
         password: TEST_PASSWORD,
@@ -556,7 +646,7 @@ describe.skipIf(!shouldRun)(
         );
       }
 
-      // Step 7: townhouse hs up A (apex cold-boot — 5 min cold budget)
+      // Step 7b: townhouse hs up A (apex cold-boot — 5 min cold budget)
       const up = runCli('hs', {
         configDir: tmpDirA,
         password: TEST_PASSWORD,
@@ -583,8 +673,10 @@ describe.skipIf(!shouldRun)(
       // Hostname shape: v3 onion-equivalent — 56-char base32 [a-z2-7]+ followed by
       // .anyone (canonical apex) or .anon (B's locally-published HS). Both TLDs admitted
       // because the @anyone-protocol embedded client emits different TLDs depending on
-      // the publishing context. Alphabet tightened to [a-z2-7]+ 2026-05-18 code review.
-      expect(hostJson.hostname).toMatch(/^[a-z2-7]+\.(anyone|anon)$/);
+      // the publishing context. Pass 2 code review (P32): length bounded to v3-onion
+      // (56 chars) with ±1 tolerance for any encoding edge cases. Pre-Pass-2 regex was
+      // `[a-z2-7]+` which accepted arbitrarily short strings.
+      expect(hostJson.hostname).toMatch(/^[a-z2-7]{55,57}\.(anyone|anon)$/);
       hostnameA = hostJson.hostname;
       console.log(`[49.1] A hostname: ${hostnameA}`);
 
@@ -614,6 +706,9 @@ describe.skipIf(!shouldRun)(
         `rpcUrl: 'http://${bridgeGw}:18545'`
       );
       if (patchedYaml !== connectorYaml) {
+        // Pass 2 code review (P39): verify the replacement is well-formed, not just changed.
+        // Catches typos in the replacement string (e.g. missing port, wrong protocol).
+        expect(patchedYaml).toMatch(/rpcUrl:\s*['"]?http:\/\/\d+\.\d+\.\d+\.\d+:18545['"]?/);
         writeFileSync(connectorYamlPath, patchedYaml, { mode: 0o600 });
         // Restart A's connector to pick up the new rpcUrl. 2026-05-18 code review:
         // fail-fast if the restart or health-check fails — the test cannot continue
@@ -651,7 +746,13 @@ describe.skipIf(!shouldRun)(
       let addTownCode: number;
       try {
         addTownCode = await waitForExitLabelled(addTown.process, 180_000, 'townhouse node add town');
-      } catch {
+      } catch (err) {
+        // Pass 2 code review (P18): capture stderr so the failure mode (timeout, password
+        // prompt hang, docker.sock denial, etc.) is visible in the test output.
+        console.warn(
+          `[node add town] waitForExitLabelled threw: ${(err as Error).message}. ` +
+            `Captured stderr (tail 50 lines): ${addTown.stderr.slice(-50).join('')}`
+        );
         addTownCode = -1;
       }
       const addTownStdout = addTown.stdout.join('');
@@ -664,17 +765,28 @@ describe.skipIf(!shouldRun)(
         console.log(`[49.1] Town relay provisioned: ${addTownStdout.slice(0, 200)}`);
       }
 
-      // Wait up to 30s for town peer to connect to the connector
+      // Wait up to 30s for town peer to connect to the connector.
+      // Pass 2 code review (P30): track success and throw on miss — route override
+      // against an unconnected peer is meaningless, and a silent flow-through would
+      // surface as a cryptic publish failure later.
+      let townConnected = false;
       const townDeadline = Date.now() + 30_000;
       while (Date.now() < townDeadline) {
         try {
           const peers = await adminClientA.getPeers();
           if (peers.some((p) => p.id === 'town' && p.connected)) {
             console.log('[49.1] Town peer connected to connector');
+            townConnected = true;
             break;
           }
         } catch { /* retry */ }
         await sleep(2_000);
+      }
+      if (addTownCode === 0 && !townConnected) {
+        throw new Error(
+          'town peer never reached connected state within 30s. Route override against ' +
+            'an unconnected peer is meaningless; failing fast (Pass 2 P30).'
+        );
       }
 
       // Step 11.6: Override the g.townhouse.town BTP forwarding route to self-delivery.
@@ -710,13 +822,26 @@ describe.skipIf(!shouldRun)(
       }
 
       // Step 12: Determine destination address.
-      // Only use g.townhouse.town if BOTH `node add town` succeeded AND the route override
-      // landed (so the connector treats it as local delivery, no outbound claim needed).
-      // Otherwise fall back to g.townhouse (the connector itself); auto-fulfill stub handles it.
-      const aDestination = addTownCode === 0 && routeOverrideSucceeded ? 'g.townhouse.town' : 'g.townhouse';
+      // Pass 2 code review (P41): the fallback `aDestination = 'g.townhouse'` path was
+      // dead code — peerNegotiations.set was guarded on routeOverrideSucceeded too, so
+      // fallback always produced PEER_NOT_NEGOTIATED. AC #1 is supposed to hard-fail
+      // on publish failure (escape hatch removed in Pass 1). If route override fails,
+      // fail fast here with an actionable diagnostic rather than producing a
+      // graceful-looking-but-broken publish.
+      if (addTownCode !== 0 || !routeOverrideSucceeded) {
+        throw new Error(
+          `Pre-publish: addTown exit=${addTownCode}, routeOverride=${routeOverrideSucceeded}. ` +
+            'Cannot proceed with publish — fallback was removed as dead code in Pass 2 code review.'
+        );
+      }
+      const aDestination = 'g.townhouse.town';
       console.log(`[49.1] A destination: ${aDestination}`);
 
-      // Step 13: Snapshot metrics BEFORE publish
+      // Step 13: Snapshot metrics BEFORE publish.
+      // Pass 2 code review (P19): town-peer BTP handshake increments forwarded counters.
+      // Wait a beat AFTER town reaches connected state before taking the "before" snapshot,
+      // so the snapshot isn't contaminated by handshake-in-flight metric updates.
+      await sleep(500);
       metricsBeforePublish = await adminClientA.getMetrics();
       console.log(
         `[49.1] Metrics before: packetsForwarded=${metricsBeforePublish.aggregate.packetsForwarded}`
@@ -731,7 +856,9 @@ describe.skipIf(!shouldRun)(
       // against A's connector after openChannel(). B's own connector exists only to host
       // the anon SOCKS5 daemon — it doesn't sign claims for this flow. Do NOT "fix" this
       // to point at B's admin (9402) without first reading the openChannel flow.
-      bIlpAddress = `g.toon.foreign.${bPubkey.slice(0, 8)}`;
+      // Pass 2 code review (P36): bump prefix 8→16 chars to reduce collision risk
+      // across concurrent runs/foreign clients sharing the bridge gateway.
+      bIlpAddress = `g.toon.foreign.${bPubkey.slice(0, 16)}`;
       toonClient = new ToonClient({
         connectorUrl: CONNECTOR_ADMIN_URL,
         secretKey: bSecretKey,
@@ -769,7 +896,12 @@ describe.skipIf(!shouldRun)(
       // through the anon network after the connector publishes it). Retry up to 3×
       // with 60s gaps before failing (AC #1 budget: 120s from start() resolution).
       console.log('[49.1] Starting ToonClient (anon BTP connect; up to 3 retries)...');
-      const tStart = Date.now();
+      // Pass 2 code review (P-DN2): capture the FIRST start() invocation timestamp
+      // BEFORE the retry loop. Total wall budget runs from FIRST start(), not the
+      // last successful start — retry-loop slack must fit inside the 120s budget.
+      const tStartFirst = Date.now();
+      tStartFirstOuter = tStartFirst;
+      const tStart = tStartFirst;
       let startResult: Awaited<ReturnType<typeof toonClient.start>> | null = null;
       let lastStartError: Error | null = null;
       for (let attempt = 1; attempt <= 3; attempt++) {
@@ -822,10 +954,26 @@ describe.skipIf(!shouldRun)(
       }
       const tStartDone = Date.now();
       transportEstablishedAt = tStartDone;
-      console.log(`[49.1] ToonClient started in ${tStartDone - tStart}ms total`);
+      console.log(`[49.1] ToonClient started in ${tStartDone - tStartFirst}ms total (from first start() invocation)`);
       // peersDiscovered=0 is expected (no relay-based bootstrap)
 
-      // Step 16: Build the signed event
+      // Step 16: Build the signed event.
+      // Pass 2 code review (P35): clock-skew probe. If host clock and container clock
+      // differ by >30s, relay may reject the event with a misleading error. Log both
+      // for diagnostic purposes (best-effort; failures here are non-fatal).
+      try {
+        const containerEpoch = parseInt(
+          execSync(`docker exec ${HS_CONNECTOR_NAME} date +%s`, { encoding: 'utf-8', timeout: 5_000 }).trim(),
+          10
+        );
+        const hostEpoch = Math.floor(Date.now() / 1000);
+        const skew = Math.abs(hostEpoch - containerEpoch);
+        if (skew > 30) {
+          console.warn(`[clock-skew] Host vs container epoch differ by ${skew}s — relay may reject created_at.`);
+        }
+      } catch {
+        // best-effort diagnostic
+      }
       const event: NostrEvent = finalizeEvent(
         {
           kind: 1,
@@ -858,14 +1006,23 @@ describe.skipIf(!shouldRun)(
               'Update this test to match ToonClient\'s current state shape.'
           );
         }
-        negotiations.set('town', {
+        // Pass 2 code review (P20): private API write. Build the payload up-front and
+        // sanity-check required fields before set, so missing/nullish values surface
+        // here rather than as a cryptic claim-construction error later.
+        const negotiationPayload = {
           chain: CHAIN_KEY,
-          chainType: 'evm',
+          chainType: 'evm' as const,
           chainId: CHAIN_ID,
           settlementAddress: A_EVM_ADDRESS,
           tokenAddress: TOKEN_ADDRESS,
           tokenNetwork: TOKEN_NETWORK_ADDRESS,
-        });
+        };
+        for (const key of ['chain', 'chainType', 'chainId', 'settlementAddress'] as const) {
+          if (negotiationPayload[key] === undefined || negotiationPayload[key] === null) {
+            throw new Error(`peerNegotiation payload missing required field: ${key}`);
+          }
+        }
+        negotiations.set('town', negotiationPayload);
         console.log('[49.1] Injected peer negotiation for A (peerId=town, peerAddress=A_EVM_ADDRESS)');
       }
 
@@ -878,6 +1035,7 @@ describe.skipIf(!shouldRun)(
         if (channels.length > 0) {
           channelId = channels[0]!;
           const toonBytes = encodeEventToToon(event);
+          // 10 units per byte = connector's per-byte ILP-base unit price (test-token base units). (Pass 2 P24)
           const paymentAmount = BigInt(toonBytes.length) * 10n;
           proof = await toonClient.signBalanceProof(channelId, paymentAmount);
           console.log(`[49.1] Channel opened: ${channelId.slice(0, 16)}..., claim nonce=${proof.nonce}`);
@@ -936,13 +1094,36 @@ describe.skipIf(!shouldRun)(
       // for "B's BTP channel reached A's connector" — peers only contains
       // CONFIGURED peers (e.g. `town`), never auto-registered foreign BTP clients.
       try {
-        channelsAfterPublish = await adminClientA.getChannels();
+        // Pass 2 code review (P28): connector's internal "register BTP channel as a
+        // ChannelSummary entry keyed by peerId === bPubkey" path is async. Poll briefly
+        // to absorb the registration latency window (mirrors the metrics-poll pattern above).
+        channelsAfterPublish = [];
+        const channelsPollDeadline = Date.now() + 3_000;
+        while (Date.now() < channelsPollDeadline) {
+          channelsAfterPublish = await adminClientA.getChannels();
+          const bChan = channelsAfterPublish.find(
+            (c) =>
+              typeof c.peerId === 'string' &&
+              c.peerId.toLowerCase() === bPubkey.toLowerCase() &&
+              ['open', 'active', 'established'].includes((c.status as string) ?? '')
+          );
+          if (bChan) break;
+          await sleep(250);
+        }
         peersAfterPublish = await adminClientA.getPeers();
         const bChanSnap = channelsAfterPublish.find(
           (c) =>
             typeof c.peerId === 'string' &&
             c.peerId.toLowerCase() === bPubkey.toLowerCase()
         );
+        // Pass 2 code review (P29): if strict peerId match fails but channels exist,
+        // surface the actual peerId shape so we can spot connector schema drift.
+        if (channelsAfterPublish.length > 0 && !channelsAfterPublish.some((c) => c.peerId === bPubkey)) {
+          console.warn(
+            `[AC #4 precondition] No channel peerId === ${bPubkey.slice(0, 16)}... but ${channelsAfterPublish.length} channels exist. ` +
+              `Sample peerIds: ${channelsAfterPublish.slice(0, 3).map((c) => c.peerId).join(', ')}`
+          );
+        }
         console.log(
           `[49.1] Channels snapshot after publish: ${channelsAfterPublish.length} entries; ` +
             `B channel (peerId=${bPubkey.slice(0, 16)}...) present=${!!bChanSnap}, status=${bChanSnap?.status ?? 'n/a'}`
@@ -961,6 +1142,28 @@ describe.skipIf(!shouldRun)(
     }, 1080_000);  // 18 min: B anon daemon (~4 min) + A apex boot (~5 min) + town relay (~3 min) + 6 min slack
 
     afterAll(async () => {
+      // Pass 2 code review (P38): capture container logs to disk before cleanup wipes
+      // them, so failed beforeAll runs leave actionable diagnostic evidence. Best-effort.
+      try {
+        const dumpPath = join(tmpdir(), `townhouse-foreign-hs-smoke-logs-${Date.now()}.txt`);
+        const lines: string[] = [];
+        for (const containerName of [B_CONNECTOR_NAME, ...HS_CONTAINER_NAMES]) {
+          try {
+            const out = execSync(`docker logs --tail 200 ${containerName} 2>&1`, {
+              encoding: 'utf-8',
+              timeout: 10_000,
+            });
+            lines.push(`\n===== ${containerName} =====\n${out}`);
+          } catch {
+            lines.push(`\n===== ${containerName} (logs unavailable) =====\n`);
+          }
+        }
+        writeFileSync(dumpPath, lines.join(''), 'utf-8');
+        console.log(`[49.1 afterAll] Container logs captured to ${dumpPath}`);
+      } catch {
+        // best-effort; don't let diagnostic capture itself fail teardown
+      }
+
       try {
         // Best-effort ToonClient shutdown
         try {
@@ -986,6 +1189,41 @@ describe.skipIf(!shouldRun)(
 
         cleanupContainersAndVolumes();
         cleanupBConnector();
+
+        // Pass 2 code review (P2): wildcard sweep per AC #5 "ALL townhouse-foreign-*
+        // containers." Catches partial-cleanup leftovers from prior crashed runs.
+        try {
+          const orphans = execSync(
+            `docker ps -aq --filter "name=townhouse-foreign-"`,
+            { encoding: 'utf-8', timeout: 10_000 }
+          ).trim();
+          if (orphans) {
+            execSync(`docker rm -f ${orphans.split('\n').join(' ')}`, {
+              encoding: 'utf-8',
+              timeout: 30_000,
+              stdio: 'pipe',
+            });
+          }
+        } catch {
+          // best-effort cleanup; don't let afterAll throw
+        }
+
+        // Pass 2 code review (P3): "any town-data volumes spawned" sweep per AC #5.
+        try {
+          const orphanVols = execSync(
+            `docker volume ls -q --filter "name=townhouse-hs-town-"`,
+            { encoding: 'utf-8', timeout: 10_000 }
+          ).trim();
+          if (orphanVols) {
+            execSync(`docker volume rm ${orphanVols.split('\n').join(' ')}`, {
+              encoding: 'utf-8',
+              timeout: 30_000,
+              stdio: 'pipe',
+            });
+          }
+        } catch {
+          // best-effort cleanup
+        }
 
         if (tmpDirA) {
           rmSync(tmpDirA, { recursive: true, force: true });
@@ -1028,6 +1266,13 @@ describe.skipIf(!shouldRun)(
         // and 120s total wall budget for AC #1.
         const publishDurationMs = publishCompletedAt - publishStartedAt;
         const transportToPublishMs = publishCompletedAt - transportEstablishedAt;
+        // Pass 2 code review (P1): AC #1 third budget — 90s transport-established window.
+        // Was captured in beforeAll (tStartFirst → transportEstablishedAt) but never asserted.
+        const transportEstablishedMs = transportEstablishedAt - tStartFirstOuter;
+        expect(
+          transportEstablishedMs,
+          `AC #1 wall budget: transport-established took ${transportEstablishedMs}ms (>90_000ms)`
+        ).toBeLessThanOrEqual(90_000);
         expect(
           publishDurationMs,
           `AC #1 wall budget: publishEvent took ${publishDurationMs}ms (>30_000ms)`
@@ -1035,6 +1280,13 @@ describe.skipIf(!shouldRun)(
         expect(
           transportToPublishMs,
           `AC #1 wall budget: transport-established → publish-accepted took ${transportToPublishMs}ms (>120_000ms total)`
+        ).toBeLessThanOrEqual(120_000);
+        // Pass 2 code review (P-DN2): total wall budget runs from FIRST start() invocation,
+        // not the last successful start. Retry-loop slack must fit inside 120s.
+        const totalWallMs = publishCompletedAt - tStartFirstOuter;
+        expect(
+          totalWallMs,
+          `AC #1 wall budget: total wall from FIRST start() to publish-accepted took ${totalWallMs}ms (>120_000ms)`
         ).toBeLessThanOrEqual(120_000);
 
         // AC #3.2: SOCKS5 transport invariants (inspect resolved ToonClient config)
@@ -1050,7 +1302,8 @@ describe.skipIf(!shouldRun)(
         // btpUrl: ws:// (plain) on port 3000 — Sub-path A2 variant exposes B's connector's
         // BTP/WS directly on the host, not wss over A's HS. Alphabet tightened to base32
         // [a-z2-7]+ 2026-05-18 code review (rate-limit-via-shape guard).
-        expect(clientConfig.btpUrl).toMatch(/^ws:\/\/[a-z2-7]+\.(anyone|anon):3000\/btp$/);
+        // Pass 2 code review (P32): length bounded to v3-onion shape.
+        expect(clientConfig.btpUrl).toMatch(/^ws:\/\/[a-z2-7]{55,57}\.(anyone|anon):3000\/btp$/);
 
         console.log(
           `[49.1 Test 1] PASS — event accepted + transport invariants verified. ` +
@@ -1089,8 +1342,27 @@ describe.skipIf(!shouldRun)(
           if (channelsCode === 0) {
             const stdout = channelsResult.stdout.join('');
             try {
-              // channels --json emits a multi-line array; JSON.parse the whole output
-              const parsed: unknown[] = JSON.parse(stdout.trim()) as unknown[];
+              // Pass 2 code review (P21): trim-and-parse is fragile to any future stdout
+              // prelude (Node deprecation warnings, banners). Scan from the end for a
+              // balanced top-level [ ... ] or { ... } block.
+              const extractLastJsonBlock = (s: string): string | null => {
+                const trimmed = s.trim();
+                if (trimmed.length === 0) return null;
+                const lastChar = trimmed.charAt(trimmed.length - 1);
+                if (lastChar !== ']' && lastChar !== '}') return trimmed;
+                const openChar = lastChar === ']' ? '[' : '{';
+                let depth = 0;
+                for (let i = trimmed.length - 1; i >= 0; i--) {
+                  if (trimmed[i] === lastChar) depth++;
+                  else if (trimmed[i] === openChar) {
+                    depth--;
+                    if (depth === 0) return trimmed.slice(i);
+                  }
+                }
+                return trimmed;
+              };
+              const jsonBlock = extractLastJsonBlock(stdout) ?? stdout.trim();
+              const parsed: unknown[] = JSON.parse(jsonBlock) as unknown[];
               if (Array.isArray(parsed)) {
                 // 2026-05-18 code review: changed OR to AND on B's pubkey AND open state.
                 // The prior OR predicate degenerated into a tautology — A↔town's `open`
@@ -1148,12 +1420,24 @@ describe.skipIf(!shouldRun)(
           }, 15_000);
 
           try {
-            await waitForExit(logsResult.process, 16_000);
+            // Pass 2 code review (P27): use labelled variant for better diagnostics on timeout.
+            await waitForExitLabelled(logsResult.process, 16_000, 'townhouse logs');
           } catch {
             /* expected — we killed it */
           } finally {
             clearTimeout(logsDeadline);
           }
+
+          // Pass 2 code review (P22): SIGKILL closes the pipe; stdout 'data' events may
+          // still be queued. Await 'end' so the last-flushed bytes (potentially containing
+          // the event id) are guaranteed to be in the accumulator before we test for the substring.
+          await new Promise<void>((resolve) => {
+            const stdoutStream = logsResult.process.stdout;
+            if (!stdoutStream || stdoutStream.readableEnded) return resolve();
+            stdoutStream.once('end', () => resolve());
+            // Belt-and-suspenders: don't wait forever if 'end' never fires.
+            setTimeout(() => resolve(), 1_000).unref();
+          });
 
           const logsStdout = logsResult.stdout.join('');
           // 2026-05-18 code review: match the FULL 64-char eventId (no slice(0,16) prefix).
@@ -1213,7 +1497,8 @@ describe.skipIf(!shouldRun)(
         const hostJson = JSON.parse(
           readFileSync(join(tmpDirA, 'host.json'), 'utf-8')
         ) as { hostname: string };
-        expect(hostJson.hostname).toMatch(/^[a-z2-7]+\.(anyone|anon)$/);
+        // Pass 2 code review (P32): length bounded to v3-onion shape.
+        expect(hostJson.hostname).toMatch(/^[a-z2-7]{55,57}\.(anyone|anon)$/);
         expect(hostJson.hostname).toBe(hostnameA);
 
         // connector.yaml uses the `transport` block (not legacy `anon.enabled`);
@@ -1237,10 +1522,11 @@ describe.skipIf(!shouldRun)(
         expect(clientConfig.btpUrl).toBe(`ws://${hostnameA}:3000/btp`);
         expect(clientConfig.transport?.socksProxy).toMatch(/^socks5h:\/\//);
 
-        // NFR9: all host port bindings are 127.0.0.1 only (connector container)
+        // NFR9: all host port bindings are 127.0.0.1 only (connector container).
+        // Pass 2 code review (P33): explicit timeout so a hung dockerd doesn't block.
         const bindingsJson = execSync(
           `docker inspect ${HS_CONNECTOR_NAME} --format '{{json .HostConfig.PortBindings}}'`,
-          { encoding: 'utf-8' }
+          { encoding: 'utf-8', timeout: 10_000 }
         );
         const bindings = JSON.parse(bindingsJson) as Record<
           string,
@@ -1287,6 +1573,15 @@ describe.skipIf(!shouldRun)(
         );
 
         if (!bChannelReachedA) {
+          // Pass 2 code review (P29): if strict peerId match fails but channels exist,
+          // surface the actual peerId shape so we can spot connector schema drift
+          // before failing AC #4's precondition.
+          if (channelsAfterPublish.length > 0 && !channelsAfterPublish.some((c) => c.peerId === bPubkey)) {
+            console.warn(
+              `[AC #4 precondition] No channel peerId === ${bPubkey.slice(0, 16)}... but ${channelsAfterPublish.length} channels exist. ` +
+                `Sample peerIds: ${channelsAfterPublish.slice(0, 3).map((c) => c.peerId).join(', ')}`
+            );
+          }
           // B's BTP channel never reached A. AC #4 cannot be meaningfully
           // verified (the resolver fallback would pass trivially because the
           // nodes.yaml is empty, but that's not evidence of the contract).
@@ -1329,6 +1624,20 @@ describe.skipIf(!shouldRun)(
                 if (!peers) {
                   primaryError = '/api/earnings response missing peers[] field';
                 } else {
+                  // Pass 2 code review (P34): if /api/earnings.peers[] is operator-label-keyed
+                  // (e.g. 'town', 'mill') instead of hex-pubkey-keyed, peers.find(by hex) returns
+                  // undefined and we'd silently fall through to FALLBACK. Log the shape so future
+                  // schema drift is visible.
+                  const hexPubkeyShaped = peers.some(
+                    (p) => typeof p['id'] === 'string' && /^[0-9a-f]{64}$/.test(p['id'] as string)
+                  );
+                  if (peers.length > 0 && !hexPubkeyShaped) {
+                    console.warn(
+                      `[AC #4 PRIMARY] /api/earnings.peers[] does not appear hex-pubkey-keyed. ` +
+                        `Sample id: '${(peers[0] as Record<string, unknown> | undefined)?.['id'] ?? '(none)'}'. ` +
+                        `If this is operator-label-keyed, AC #4 PRIMARY path is structurally broken; FALLBACK will be used.`
+                    );
+                  }
                   // /api/earnings keys peers by `id` (not `peerId`); confirmed via schema.
                   // Full equality match (no substring) so we don't false-positive on collisions.
                   const bEntry = peers.find((p) => p['id'] === bPubkey);
@@ -1403,12 +1712,15 @@ describe.skipIf(!shouldRun)(
         publishedAt: string;
         writtenAt: string;
       };
-      expect(json.hostname).toMatch(/^[a-z2-7]+\.(anyone|anon)$/);
+      // Pass 2 code review (P32): length bounded to v3-onion shape.
+      expect(json.hostname).toMatch(/^[a-z2-7]{55,57}\.(anyone|anon)$/);
       expect(json.connectorAdminUrl).toBe('http://127.0.0.1:9401');
       expect(json.townhouseApiUrl).toBe('http://127.0.0.1:28090');
-      // 2026-05-18 code review: tightened from .toBeTruthy() (which accepts "invalid")
-      // to an ISO-8601 / RFC 3339 timestamp match. Empty string still fails.
-      expect(json.publishedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/);
+      // Pass 2 code review (P25): semantic validation — Date.parse() handles real
+      // ISO-8601 / RFC 3339 strings and the round-trip rejects malformed inputs like
+      // '9999-99-99T...' that a naive regex would accept.
+      expect(Number.isFinite(Date.parse(json.publishedAt))).toBe(true);
+      expect(new Date(json.publishedAt).toISOString()).toBe(json.publishedAt);
     }, 5_000);
 
     it('mode 0o600 on connector.yaml and host.json', () => {
