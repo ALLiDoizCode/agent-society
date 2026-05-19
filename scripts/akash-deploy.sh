@@ -43,6 +43,9 @@ DEPOSIT_BLOCKSCOUT=15
 DEPOSIT_SOLANA_EXPLORER=5
 # ATOR probe is a short-lived derisking deploy (~hour, not month). Min deposit.
 DEPOSIT_ATOR_PROBE=5
+# Faucet — dedicated dev faucet lease (story 49.2 architecture A2).
+# Single small service; ~$2-5/mo. Min deposit.
+DEPOSIT_FAUCET=5
 # Townhouse — full operator stack (apex connector + town + mill + dvm + faucet)
 # behind a .anyone hidden service. 5 services × ~30d at SDL prices ≈ $10.
 DEPOSIT_TOWNHOUSE=10
@@ -69,6 +72,14 @@ ATOR_PROBE_SHA="$(
     2>/dev/null \
   | sha256sum | head -c 12
 )"
+# Faucet SHA covers the faucet package source + the baked Solana faucet
+# authority + the Dockerfile. A change to any of these = fresh image tag.
+FAUCET_SHA="$(
+  cat "$ROOT/packages/faucet/Dockerfile" 2>/dev/null \
+  | { find "$ROOT/packages/faucet/src" "$ROOT/packages/faucet/public" -type f -print0 2>/dev/null | xargs -0 cat 2>/dev/null; cat; } \
+  | { cat "$ROOT/infra/solana/keys/faucet-authority.json" 2>/dev/null; cat; } \
+  | sha256sum | head -c 12
+)"
 
 ANVIL_IMAGE_TAGGED="ghcr.io/toon-protocol/akash-anvil:sha-$ANVIL_SHA"
 ANVIL_IMAGE_DEMO="ghcr.io/toon-protocol/akash-anvil:demo"
@@ -78,6 +89,11 @@ SOLANA_EXPLORER_IMAGE_TAGGED="ghcr.io/toon-protocol/akash-solana-explorer:sha-$S
 SOLANA_EXPLORER_IMAGE_DEMO="ghcr.io/toon-protocol/akash-solana-explorer:demo"
 ATOR_PROBE_IMAGE_TAGGED="ghcr.io/toon-protocol/akash-ator-probe:sha-$ATOR_PROBE_SHA"
 ATOR_PROBE_IMAGE_DEMO="ghcr.io/toon-protocol/akash-ator-probe:demo"
+FAUCET_IMAGE_TAGGED="ghcr.io/toon-protocol/akash-faucet:sha-$FAUCET_SHA"
+FAUCET_IMAGE_DEMO="ghcr.io/toon-protocol/akash-faucet:demo"
+# Compat alias — the existing townhouse.sdl.yaml references this name, so
+# we keep it published in parallel until that SDL is updated.
+FAUCET_IMAGE_TOWNHOUSE_DEMO="ghcr.io/toon-protocol/townhouse-faucet:demo"
 
 require_env() {
   for v in "$@"; do
@@ -243,6 +259,36 @@ cmd_build() {
     docker push "$SOLANA_EXPLORER_IMAGE_TAGGED"
     docker push "$SOLANA_EXPLORER_IMAGE_DEMO"
   fi
+}
+
+# Build (and push) the dedicated dev-faucet image. Story 49.2 — bakes the
+# Solana faucet authority keypair from infra/solana/keys/ into the image at
+# /etc/faucet/sol-authority.json. Build context is the repo root so the
+# Dockerfile can reach outside packages/faucet/ for the key file.
+# Pushes townhouse-faucet:demo — the only tag the current PAT can write.
+# The story 49.2 canonical name akash-faucet:demo is also tagged locally
+# so `docker push akash-faucet:demo` works once the GHCR package is
+# created (`gh api orgs/toon-protocol/packages` or via the GitHub UI).
+# Until then, faucet.sdl.yaml references the townhouse-faucet:demo alias.
+cmd_build_faucet() {
+  require_cli docker
+  echo "Building $FAUCET_IMAGE_TAGGED + akash-faucet:demo + townhouse-faucet:demo..."
+  docker build \
+    -f "$ROOT/packages/faucet/Dockerfile" \
+    -t "$FAUCET_IMAGE_TAGGED" \
+    -t "$FAUCET_IMAGE_DEMO" \
+    -t "$FAUCET_IMAGE_TOWNHOUSE_DEMO" \
+    "$ROOT"
+  echo "Pushing $FAUCET_IMAGE_TOWNHOUSE_DEMO (canonical alias used by faucet.sdl.yaml)..."
+  docker push "$FAUCET_IMAGE_TOWNHOUSE_DEMO"
+  # Try the canonical akash-faucet:demo push; tolerate scope failures so
+  # the build script doesn't break when the GHCR package isn't created yet.
+  echo "Pushing $FAUCET_IMAGE_DEMO (canonical name per story 49.2)..."
+  docker push "$FAUCET_IMAGE_DEMO" \
+    || echo "[faucet] WARNING: push of $FAUCET_IMAGE_DEMO failed (likely GHCR package scope). Continuing with townhouse-faucet:demo alias." >&2
+  echo "Pushing $FAUCET_IMAGE_TAGGED (SHA-pinned)..."
+  docker push "$FAUCET_IMAGE_TAGGED" \
+    || echo "[faucet] WARNING: push of $FAUCET_IMAGE_TAGGED failed (likely GHCR package scope)." >&2
 }
 
 # Build (and push) the ATOR probe image only. Kept separate from cmd_build so
@@ -422,6 +468,7 @@ cmd_resume() {
     blockscout) service=blockscout; port=4000; probe_fn=probe_blockscout ;;
     otterscan) service=otterscan; port=80; probe_fn=probe_otterscan ;;
     solana-explorer) service=solana-explorer; port=3000; probe_fn=probe_http_200; image_digest="$(image_digest "$SOLANA_EXPLORER_IMAGE_DEMO" 2>/dev/null || true)" ;;
+    faucet) service=faucet; port=3500; probe_fn=probe_http_200; image_digest="$(image_digest "$FAUCET_IMAGE_DEMO" 2>/dev/null || true)" ;;
     ator-probe)
       # `resume` doesn't apply: cmd_ator_probe owns its own deploy flow
       # (no-ingress, no HTTP poll). Re-run cmd_ator_probe to redeploy with
@@ -713,6 +760,70 @@ cmd_townhouse() {
   echo
   echo "  Wait ~60-120s for the HS descriptor to publish, then dial:"
   echo "    btp+wss://$hostname:3000   # via anon SOCKS5"
+}
+
+# Render the dedicated dev-faucet SDL (story 49.2 architecture A2). Reads
+# EVM_RPC_URL + SOLANA_RPC_URL from `leases.json` (Akash chain leases) with
+# fallback to localnet defaults, then substitutes them + the Mock USDC
+# addresses into a temp SDL. Output goes to stdout so `deploy_sdl` can
+# `cat` it through to the Console API. Same pattern as render_townhouse_sdl.
+render_faucet_sdl() {
+  local sdl_template="$SDL_DIR/faucet.sdl.yaml"
+
+  # Resolve chain RPCs via the same fallback chain the townhouse renderer
+  # uses (env -> leases.json -> localnet defaults).
+  local evm_rpc evm_usdc sol_rpc sol_usdc
+  evm_rpc="${EVM_RPC_URL:-$(jq -r '.anvil.url // empty' "$LEASES_FILE" 2>/dev/null || true)}"
+  evm_rpc="${evm_rpc:-http://localhost:8545}"
+  evm_usdc="${EVM_USDC_ADDRESS:-0x5FbDB2315678afecb367f032d93F642f64180aa3}"
+  sol_rpc="${SOLANA_RPC_URL:-$(jq -r '.solana.url // empty' "$LEASES_FILE" 2>/dev/null || true)}"
+  sol_rpc="${sol_rpc:-http://localhost:8899}"
+  sol_usdc="${SOLANA_USDC_MINT:-6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q}"
+
+  sed \
+    -e "s|__EVM_RPC_URL__|$evm_rpc|g" \
+    -e "s|__EVM_USDC_ADDRESS__|$evm_usdc|g" \
+    -e "s|__SOLANA_RPC_URL__|$sol_rpc|g" \
+    -e "s|__SOLANA_USDC_MINT__|$sol_usdc|g" \
+    "$sdl_template"
+}
+
+cmd_faucet() {
+  require_env AKASH_CONSOLE_API_KEY
+  require_cli curl jq
+
+  ensure_leases_file
+
+  # Faucet depends on at least one chain lease being up — otherwise the
+  # drip routes will 5xx out of the gate. Warn loudly but don't block; the
+  # operator may be deploying out-of-order intentionally.
+  local anvil_url solana_url
+  anvil_url="$(jq -r '.anvil.url // ""' "$LEASES_FILE")"
+  solana_url="$(jq -r '.solana.url // ""' "$LEASES_FILE")"
+  if [ -z "$anvil_url" ] && [ -z "$solana_url" ]; then
+    echo "[faucet] WARNING: neither anvil nor solana leases found in $LEASES_FILE." >&2
+    echo "[faucet] The faucet will start but all drip routes will 5xx until at least one chain lease is up." >&2
+  fi
+
+  local rendered_sdl
+  rendered_sdl="$(mktemp --suffix=.sdl.yaml)"
+  trap 'rm -f "${rendered_sdl-}"' EXIT
+  render_faucet_sdl > "$rendered_sdl"
+
+  # Currently the SDL references townhouse-faucet:demo (see SDL header
+  # for the GHCR scope rationale). Use that digest for accurate manifest
+  # tracking.
+  local digest
+  digest="$(image_digest "$FAUCET_IMAGE_TOWNHOUSE_DEMO")"
+
+  # Readiness probe — the faucet UI returns 200 from root once the Express
+  # server is up. `/health` would also work; root is simpler + matches the
+  # townhouse SDL's faucet probe path.
+  deploy_sdl faucet "$rendered_sdl" faucet 3500 probe_http_200 "$DEPOSIT_FAUCET" "$digest"
+
+  echo
+  echo "[faucet] Deployed."
+  echo "  URL: $(jq -r '.faucet.url // "(pending)"' "$LEASES_FILE")"
 }
 
 cmd_anvil() {
@@ -1022,6 +1133,7 @@ cmd_redeploy_all() {
 case "${1:-}" in
   build) cmd_build ;;
   build-ator-probe) cmd_build_ator_probe ;;
+  build-faucet) cmd_build_faucet ;;
   anvil) cmd_anvil ;;
   solana) cmd_solana ;;
   blockscout) cmd_blockscout ;;
@@ -1029,6 +1141,7 @@ case "${1:-}" in
   solana-explorer) cmd_solana_explorer ;;
   ator-probe) cmd_ator_probe ;;
   townhouse) cmd_townhouse ;;
+  faucet) cmd_faucet ;;
   all) cmd_all ;;
   close) shift; cmd_close "$@" ;;
   redeploy) shift; cmd_redeploy "$@" ;;
@@ -1042,6 +1155,9 @@ Usage: $0 <command>
 Commands:
   build              Build + push images (SHA-pinned + :demo tags)
   build-ator-probe   Build + push the ATOR-probe image only
+  build-faucet       Build + push the dev-faucet image only
+                     (ghcr.io/toon-protocol/akash-faucet:demo +
+                      ghcr.io/toon-protocol/townhouse-faucet:demo compat tag)
   anvil              Deploy anvil.sdl.yaml — writes leases.json
   solana             Deploy solana.sdl.yaml — writes leases.json (RPC + WS)
   otterscan          Deploy otterscan.sdl.yaml — EVM explorer (anvil must be up)
@@ -1053,6 +1169,10 @@ Commands:
                      publishing a hidden service descriptor and exposing the
                      .anon hostname at <lease>/hostname. Once deployed, run
                      scripts/akash-ator-probe-test.sh for the round-trip test.
+  faucet             Deploy faucet.sdl.yaml — dedicated dev-faucet lease
+                     (story 49.2 A2). Reads chain RPCs from leases.json
+                     (anvil + solana) and writes the faucet URL back to
+                     leases.json. Run AFTER anvil + solana are healthy.
   townhouse          Deploy townhouse.sdl.yaml — full operator stack (apex
                      connector + town + mill + dvm + faucet) behind a .anyone
                      hidden service. Reads chain endpoints from

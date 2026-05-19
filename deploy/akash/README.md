@@ -9,6 +9,7 @@ deployment without standing up local infrastructure.
 | --- | --- |
 | **Anvil** | Foundry EVM chain (chain-id `31337`) with Mock USDC pre-deployed and 7 test accounts pre-funded. |
 | **Solana** | `solana-test-validator` with the `payment_channel` BPF program loaded at genesis and an SPL Mock USDC mint bootstrapped on every fresh ledger. |
+| **Faucet** | Dual-chain dev faucet (Express, port 3500) with unified HTTPS UI. Drips ETH+USDC on the Anvil lease and SOL+USDC on the Solana lease. Story 49.2 architecture A2 — one lease, one ingress, one image. |
 | **Otterscan** | Single-page React EVM explorer pointing at our Anvil. (Recommended over Blockscout — see [Service catalog](#service-catalog).) |
 | **Solana Explorer** | Optional Solana block explorer pointing at our validator. Off by default. |
 | **Blockscout** | Legacy EVM explorer. Off by default; Otterscan is the recommended replacement. |
@@ -265,22 +266,72 @@ take effect until the next `redeploy <name>` or `redeploy-all`.
 ## Faucet
 
 The faucet drips both native gas + Mock USDC for whichever chain you
-target. There are three entry points, all backed by the same logic:
+target. There are FOUR entry points, all backed by similar logic:
 
 | Entry point | Format |
 | --- | --- |
 | `scripts/faucet-evm.sh <0xaddress> [usdc=10000] [eth=10]` | Shell — Anvil dev RPCs only |
 | `scripts/faucet-sol.sh <pubkey> [sol=10] [usdc=100]` | Shell — calls `faucet-sol-usdc.mjs` for the SPL transfer |
 | `POST /api/faucet` (Townhouse API) | JSON `{chain, recipient, amount?}` — used by the dashboard's `FaucetPanel` |
+| `POST /faucet/{evm,sol}` (Akash devnet faucet, story 49.2) | JSON `{address, amount?}` — published image, see below |
 
-All three resolve the chain RPC the same way: `leases.json` first, then
-fall back to the local Townhouse dev stack ports (`28545` EVM, `28899`
-SOL) if no Akash lease is up.
+### Akash-deployed Dev Faucet (story 49.2)
+
+Architecture **A2** (dedicated faucet lease):
+
+- Image: `ghcr.io/toon-protocol/akash-faucet:demo` (also published as
+  `ghcr.io/toon-protocol/townhouse-faucet:demo` for compat with
+  `townhouse.sdl.yaml`).
+- SDL: `deploy/akash/faucet.sdl.yaml` — single small service exposing
+  port 3500 via Akash L7 ingress (HTTPS via Let's Encrypt).
+- Drives BOTH chains from one container — `RPC_URL` and `SOLANA_RPC_URL`
+  are templated from `leases.json` at deploy time by
+  `render_faucet_sdl` in `scripts/akash-deploy.sh`.
+- Bakes the deterministic Solana faucet authority into the image at
+  `/etc/faucet/sol-authority.json` (build context is the repo root so
+  `infra/solana/keys/faucet-authority.json` is reachable).
+- Holds an in-memory ring buffer (cap 100) for the recent-drips feed —
+  no cross-origin merge required.
+
+Deploy:
+
+```bash
+./scripts/akash-deploy.sh build-faucet   # build + push the image
+./scripts/akash-deploy.sh faucet         # deploy a lease, write leases.json
+```
+
+API surface (story 49.2 schema-contract at
+`packages/townhouse/contracts/faucet.schema.json`):
+
+| Endpoint | Body | Returns |
+| --- | --- | --- |
+| `POST /faucet/evm` | `{address, amount?}` | `{tx, chain:'evm', recipient, balanceAfter?, explorerUrl?}` |
+| `POST /faucet/sol` | `{address, amount?}` | `{tx, chain:'solana', recipient, balanceAfter?, explorerUrl?}` |
+| `POST /faucet` | `{chain, recipient, amount?}` | unified shape; same response |
+| `GET /faucet/recent?limit=10` | — | `[{ts, address(truncated), amount, txid, chain}]` |
+| `GET /health` | — | `{status:'ok', tokenReady, solanaAuthorityReady, chainIds: {...}}` |
+
+Rate limit: **1 req/sec per source address + 5 req/min per source IP** on
+the `/faucet/*` surface (unlimited supply otherwise — no daily cap).
+The legacy `/api/*` surface retains its 1-hour cooldown for backwards
+compat with the existing dashboards and shell scripts.
 
 The Solana faucet authority's keypair lives at
 `infra/solana/keys/faucet-authority.json`. It's committed to the repo
 on purpose — same security posture as Anvil's account 0 private key,
 which is the most well-known private key in EVM dev. **Devnet only.**
+
+### Lease ownership + sunset (story 49.2 persistent-deployment discipline)
+
+- **Owner:** `dev.jonathan.green@gmail.com` (records lease in
+  `leases.json` after the first `faucet` deploy).
+- **AKT-burn budget:** ~$2-5/mo at SDL prices. Alert at 50% drain via
+  the existing `scripts/akash-status.sh` (manual op-side check; CI cron
+  wiring is deferred to a separate hardening story).
+- **Sunset:** when Epic 49 retires, close the faucet lease via
+  `scripts/akash-deploy.sh close faucet`. Tracked in
+  `_bmad-output/implementation-artifacts/deferred-work.md` § "Epic 49
+  sunset checklist".
 
 ---
 

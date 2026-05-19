@@ -1,0 +1,98 @@
+---
+# TOON Dev Faucet — dual-chain EVM + Solana drip service on Akash.
+#
+# Architecture A2 (story 49.2 § "SDL Integration Architecture"):
+#   One small lease, one HTTPS ingress, one image build. Drives BOTH chains
+#   via env vars — `RPC_URL` and `SOLANA_RPC_URL` are templated from
+#   deploy/akash/leases.json at deploy time (see render_faucet_sdl in
+#   scripts/akash-deploy.sh). The single Express server holds the recent-
+#   drips ring buffer for both chains (server-side merge — no cross-origin
+#   needed in the UI).
+#
+# Image: ghcr.io/toon-protocol/townhouse-faucet:demo
+#   Built from packages/faucet/Dockerfile with the repo root as build
+#   context so the deterministic Solana faucet authority at
+#   infra/solana/keys/faucet-authority.json gets baked into the image at
+#   /etc/faucet/sol-authority.json (devnet-only public fixture — same
+#   security posture as Anvil's account[0]).
+#
+# CANONICAL NAME: the story 49.2 spec calls for `akash-faucet:demo` to
+#   match the `akash-{anvil,solana}:demo` convention. The current PAT in
+#   ~/.docker/config.json only has push rights to existing GHCR packages
+#   so the `akash-faucet` package needs to be created in
+#   https://github.com/orgs/toon-protocol/packages first OR a PAT with
+#   broader `write:packages` scope generated. Until that's done, this
+#   SDL uses the `townhouse-faucet:demo` alias (which is the same image,
+#   pushed via the existing PAT scope, and which the existing
+#   townhouse.sdl.yaml also references). Tracked in
+#   _bmad-output/implementation-artifacts/deferred-work.md.
+#
+# Storage: ephemeral. The faucet holds an in-memory rate-limit map + a
+# 100-entry recent-drips ring buffer; container restart = clean slate. No
+# value lost (the underlying chain state on anvil/solana leases is the
+# actual source of truth).
+#
+# Pricing: 1000 uakt per block (~$2-5/mo). Tiny lease.
+#
+# Template tokens substituted by scripts/akash-deploy.sh render_faucet_sdl:
+#   __EVM_RPC_URL__        - default: leases.anvil.url
+#   __EVM_USDC_ADDRESS__   - default: 0x5FbDB231… (Mock USDC on Anvil)
+#   __SOLANA_RPC_URL__     - default: leases.solana.url
+#   __SOLANA_USDC_MINT__   - default: 6GbdrV… (Mock USDC mint on Solana)
+
+version: "2.0"
+
+services:
+  faucet:
+    image: ghcr.io/toon-protocol/townhouse-faucet:demo
+    env:
+      - PORT=3500
+      # ── EVM ──
+      - RPC_URL=__EVM_RPC_URL__
+      - TOKEN_ADDRESS=__EVM_USDC_ADDRESS__
+      - ETH_AMOUNT=100
+      - TOKEN_AMOUNT=10000
+      # ── Solana ──
+      # Faucet authority keypair is BAKED INTO the image at
+      # /etc/faucet/sol-authority.json (see packages/faucet/Dockerfile).
+      - SOLANA_RPC_URL=__SOLANA_RPC_URL__
+      - SOLANA_USDC_MINT=__SOLANA_USDC_MINT__
+      - SOLANA_FAUCET_AUTHORITY_KEYPAIR_PATH=/etc/faucet/sol-authority.json
+      - SOL_USDC_AMOUNT=100
+      # Legacy /api/* rate limit (hour-window per address). The new
+      # /faucet/* routes use 1/sec/address + 5/min/IP — see
+      # packages/faucet/src/index.js story 49.2 AC #1.
+      - RATE_LIMIT_HOURS=1
+      - CHAIN_ID=31337
+      - SOLANA_CLUSTER=akash-devnet
+    expose:
+      # `as: 80` triggers Akash's L7 HTTPS ingress (Let's Encrypt). The
+      # faucet UI is loadable from a browser without mixed-content blocking.
+      - port: 3500
+        as: 80
+        proto: tcp
+        to:
+          - global: true
+
+profiles:
+  compute:
+    faucet:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 256Mi
+        storage:
+          - size: 1Gi
+  placement:
+    dcloud:
+      pricing:
+        faucet:
+          denom: uakt
+          amount: 1000
+
+deployment:
+  faucet:
+    dcloud:
+      profile: faucet
+      count: 1
