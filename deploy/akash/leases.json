@@ -44,5 +44,14 @@
     "url": "https://vpu5jnfjdde4154qpl0l1dhb54.ingress.boogle.cloud",
     "image_digest": "sha256:bc115094147d239fec6c959764f5f16cb5b7f7c0bdc2ee3246d25c5f6bab7f10",
     "deployed_at": "2026-05-19T05:00:37Z"
+  },
+  "foreign-toon-client": {
+    "dseq": "26900634",
+    "provider": "akash1hgulk6aekakqzc0v6wukrd3dy9n90f5gkl4ezk",
+    "host": "gceiiicc7dcvn86liph2ajuj74.ingress.h4i-dedicated.eu-sw-2.digitalfrontier.so",
+    "port": 443,
+    "url": "https://gceiiicc7dcvn86liph2ajuj74.ingress.h4i-dedicated.eu-sw-2.digitalfrontier.so",
+    "image_digest": "sha256:a4d9b97385e382173178306d9d0f255f019f79941c37fc3067787bc3fc47d756",
+    "deployed_at": "2026-05-20T00:57:50Z"
   }
 }

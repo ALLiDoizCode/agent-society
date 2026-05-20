@@ -1,4 +1,27 @@
 
+## Epic 49 sunset checklist
+
+Track-forward: when Epic 49 retires (or by 2026-08-31, whichever comes first),
+close these long-lived Akash leases. Each runs ~$2-5/mo and has NO consumer
+outside Epic 49 — closing the epic = closing the leases.
+
+- **49.3 foreign-toon-client lease** — close via `scripts/akash-deploy.sh close foreign-toon-client`.
+  Lease URL recorded in `deploy/akash/leases.json["foreign-toon-client"].url` after deploy.
+  Owner: `dev.jonathan.green@gmail.com`. Monthly AKT-burn budget: ~$3-5/mo at
+  1500 uakt/block × 30 days; alert at 50% drain (manual eyeball discipline
+  for now — wire to monthly cron if pilot extends past 2026-08-31). The pod
+  holds ZERO persistent state (ephemeral signer keys, no on-disk wallet); a
+  clean close + redeploy is safe at any time.
+- **49.2 faucet lease** — close at the same time as 49.3. The faucet has no
+  consumers once 49.3 closes (49.4/49.5 also retire alongside).
+- **anvil + solana chain leases** — close after 49.3 + 49.2 (they're the only
+  remaining consumers; downstream Mock USDC state is throwaway).
+
+Orphan-lease detector follow-up (NOT blocking 49.3): wire
+`scripts/akash-status.sh --orphan-check` into CI nightly to page on any
+unknown leases under the toon-protocol Akash Console wallet. Currently
+manual via the Console UI. Belongs in a small infra-hardening story.
+
 ## Deferred from: code review of 49-2-akash-devnet-faucets-and-ui (2026-05-19)
 
 - **W1 — Smoke test 5 exercises IP rate-limit, not per-address token-bucket** — `Promise.all` fires 6 requests concurrently; all 6 see no prior hit at check-time before any `recordFaucetHit` runs; the IP 5/min cap is what actually fires. A sequential per-address sub-test (two requests 500ms apart to the same address, expect second=429) would properly gate AC#1's 1/sec address limit. Low impact in devnet context. [`packages/townhouse/src/__integration__/akash-faucet-smoke.test.ts:188`]
@@ -498,3 +521,11 @@ All findings target `packages/townhouse/src/__integration__/townhouse-tui-e2e.te
 - `/api/transport` readiness check at lines 340-343 doesn't confirm `/api/earnings` plugin registered. Plugin-order regression would surface as opaque 404 in Test 2.
 - `parseLastJsonLine` at lines 177-193 walks back to first line starting with `{` — could parse a structured log envelope as the success body. Mitigated today by `expect(addBody.ok).toBe(true)` at line 383 but fragile.
 - ActivityTicker disjunction `/no settlements yet|press \[a\] when|activity arrives|\[a\] activity/` at lines 485-487 accepts wildly different ticker states — broad assertion misses regressions where ticker copy renders the wrong empty-state variant.
+
+## Deferred from: code review of 49-3-persistent-akash-foreign-client-pod (2026-05-19)
+
+- **D1: Raw TCP probe in waitForSocks5Bound** — `docker/src/entrypoint-foreign-pod.ts` uses a raw TCP connect probe to detect SOCKS5 readiness. A real SOCKS5 protocol greeting probe would be more accurate. Pre-existing from 49.1 deferred-work.md D1; the 3× retry inside ToonClient.start() absorbs the gap for now.
+- **D2: Tor circuits not fully built when SOCKS5 binds** — The SOCKS5 port binds before Tor circuits are usable for outbound .anyone tunnels. Real fix is the same as D1 (SOCKS5 greeting probe confirms circuits); current workaround is ToonClient.start() retry.
+- **D3: Lease owner pubkey pending Task 8 deploy** — Story footer records `dev.jonathan.green@gmail.com` as owner; Akash Console wallet pubkey must be appended after the first `scripts/akash-deploy.sh foreign-toon-client` run.
+- **D4: AKASH_FOREIGN_POD_URL trailing slash in smoke test URL composition** — `packages/townhouse/src/__integration__/akash-foreign-pod-smoke.test.ts` constructs URLs as `${AKASH_FOREIGN_POD_URL}/healthz`; a trailing slash in the env var produces double-slash. Low risk for operator-controlled env; fix with `url.replace(/\/$/, '')`.
+- **D5: AC #2 publish fails against fresh test apex (HS propagation delay)** — `socks5.ts` uses a 2s socket timeout for the SOCKS5 connect. A freshly-started `townhouse hs up` apex has not yet had its HS descriptor indexed by the public ATOR DHT; the pod's ATOR proxy (ator-public mode, 5.78.181.0:9052) accepts the SOCKS5 CONNECT but can't route within 2s. Smoke tests 3, 4, 9 fail against a 60-second-old apex. In production (operator apex running for hours/days), the descriptor IS indexed and the first connect succeeds within 2s. Fix: extend the socks5.ts socket timeout from 2s to 30s for the initial connect attempt, OR add a "HS readiness probe" that confirms the DHT has indexed the descriptor before running the publish tests. Belongs in a small transport-hardening story alongside D1.

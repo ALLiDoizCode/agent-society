@@ -46,6 +46,9 @@ DEPOSIT_ATOR_PROBE=5
 # Faucet — dedicated dev faucet lease (story 49.2 architecture A2).
 # Single small service; ~$2-5/mo. Min deposit.
 DEPOSIT_FAUCET=5
+# Foreign-TOON-client pod (story 49.3) — persistent lease, slightly heavier
+# than the faucet (anon daemon + viem + Fastify). ~$3-5/mo. Min deposit.
+DEPOSIT_FOREIGN_CLIENT=5
 # Townhouse — full operator stack (apex connector + town + mill + dvm + faucet)
 # behind a .anyone hidden service. 5 services × ~30d at SDL prices ≈ $10.
 DEPOSIT_TOWNHOUSE=10
@@ -80,6 +83,22 @@ FAUCET_SHA="$(
   | { cat "$ROOT/infra/solana/keys/faucet-authority.json" 2>/dev/null; cat; } \
   | sha256sum | head -c 12
 )"
+# Foreign-toon-client SHA covers the Dockerfile + entrypoint source + schema
+# contract + workspace pieces the entrypoint actually imports. Story 49.3.
+FOREIGN_CLIENT_SHA="$(
+  for _sha_f in \
+    "$ROOT/docker/Dockerfile.foreign-toon-client" \
+    "$ROOT/docker/src/entrypoint-foreign-pod.ts" \
+    "$ROOT/packages/townhouse/contracts/foreign-publish.schema.json" \
+    "$ROOT/docker/townhouse-ator-sidecar/checksums.txt" \
+  ; do
+    if [ ! -f "$_sha_f" ]; then
+      echo "[sha] ERROR: required file missing for FOREIGN_CLIENT_SHA: $_sha_f" >&2
+      exit 1
+    fi
+    cat "$_sha_f"
+  done | sha256sum | head -c 12
+)"
 
 ANVIL_IMAGE_TAGGED="ghcr.io/toon-protocol/akash-anvil:sha-$ANVIL_SHA"
 ANVIL_IMAGE_DEMO="ghcr.io/toon-protocol/akash-anvil:demo"
@@ -94,6 +113,10 @@ FAUCET_IMAGE_DEMO="ghcr.io/toon-protocol/akash-faucet:demo"
 # Compat alias — the existing townhouse.sdl.yaml references this name, so
 # we keep it published in parallel until that SDL is updated.
 FAUCET_IMAGE_TOWNHOUSE_DEMO="ghcr.io/toon-protocol/townhouse-faucet:demo"
+# Foreign-TOON-client pod image (Story 49.3 — persistent Akash foreign-pod
+# with POST /publish). Hosts the Fastify control plane + in-pod anon daemon.
+FOREIGN_CLIENT_IMAGE_TAGGED="ghcr.io/toon-protocol/akash-foreign-toon-client:sha-$FOREIGN_CLIENT_SHA"
+FOREIGN_CLIENT_IMAGE_DEMO="ghcr.io/toon-protocol/akash-foreign-toon-client:demo"
 
 require_env() {
   for v in "$@"; do
@@ -289,6 +312,109 @@ cmd_build_faucet() {
   echo "Pushing $FAUCET_IMAGE_TAGGED (SHA-pinned)..."
   docker push "$FAUCET_IMAGE_TAGGED" \
     || echo "[faucet] WARNING: push of $FAUCET_IMAGE_TAGGED failed (likely GHCR package scope)." >&2
+}
+
+# Build (and push) the Foreign-TOON-Client pod image (Story 49.3).
+# Builds from the repo root so the Dockerfile can reach packages/townhouse/
+# contracts + docker/townhouse-ator-sidecar/ checksums + docker/src/
+# entrypoint-foreign-pod.ts.
+cmd_build_foreign_toon_client() {
+  require_cli docker
+  echo "Building $FOREIGN_CLIENT_IMAGE_TAGGED + :demo..."
+  docker build \
+    -f "$ROOT/docker/Dockerfile.foreign-toon-client" \
+    -t "$FOREIGN_CLIENT_IMAGE_TAGGED" \
+    -t "$FOREIGN_CLIENT_IMAGE_DEMO" \
+    "$ROOT"
+  echo "Pushing $FOREIGN_CLIENT_IMAGE_TAGGED (SHA-pinned)..."
+  docker push "$FOREIGN_CLIENT_IMAGE_TAGGED" || {
+    echo "[foreign-toon-client] ERROR: push of SHA-pinned tag failed." >&2
+    echo "  Create the package first: https://github.com/orgs/toon-protocol/packages" >&2
+    echo "  Then re-run: $0 build-foreign-toon-client" >&2
+    exit 1
+  }
+  echo "Pushing $FOREIGN_CLIENT_IMAGE_DEMO (canonical)..."
+  docker push "$FOREIGN_CLIENT_IMAGE_DEMO" || {
+    echo "[foreign-toon-client] ERROR: push of $FOREIGN_CLIENT_IMAGE_DEMO failed." >&2
+    exit 1
+  }
+}
+
+# Render the foreign-toon-client SDL (story 49.3). Reads FAUCET_URL +
+# EVM_RPC_URL + SOLANA_RPC_URL from leases.json with fallback to localnet
+# defaults, then substitutes them into a temp SDL. Output goes to stdout
+# so deploy_sdl can `cat` it through to the Console API.
+render_foreign_toon_client_sdl() {
+  local sdl_template="$SDL_DIR/foreign-toon-client.sdl.yaml"
+
+  local faucet_url evm_rpc sol_rpc
+  faucet_url="${FAUCET_URL:-$(jq -r '.faucet.url // empty' "$LEASES_FILE" 2>/dev/null || true)}"
+  faucet_url="${faucet_url:-http://localhost:3500}"
+  evm_rpc="${EVM_RPC_URL:-$(jq -r '.anvil.url // empty' "$LEASES_FILE" 2>/dev/null || true)}"
+  evm_rpc="${evm_rpc:-http://localhost:8545}"
+  sol_rpc="${SOLANA_RPC_URL:-$(jq -r '.solana.url // empty' "$LEASES_FILE" 2>/dev/null || true)}"
+  sol_rpc="${sol_rpc:-http://localhost:8899}"
+
+  sed \
+    -e "s#__FAUCET_URL__#$faucet_url#g" \
+    -e "s#__EVM_RPC_URL__#$evm_rpc#g" \
+    -e "s#__SOLANA_RPC_URL__#$sol_rpc#g" \
+    "$sdl_template"
+}
+
+cmd_foreign_toon_client() {
+  require_env AKASH_CONSOLE_API_KEY
+  require_cli curl jq
+
+  ensure_leases_file
+
+  # Foreign-pod depends on the faucet + chain leases being up. Warn loudly
+  # but don't block — operator may be deploying out-of-order intentionally.
+  local faucet_url anvil_url solana_url
+  faucet_url="$(jq -r '.faucet.url // ""' "$LEASES_FILE")"
+  anvil_url="$(jq -r '.anvil.url // ""' "$LEASES_FILE")"
+  solana_url="$(jq -r '.solana.url // ""' "$LEASES_FILE")"
+  if [ -z "$faucet_url" ]; then
+    echo "[foreign-toon-client] WARNING: faucet lease not found in $LEASES_FILE." >&2
+    echo "[foreign-toon-client] Pod boot will fail at the faucet auto-fund step." >&2
+    echo "[foreign-toon-client] Run: $0 build-faucet && $0 faucet" >&2
+  fi
+  if [ -z "$anvil_url" ] || [ -z "$solana_url" ]; then
+    echo "[foreign-toon-client] WARNING: anvil/solana leases not both found." >&2
+    echo "[foreign-toon-client] Pod will fail balance polling." >&2
+  fi
+
+  local rendered_sdl
+  rendered_sdl="$(mktemp --suffix=.sdl.yaml)"
+  trap 'rm -f "${rendered_sdl-}"' EXIT
+  render_foreign_toon_client_sdl > "$rendered_sdl"
+
+  local digest
+  digest="$(image_digest "$FOREIGN_CLIENT_IMAGE_DEMO")"
+
+  # Readiness probe — the pod's /healthz returns 200 only after the anon
+  # daemon binds SOCKS5 AND the faucet auto-fund completes. The cold-boot
+  # window is ~30-90s for anon + ~5s for faucet, so the wait_for_url
+  # timeout needs to be at least 180s; we use 300s per deploy_sdl default.
+  deploy_sdl foreign-toon-client "$rendered_sdl" foreign-toon-client 8080 probe_foreign_pod_healthz "$DEPOSIT_FOREIGN_CLIENT" "$digest"
+
+  echo
+  echo "[foreign-toon-client] Deployed."
+  echo "  URL:        $(jq -r '."foreign-toon-client".url // "(pending)"' "$LEASES_FILE")"
+  echo "  /healthz:   $(jq -r '."foreign-toon-client".url // "(pending)"' "$LEASES_FILE")/healthz"
+  echo "  /publish:   $(jq -r '."foreign-toon-client".url // "(pending)"' "$LEASES_FILE")/publish"
+  echo
+  echo "  Lease owner: dev.jonathan.green@gmail.com"
+  echo "  Sunset:      Close via \`$0 close foreign-toon-client\` when Epic 49 retires"
+  echo "               (see deferred-work.md § 'Epic 49 sunset checklist')."
+}
+
+# Probe — fetches /healthz and checks `"anyoneReady": true`. The pod's
+# JSON shape is fixed by packages/townhouse/contracts/foreign-publish.schema.json.
+probe_foreign_pod_healthz() {
+  local body
+  body="$(curl -sf -k -m 8 --connect-timeout 5 "$1/healthz" 2>/dev/null || echo '')"
+  echo "$body" | grep -q '"anyoneReady":[[:space:]]*true'
 }
 
 # Build (and push) the ATOR probe image only. Kept separate from cmd_build so
@@ -1048,6 +1174,8 @@ cmd_redeploy() {
     solana-explorer) cmd_solana_explorer ;;
     ator-probe) cmd_ator_probe ;;
     townhouse) cmd_townhouse ;;
+    faucet) cmd_faucet ;;
+    foreign-toon-client) cmd_foreign_toon_client ;;
     *) echo "Unknown service: $name" >&2; exit 1 ;;
   esac
 }
@@ -1134,6 +1262,7 @@ case "${1:-}" in
   build) cmd_build ;;
   build-ator-probe) cmd_build_ator_probe ;;
   build-faucet) cmd_build_faucet ;;
+  build-foreign-toon-client) cmd_build_foreign_toon_client ;;
   anvil) cmd_anvil ;;
   solana) cmd_solana ;;
   blockscout) cmd_blockscout ;;
@@ -1142,6 +1271,7 @@ case "${1:-}" in
   ator-probe) cmd_ator_probe ;;
   townhouse) cmd_townhouse ;;
   faucet) cmd_faucet ;;
+  foreign-toon-client) cmd_foreign_toon_client ;;
   all) cmd_all ;;
   close) shift; cmd_close "$@" ;;
   redeploy) shift; cmd_redeploy "$@" ;;

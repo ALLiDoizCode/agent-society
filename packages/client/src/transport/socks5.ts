@@ -66,7 +66,11 @@ export function createSocks5WebSocketFactory(
   const WS = require('ws') as typeof WSModule;
   /* eslint-enable @typescript-eslint/no-require-imports */
 
-  const agent = new SocksProxyAgent(socksProxy);
+  // 120s timeout: the socks library's default is 30s, which is too short for
+  // the ATOR network to build circuits to fresh hidden services from certain
+  // network paths (e.g., Akash datacenter → public ATOR proxy → local HS).
+  // 120s gives the proxy time to find a working introduction-point circuit.
+  const agent = new SocksProxyAgent(socksProxy, { timeout: 120_000 });
 
   // CJS/ESM interop: `require('ws')` can return any of three shapes depending on
   // the bundler/loader: the class directly (pure CJS); `{ default: WSClass, ... }`
