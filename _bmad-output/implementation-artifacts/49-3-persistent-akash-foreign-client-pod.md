@@ -83,6 +83,8 @@ so that **49.4's settlement assertions and 49.5's close-out gate can drive the f
 
 **FRs:** FR30, FR31 | **NFRs:** NFR5 (real `.anyone` transport — no `127.0.0.1` substitute), NFR8 (no on-disk secret files; ephemeral keys are memory-only — N/A here), NFR9 (no `0.0.0.0`-bound admin endpoints; the `/publish` route IS the public ingress, that's by design — but `/signer-info` should be the only "debug" surface and it returns PUBLIC keys only)
 
+> **AC #2 clarification (2026-05-20 via /bmad-party-mode):** the phrases "`connectorUrl=http://127.0.0.1:<local-connector-port>`" and "opens a payment channel via the pod's local connector" in AC #2 are misleading. The actual implementation (`docker/src/entrypoint-foreign-pod.ts:581`) sets `connectorUrl: 'http://127.0.0.1:1'` purely as a `validateConfig` stub — there is NO in-pod connector process. Channel-open and EIP-712 balance-proof signing happen CLIENT-SIDE inside the ToonClient's `channelManager` (SDK code, not a connector). The pod opens a BTP WebSocket directly to the TARGET connector via `btpUrl=ws://<targetHostname>:3000/btp`. AC text preserved for history; treat the corrected wording in § "Architectural Layering" below as canonical.
+
 ## Tasks / Subtasks
 
 - [x] **Task 1: Pre-work — read every file in the blast radius end-to-end (AC: all)**
@@ -229,6 +231,8 @@ The /bmad-party-mode discussion explored several architectural options that turn
 
 ### Architectural Layering — What the Pod Actually Exercises
 
+> **Correction (2026-05-20 via /bmad-party-mode):** earlier revisions of this diagram showed a phantom "local connector (in-pod, Anvil-backed)" box. That box does NOT exist in the runtime. The pod is a TOON CLIENT only — `entrypoint-foreign-pod.ts:581` sets `connectorUrl: 'http://127.0.0.1:1'` as a `validateConfig` stub, unused at runtime. The ToonClient opens a BTP WebSocket directly to the TARGET connector via `btpUrl`; channel-open and EIP-712 balance-proof signing happen CLIENT-SIDE inside the SDK's channelManager. The diagram below has been corrected.
+
 ```
 external caller (laptop test process, 49.4/49.5 gate, third-party dev)
   ↓ HTTPS POST /publish {event, targetHostname}
@@ -240,21 +244,25 @@ Akash foreign-pod lease (ghcr.io/toon-protocol/akash-foreign-toon-client:demo)
   │   └── return 202 {eventId, claimHash, ...}
   ├── ToonClient (in-process) — from @toon-protocol/client
   │   ├── transport: socks5h://127.0.0.1:9050 (via createSocks5WebSocketFactory)
-  │   ├── btpUrl: wss://${targetHostname}/btp
-  │   └── connectorUrl: http://127.0.0.1:<local-connector-port>
-  ├── local connector (in-pod, Anvil-backed) — clearnet to Akash-Anvil
-  │   └── channelManager opens BTP channel, signs EIP-712 balance proof
+  │   ├── btpUrl: ws://${targetHostname}:3000/btp  (BTP straight to TARGET connector)
+  │   ├── btpPeerId: keys.evmAddress               (pod's identity to TARGET)
+  │   ├── connectorUrl: http://127.0.0.1:1         (validateConfig STUB — no in-pod connector exists)
+  │   └── channelManager (client-side) → openChannel + sign EIP-712 balance proof
   ├── @anyone-protocol/anyone-client daemon (in-pod) — SOCKS5 on 127.0.0.1:9050
-  │   └── dials targetHostname.anyone via Tor circuit
+  │   └── dials targetHostname.anyone via Tor circuit (when target is an .anyone HS)
   └── ephemeral signer keys (in-memory only, regen on pod restart)
       └── funded on boot via POST <faucet.url>/faucet (49.2's API)
 
-target townhouse HS (on operator's laptop, OR another Akash pod for tests)
-  ├── townhouse hs up — published .anyone hostname X
+target connector (operator-controlled — pod is target-agnostic)
+  ├── option A: .anyone HS connector (townhouse hs up apex) — reached via SOCKS5
+  ├── option B: clearnet apex connector — reached via direct WS (no SOCKS5 dial)
+  ├── option C: any third-party BTP-speaking service connector — same surface
   └── connector accepts BTP channel → relay accepts kind:1 → peer-type 'external'
 ```
 
 The pod is a **stateful long-lived service** (signer keys, ToonClient cache, anon-client daemon) but it has **no persistent disk state** (ephemeral keys, in-memory ring buffer, no on-disk wallet). A redeploy = fresh keys + fresh faucet drip + ready to publish. That's the right shape for a dev fixture; production-grade key management is out of scope.
+
+**Design strength of this layering:** the pod's only network coupling to a target is the pair `(btpUrl, transport)`. Repointing at a different connector — `.anyone` HS, clearnet, third-party — is a config change, not a code change. The pod doesn't know or care which kind of connector it's talking to; the connector's responsibilities (channel state validation, relay acceptance, peer-type classification, settlement) stay server-side.
 
 ### Schema-Contract Discipline (Murat)
 

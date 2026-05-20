@@ -232,6 +232,8 @@ Every layer the unit tests stub is real here. The anon network IS the integratio
 
 ### Foreign-Client Architecture — OQ-1
 
+> **Resolved (2026-05-20 via /bmad-party-mode, retro on 49.3 pod):** Sub-path C is viable AND is what the 49.3 persistent Akash foreign-client pod ended up shipping. `connectorUrl` IS mandatory at config-validation time but is UNUSED at runtime when `btpUrl` is set — `docker/src/entrypoint-foreign-pod.ts:581` passes `connectorUrl: 'http://127.0.0.1:1'` as a validator stub. The ToonClient's internal `channelManager` (client-side SDK code, NOT a connector instance) holds channel state, opens BTP channels via `btpClient`, and signs EIP-712 balance proofs. The "(ii) a local connector for the BTP channel manager and EVM signer" item below is misleading — those responsibilities live in the SDK, not a separate connector process. Treat the three-sub-path narrative below as historical decision-context, not a current architectural description.
+
 Operator B's stack must source THREE things: (i) outbound anon transport (SOCKS5 proxy speaking the anon protocol), (ii) a local connector for the BTP channel manager and EVM signer (the client side of the ILP claim), (iii) optionally its own `.anyone` HS for symmetry / future bidirectional smoke. Three composition paths:
 
 **Sub-path A1 (RECOMMENDED) — full `townhouse hs up` on B's side with container-prefix override:**
