@@ -723,24 +723,34 @@ async function main(): Promise<void> {
       }
 
       // 6c: faucet drip + native balance polling (each chain gets its own 30s window).
-      // USDC polls are best-effort — don't fail boot if USDC hasn't confirmed.
+      //
+      // Drip is BEST-EFFORT: if the faucet is unreachable (cross-provider HTTPS
+      // can be flaky on Akash — see story 49.4 carry-forward #4), the pod still
+      // boots provided an operator pre-funds the addresses out-of-band (e.g.
+      // anvil_setBalance for EVM, solana airdrop / spl-token mint-to for SOL).
+      // The poll is what actually unlocks anyoneReady=true; the drip just makes
+      // the happy path automatic. USDC polls are best-effort regardless.
       const [evmBal, solBal] = await Promise.all([
-        dripFromFaucet(env.faucetUrl, 'evm', keys.evmAddress, log).then(async () => {
+        (async () => {
+          dripFromFaucet(env.faucetUrl, 'evm', keys.evmAddress, log).catch((err: Error) =>
+            log(`[faucet] EVM drip non-fatal: ${err.message} — relying on out-of-band funding`)
+          );
           const deadline = Date.now() + 30_000;
           const bal = await pollEvmBalance(env.evmRpcUrl, keys.evmAddress, env.evmEthThresholdWei, deadline, log);
-          // USDC is best-effort; don't block boot if it times out
           pollEvmUsdcBalance(env.evmRpcUrl, env.tokenAddress, keys.evmAddress, env.evmUsdcThreshold, deadline, log)
             .catch((err: Error) => log(`[balance] EVM USDC (non-fatal): ${err.message}`));
           return bal;
-        }),
-        dripFromFaucet(env.faucetUrl, 'solana', keys.solPublicKeyBase58, log).then(async () => {
+        })(),
+        (async () => {
+          dripFromFaucet(env.faucetUrl, 'solana', keys.solPublicKeyBase58, log).catch((err: Error) =>
+            log(`[faucet] SOL drip non-fatal: ${err.message} — relying on out-of-band funding`)
+          );
           const deadline = Date.now() + 30_000;
           const bal = await pollSolBalance(env.solanaRpcUrl, keys.solPublicKeyBase58, env.solLamportThreshold, deadline, log);
-          // USDC is best-effort; don't block boot if it times out
           pollSolUsdcBalance(env.solanaRpcUrl, env.solanaUsdcMint, keys.solPublicKeyBase58, env.solUsdcThreshold, deadline, log)
             .catch((err: Error) => log(`[balance] SOL USDC (non-fatal): ${err.message}`));
           return bal;
-        }),
+        })(),
       ]);
       evmBalance = evmBal;
       solBalance = Number(solBal);

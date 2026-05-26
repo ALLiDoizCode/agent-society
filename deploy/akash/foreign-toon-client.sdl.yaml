@@ -33,6 +33,12 @@
 # _bmad-output/implementation-artifacts/deferred-work.md § "Epic 49 sunset
 # checklist".
 #
+# Story 49.4 post-state (2026-05-20): TOON_FEE_PER_EVENT flipped from 0 → 1000000
+# (= 1 USDC at scale=6) under Option B authority (Task 4.1). The connector now
+# processes a real EVM claim on every /publish, crediting A's earnings plane.
+# 49.5's gate consumes whatever TOON_FEE_PER_EVENT is set at gate time. To
+# revert, redeploy with TOON_FEE_PER_EVENT=0 env override in scripts/akash-deploy.sh.
+#
 # Pricing: 1500 uakt per block (~$3-5/mo). Slightly larger than the faucet
 # lease because the local anon daemon + viem clients need ~1Gi RAM headroom.
 #
@@ -83,7 +89,11 @@ services:
       # ILP fee per publish event (ILP units). 0 = free relay; the connector
       # skips per-packet claim generation for amount=0, and the relay accepts
       # with FEE_PER_EVENT=0. Set to a positive integer for paid relays.
-      - TOON_FEE_PER_EVENT=0
+      # Story 49.4 Option B: set to 1000000 (1 USDC at scale=6) so the
+      # connector processes a real EVM claim and credits A's earnings plane.
+      # Re-deployed with TOON_FEE_PER_EVENT=1000000 for the 49.4 smoke gate.
+      # Story 49.5's gate will use whatever fee is set here at gate time.
+      - TOON_FEE_PER_EVENT=1000000
       # NOTE: targetHostname is per-request via POST /publish body (AC #3).
       # NO TARGET_HOSTNAME env var here — the pod accepts ANY .anyone HS
       # at runtime, no redeploy needed when the operator's laptop reboots.

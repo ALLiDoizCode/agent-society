@@ -16,6 +16,7 @@ const result = await esbuild.build({
     'src/entrypoint-sdk.ts',
     'src/attestation-server.ts',
     'src/entrypoint-foreign-pod.ts',
+    'src/entrypoint-dvm.ts',
   ],
   bundle: true,
   format: 'esm',

@@ -1,4 +1,18 @@
 
+## Deferred from: Epic 21.18 — Arweave Turbo Credit Funding (2026-05-22)
+
+- ~~**D1 — human-crypto-keys vendoring**~~ **RESOLVED 2026-05-22** — Replaced `human-crypto-keys@0.1.4` + `node-forge@0.8.5` with `rsa-from-seed.ts` (HMAC-DRBG via `@noble/hashes` + `node-forge@1.3.3`). Byte-identical RSA-4096 derivation; CVE-free; 126/126 wallet tests pass.
+
+- **D2 — live DVM integration smoke against real orchestrator** — `townhouse up --dvm` live test (verify `DVM_ARWEAVE_JWK_B64` appears in container env) was deferred because running it requires stopping the HS stack. Unit tests in `orchestrator.test.ts:1537–1694` cover the 4 code paths. Do live smoke before 21.18 ships as `done`. [`packages/townhouse/src/docker/orchestrator.ts`]
+
+- **D3 — cold pull narration smoke** — `pull-narrator.ts` was added but live pull-narration (removing a Docker image and re-running `hs up`) was not smoke-tested in this session. Run once before 21.18 ships. [`packages/townhouse/src/cli/pull-narrator.ts`]
+
+- **D6 — Story 49-5 ATOR green run** — `townhouse-dvm-arweave-e2e.test.ts` (643 lines) is implemented and runs ACs #5+#6 green every run. ACs #1-#4 require stable ATOR bootstrap (60s hardcoded limit in `@anyone-protocol/anyone-client` fires under load). Re-run after ATOR network recovers. Infrastructure is correct: relay on `townhouse-hs-net` bridge, `CONNECTOR_URL=ws://connector:3000`, DVM runs as host process with unauthenticated Turbo. [`packages/townhouse/src/__integration__/townhouse-dvm-arweave-e2e.test.ts`]
+
+- **D4 — `credits buy` live on-chain test** — `--quote-only` was tested live with Turbo devnet. Full `topUpWithTokens` submit path (real on-chain tx) was not tested. Requires funded DVM SOL/EVM address. Smoke once before v0.1 pilot. [`packages/townhouse/src/credits/buy.ts`]
+
+- **D5 — `wallet.arweave.enc` export from `wallet/index.ts`** — `ar-cache.ts` functions are not currently re-exported from the wallet index (only consumed internally via manager.ts). Expose if scripting access is needed.
+
 ## Epic 49 sunset checklist
 
 Track-forward: when Epic 49 retires (or by 2026-08-31, whichever comes first),
@@ -529,3 +543,23 @@ All findings target `packages/townhouse/src/__integration__/townhouse-tui-e2e.te
 - **D3: Lease owner pubkey pending Task 8 deploy** — Story footer records `dev.jonathan.green@gmail.com` as owner; Akash Console wallet pubkey must be appended after the first `scripts/akash-deploy.sh foreign-toon-client` run.
 - **D4: AKASH_FOREIGN_POD_URL trailing slash in smoke test URL composition** — `packages/townhouse/src/__integration__/akash-foreign-pod-smoke.test.ts` constructs URLs as `${AKASH_FOREIGN_POD_URL}/healthz`; a trailing slash in the env var produces double-slash. Low risk for operator-controlled env; fix with `url.replace(/\/$/, '')`.
 - **D5: AC #2 publish fails against fresh test apex (HS propagation delay)** — `socks5.ts` uses a 2s socket timeout for the SOCKS5 connect. A freshly-started `townhouse hs up` apex has not yet had its HS descriptor indexed by the public ATOR DHT; the pod's ATOR proxy (ator-public mode, 5.78.181.0:9052) accepts the SOCKS5 CONNECT but can't route within 2s. Smoke tests 3, 4, 9 fail against a 60-second-old apex. In production (operator apex running for hours/days), the descriptor IS indexed and the first connect succeeds within 2s. Fix: extend the socks5.ts socket timeout from 2s to 30s for the initial connect attempt, OR add a "HS readiness probe" that confirms the DHT has indexed the descriptor before running the publish tests. Belongs in a small transport-hardening story alongside D1.
+
+## Deferred from: code review of 49-4-paid-packet-earnings-receipt-evm-and-sol-on-akash (2026-05-20)
+
+- **D1 (49.4): Hardcoded ATOR proxy `5.78.181.0:9052`** — `packages/townhouse/src/__integration__/akash-paid-earnings-smoke.test.ts:813-815` hardcodes the public ATOR introduction proxy. Should be env-overridable (`ATOR_SOCKS5_PROXY`) with a fallback to localhost; deferred to next transport-config refactor.
+- **D2 (49.4): Hardcoded apex EVM address `0x90F79bf6…`** — `packages/townhouse/src/__integration__/akash-paid-earnings-smoke.test.ts:700` is the deterministic Anvil acct[1]; runtime parse from pod `/healthz` is a polish item, not a correctness gap.
+- **D3 (49.4): `EXPECTED_FEE = 1_000_000n` hand-linked to SDL value** — Test file duplicates the value baked into `deploy/akash/foreign-toon-client.sdl.yaml`. Future polish: parse `TOON_FEE_PER_EVENT` from pod `/healthz` at runtime; deferred to next test-helpers refactor.
+- **D4 (49.4): `parseLastJsonLine` duplicated from 47.5** — Same helper exists in `townhouse-earnings-e2e.test.ts` and `akash-paid-earnings-smoke.test.ts`. Extract to `_test-helpers.ts` in a follow-up cleanup PR.
+- **D5 (49.4): `townhouse hs up` exit semantics assumption** — Test assumes `hs up` returns exit code 0 after orchestration completes (works per 49.3 precedent). Document the assumption explicitly if the orchestrator behavior changes.
+- **D6 (49.4): Fixed 8s sleep for BTP handshake** — `akash-paid-earnings-smoke.test.ts:741` waits a magic 8s for connector↔relay BTP handshake. Replace with poll on `adminClientA.getPeers()` for `connected: true` in a future refactor.
+- **D7 (49.4): `example.invalid` DNS resolver pitfalls** — Preflight unit tests (AC #6) probe `https://example.invalid/*`. RFC 6761 guarantees no resolution, but corporate DNS / split-horizon resolvers / captive portals may answer. Switch to `http://127.0.0.1:1/` (ECONNREFUSED) if false-positive resolution becomes a CI issue.
+- **D8 (49.4): Single provider for two critical leases (anvil+faucet)** — Both currently on `akash1hgulk6…`. Multi-provider distribution is an Epic 49.5 stability concern; campaign artifact, not a blocking issue.
+- **D9 (49.4): AC #2 Mill `node add mill` synthetic substitution** — Test substitutes a synthetic Mill registration (nodes.yaml write + `connectorAdmin.registerPeer`) for the real `townhouse node add mill` 6-step lifecycle. Acknowledged in AC #2 BLOCKED-STRUCTURAL scope; revisit when Mill SOL settlement routing layer ships.
+- **D10 (49.4): `captureLogsOnFailure` writes to `process.cwd()`** — Inconsistent with workspace-rooted logs. 47.5 has the same pattern; anchor to `WORKSPACE_ROOT` from `_test-helpers.ts` in the next test-helpers refactor.
+
+## Deferred from: 49-4 post-review-pass-1 GREEN re-run attempt (2026-05-20)
+
+- **D-49.4-PR1-1 (49.5 prerequisite): Akash provider quality is the binding constraint on a deterministic GREEN gate.** 4 consecutive provider failures across 1 hour of redeploy churn (Solana validator io_uring crash, two foreign-pod providers with broken outbound HTTPS / dead ingress). 49.5 should either pre-vet a small allow-list of known-good providers, use a private Akash provider, or switch the foreign-pod off Akash for the gate. Capture this as an Epic 49.5 architecture decision before its CI gate runs.
+- **D-49.4-PR1-2 (49.5 prerequisite): pod boot resilience now landed but unverified in live evidence.** Patch in `docker/src/entrypoint-foreign-pod.ts` lines ~725-746 makes drip best-effort + lets `pollEvmBalance`/`pollSolBalance` run regardless. Pod self-heals when operator pre-funds via `anvil_setBalance` / Solana `requestAirdrop`. Image rebuilt + pushed: `ghcr.io/toon-protocol/akash-foreign-toon-client:demo@sha256:571e0e66920b206b34d63bc08eabb456bab410b2586b38824b18cec3d9044cf8`. 49.5's gate inherits this — first live evidence that the resilience path actually fires is owed to 49.5.
+- **D-49.4-PR1-3: `scripts/akash-deploy.sh` readiness probe is broken for `/healthz`-only services.** Currently probes the bare ingress URL `/` and expects 2xx, but Fastify-served pods (foreign-toon-client) return 404 for `/`. Probe times out the full 300s waiting for `/` to respond, even when the pod is healthy. Fix: parameterize the readiness path per service (e.g. `READINESS_PATH=/healthz`) or default it to `/healthz` for foreign-pod-class deployments.
+- **D-49.4-PR1-4: P2 substitution-verification guard refined.** Original implementation counted text occurrences of `TOON_FEE_PER_EVENT=`, which broke after the SDL header was extended with the same string in comments. Now counts env-LINE matches via a regex-anchored grep. Documented inline in `scripts/akash-deploy.sh:render_foreign_toon_client_sdl`. No further action needed; flagged here only for awareness during the next SDL-template audit.
