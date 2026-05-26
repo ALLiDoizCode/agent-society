@@ -465,6 +465,7 @@ development_status:
   21-13-dashboard-wallet-and-keys-view: done
   21-14-first-run-setup-wizard: done
   21-15-ator-privacy-transport-and-connectivity-status: done
+  21-18-arweave-turbo-credit-funding: in-progress  # AR JWK derivation + credits buy/balance CLI + DVM boot loop + on-disk JWK cache + port preflight + pull narration + rsa-from-seed (CVE-free); 1442/1443 tests passing; live DVM integration + cold pull narration + credits buy on-chain still pending (deferred-work D2-D4)
   21-16-e2e-integration-tests: backlog
   21-17-publish-package: backlog
   epic-21-retrospective: optional
@@ -596,6 +597,6 @@ development_status:
   49-1-toon-client-foreign-townhouse-hs-smoke: done  # 2026-05-18 Pass 2 code review applied 44 patches + 2 follow-ups; round-9b smoke 7/7 PASS in 117.06s
   49-2-akash-devnet-faucets-and-ui: done  # 2026-05-19 code review Pass 1 complete: 15 patches applied + chains redeployed (Anvil DSEQ 26888410, Solana DSEQ 26888424, Faucet DSEQ 26888459 at vpu5jnfjdde4154qpl0l1dhb54.ingress.boogle.cloud); smoke re-run 7/7 PASS in 16.23s. F4 resolved.
   49-3-persistent-akash-foreign-client-pod: done  # 2026-05-19 Smoke 7/7 PASS in 75.59s. AC #1 /healthz PASS (anyoneReady=true, evm=100ETH, sol=1SOL), AC #2 POST /publish 202 in 14314ms (first attempt, no retries), AC #4 channel peerId===podEvmAddr PASS, AC #5 peer-type external PASS (fallback), AC #6 socks5h:// PASS, AC #9 rate-limit 429 PASS, containers PASS. Key fixes this session: btpPeerId=evmAddress (was nostrPubkey), ilpAmount=0n in publishEvent (bypasses connector→relay channel requirement — connector skips per-packet claim for amount=0), 45s publish deadline (beats nginx 60s), schema added nostrPubkey, town relay APEX_EVM_ADDRESS=0x90F79bf6... (matches pod TARGET_SETTLEMENT_ADDRESS), FEE_PER_EVENT=0. Pod live DSEQ=26900019 at https://orq1lkcdutarlaeicvtt51ltno.ingress.akash-palmito.org (palmito, ator-public mode, proxy=socks5h://5.78.181.0:9052, evm=0xb872E094...).
-  49-4-paid-packet-earnings-receipt-evm-and-sol-on-akash: backlog  # renumbered from 49.2 on 2026-05-18 (party mode); now consumes 49.3's Akash foreign-client pod
-  49-5-live-e2e-gate-real-anyone-loop-akash-evm-sol: backlog  # renumbered from 49.3 on 2026-05-18 (party mode); workflow_dispatch only; not per-PR
+  49-4-paid-packet-earnings-receipt-evm-and-sol-on-akash: done  # adversarial code review pass 1 complete 2026-05-20; AC #1 EVM leg BLOCKED-PARTIAL (round-6 recentClaims evidence real: publish 202+claimHash+1_000_000 USDC raw units; patched assertion + 4-provider Akash failure cascade blocked GREEN re-run; GREEN gate inherited by 49.5); AC #2 SOL leg BLOCKED-STRUCTURAL (Mill routing layer unimplemented; filed as 49.5 close-out blocker); 40 patches + 5 decisions resolved; 10 items deferred to deferred-work.md
+  49-5-live-e2e-gate-real-anyone-loop-akash-evm-sol: in-progress  # story file created 2026-05-26; local-Docker pivot (D-49.4-PR1-1); image-manifest D3/D4 fix prerequisite; 4 WIP gate files to commit; workflow_dispatch only; not per-PR
   epic-49-retrospective: optional

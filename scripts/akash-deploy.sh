@@ -355,11 +355,34 @@ render_foreign_toon_client_sdl() {
   sol_rpc="${SOLANA_RPC_URL:-$(jq -r '.solana.url // empty' "$LEASES_FILE" 2>/dev/null || true)}"
   sol_rpc="${sol_rpc:-http://localhost:8899}"
 
-  sed \
+  # Story 49.4 Option B: allow caller to override the ILP fee per event via
+  # TOON_FEE_PER_EVENT env var (e.g. TOON_FEE_PER_EVENT=1000000 for 1 USDC).
+  # When unset, the value baked into the SDL template is used unchanged.
+  local rendered
+  rendered="$(sed \
     -e "s#__FAUCET_URL__#$faucet_url#g" \
     -e "s#__EVM_RPC_URL__#$evm_rpc#g" \
     -e "s#__SOLANA_RPC_URL__#$sol_rpc#g" \
-    "$sdl_template"
+    "$sdl_template")"
+  if [ -n "${TOON_FEE_PER_EVENT:-}" ]; then
+    if ! [[ "${TOON_FEE_PER_EVENT}" =~ ^[0-9]+$ ]]; then
+      echo "[foreign-toon-client] TOON_FEE_PER_EVENT must be a non-negative integer, got: ${TOON_FEE_PER_EVENT}" >&2
+      exit 1
+    fi
+    # Count env-LINE matches before/after substitution (not text occurrences —
+    # comments may also mention TOON_FEE_PER_EVENT= and would skew the count).
+    local env_lines_before
+    env_lines_before="$(echo "$rendered" | grep -cE "^[[:space:]]*-[[:space:]]+TOON_FEE_PER_EVENT=[0-9]+" || true)"
+    rendered="$(echo "$rendered" | sed -E "s#^([[:space:]]*-[[:space:]]+)TOON_FEE_PER_EVENT=[0-9]+#\1TOON_FEE_PER_EVENT=${TOON_FEE_PER_EVENT}#g")"
+    local env_lines_after
+    env_lines_after="$(echo "$rendered" | grep -cE "^[[:space:]]*-[[:space:]]+TOON_FEE_PER_EVENT=${TOON_FEE_PER_EVENT}$" || true)"
+    if [ "$env_lines_before" -lt 1 ] || [ "$env_lines_after" -lt 1 ]; then
+      echo "[foreign-toon-client] TOON_FEE_PER_EVENT override did not substitute (env_lines before=$env_lines_before, after=$env_lines_after with value=${TOON_FEE_PER_EVENT}) — SDL formatting drift?" >&2
+      exit 1
+    fi
+    echo "[foreign-toon-client] Using TOON_FEE_PER_EVENT=${TOON_FEE_PER_EVENT} (override) — $env_lines_after env line(s) substituted" >&2
+  fi
+  echo "$rendered"
 }
 
 cmd_foreign_toon_client() {
@@ -411,10 +434,36 @@ cmd_foreign_toon_client() {
 
 # Probe — fetches /healthz and checks `"anyoneReady": true`. The pod's
 # JSON shape is fixed by packages/townhouse/contracts/foreign-publish.schema.json.
+# NOTE: always appends /healthz to the base URL — bare / returns 404 from
+# Fastify (D-49.4-PR1-3 fix). probe_http_200 must NOT be used for this class.
 probe_foreign_pod_healthz() {
   local body
   body="$(curl -sf -k -m 8 --connect-timeout 5 "$1/healthz" 2>/dev/null || echo '')"
   echo "$body" | grep -q '"anyoneReady":[[:space:]]*true'
+}
+
+# Manual readiness probe for the foreign-toon-client lease (D-49.4-PR1-3).
+# Reads the URL from leases.json and calls probe_foreign_pod_healthz which
+# hits /healthz — bare / returns 404 from Fastify and is not a valid probe.
+cmd_probe_foreign_pod() {
+  ensure_leases_file
+  local url
+  url="$(jq -r '."foreign-toon-client".url // empty' "$LEASES_FILE")"
+  if [ -z "$url" ]; then
+    echo "ERROR: no foreign-toon-client lease in $LEASES_FILE" >&2
+    exit 1
+  fi
+  echo "[probe-foreign-pod] Probing $url/healthz ..."
+  local body
+  body="$(curl -sf -k -m 10 --connect-timeout 5 "$url/healthz" 2>/dev/null || echo '')"
+  if echo "$body" | grep -q '"anyoneReady":[[:space:]]*true'; then
+    echo "[probe-foreign-pod] PASS — anyoneReady=true"
+    echo "$body" | jq -c '{anyoneReady, evmAddr, solAddr, balances}' 2>/dev/null || echo "$body"
+  else
+    echo "[probe-foreign-pod] FAIL — anyoneReady not true (or pod unreachable)"
+    echo "  body: $(echo "$body" | head -c 200)"
+    exit 1
+  fi
 }
 
 # Build (and push) the ATOR probe image only. Kept separate from cmd_build so
@@ -1272,6 +1321,7 @@ case "${1:-}" in
   townhouse) cmd_townhouse ;;
   faucet) cmd_faucet ;;
   foreign-toon-client) cmd_foreign_toon_client ;;
+  probe-foreign-pod) cmd_probe_foreign_pod ;;
   all) cmd_all ;;
   close) shift; cmd_close "$@" ;;
   redeploy) shift; cmd_redeploy "$@" ;;
@@ -1310,6 +1360,8 @@ Commands:
                      defaults). Generates / reuses an HS keypair under
                      deploy/akash/townhouse-keys/ — gitignored, deterministic
                      across redeploys.
+  probe-foreign-pod  Probe the foreign-toon-client /healthz from leases.json
+                     (D-49.4-PR1-3: bare / returns 404 from Fastify — always /healthz)
   all                build + anvil + solana + otterscan + solana-explorer
   close <name>       Close a lease (DELETE /v1/deployments/{dseq})
   redeploy <name>    Close + redeploy, denylist prior provider
