@@ -232,8 +232,14 @@ export async function createTurboAdapter(
   }
 
   // ── Unauthenticated free tier (≤100 KB uploads, no wallet required) ─────
+  // TurboFactory.unauthenticated() is read-only (getBalance, getUploadCosts).
+  // For uploads the Turbo service accepts authenticated requests from zero-credit
+  // accounts for payloads ≤100KB; an ephemeral JWK is sufficient (no deposit).
   const { TurboFactory } = await importTurbo();
-  const client = TurboFactory.unauthenticated({});
+  const { default: Arweave } = await import('arweave');
+  const arweave = Arweave.init({});
+  const ephemeralJwk = await arweave.crypto.generateJWK();
+  const client = TurboFactory.authenticated({ privateKey: ephemeralJwk });
   return {
     adapter: new TurboUploadAdapter(client),
     source: 'unauthenticated-free-tier',

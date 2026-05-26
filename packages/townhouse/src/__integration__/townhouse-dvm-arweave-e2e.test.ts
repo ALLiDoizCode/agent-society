@@ -399,21 +399,32 @@ describe.skipIf(!shouldRun)(
         `rpcUrl: 'http://${gw}:18545'`
       );
       if (patched === rawYaml) throw new Error('connector.yaml rpcUrl patch produced no change');
-      // Enable localDelivery so the connector forwards unrouted ILP packets to the
-      // DVM HTTP handler at port 3300. The original connector.yaml may already have
-      // localDelivery.enabled: false — REPLACE it rather than append (YAML parsers
-      // use the first occurrence of a duplicate key).
+      // Enable localDelivery so the connector forwards packets for g.townhouse to
+      // the DVM HTTP handler at port 3300. The original connector.yaml may already
+      // have localDelivery.enabled: false — REPLACE it rather than append (YAML
+      // parsers use the first occurrence of a duplicate key).
       const localDeliveryBlock = `localDelivery:\n  enabled: true\n  handlerUrl: 'http://${hsNetGw}:3300'`;
       if (/localDelivery:/.test(patched)) {
-        // Replace existing localDelivery block (handles enabled:false → true)
         patched = patched.replace(/localDelivery:[\s\S]*?(?=\n\w|\n#|$)/m, localDeliveryBlock);
       } else {
         patched += `\n${localDeliveryBlock}\n`;
       }
+      // Add a self-route: g.townhouse → local. The connector's routing table is built
+      // from the `routes:` YAML field; without this entry getNextHop('g.townhouse')
+      // returns null and the connector rejects with F02 BEFORE checking localDelivery.
+      // nextHop: 'local' matches the packet-handler check (nextHop === 'local').
+      const selfRouteEntry = `  - prefix: 'g.townhouse'\n    nextHop: local\n    priority: 100`;
+      if (/routes:\s*\[\]/.test(patched)) {
+        patched = patched.replace(/routes:\s*\[\]/, `routes:\n${selfRouteEntry}`);
+      } else if (/^routes:/m.test(patched) && !/prefix.*g\.townhouse/.test(patched)) {
+        patched = patched.replace(/^(routes:)/m, `$1\n${selfRouteEntry}`);
+      } else if (!/routes:/.test(patched)) {
+        patched += `\nroutes:\n${selfRouteEntry}\n`;
+      }
       writeFileSync(yamlPath, patched, { mode: 0o600 });
       execSync(`docker restart ${HS_CONNECTOR_NAME}`, { stdio: 'pipe', timeout: 30_000 });
       await waitForUrl(`${CONNECTOR_ADMIN_URL}/health`, { maxMs: 60_000, label: 'connector restart' });
-      console.log(`[49-5] Patched rpcUrl → ${gw}:18545, localDelivery → http://${hsNetGw}:3300 (hs-net gw)`);
+      console.log(`[49-5] Patched rpcUrl → ${gw}:18545, localDelivery → http://${hsNetGw}:3300, routes.g.townhouse → local`);
 
       adminClientA = new ConnectorAdminClient(CONNECTOR_ADMIN_URL, 5_000);
 
