@@ -53,7 +53,6 @@ import { execSync } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import {
   mkdtempSync,
-  mkdirSync,
   rmSync,
   existsSync,
   statSync,
@@ -132,7 +131,7 @@ const EARNINGS_URL = 'http://127.0.0.1:28090/api/earnings';
 // conflict with B's host-mode anon daemon on the same port 9050).
 const B_CONNECTOR_NAME = 'townhouse-foreign-b-connector';
 const B_ANON_VOLUME = 'townhouse-foreign-b-anon';
-const B_ADMIN_URL = 'http://127.0.0.1:9402';
+const _B_ADMIN_URL = 'http://127.0.0.1:9402';
 const B_SOCKS5_PROXY_URL = 'socks5h://127.0.0.1:9050';  // B's anon daemon on host loopback
 const B_BTP_SERVER_PORT = 3002;  // distinct from A's internal BTP port 3000
 const B_HEALTH_PORT = 8082;      // distinct from A's health port 8080
@@ -691,7 +690,7 @@ describe.skipIf(!shouldRun)(
       // the Docker-bridge-accessible Anvil at 172.17.0.1:18545 so A's connector can
       // verify on-chain channels. Then restart A's connector container to pick up the change.
       const connectorYamlPath = join(tmpDirA, 'connector.yaml');
-      let connectorYaml = readFileSync(connectorYamlPath, 'utf-8');
+      const connectorYaml = readFileSync(connectorYamlPath, 'utf-8');
       if (!/^chainProviders\s*:/m.test(connectorYaml)) {
         throw new Error(
           'Epic 47 BUG-1 regression: connector.yaml missing chainProviders. ' +
@@ -901,7 +900,7 @@ describe.skipIf(!shouldRun)(
       // last successful start — retry-loop slack must fit inside the 120s budget.
       const tStartFirst = Date.now();
       tStartFirstOuter = tStartFirst;
-      const tStart = tStartFirst;
+      const _tStart = tStartFirst;
       let startResult: Awaited<ReturnType<typeof toonClient.start>> | null = null;
       let lastStartError: Error | null = null;
       for (let attempt = 1; attempt <= 3; attempt++) {

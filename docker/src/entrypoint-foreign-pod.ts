@@ -398,7 +398,7 @@ async function pollSolUsdcBalance(
         signal: AbortSignal.timeout(5_000),
       });
       if (res.ok) {
-        type TResp = { result?: { value?: Array<{ account?: { data?: { parsed?: { info?: { tokenAmount?: { amount?: string } } } } } }> }; error?: unknown };
+        interface TResp { result?: { value?: { account?: { data?: { parsed?: { info?: { tokenAmount?: { amount?: string } } } } } }[] }; error?: unknown }
         const json = (await res.json()) as TResp;
         if (json.error) {
           log(`[balance] SOL USDC RPC error: ${JSON.stringify(json.error)}`);
@@ -471,8 +471,8 @@ async function main(): Promise<void> {
   // Routes read from this state so Fastify can serve /healthz immediately.
   let socks5ProxyUrl: string | null = null;
   let anyoneReady = false;
-  let evmBalance: bigint = 0n;
-  let solBalance: number = 0;
+  let evmBalance = 0n;
+  let solBalance = 0;
   let bootComplete = false;
   let isShuttingDown = false;
   let anonChild: ChildProcess | null = null;
@@ -646,7 +646,7 @@ async function main(): Promise<void> {
         }
       }
 
-      const toonBytes = encodeEventToToon(event);
+      const _toonBytes = encodeEventToToon(event);
       // Use env.feePerEvent (TOON_FEE_PER_EVENT, default 0) as both the
       // cumulative balance-proof amount and the ILP PREPARE amount.  When
       // fee=0 the relay accepts the event for free and the connector skips

@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 
+import type * as NodeReadline from 'node:readline';
 import { main } from './cli.js';
 import { WalletManager } from './wallet/manager.js';
 
@@ -56,10 +57,10 @@ vi.spyOn(WalletManager.prototype, 'getNodeKeys').mockImplementation(function (
 // Channel to override the next answer per test. Default to "y" so the prompt
 // proceeds when a test doesn't care. Tests that exercise the abort path
 // set this to "n" before invoking `main`.
-let nextPromptAnswer: string = 'y';
+let nextPromptAnswer = 'y';
 
 vi.mock('node:readline', async () => {
-  const actual = (await vi.importActual<typeof import('node:readline')>(
+  const actual = (await vi.importActual<NodeReadline>(
     'node:readline'
   ));
   return {

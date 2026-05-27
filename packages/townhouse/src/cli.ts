@@ -1892,7 +1892,7 @@ async function handleHsUp(
             console.error(
               `[townhouse hs up] ATOR bootstrap timed out (attempt ${attempt}/${MAX_ANON_RETRIES}) — retrying...`
             );
-            await orch.down().catch(() => {});
+            await orch.down().catch(() => undefined);
             continue;
           }
           throw err;

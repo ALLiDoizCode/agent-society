@@ -215,7 +215,7 @@ function getPeerLifetime(
   earnings: Record<string, unknown>,
   peerId: string
 ): bigint {
-  const peers = earnings['peers'] as Array<Record<string, unknown>> | undefined;
+  const peers = earnings['peers'] as Record<string, unknown>[] | undefined;
   if (!peers) return 0n;
   const targetId = normPeerId(peerId);
   const peer = peers.find((p) =>
@@ -265,13 +265,13 @@ function getApexRoutingFeeLifetime(
  *
  * Returns the cumulative amount (bigint at the connector's raw scale).
  */
-function getRecentClaimsTotalForPeer(
+function _getRecentClaimsTotalForPeer(
   earnings: Record<string, unknown>,
   peerId: string,
   sinceMs?: number
 ): bigint {
   const claims = earnings['recentClaims'] as
-    | Array<Record<string, unknown>>
+    | Record<string, unknown>[]
     | undefined;
   if (!claims) return 0n;
   const targetId = normPeerId(peerId);
@@ -309,7 +309,7 @@ function findInboundClaimForPeer(
   sinceMs: number
 ): Record<string, unknown> | null {
   const claims = earnings['recentClaims'] as
-    | Array<Record<string, unknown>>
+    | Record<string, unknown>[]
     | undefined;
   if (!claims) return null;
   const targetId = normPeerId(peerId);
@@ -489,7 +489,7 @@ describe.skipIf(!shouldRun)(
     let adminClientA: ConnectorAdminClient;
     let podEvmAddr: string;
     let bSecretKey: Uint8Array;
-    let bPubkey: string;
+    let _bPubkey: string;
     let priorWalletPassword: string | undefined;
     let leases: Leases;
     let podUrl: string;
@@ -680,7 +680,7 @@ describe.skipIf(!shouldRun)(
       // documented in Foundry/Anvil examples. NEVER use on real chains. Same
       // posture as the Solana mock-USDC keys (project_solana_mock_usdc_keys memory).
       const TOWN_EVM_PRIVATE_KEY = '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926b'; // gitleaks:allow Anvil dev key
-      const TOWN_EVM_ADDRESS = '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65';
+      const _TOWN_EVM_ADDRESS = '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65';
       {
         const townComposePath = join(tmpDirA, 'compose', 'townhouse-hs.yml');
         if (existsSync(townComposePath)) {
@@ -882,7 +882,7 @@ describe.skipIf(!shouldRun)(
 
       // ── 8. Nostr keypair for signing test events ──────────────────────────
       bSecretKey = generateSecretKey();
-      bPubkey = getPublicKey(bSecretKey);
+      _bPubkey = getPublicKey(bSecretKey);
 
       // ── 9. Diagnose connector earnings + capture pre-publish baseline ────
       {
@@ -1233,7 +1233,7 @@ describe.skipIf(!shouldRun)(
           }
 
           // ── AC #4: pod's EVM addr resolves to type:'external' ──────────────
-          const peers = earningsAfter['peers'] as Array<Record<string, unknown>> | undefined ?? [];
+          const peers = earningsAfter['peers'] as Record<string, unknown>[] | undefined ?? [];
           const podEntry = peers.find(
             (p) => typeof p['id'] === 'string' && normPeerId(p['id']) === normPeerId(podEvmAddr)
           );
@@ -1271,7 +1271,7 @@ describe.skipIf(!shouldRun)(
           const drillOut = drillResult.stdout.join('');
           let drillJson: {
             aggregate: { packetsForwarded: number };
-            peers: Array<{ peerId: string; packetsForwarded: number }>;
+            peers: { peerId: string; packetsForwarded: number }[];
             uptimeSeconds: number;
           };
           try {
@@ -1405,7 +1405,7 @@ describe.skipIf(!shouldRun)(
 
         // If post-publish earnings is available, verify three distinct peer type buckets
         if (postPublishEarnings) {
-          const peers = postPublishEarnings['peers'] as Array<Record<string, unknown>> ?? [];
+          const peers = postPublishEarnings['peers'] as Record<string, unknown>[] ?? [];
           const typesSeen = new Set(peers.map((p) => p['type']));
           // We may not see all three in /api/earnings (zero-claim peers not surfaced).
           // Asserting that the resolver correctly distinguishes all three is sufficient.

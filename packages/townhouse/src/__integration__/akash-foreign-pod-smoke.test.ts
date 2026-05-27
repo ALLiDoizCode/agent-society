@@ -189,8 +189,8 @@ describe.skipIf(!shouldRun)(
     let adminClientA: ConnectorAdminClient;
     let podEvmAddr: string;
     let podSolAddr: string;
-    let publishedEventId: string;
-    let publishedResponse: Record<string, unknown> | null = null;
+    let _publishedEventId: string;
+    let _publishedResponse: Record<string, unknown> | null = null;
     let bSecretKey: Uint8Array;
     let bPubkey: string;
     let priorWalletPassword: string | undefined;
@@ -544,7 +544,7 @@ describe.skipIf(!shouldRun)(
         },
         bSecretKey
       );
-      publishedEventId = event.id;
+      _publishedEventId = event.id;
 
       // Confirm the request body would pass the pod's own ajv check
       const reqBody = { event, targetHostname: hostnameA };
@@ -610,7 +610,7 @@ describe.skipIf(!shouldRun)(
       expect(res.status, `expected 202, got ${res.status}: ${bodyText.slice(0, 200)}`).toBe(202);
       expect(validators.validatePublishSuccess(body), 'response schema mismatch').toBe(true);
       expect(body['eventId']).toBe(event.id);
-      publishedResponse = body;
+      _publishedResponse = body;
     }, 330_000); // 5.5 min: propagation wait (4.5 min) + overhead
 
     // ── Test 4: AC #4 — Channel surfaces on A's drill verb ────────────────────
@@ -622,9 +622,9 @@ describe.skipIf(!shouldRun)(
       const POLL_INTERVAL_MS = 2_000;
       const POLL_BUDGET_MS = 15_000;
       const pollStart = Date.now();
-      let channels: Array<{ peerId: string; status: string }> = [];
+      let channels: { peerId: string; status: string }[] = [];
 
-      const parseChannels = (): Array<{ peerId: string; status: string }> => {
+      const _parseChannels = (): { peerId: string; status: string }[] => {
         const channelsResult = runCli('channels', {
           configDir: tmpDirA,
           extraArgs: ['--json'],
@@ -644,7 +644,7 @@ describe.skipIf(!shouldRun)(
             if (depth === 0) { jsonBlock = trimmed.slice(i); break; }
           }
         }
-        try { return JSON.parse(jsonBlock) as Array<{ peerId: string; status: string }>; }
+        try { return JSON.parse(jsonBlock) as { peerId: string; status: string }[]; }
         catch { return []; }
       };
 
@@ -669,7 +669,7 @@ describe.skipIf(!shouldRun)(
             }
           }
           try {
-            channels = JSON.parse(jsonBlock) as Array<{ peerId: string; status: string }>;
+            channels = JSON.parse(jsonBlock) as { peerId: string; status: string }[];
           } catch { channels = []; }
         }
         console.log(`[49.3 Test 4] channels: ${channels.length} entries (elapsed ${Math.round((Date.now() - pollStart) / 1000)}s)`);
@@ -710,7 +710,7 @@ describe.skipIf(!shouldRun)(
         });
         if (res.ok) {
           const body = (await res.json()) as Record<string, unknown>;
-          const peers = body['peers'] as Array<Record<string, unknown>> | undefined;
+          const peers = body['peers'] as Record<string, unknown>[] | undefined;
           if (peers) {
             const podEntry = peers.find((p) => p['id'] === podEvmAddr);
             if (podEntry) {
@@ -756,7 +756,7 @@ describe.skipIf(!shouldRun)(
       );
       const body = JSON.stringify({ event, targetHostname: hostnameA });
 
-      const responses: Array<{ status: number; retryAfterSec?: number }> = [];
+      const responses: { status: number; retryAfterSec?: number }[] = [];
       // Sequential to keep timestamps deterministic — Promise.all would race.
       for (let i = 0; i < 35; i++) {
         const res = await fetchWithTimeout(`${POD}/publish`, {

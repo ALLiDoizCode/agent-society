@@ -44,9 +44,9 @@ vi.mock('@toon-protocol/sdk', async (importOriginal) => {
 
 // Mock @ardrive/turbo-sdk/node so we can introspect which path createTurboAdapter
 // took without doing real network / signer work.
-const ArweaveSignerCalls: Array<{ jwk: unknown }> = [];
-const TurboFactoryCalls: Array<{ args: unknown }> = [];
-const TurboFactoryUnauthCalls: Array<{ args: unknown }> = [];
+const ArweaveSignerCalls: { jwk: unknown }[] = [];
+const TurboFactoryCalls: { args: unknown }[] = [];
+const TurboFactoryUnauthCalls: { args: unknown }[] = [];
 vi.mock('@ardrive/turbo-sdk/node', () => {
   class ArweaveSigner {
     public jwk: unknown;

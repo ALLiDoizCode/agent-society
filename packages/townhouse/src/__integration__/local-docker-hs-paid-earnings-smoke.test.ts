@@ -82,7 +82,7 @@ if (!shouldRun) {
 const EXPECTED_FEE = 1_000_000n;            // 1 USDC at scale=6
 const TOLERANCE = 10_000n;                  // 1¢ rounding tolerance (NFR10)
 const APEX_EVM_ADDRESS = '0x90F79bf6EB2c4f870365E785982E1f101E93b906';
-const TOWN_EVM_ADDRESS = '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65';
+const _TOWN_EVM_ADDRESS = '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65';
 
 const CLIENT_URL = 'http://127.0.0.1:29200';
 const CONNECTOR_ADMIN_URL = 'http://127.0.0.1:9401';
@@ -138,7 +138,7 @@ function findInboundClaimForPeer(
   tolerance: bigint,
   sinceMs: number
 ): Record<string, unknown> | null {
-  const claims = earnings['recentClaims'] as Array<Record<string, unknown>> | undefined;
+  const claims = earnings['recentClaims'] as Record<string, unknown>[] | undefined;
   if (!claims) return null;
   const targetId = normPeerId(peerId);
   const lo = expectedAmount - tolerance;
@@ -266,7 +266,7 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
   let apexHostname: string;
   let podEvmAddr: string;
   let bSecretKey: Uint8Array;
-  let bPubkey: string;
+  let _bPubkey: string;
   let evmRpcUrl: string;
   let preEarnings: Record<string, unknown> | null = null;
   let testStartMs = Date.now(); // initialised conservatively; overwritten in beforeAll
@@ -331,7 +331,7 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
 
     // ── Generate Nostr keypair for signed events ───────────────────────────
     bSecretKey = generateSecretKey();
-    bPubkey = getPublicKey(bSecretKey);
+    _bPubkey = getPublicKey(bSecretKey);
     testStartMs = Date.now();
   }, 120_000);
 
@@ -377,10 +377,10 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
   it('client + townhouse containers are on DIFFERENT Docker networks', () => {
     const hsContainers = JSON.parse(
       execSync(`docker network inspect ${HS_NETWORK}`, { encoding: 'utf-8', timeout: 5_000 })
-    ) as Array<{ Containers?: Record<string, { Name?: string }> }>;
+    ) as { Containers?: Record<string, { Name?: string }> }[];
     const clientContainers = JSON.parse(
       execSync(`docker network inspect ${CLIENT_NETWORK}`, { encoding: 'utf-8', timeout: 5_000 })
-    ) as Array<{ Containers?: Record<string, { Name?: string }> }>;
+    ) as { Containers?: Record<string, { Name?: string }> }[];
 
     const hsNames = Object.values(hsContainers[0]?.Containers ?? {}).map((c) => c.Name ?? '');
     const clientNames = Object.values(clientContainers[0]?.Containers ?? {}).map((c) => c.Name ?? '');

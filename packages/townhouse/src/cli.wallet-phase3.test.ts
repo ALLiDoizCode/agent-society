@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type * as NodeReadline from 'node:readline';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -69,7 +70,7 @@ vi.mock('dockerode', () => ({
 // Mock readline (matches the cli.credits.test.ts pattern) — Phase 3 doesn't
 // use prompts but mocking keeps test runs deterministic across files.
 vi.mock('node:readline', async () => {
-  const actual = await vi.importActual<typeof import('node:readline')>(
+  const actual = await vi.importActual<NodeReadline>(
     'node:readline'
   );
   return {

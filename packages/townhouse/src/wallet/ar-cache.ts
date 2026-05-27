@@ -202,7 +202,8 @@ export async function deleteArweaveJwkFromCache(
   const file = await loadArweaveCacheFile(path);
   if (!file) return;
   if (!(nodeType in file.nodes)) return;
-  delete file.nodes[nodeType];
+  const { [nodeType]: _removed, ...remaining } = file.nodes;
+  file.nodes = remaining;
 
   if (Object.keys(file.nodes).length === 0) {
     try {

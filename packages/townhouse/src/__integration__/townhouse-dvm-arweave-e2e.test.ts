@@ -45,7 +45,6 @@ import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools/pure
 import type { NostrEvent } from 'nostr-tools/pure';
 import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
 import { ToonClient } from '@toon-protocol/client';
-import type { SignedBalanceProof } from '@toon-protocol/client';
 
 import { isTruthyEnv, runCli, waitForExit, waitForUrl } from './_test-helpers.js';
 import { ConnectorAdminClient } from '../connector/admin-client.js';
@@ -78,7 +77,7 @@ const B_BTP_PORT = 3002;
 const B_HEALTH_PORT = 8082;
 
 const DVM_CONTAINER_NAME = 'townhouse-dvm';
-const DVM_ANON_VOLUME = 'townhouse-dvm-anon';
+const _DVM_ANON_VOLUME = 'townhouse-dvm-anon';
 const DVM_BLS_PORT = 3400;
 // Fixed test DVM Nostr key (32 bytes, not a real wallet). gitleaks:allow
 const DVM_NOSTR_SECRET_KEY = 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd';
@@ -91,7 +90,7 @@ const HS_API_READY_URL = `${HS_API}/api/transport`;
 // /api/earnings requires townhouse-api RC5+; older HS images return 404.
 // Use the connector admin API directly instead.
 const CONNECTOR_HEALTH_URL = `${CONNECTOR_ADMIN_URL}/health`;
-const CONNECTOR_BALANCES_URL = `${CONNECTOR_ADMIN_URL}/admin/balances`;
+const _CONNECTOR_BALANCES_URL = `${CONNECTOR_ADMIN_URL}/admin/balances`;
 // DVM variables
 let dvmBtpConnectorUrl = ''; // set after connector bridge IP is known
 
