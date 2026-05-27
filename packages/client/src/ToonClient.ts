@@ -290,7 +290,11 @@ export class ToonClient {
    */
   async publishEvent(
     event: NostrEvent,
-    options?: { destination?: string; claim?: SignedBalanceProof; ilpAmount?: bigint }
+    options?: {
+      destination?: string;
+      claim?: SignedBalanceProof;
+      ilpAmount?: bigint;
+    }
   ): Promise<PublishEventResult> {
     if (!this.state) {
       throw new ToonClientError(
@@ -306,9 +310,10 @@ export class ToonClient {
       // Calculate payment amount: basePricePerByte * encoded size.
       // Callers may override via options.ilpAmount (e.g. 0n for free relays).
       const basePricePerByte = 10n;
-      const amount = options?.ilpAmount !== undefined
-        ? String(options.ilpAmount)
-        : String(BigInt(toonData.length) * basePricePerByte);
+      const amount =
+        options?.ilpAmount !== undefined
+          ? String(options.ilpAmount)
+          : String(BigInt(toonData.length) * basePricePerByte);
 
       // Use provided destination or fall back to config default
       const destination =

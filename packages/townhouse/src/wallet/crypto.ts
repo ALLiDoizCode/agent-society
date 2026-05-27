@@ -206,7 +206,9 @@ export function decryptArweaveJwk(
   try {
     parsed = JSON.parse(plaintext);
   } catch {
-    throw new Error('Arweave JWK cache is corrupt: plaintext is not valid JSON');
+    throw new Error(
+      'Arweave JWK cache is corrupt: plaintext is not valid JSON'
+    );
   }
   if (
     typeof parsed !== 'object' ||

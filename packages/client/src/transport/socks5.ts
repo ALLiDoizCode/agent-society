@@ -80,15 +80,13 @@ export function createSocks5WebSocketFactory(
   // would accept a namespace object as a "constructor" and throw cryptically.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ws = WS as any;
-  const WSClass = (
-    typeof ws === 'function'
-      ? ws
-      : typeof ws.default === 'function'
-        ? ws.default
-        : typeof ws.WebSocket === 'function'
-          ? ws.WebSocket
-          : null
-  ) as unknown as typeof WSModule.prototype.constructor;
+  const WSClass = (typeof ws === 'function'
+    ? ws
+    : typeof ws.default === 'function'
+      ? ws.default
+      : typeof ws.WebSocket === 'function'
+        ? ws.WebSocket
+        : null) as unknown as typeof WSModule.prototype.constructor;
   if (WSClass === null) {
     throw new Error(
       "createSocks5WebSocketFactory: require('ws') did not yield a constructor on .default, .WebSocket, or the module root."

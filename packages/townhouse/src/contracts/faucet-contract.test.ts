@@ -33,7 +33,11 @@ function loadSchema() {
 // so internal $ref pointers (e.g., FaucetUnifiedRequest → #/definitions/Chain)
 // resolve against the whole document.
 function makeAjvWithSchema() {
-  const ajv = new Ajv({ strict: false, allErrors: true, allowUnionTypes: true });
+  const ajv = new Ajv({
+    strict: false,
+    allErrors: true,
+    allowUnionTypes: true,
+  });
   addFormats(ajv);
   const schema = loadSchema();
   ajv.addSchema(schema, 'faucet');
@@ -61,9 +65,9 @@ describe('faucet.schema.json — schema-contract DoD (story 49.2 Task 6)', () =>
 
   it('valid FaucetUnifiedRequest shape passes', () => {
     const validate = getValidator('FaucetUnifiedRequest');
-    expect(
-      validate({ chain: 'evm', recipient: '0x' + 'a'.repeat(40) })
-    ).toBe(true);
+    expect(validate({ chain: 'evm', recipient: '0x' + 'a'.repeat(40) })).toBe(
+      true
+    );
     expect(
       validate({
         chain: 'solana',
@@ -75,9 +79,9 @@ describe('faucet.schema.json — schema-contract DoD (story 49.2 Task 6)', () =>
 
   it('FaucetUnifiedRequest rejects unknown chain', () => {
     const validate = getValidator('FaucetUnifiedRequest');
-    expect(
-      validate({ chain: 'mina', recipient: '0x' + 'a'.repeat(40) })
-    ).toBe(false);
+    expect(validate({ chain: 'mina', recipient: '0x' + 'a'.repeat(40) })).toBe(
+      false
+    );
   });
 
   it('FaucetUnifiedRequest rejects additionalProperties', () => {
@@ -124,9 +128,9 @@ describe('faucet.schema.json — schema-contract DoD (story 49.2 Task 6)', () =>
     ).toBe(true);
 
     // Missing required `tx`.
-    expect(
-      validate({ chain: 'evm', recipient: '0x' + 'a'.repeat(40) })
-    ).toBe(false);
+    expect(validate({ chain: 'evm', recipient: '0x' + 'a'.repeat(40) })).toBe(
+      false
+    );
 
     // additionalProperties enforcement.
     expect(
@@ -142,9 +146,9 @@ describe('faucet.schema.json — schema-contract DoD (story 49.2 Task 6)', () =>
   it('FaucetClientErrorResponse — accepts 4xx body shape with waitMinutes', () => {
     const validate = getValidator('FaucetClientErrorResponse');
     expect(validate({ error: 'rate limit exceeded' })).toBe(true);
-    expect(
-      validate({ error: 'rate limit exceeded', waitMinutes: 1 })
-    ).toBe(true);
+    expect(validate({ error: 'rate limit exceeded', waitMinutes: 1 })).toBe(
+      true
+    );
     // Missing required `error`.
     expect(validate({ waitMinutes: 1 })).toBe(false);
   });

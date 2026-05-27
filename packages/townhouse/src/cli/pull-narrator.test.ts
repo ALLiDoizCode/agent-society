@@ -63,7 +63,9 @@ describe('PullNarrator', () => {
     // First Downloading event is a transition from Pulling → Downloading;
     // always printed.
     expect(n.format(ev('img', 'Pulling fs layer'))).not.toBeNull();
-    expect(n.format(ev('img', 'Downloading', { progress: '1MB' }))).not.toBeNull();
+    expect(
+      n.format(ev('img', 'Downloading', { progress: '1MB' }))
+    ).not.toBeNull();
 
     // Subsequent Downloading events within the throttle window are dropped.
     t += 100;
@@ -75,7 +77,9 @@ describe('PullNarrator', () => {
 
     // Crossing the 1 s boundary releases the next one.
     t += 1; // now elapsed === 1000
-    expect(n.format(ev('img', 'Downloading', { progress: '5MB' }))).not.toBeNull();
+    expect(
+      n.format(ev('img', 'Downloading', { progress: '5MB' }))
+    ).not.toBeNull();
   });
 
   it('throttles Extracting independently per image', () => {
@@ -83,23 +87,35 @@ describe('PullNarrator', () => {
     const n = new PullNarrator({ now: () => t, throttleMs: 1000 });
 
     // image-a first Extracting at t=0 (transition from undefined → Extracting).
-    expect(n.format(ev('image-a', 'Extracting', { progress: 'a1' }))).not.toBeNull();
+    expect(
+      n.format(ev('image-a', 'Extracting', { progress: 'a1' }))
+    ).not.toBeNull();
     // image-b first Extracting at t=500 — a different image, also printed.
     t = 500;
-    expect(n.format(ev('image-b', 'Extracting', { progress: 'b1' }))).not.toBeNull();
+    expect(
+      n.format(ev('image-b', 'Extracting', { progress: 'b1' }))
+    ).not.toBeNull();
 
     // At t=999, both images are inside their own throttle windows
     // (a: 999 ms elapsed since t=0; b: 499 ms elapsed since t=500). Both
     // repeated Extracting events should be suppressed.
     t = 999;
-    expect(n.format(ev('image-a', 'Extracting', { progress: 'a2' }))).toBeNull();
-    expect(n.format(ev('image-b', 'Extracting', { progress: 'b2' }))).toBeNull();
+    expect(
+      n.format(ev('image-a', 'Extracting', { progress: 'a2' }))
+    ).toBeNull();
+    expect(
+      n.format(ev('image-b', 'Extracting', { progress: 'b2' }))
+    ).toBeNull();
 
     // At t=1000 image-a's window has closed but image-b's hasn't (it's at
     // 500 ms). Each image's throttle is independent.
     t = 1000;
-    expect(n.format(ev('image-a', 'Extracting', { progress: 'a3' }))).not.toBeNull();
-    expect(n.format(ev('image-b', 'Extracting', { progress: 'b3' }))).toBeNull();
+    expect(
+      n.format(ev('image-a', 'Extracting', { progress: 'a3' }))
+    ).not.toBeNull();
+    expect(
+      n.format(ev('image-b', 'Extracting', { progress: 'b3' }))
+    ).toBeNull();
   });
 
   it('reset() clears per-image state so transitions re-fire from scratch', () => {

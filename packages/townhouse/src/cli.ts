@@ -90,10 +90,7 @@ import type { NodeKeyInfo } from './wallet/index.js';
 import type { TurboTokenId } from './wallet/turbo-signer.js';
 import { buyCredits } from './credits/buy.js';
 import { getCreditBalance } from './credits/balance.js';
-import {
-  formatTokenAmount,
-  formatWincAsBytes,
-} from './credits/units.js';
+import { formatTokenAmount, formatWincAsBytes } from './credits/units.js';
 import { shouldRenderInk } from './tui/tty-detect.js';
 
 /**
@@ -700,12 +697,8 @@ async function handleWalletShow(
     // Trailing tips block — guides the operator to scripting and the
     // related credit-funding command added in Phase 2.
     console.log('Tip: townhouse wallet show --json   for scripting');
-    console.log(
-      '     townhouse wallet show --hex    to see raw hex pubkeys'
-    );
-    console.log(
-      '     townhouse wallet show --paths  to see derivation paths'
-    );
+    console.log('     townhouse wallet show --hex    to see raw hex pubkeys');
+    console.log('     townhouse wallet show --paths  to see derivation paths');
     console.log(
       '     townhouse credits buy --token sol --amount <n>  to fund Arweave uploads'
     );
@@ -784,12 +777,8 @@ async function handleWalletSeed(
     console.log(
       '============================================================='
     );
-    console.log(
-      ' [!] Anyone who sees this seed owns your townhouse identity.'
-    );
-    console.log(
-      ' [!] Anyone who records this terminal owns your earnings.'
-    );
+    console.log(' [!] Anyone who sees this seed owns your townhouse identity.');
+    console.log(' [!] Anyone who records this terminal owns your earnings.');
     console.log(
       ' [!] Shoulder-surf, screen-shares, and tmux logs are vectors.'
     );
@@ -906,7 +895,9 @@ async function handleCreditsBuy(
   if (feeRaw !== undefined) {
     const parsed = Number(feeRaw);
     if (!Number.isFinite(parsed) || parsed <= 0) {
-      console.error(`--fee-multiplier must be a positive number, got '${feeRaw}'`);
+      console.error(
+        `--fee-multiplier must be a positive number, got '${feeRaw}'`
+      );
       process.exitCode = 1;
       return;
     }
@@ -914,13 +905,17 @@ async function handleCreditsBuy(
   }
   const quoteOnly = values['quote-only'] === true;
   const skipConfirm = values['yes'] === true;
-  const destinationOverride = values['credit-destination'] as string | undefined;
+  const destinationOverride = values['credit-destination'] as
+    | string
+    | undefined;
 
   // ── 2. Wallet unlock ──
   const walletPath = config.wallet.encrypted_path;
   const loaded = await loadWallet(walletPath);
   if (!loaded) {
-    console.error(`No wallet found at ${walletPath}. Run \`townhouse init\` first.`);
+    console.error(
+      `No wallet found at ${walletPath}. Run \`townhouse init\` first.`
+    );
     process.exitCode = 1;
     return;
   }
@@ -971,7 +966,9 @@ async function handleCreditsBuy(
     }
 
     // ── 4. Quote step ──
-    process.stdout.write(`Quoting ${amountRaw} ${token} for ${nodeType}'s credit address...\n`);
+    process.stdout.write(
+      `Quoting ${amountRaw} ${token} for ${nodeType}'s credit address...\n`
+    );
     const quote = await buyCredits({
       wallet,
       nodeType,
@@ -1067,7 +1064,9 @@ async function handleCreditsBalance(
   const walletPath = config.wallet.encrypted_path;
   const loaded = await loadWallet(walletPath);
   if (!loaded) {
-    console.error(`No wallet found at ${walletPath}. Run \`townhouse init\` first.`);
+    console.error(
+      `No wallet found at ${walletPath}. Run \`townhouse init\` first.`
+    );
     process.exitCode = 1;
     return;
   }
@@ -1825,9 +1824,7 @@ async function handleHsUp(
           let pulled = 0;
           for (const ref of apexImages) {
             pulled++;
-            console.log(
-              `  [${pulled}/${apexImages.length}] ${ref}`
-            );
+            console.log(`  [${pulled}/${apexImages.length}] ${ref}`);
             await orch.pullImage(ref);
           }
         }
@@ -2342,15 +2339,11 @@ export async function main(
       if (subCommand === 'show') {
         const configPath = (values.config as string) ?? DEFAULT_CONFIG_PATH;
         const config = loadConfig(configPath);
-        await handleWalletShow(
-          config,
-          values.password as string | undefined,
-          {
-            json: values.json === true,
-            hex: values.hex === true,
-            paths: values.paths === true,
-          }
-        );
+        await handleWalletShow(config, values.password as string | undefined, {
+          json: values.json === true,
+          hex: values.hex === true,
+          paths: values.paths === true,
+        });
       } else if (subCommand === 'seed') {
         const configPath = (values.config as string) ?? DEFAULT_CONFIG_PATH;
         const config = loadConfig(configPath);

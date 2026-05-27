@@ -26,10 +26,7 @@ import { TurboFactory } from '@ardrive/turbo-sdk/node';
 
 import type { NodeType } from '../docker/types.js';
 import type { WalletManager } from '../wallet/manager.js';
-import {
-  buildTurboSigner,
-  type TurboTokenId,
-} from '../wallet/turbo-signer.js';
+import { buildTurboSigner, type TurboTokenId } from '../wallet/turbo-signer.js';
 import { parseTokenAmount } from './units.js';
 
 export interface BuyCreditsOptions {
@@ -109,9 +106,7 @@ export type BuyResult = BuyQuoteResult | BuySubmitResult;
  * Pure business logic: no console output, no prompts. The CLI handler should
  * stream status messages between awaits.
  */
-export async function buyCredits(
-  opts: BuyCreditsOptions
-): Promise<BuyResult> {
+export async function buyCredits(opts: BuyCreditsOptions): Promise<BuyResult> {
   const {
     wallet,
     nodeType,
@@ -128,8 +123,11 @@ export async function buyCredits(
 
   // EVM/SOL signer = the funding identity. For `ar` the signer is also
   // the credit recipient (you can buy AR credits with AR — though uncommon).
-  const { signer, token: canonicalToken, address: fromAddress } =
-    await buildTurboSigner(wallet, nodeType, token);
+  const {
+    signer,
+    token: canonicalToken,
+    address: fromAddress,
+  } = await buildTurboSigner(wallet, nodeType, token);
 
   // Default credit destination = funding identity. Phase 4 will override
   // with the DVM's Arweave address.

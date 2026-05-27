@@ -14,10 +14,7 @@ import type * as NodeReadline from 'node:readline';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import {
-  randomBytes,
-  generateKeyPairSync,
-} from 'node:crypto';
+import { randomBytes, generateKeyPairSync } from 'node:crypto';
 
 // ── Mock rsa-from-seed with a real (but unrelated to the seed) RSA-4096
 //    key so wallet show's ensureArweaveKey('dvm') resolves quickly. Tests do
@@ -70,9 +67,7 @@ vi.mock('dockerode', () => ({
 // Mock readline (matches the cli.credits.test.ts pattern) — Phase 3 doesn't
 // use prompts but mocking keeps test runs deterministic across files.
 vi.mock('node:readline', async () => {
-  const actual = await vi.importActual<NodeReadline>(
-    'node:readline'
-  );
+  const actual = await vi.importActual<NodeReadline>('node:readline');
   return {
     ...actual,
     createInterface: () => ({
@@ -289,7 +284,10 @@ describe('wallet show (Phase 3 cards + flags)', () => {
         .map((c) => String(c[0]))
         .filter((s) => s.trim().startsWith('{'))
         .join('');
-      const parsed = JSON.parse(jsonStr) as Record<string, Record<string, unknown>>;
+      const parsed = JSON.parse(jsonStr) as Record<
+        string,
+        Record<string, unknown>
+      >;
 
       // Top-level keys
       expect(parsed['town']).toBeDefined();
@@ -297,7 +295,10 @@ describe('wallet show (Phase 3 cards + flags)', () => {
       expect(parsed['dvm']).toBeDefined();
 
       // Spot-check: town.nostr.npub starts with "npub1"
-      const townNostr = parsed['town']?.['nostr'] as { npub: string; hex: string };
+      const townNostr = parsed['town']?.['nostr'] as {
+        npub: string;
+        hex: string;
+      };
       expect(townNostr.npub.startsWith('npub1')).toBe(true);
       // Hex is also exposed in --json (unconditional schema field).
       expect(townNostr.hex).toMatch(/^[0-9a-f]{64}$/);
@@ -318,7 +319,9 @@ describe('wallet show (Phase 3 cards + flags)', () => {
       expect(parsed['dvm']?.['mina']).toBeUndefined();
 
       // DVM card surfaces the Arweave address after ensureArweaveKey resolves.
-      const dvmAr = parsed['dvm']?.['arweave'] as { address: string } | undefined;
+      const dvmAr = parsed['dvm']?.['arweave'] as
+        | { address: string }
+        | undefined;
       expect(dvmAr).toBeDefined();
       expect(dvmAr!.address).toMatch(/^[A-Za-z0-9_-]{43}$/);
     } finally {
@@ -378,7 +381,10 @@ describe('wallet show (Phase 3 cards + flags)', () => {
         .map((c) => String(c[0]))
         .filter((s) => s.trim().startsWith('{'))
         .join('');
-      const parsed = JSON.parse(jsonStr) as Record<string, Record<string, unknown>>;
+      const parsed = JSON.parse(jsonStr) as Record<
+        string,
+        Record<string, unknown>
+      >;
 
       const townSol = parsed['town']?.['sol'] as { address: string };
       const millSol = parsed['mill']?.['sol'] as { address: string };
@@ -470,9 +476,7 @@ describe('wallet seed (Phase 3)', () => {
         WALLET_PASSWORD,
       ]);
 
-      const out = consoleLogSpy.mock.calls
-        .map((c) => String(c[0]))
-        .join('\n');
+      const out = consoleLogSpy.mock.calls.map((c) => String(c[0])).join('\n');
 
       // Warning banner is present (ASCII per CLAUDE.md emoji policy).
       expect(out).toMatch(/=+/);

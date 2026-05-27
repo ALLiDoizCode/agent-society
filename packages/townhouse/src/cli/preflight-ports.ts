@@ -112,7 +112,9 @@ export async function isPortInUse(port: number): Promise<boolean> {
 function findDockerCulprit(
   containers: readonly ContainerInfo[],
   port: number
-): Pick<PortCollision, 'containerName' | 'composeProject' | 'status'> | undefined {
+):
+  | Pick<PortCollision, 'containerName' | 'composeProject' | 'status'>
+  | undefined {
   for (const c of containers) {
     const ports = c.Ports ?? [];
     for (const p of ports) {
@@ -220,9 +222,7 @@ export function formatCollisionMessage(
   if (collisions.length === 0) return '';
 
   const lines: string[] = [];
-  lines.push(
-    'townhouse hs up: cannot start — host ports already in use:'
-  );
+  lines.push('townhouse hs up: cannot start — host ports already in use:');
   lines.push('');
 
   for (const c of collisions) {

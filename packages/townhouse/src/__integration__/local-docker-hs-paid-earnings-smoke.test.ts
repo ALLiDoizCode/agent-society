@@ -36,7 +36,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
-import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools/pure';
+import {
+  generateSecretKey,
+  getPublicKey,
+  finalizeEvent,
+} from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 
 import { isTruthyEnv } from './_test-helpers.js';
@@ -48,8 +52,11 @@ import { earningsResponseSchema } from '../api/schemas/earnings.js';
 
 const ajv = new Ajv({ strict: true });
 addFormats(ajv);
-const earningsResponse200 = (earningsResponseSchema.response as Record<number, unknown>)[200];
-if (!earningsResponse200) throw new Error('earningsResponseSchema.response[200] missing');
+const earningsResponse200 = (
+  earningsResponseSchema.response as Record<number, unknown>
+)[200];
+if (!earningsResponse200)
+  throw new Error('earningsResponseSchema.response[200] missing');
 const validateEarnings = ajv.compile(earningsResponse200);
 
 function expectMatchesSchema(body: unknown, label: string): void {
@@ -79,8 +86,8 @@ if (!shouldRun) {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const EXPECTED_FEE = 1_000_000n;            // 1 USDC at scale=6
-const TOLERANCE = 10_000n;                  // 1¢ rounding tolerance (NFR10)
+const EXPECTED_FEE = 1_000_000n; // 1 USDC at scale=6
+const TOLERANCE = 10_000n; // 1¢ rounding tolerance (NFR10)
 const APEX_EVM_ADDRESS = '0x90F79bf6EB2c4f870365E785982E1f101E93b906';
 const _TOWN_EVM_ADDRESS = '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65';
 
@@ -91,12 +98,18 @@ const EARNINGS_URL = 'http://127.0.0.1:28090/api/earnings';
 const HS_NETWORK = 'townhouse-hs-net';
 const CLIENT_NETWORK = 'e2e-client-net';
 const CLIENT_CONTAINER = 'toon-client-e2e';
-const HS_CONTAINER_NAMES = ['townhouse-hs-connector', 'townhouse-hs-api', 'townhouse-hs-town'];
+const HS_CONTAINER_NAMES = [
+  'townhouse-hs-connector',
+  'townhouse-hs-api',
+  'townhouse-hs-town',
+];
 
 // Locate the local townhouse home for host.json (.anyone hostname) lookup.
 const thisFile = fileURLToPath(import.meta.url);
 const REPO_ROOT = join(dirname(thisFile), '..', '..', '..', '..');
-const TOWNHOUSE_HOME = process.env['TOWNHOUSE_HOME'] || join(process.env['HOME'] || '/root', '.townhouse-e2e');
+const TOWNHOUSE_HOME =
+  process.env['TOWNHOUSE_HOME'] ||
+  join(process.env['HOME'] || '/root', '.townhouse-e2e');
 const LEASES_PATH = join(REPO_ROOT, 'deploy', 'akash', 'leases.json');
 
 // ── Shared helpers (mirrored from akash-paid-earnings-smoke.test.ts) ─────────
@@ -119,7 +132,9 @@ async function fetchWithTimeout(
   }
 }
 
-async function fetchEarnings(label = 'GET /api/earnings'): Promise<Record<string, unknown>> {
+async function fetchEarnings(
+  label = 'GET /api/earnings'
+): Promise<Record<string, unknown>> {
   const res = await fetchWithTimeout(EARNINGS_URL, { budgetMs: 10_000, label });
   if (!res.ok) throw new Error(`[${label}] HTTP ${res.status}`);
   const body = (await res.json()) as Record<string, unknown>;
@@ -138,20 +153,27 @@ function findInboundClaimForPeer(
   tolerance: bigint,
   sinceMs: number
 ): Record<string, unknown> | null {
-  const claims = earnings['recentClaims'] as Record<string, unknown>[] | undefined;
+  const claims = earnings['recentClaims'] as
+    | Record<string, unknown>[]
+    | undefined;
   if (!claims) return null;
   const targetId = normPeerId(peerId);
   const lo = expectedAmount - tolerance;
   const hi = expectedAmount + tolerance;
   for (const c of claims) {
-    const cPeer = typeof c['peerId'] === 'string' ? normPeerId(c['peerId']) : '';
+    const cPeer =
+      typeof c['peerId'] === 'string' ? normPeerId(c['peerId']) : '';
     if (cPeer !== targetId || c['direction'] !== 'inbound') continue;
     const cAmt = typeof c['amount'] === 'string' ? c['amount'] : null;
     if (!cAmt) continue;
     const at = typeof c['at'] === 'string' ? Date.parse(c['at']) : NaN;
     if (!Number.isFinite(at) || at < sinceMs) continue;
     let amt: bigint;
-    try { amt = BigInt(cAmt); } catch { continue; }
+    try {
+      amt = BigInt(cAmt);
+    } catch {
+      continue;
+    }
     if (amt >= lo && amt <= hi) return c;
   }
   return null;
@@ -176,11 +198,16 @@ async function probeAkashEndpoint(
       budgetMs: 10_000,
       label,
       ...(rpcPayload
-        ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: rpcPayload }
+        ? {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: rpcPayload,
+          }
         : {}),
     });
     const bodyText = await res.text();
-    if (!res.ok) throw new Error(`${label} RPC HTTP ${res.status} — ${redeployHint}`);
+    if (!res.ok)
+      throw new Error(`${label} RPC HTTP ${res.status} — ${redeployHint}`);
     if (rpcKind === 'evm') {
       const body = JSON.parse(bodyText) as { result?: unknown };
       if (typeof body.result !== 'string' || !body.result.startsWith('0x')) {
@@ -188,13 +215,16 @@ async function probeAkashEndpoint(
       }
     } else if (rpcKind === 'solana') {
       const body = JSON.parse(bodyText) as { result?: unknown };
-      if (body.result !== 'ok') throw new Error(`${label} getHealth != ok — ${redeployHint}`);
+      if (body.result !== 'ok')
+        throw new Error(`${label} getHealth != ok — ${redeployHint}`);
     }
     return bodyText;
   } catch (e) {
     const msg = (e as Error).message;
     if (msg.includes(redeployHint)) throw e;
-    throw new Error(`Akash ${label} RPC unreachable at ${target}: ${msg}\n  → ${redeployHint}`);
+    throw new Error(
+      `Akash ${label} RPC unreachable at ${target}: ${msg}\n  → ${redeployHint}`
+    );
   }
 }
 
@@ -202,7 +232,12 @@ async function getEvmBalanceWei(rpcUrl: string, addr: string): Promise<bigint> {
   const res = await fetchWithTimeout(rpcUrl, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [addr, 'latest'] }),
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_getBalance',
+      params: [addr, 'latest'],
+    }),
     budgetMs: 10_000,
     label: `eth_getBalance ${addr}`,
   });
@@ -210,8 +245,15 @@ async function getEvmBalanceWei(rpcUrl: string, addr: string): Promise<bigint> {
   return body.result ? BigInt(body.result) : 0n;
 }
 
-async function captureLogsOnFailure(tag: string, data: Record<string, unknown>): Promise<void> {
-  const logDir = join(process.cwd(), 'e2e-local-hs-logs', `${Date.now()}-${tag}`);
+async function captureLogsOnFailure(
+  tag: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const logDir = join(
+    process.cwd(),
+    'e2e-local-hs-logs',
+    `${Date.now()}-${tag}`
+  );
   try {
     mkdirSync(logDir, { recursive: true });
     writeFileSync(join(logDir, 'data.json'), JSON.stringify(data, null, 2));
@@ -275,9 +317,14 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
   beforeAll(async () => {
     // ── Read leases ─────────────────────────────────────────────────────────
     if (!existsSync(LEASES_PATH)) {
-      throw new Error(`leases.json missing at ${LEASES_PATH} — run scripts/akash-deploy.sh first`);
+      throw new Error(
+        `leases.json missing at ${LEASES_PATH} — run scripts/akash-deploy.sh first`
+      );
     }
-    const leases = JSON.parse(readFileSync(LEASES_PATH, 'utf-8')) as Record<string, { url?: string }>;
+    const leases = JSON.parse(readFileSync(LEASES_PATH, 'utf-8')) as Record<
+      string,
+      { url?: string }
+    >;
     evmRpcUrl = leases['anvil']?.url ?? '';
     if (!evmRpcUrl) throw new Error('anvil.url missing from leases.json');
 
@@ -289,7 +336,9 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
           `  Run: bash scripts/townhouse-e2e-local-hs.sh up`
       );
     }
-    const hostJson = JSON.parse(readFileSync(hostJsonPath, 'utf-8')) as { hostname: string };
+    const hostJson = JSON.parse(readFileSync(hostJsonPath, 'utf-8')) as {
+      hostname: string;
+    };
     apexHostname = hostJson.hostname;
     expect(apexHostname).toMatch(/^[a-z2-7]{55,57}\.(anyone|anon)$/);
     console.log(`[local-hs] apex hostname: ${apexHostname}`);
@@ -308,11 +357,15 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
       balances: { evm: string; sol: number };
     };
     if (!healthz.anyoneReady) {
-      throw new Error(`Client anyoneReady=false. Retry: docker logs ${CLIENT_CONTAINER} | tail -50`);
+      throw new Error(
+        `Client anyoneReady=false. Retry: docker logs ${CLIENT_CONTAINER} | tail -50`
+      );
     }
     podEvmAddr = healthz.evmAddr;
     console.log(`[local-hs] client EVM=${podEvmAddr} SOL=${healthz.solAddr}`);
-    console.log(`[local-hs] client balances: evm=${healthz.balances.evm} sol=${healthz.balances.sol}`);
+    console.log(
+      `[local-hs] client balances: evm=${healthz.balances.evm} sol=${healthz.balances.sol}`
+    );
 
     // ── Capture pre-publish baseline earnings ───────────────────────────────
     const earningsDeadline = Date.now() + 30_000;
@@ -323,10 +376,13 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
           preEarnings = candidate;
           break;
         }
-      } catch { /* keep polling */ }
+      } catch {
+        /* keep polling */
+      }
       await sleep(3_000);
     }
-    if (!preEarnings) throw new Error('Could not capture baseline earnings within 30s');
+    if (!preEarnings)
+      throw new Error('Could not capture baseline earnings within 30s');
     console.log(`[local-hs] baseline status=${String(preEarnings['status'])}`);
 
     // ── Generate Nostr keypair for signed events ───────────────────────────
@@ -338,7 +394,10 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
   // ── Test 1: client /healthz ────────────────────────────────────────────────
 
   it('client /healthz reports anyoneReady + funded balances', async () => {
-    const res = await fetchWithTimeout(`${CLIENT_URL}/healthz`, { budgetMs: 5_000, label: '/healthz' });
+    const res = await fetchWithTimeout(`${CLIENT_URL}/healthz`, {
+      budgetMs: 5_000,
+      label: '/healthz',
+    });
     expect(res.ok).toBe(true);
     const body = (await res.json()) as {
       anyoneReady: boolean;
@@ -356,7 +415,10 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
   // ── Test 2: client /signer-info — public ATOR transport confirmed ─────────
 
   it('client uses public ATOR SOCKS5 transport (NFR5)', async () => {
-    const res = await fetchWithTimeout(`${CLIENT_URL}/signer-info`, { budgetMs: 5_000, label: '/signer-info' });
+    const res = await fetchWithTimeout(`${CLIENT_URL}/signer-info`, {
+      budgetMs: 5_000,
+      label: '/signer-info',
+    });
     expect(res.ok).toBe(true);
     const body = (await res.json()) as {
       transport?: { type?: string; socksProxy?: string };
@@ -376,142 +438,177 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
 
   it('client + townhouse containers are on DIFFERENT Docker networks', () => {
     const hsContainers = JSON.parse(
-      execSync(`docker network inspect ${HS_NETWORK}`, { encoding: 'utf-8', timeout: 5_000 })
+      execSync(`docker network inspect ${HS_NETWORK}`, {
+        encoding: 'utf-8',
+        timeout: 5_000,
+      })
     ) as { Containers?: Record<string, { Name?: string }> }[];
     const clientContainers = JSON.parse(
-      execSync(`docker network inspect ${CLIENT_NETWORK}`, { encoding: 'utf-8', timeout: 5_000 })
+      execSync(`docker network inspect ${CLIENT_NETWORK}`, {
+        encoding: 'utf-8',
+        timeout: 5_000,
+      })
     ) as { Containers?: Record<string, { Name?: string }> }[];
 
-    const hsNames = Object.values(hsContainers[0]?.Containers ?? {}).map((c) => c.Name ?? '');
-    const clientNames = Object.values(clientContainers[0]?.Containers ?? {}).map((c) => c.Name ?? '');
+    const hsNames = Object.values(hsContainers[0]?.Containers ?? {}).map(
+      (c) => c.Name ?? ''
+    );
+    const clientNames = Object.values(
+      clientContainers[0]?.Containers ?? {}
+    ).map((c) => c.Name ?? '');
 
     expect(hsNames.includes(CLIENT_CONTAINER)).toBe(false);
     for (const hs of HS_CONTAINER_NAMES) {
       expect(clientNames.includes(hs)).toBe(false);
     }
-    console.log(`[local-hs] isolation OK — ${HS_NETWORK}=[${hsNames.join(',')}], ${CLIENT_NETWORK}=[${clientNames.join(',')}]`);
+    console.log(
+      `[local-hs] isolation OK — ${HS_NETWORK}=[${hsNames.join(',')}], ${CLIENT_NETWORK}=[${clientNames.join(',')}]`
+    );
   }, 15_000);
 
   // ── Test 5: THE GATE — paid publish credits apex earnings ─────────────────
 
-  it(
-    'EVM leg: paid publish credits apex earnings within tolerance (NFR10 ±1¢)',
-    async () => {
-      expect(podEvmAddr).toBeTruthy();
-      expect(apexHostname).toBeTruthy();
-      const sinceMs = testStartMs;
+  it('EVM leg: paid publish credits apex earnings within tolerance (NFR10 ±1¢)', async () => {
+    expect(podEvmAddr).toBeTruthy();
+    expect(apexHostname).toBeTruthy();
+    const sinceMs = testStartMs;
 
-      // Drive a real signed publish
-      const event: NostrEvent = finalizeEvent(
-        {
-          kind: 1,
-          content: `local-hs smoke @ ${new Date().toISOString()}`,
-          tags: [['t', 'local-hs-smoke']],
-          created_at: Math.floor(Date.now() / 1000),
-        },
-        bSecretKey
-      );
-      const reqBody = { event, targetHostname: apexHostname };
+    // Drive a real signed publish
+    const event: NostrEvent = finalizeEvent(
+      {
+        kind: 1,
+        content: `local-hs smoke @ ${new Date().toISOString()}`,
+        tags: [['t', 'local-hs-smoke']],
+        created_at: Math.floor(Date.now() / 1000),
+      },
+      bSecretKey
+    );
+    const reqBody = { event, targetHostname: apexHostname };
 
-      let publishRes: Response | null = null;
-      let publishBodyText = '';
-      let attemptDurationMs = 0;
-      let successAttempt = 0;
-      const publishStart = Date.now();
-      const RETRY_BUDGET_MS = 270_000;
-      const PER_ATTEMPT_BUDGET_MS = 90_000;
+    let publishRes: Response | null = null;
+    let publishBodyText = '';
+    let attemptDurationMs = 0;
+    let successAttempt = 0;
+    const publishStart = Date.now();
+    const RETRY_BUDGET_MS = 270_000;
+    const PER_ATTEMPT_BUDGET_MS = 90_000;
 
-      for (let attempt = 1; Date.now() - publishStart < RETRY_BUDGET_MS; attempt++) {
-        const attemptStart = Date.now();
+    for (
+      let attempt = 1;
+      Date.now() - publishStart < RETRY_BUDGET_MS;
+      attempt++
+    ) {
+      const attemptStart = Date.now();
+      try {
+        publishRes = await fetchWithTimeout(`${CLIENT_URL}/publish`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(reqBody),
+          budgetMs: PER_ATTEMPT_BUDGET_MS,
+          label: `POST /publish attempt ${attempt}`,
+        });
+        attemptDurationMs = Date.now() - attemptStart;
+        publishBodyText = await publishRes.text();
         try {
-          publishRes = await fetchWithTimeout(`${CLIENT_URL}/publish`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(reqBody),
-            budgetMs: PER_ATTEMPT_BUDGET_MS,
-            label: `POST /publish attempt ${attempt}`,
-          });
-          attemptDurationMs = Date.now() - attemptStart;
-          publishBodyText = await publishRes.text();
-          try { publishBody = JSON.parse(publishBodyText) as Record<string, unknown>; } catch { /* keep raw */ }
-          console.log(
-            `[local-hs Test 5] attempt=${attempt} status=${publishRes.status} ` +
-              `attempt=${attemptDurationMs}ms wall=${Date.now() - publishStart}ms ` +
-              `body=${publishBodyText.slice(0, 200)}`
-          );
-          if (publishRes.status === 202) {
-            successAttempt = attempt;
-            break;
-          }
-          if (publishRes.status >= 400 && publishRes.status < 500 && publishBody['retryable'] !== true) break;
-        } catch (err) {
-          console.log(`[local-hs Test 5] attempt=${attempt} fetch error: ${(err as Error).message}`);
-          if (Date.now() - attemptStart >= 5_000) break;
+          publishBody = JSON.parse(publishBodyText) as Record<string, unknown>;
+        } catch {
+          /* keep raw */
         }
-        await sleep(5_000);
-      }
-
-      if (!publishRes || publishRes.status !== 202) {
-        await captureLogsOnFailure('publish-failed', { publishBody, publishBodyText, baseline: preEarnings });
-        throw new Error(
-          `Publish failed: status=${publishRes?.status}, body=${publishBodyText.slice(0, 300)}`
+        console.log(
+          `[local-hs Test 5] attempt=${attempt} status=${publishRes.status} ` +
+            `attempt=${attemptDurationMs}ms wall=${Date.now() - publishStart}ms ` +
+            `body=${publishBodyText.slice(0, 200)}`
         );
-      }
-
-      // Wire-shape assertions
-      expect(publishBody['eventId']).toBe(event.id);
-      expect(publishBody['claimHash']).toMatch(/^0x[0-9a-fA-F]{64}$/);
-      expect(publishBody['chainId']).toBe(31337);
-      expect(attemptDurationMs).toBeLessThanOrEqual(PER_ATTEMPT_BUDGET_MS);
-
-      console.log(
-        `[local-hs Test 5] publish 202 in ${Date.now() - publishStart}ms wall ` +
-          `(attempt #${successAttempt}, ${attemptDurationMs}ms successful attempt). ` +
-          `claimHash=${publishBody['claimHash']}`
-      );
-
-      // Poll for credit
-      const pollDeadline = Date.now() + 90_000;
-      let postEarnings: Record<string, unknown> | null = null;
-      let matchedClaim: Record<string, unknown> | null = null;
-      while (Date.now() < pollDeadline) {
-        try {
-          postEarnings = await fetchEarnings('post-publish');
-          matchedClaim = findInboundClaimForPeer(postEarnings, podEvmAddr, EXPECTED_FEE, TOLERANCE, sinceMs);
-          if (matchedClaim) break;
-        } catch (e) {
-          console.warn(`[local-hs Test 5] earnings fetch failed: ${(e as Error).message}`);
+        if (publishRes.status === 202) {
+          successAttempt = attempt;
+          break;
         }
-        await sleep(3_000);
+        if (
+          publishRes.status >= 400 &&
+          publishRes.status < 500 &&
+          publishBody['retryable'] !== true
+        )
+          break;
+      } catch (err) {
+        console.log(
+          `[local-hs Test 5] attempt=${attempt} fetch error: ${(err as Error).message}`
+        );
+        if (Date.now() - attemptStart >= 5_000) break;
       }
+      await sleep(5_000);
+    }
 
-      if (!matchedClaim) {
-        await captureLogsOnFailure('credit-not-found', {
-          publishBody,
-          baseline: preEarnings,
+    if (!publishRes || publishRes.status !== 202) {
+      await captureLogsOnFailure('publish-failed', {
+        publishBody,
+        publishBodyText,
+        baseline: preEarnings,
+      });
+      throw new Error(
+        `Publish failed: status=${publishRes?.status}, body=${publishBodyText.slice(0, 300)}`
+      );
+    }
+
+    // Wire-shape assertions
+    expect(publishBody['eventId']).toBe(event.id);
+    expect(publishBody['claimHash']).toMatch(/^0x[0-9a-fA-F]{64}$/);
+    expect(publishBody['chainId']).toBe(31337);
+    expect(attemptDurationMs).toBeLessThanOrEqual(PER_ATTEMPT_BUDGET_MS);
+
+    console.log(
+      `[local-hs Test 5] publish 202 in ${Date.now() - publishStart}ms wall ` +
+        `(attempt #${successAttempt}, ${attemptDurationMs}ms successful attempt). ` +
+        `claimHash=${publishBody['claimHash']}`
+    );
+
+    // Poll for credit
+    const pollDeadline = Date.now() + 90_000;
+    let postEarnings: Record<string, unknown> | null = null;
+    let matchedClaim: Record<string, unknown> | null = null;
+    while (Date.now() < pollDeadline) {
+      try {
+        postEarnings = await fetchEarnings('post-publish');
+        matchedClaim = findInboundClaimForPeer(
           postEarnings,
           podEvmAddr,
-          expectedFee: EXPECTED_FEE.toString(),
-        });
-        throw new Error(
-          `No inbound claim found for peerId=${podEvmAddr} amount≈${EXPECTED_FEE} ` +
-            `within ±${TOLERANCE} after ${sinceMs}. recentClaims: ` +
-            JSON.stringify(postEarnings?.['recentClaims']).slice(0, 500)
+          EXPECTED_FEE,
+          TOLERANCE,
+          sinceMs
+        );
+        if (matchedClaim) break;
+      } catch (e) {
+        console.warn(
+          `[local-hs Test 5] earnings fetch failed: ${(e as Error).message}`
         );
       }
+      await sleep(3_000);
+    }
 
-      // Verify claim is a real signed claim, not a stub
-      const matchedAmount = BigInt(matchedClaim['amount'] as string);
-      expect(matchedAmount).toBeGreaterThanOrEqual(EXPECTED_FEE - TOLERANCE);
-      expect(matchedAmount).toBeLessThanOrEqual(EXPECTED_FEE + TOLERANCE);
-      expect(matchedClaim['direction']).toBe('inbound');
-
-      console.log(
-        `[local-hs Test 5] CREDIT LANDED: ${JSON.stringify(matchedClaim).slice(0, 300)}`
+    if (!matchedClaim) {
+      await captureLogsOnFailure('credit-not-found', {
+        publishBody,
+        baseline: preEarnings,
+        postEarnings,
+        podEvmAddr,
+        expectedFee: EXPECTED_FEE.toString(),
+      });
+      throw new Error(
+        `No inbound claim found for peerId=${podEvmAddr} amount≈${EXPECTED_FEE} ` +
+          `within ±${TOLERANCE} after ${sinceMs}. recentClaims: ` +
+          JSON.stringify(postEarnings?.['recentClaims']).slice(0, 500)
       );
-    },
-    420_000
-  );
+    }
+
+    // Verify claim is a real signed claim, not a stub
+    const matchedAmount = BigInt(matchedClaim['amount'] as string);
+    expect(matchedAmount).toBeGreaterThanOrEqual(EXPECTED_FEE - TOLERANCE);
+    expect(matchedAmount).toBeLessThanOrEqual(EXPECTED_FEE + TOLERANCE);
+    expect(matchedClaim['direction']).toBe('inbound');
+
+    console.log(
+      `[local-hs Test 5] CREDIT LANDED: ${JSON.stringify(matchedClaim).slice(0, 300)}`
+    );
+  }, 420_000);
 
   // ── Test 6: drill metrics ↔ /api/earnings parity ──────────────────────────
 
@@ -522,10 +619,13 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
 
     // drill metrics is invoked via the CLI; use the connector admin metrics
     // endpoint directly to avoid the CLI subprocess overhead.
-    const metricsRes = await fetchWithTimeout(`${CONNECTOR_ADMIN_URL}/admin/metrics.json`, {
-      budgetMs: 10_000,
-      label: '/admin/metrics.json',
-    });
+    const metricsRes = await fetchWithTimeout(
+      `${CONNECTOR_ADMIN_URL}/admin/metrics.json`,
+      {
+        budgetMs: 10_000,
+        label: '/admin/metrics.json',
+      }
+    );
     expect(metricsRes.ok).toBe(true);
     const metrics = (await metricsRes.json()) as {
       aggregate?: { packetsForwarded?: number };
@@ -539,7 +639,9 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
   it('PeerTypeResolver resolves town/mill/external distinctly', async () => {
     const nodesYamlPath = join(TOWNHOUSE_HOME, 'nodes.yaml');
     if (!existsSync(nodesYamlPath)) {
-      throw new Error(`nodes.yaml missing at ${nodesYamlPath} — orchestrator did not register peers`);
+      throw new Error(
+        `nodes.yaml missing at ${nodesYamlPath} — orchestrator did not register peers`
+      );
     }
     const yaml = await readNodesYaml(nodesYamlPath);
     const resolver = new PeerTypeResolver(yaml);
@@ -552,7 +654,13 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
 
   it('matched recentClaim carries a real claimHash + chain context (signed proof)', async () => {
     const earnings = await fetchEarnings('claim-verify');
-    const claim = findInboundClaimForPeer(earnings, podEvmAddr, EXPECTED_FEE, TOLERANCE, testStartMs);
+    const claim = findInboundClaimForPeer(
+      earnings,
+      podEvmAddr,
+      EXPECTED_FEE,
+      TOLERANCE,
+      testStartMs
+    );
     expect(claim, 'claim should be present after Test 5').not.toBeNull();
     expect(claim!['peerId']).toBeTruthy();
     expect(claim!['amount']).toBeTruthy();
@@ -560,7 +668,9 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
     // Some surfaces carry the chain assetCode (= USDC contract addr) — verify it's the
     // deterministic Akash-Anvil USDC mint, proves the chain context is real.
     if (typeof claim!['assetCode'] === 'string') {
-      expect(claim!['assetCode'].toLowerCase()).toBe('0x5fbdb2315678afecb367f032d93f642f64180aa3');
+      expect(claim!['assetCode'].toLowerCase()).toBe(
+        '0x5fbdb2315678afecb367f032d93f642f64180aa3'
+      );
     }
     // The publishBody.claimHash from Test 5 is the actual ECDSA-signed BalanceProof
     // hash; if the connector accepted the credit, the sig was valid (the

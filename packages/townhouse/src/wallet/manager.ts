@@ -476,7 +476,8 @@ export class WalletManager {
             chainExtras[nodeType].solanaAddress = base58Encode(
               chainKeys.solana.publicKey
             );
-            chainExtras[nodeType].solanaPrivateKey = chainKeys.solana.privateKey;
+            chainExtras[nodeType].solanaPrivateKey =
+              chainKeys.solana.privateKey;
             chainExtras[nodeType].solanaDerivationPath = chainKeys.solana.path;
           }
           if (nodeType === 'mill' && chainKeys.mina) {
@@ -639,9 +640,7 @@ async function deriveArweaveKey(
 
   // Arweave address = base64url(sha256(modulus_bytes)).
   const modulusBytes = Buffer.from(jwk.n, 'base64url');
-  const address = createHash('sha256')
-    .update(modulusBytes)
-    .digest('base64url');
+  const address = createHash('sha256').update(modulusBytes).digest('base64url');
 
   return { jwk, address, path };
 }

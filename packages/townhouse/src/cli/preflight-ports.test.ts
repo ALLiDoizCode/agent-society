@@ -21,7 +21,10 @@ import {
 } from './preflight-ports.js';
 
 /** Allocate a free ephemeral port on 127.0.0.1 (kernel-assigned). */
-async function allocateFreePort(): Promise<{ port: number; close: () => Promise<void> }> {
+async function allocateFreePort(): Promise<{
+  port: number;
+  close: () => Promise<void>;
+}> {
   const server = createServer();
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
@@ -45,7 +48,9 @@ async function holdPort(port: number): Promise<Server> {
   const server = createServer();
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen({ port, host: '127.0.0.1', exclusive: true }, () => resolve());
+    server.listen({ port, host: '127.0.0.1', exclusive: true }, () =>
+      resolve()
+    );
   });
   return server;
 }
@@ -111,7 +116,14 @@ describe('checkHsPortCollisions', () => {
             Id: 'abc',
             Names: ['/townhouse-hs-connector'],
             Image: 'ghcr.io/toon-protocol/connector',
-            Ports: [{ IP: '127.0.0.1', PrivatePort: 9401, PublicPort: port, Type: 'tcp' }],
+            Ports: [
+              {
+                IP: '127.0.0.1',
+                PrivatePort: 9401,
+                PublicPort: port,
+                Type: 'tcp',
+              },
+            ],
             Status: 'Up 5 hours',
             Labels: { 'com.docker.compose.project': 'compose' },
           },

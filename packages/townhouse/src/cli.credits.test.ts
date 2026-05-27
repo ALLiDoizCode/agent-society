@@ -60,9 +60,7 @@ vi.spyOn(WalletManager.prototype, 'getNodeKeys').mockImplementation(function (
 let nextPromptAnswer = 'y';
 
 vi.mock('node:readline', async () => {
-  const actual = (await vi.importActual<NodeReadline>(
-    'node:readline'
-  ));
+  const actual = await vi.importActual<NodeReadline>('node:readline');
   return {
     ...actual,
     createInterface: () => ({
@@ -206,9 +204,7 @@ describe('credits CLI commands', () => {
     stdoutSpy = vi
       .spyOn(process.stdout, 'write')
       .mockImplementation(() => true);
-    consoleErrorSpy = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetWincForToken.mockReset();
     mockTopUpWithTokens.mockReset();

@@ -1514,7 +1514,9 @@ export class DockerOrchestrator extends EventEmitter {
             );
             await this.walletManager.ensureArweaveKey('dvm');
             const jwk = this.walletManager.getArweaveJwk('dvm');
-            const jwkB64 = Buffer.from(JSON.stringify(jwk), 'utf-8').toString('base64');
+            const jwkB64 = Buffer.from(JSON.stringify(jwk), 'utf-8').toString(
+              'base64'
+            );
             env.push(`DVM_ARWEAVE_JWK_B64=${jwkB64}`);
           } catch {
             // Wallet locked, unsupported platform, or derivation failed —

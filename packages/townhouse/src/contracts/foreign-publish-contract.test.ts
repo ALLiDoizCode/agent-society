@@ -25,14 +25,21 @@ const SCHEMA_PATH = resolve(
 );
 
 function loadSchema(): Record<string, unknown> {
-  return JSON.parse(readFileSync(SCHEMA_PATH, 'utf8')) as Record<string, unknown>;
+  return JSON.parse(readFileSync(SCHEMA_PATH, 'utf8')) as Record<
+    string,
+    unknown
+  >;
 }
 
 function makeAjvWithSchema(): {
   ajv: Ajv;
   schema: Record<string, unknown>;
 } {
-  const ajv = new Ajv({ strict: false, allErrors: true, allowUnionTypes: true });
+  const ajv = new Ajv({
+    strict: false,
+    allErrors: true,
+    allowUnionTypes: true,
+  });
   addFormats(ajv);
   const schema = loadSchema();
   ajv.addSchema(schema, 'foreign-publish');
@@ -92,7 +99,11 @@ describe('foreign-publish.schema.json — schema-contract DoD (story 49.3 Task 6
 
     it('accepts a .anon TLD (locally-published HS variant)', () => {
       const validate = getValidator('AnyoneHostname');
-      expect(validate('jhxqkj7kmd2dybsoubtjwcjmuk75xbjvfppc4f6gjcw5sl3byo7lhmid.anon')).toBe(true);
+      expect(
+        validate(
+          'jhxqkj7kmd2dybsoubtjwcjmuk75xbjvfppc4f6gjcw5sl3byo7lhmid.anon'
+        )
+      ).toBe(true);
     });
 
     it('rejects bare TLDs (no host part) — pattern requires at least one char', () => {
@@ -131,12 +142,16 @@ describe('foreign-publish.schema.json — schema-contract DoD (story 49.3 Task 6
     it('rejects malformed id (must be 64 lowercase hex chars)', () => {
       const validate = getValidator('NostrEvent');
       expect(validate({ ...FIXTURE_EVENT, id: 'short' })).toBe(false);
-      expect(validate({ ...FIXTURE_EVENT, id: FIXTURE_EVENT.id.toUpperCase() })).toBe(false);
+      expect(
+        validate({ ...FIXTURE_EVENT, id: FIXTURE_EVENT.id.toUpperCase() })
+      ).toBe(false);
     });
 
     it('rejects malformed sig (must be 128 lowercase hex chars)', () => {
       const validate = getValidator('NostrEvent');
-      expect(validate({ ...FIXTURE_EVENT, sig: FIXTURE_EVENT.sig.slice(0, 100) })).toBe(false);
+      expect(
+        validate({ ...FIXTURE_EVENT, sig: FIXTURE_EVENT.sig.slice(0, 100) })
+      ).toBe(false);
     });
 
     it('rejects additionalProperties', () => {
@@ -284,7 +299,11 @@ describe('foreign-publish.schema.json — schema-contract DoD (story 49.3 Task 6
         validate({
           error: 'invalid_request',
           ajvErrors: [
-            { path: '/event/id', message: 'pattern mismatch', keyword: 'pattern' },
+            {
+              path: '/event/id',
+              message: 'pattern mismatch',
+              keyword: 'pattern',
+            },
           ],
         })
       ).toBe(true);

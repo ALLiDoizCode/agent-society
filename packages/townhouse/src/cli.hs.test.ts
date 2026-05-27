@@ -152,7 +152,12 @@ function makeHsOverrides({
     const handlers = listeners.get('pullProgress') ?? [];
     for (const event of events) {
       for (const h of handlers) {
-        h({ image, status: event.status, id: event.id, progress: event.progress });
+        h({
+          image,
+          status: event.status,
+          id: event.id,
+          progress: event.progress,
+        });
       }
     }
   });
@@ -1112,9 +1117,7 @@ describe('CLI hs subcommand', () => {
       const errOutput = consoleErrorSpy.mock.calls
         .map((c) => c[0] as string)
         .join('\n');
-      expect(errOutput).toContain(
-        'port preflight skipped (non-fatal)'
-      );
+      expect(errOutput).toContain('port preflight skipped (non-fatal)');
       expect(errOutput).toContain('out of file descriptors');
     } finally {
       rmSync(configDir, { recursive: true, force: true });

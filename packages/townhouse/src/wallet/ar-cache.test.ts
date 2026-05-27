@@ -1,5 +1,11 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdirSync, rmSync, existsSync, statSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  rmSync,
+  existsSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';

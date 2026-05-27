@@ -26,10 +26,8 @@ import type { ArweaveJwk, NodeKeys } from './types.js';
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
 /** Deterministic 32-byte hex (not a real key — never used on-chain). */
-const FAKE_EVM_HEX =
-  '11'.repeat(32);
-const FAKE_SOL_HEX =
-  '22'.repeat(32);
+const FAKE_EVM_HEX = '11'.repeat(32);
+const FAKE_SOL_HEX = '22'.repeat(32);
 const FAKE_EVM_ADDR = '0x0000000000000000000000000000000000000001';
 /**
  * Valid 32-byte SOL public key base58-encoded — must round-trip through

@@ -116,12 +116,19 @@ export class IsomorphicBtpClient {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.ws.onerror = (event: any) => {
         const underlying = event?.error ?? event?.message;
-        const detail = underlying instanceof Error
-          ? underlying.message
-          : (typeof underlying === 'string' ? underlying : null);
-        reject(new BtpConnectionError(
-          detail ? `WebSocket connection error: ${detail}` : 'WebSocket connection error'
-        ));
+        const detail =
+          underlying instanceof Error
+            ? underlying.message
+            : typeof underlying === 'string'
+              ? underlying
+              : null;
+        reject(
+          new BtpConnectionError(
+            detail
+              ? `WebSocket connection error: ${detail}`
+              : 'WebSocket connection error'
+          )
+        );
       };
 
       this.ws.onclose = () => {

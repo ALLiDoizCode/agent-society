@@ -140,10 +140,7 @@ export function formatTokenAmount(
  *   parseTokenAmount('usdc-eth', '10')    → 10_000_000n
  *   parseTokenAmount('eth', '0.0001')     → 100_000_000_000_000n
  */
-export function parseTokenAmount(
-  token: TurboTokenId,
-  decimal: string
-): bigint {
+export function parseTokenAmount(token: TurboTokenId, decimal: string): bigint {
   const decimals = TOKEN_DECIMALS[token];
   if (decimals === undefined) {
     throw new Error(`Unknown TurboTokenId: ${String(token)}`);

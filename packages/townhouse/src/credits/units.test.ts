@@ -87,7 +87,9 @@ describe('formatTokenAmount — per-token decimal precision', () => {
   });
 
   it('AR — 12 decimals (winston)', () => {
-    expect(formatTokenAmount('ar', 1_000_000_000_000n)).toBe('1.000000000000 AR');
+    expect(formatTokenAmount('ar', 1_000_000_000_000n)).toBe(
+      '1.000000000000 AR'
+    );
   });
 
   it('handles negative amounts with a leading sign', () => {

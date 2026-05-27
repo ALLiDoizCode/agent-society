@@ -16,10 +16,7 @@ import { TurboFactory } from '@ardrive/turbo-sdk/node';
 
 import type { NodeType } from '../docker/types.js';
 import type { WalletManager } from '../wallet/manager.js';
-import {
-  buildTurboSigner,
-  type TurboTokenId,
-} from '../wallet/turbo-signer.js';
+import { buildTurboSigner, type TurboTokenId } from '../wallet/turbo-signer.js';
 
 export interface GetCreditBalanceOptions {
   wallet: WalletManager;
@@ -58,8 +55,11 @@ export async function getCreditBalance(
 ): Promise<CreditBalanceResult> {
   const { wallet, nodeType, token, address: explicitAddress } = opts;
 
-  const { signer, token: canonicalToken, address: signerAddress } =
-    await buildTurboSigner(wallet, nodeType, token);
+  const {
+    signer,
+    token: canonicalToken,
+    address: signerAddress,
+  } = await buildTurboSigner(wallet, nodeType, token);
 
   const turbo = TurboFactory.authenticated({
     signer,

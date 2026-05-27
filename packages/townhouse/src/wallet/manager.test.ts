@@ -430,7 +430,9 @@ describe('WalletManager', () => {
       const all = manager.getAllKeys();
       for (const info of all) {
         expect(typeof info.solanaAddress).toBe('string');
-        expect(info.solanaDerivationPath).toMatch(/^m\/44'\/501'\/\d+'\/0'\/0'$/);
+        expect(info.solanaDerivationPath).toMatch(
+          /^m\/44'\/501'\/\d+'\/0'\/0'$/
+        );
       }
     });
   });
@@ -557,16 +559,12 @@ describe('WalletManager', () => {
       );
     });
 
-    it(
-      'getArweaveJwk throws until ensureArweaveKey is awaited, then returns JWK',
-      async () => {
-        await manager.fromMnemonic(TEST_MNEMONIC_12);
-        expect(() => manager.getArweaveJwk('dvm')).toThrow(/not yet derived/i);
-        const jwk = await manager.ensureArweaveKey('dvm');
-        expect(manager.getArweaveJwk('dvm')).toBe(jwk);
-      },
-      120_000
-    );
+    it('getArweaveJwk throws until ensureArweaveKey is awaited, then returns JWK', async () => {
+      await manager.fromMnemonic(TEST_MNEMONIC_12);
+      expect(() => manager.getArweaveJwk('dvm')).toThrow(/not yet derived/i);
+      const jwk = await manager.ensureArweaveKey('dvm');
+      expect(manager.getArweaveJwk('dvm')).toBe(jwk);
+    }, 120_000);
 
     it('getArweaveJwk throws after lock()', async () => {
       await manager.fromMnemonic(TEST_MNEMONIC_12);
@@ -589,31 +587,28 @@ describe('WalletManager', () => {
       }
       manager.lock();
       for (const { nodeType, ref } of refs) {
-        expect(ref.every((b) => b === 0), `${nodeType} solanaPrivateKey not zeroed`).toBe(
-          true
-        );
+        expect(
+          ref.every((b) => b === 0),
+          `${nodeType} solanaPrivateKey not zeroed`
+        ).toBe(true);
       }
     });
 
-    it(
-      'wipes the Arweave JWK private exponents after derivation + lock',
-      async () => {
-        await manager.fromMnemonic(TEST_MNEMONIC_12);
-        const jwk = await manager.ensureArweaveKey('dvm');
-        // Confirm the JWK starts populated.
-        expect(jwk.d).toBeTruthy();
-        expect(jwk.p).toBeTruthy();
-        manager.lock();
-        // Private exponents are emptied. (Public n + e remain — they
-        // are not secret. But the reference held by the caller is wiped.)
-        expect(jwk.d).toBe('');
-        expect(jwk.p).toBe('');
-        expect(jwk.q).toBe('');
-        expect(jwk.dp).toBe('');
-        expect(jwk.dq).toBe('');
-        expect(jwk.qi).toBe('');
-      },
-      120_000
-    );
+    it('wipes the Arweave JWK private exponents after derivation + lock', async () => {
+      await manager.fromMnemonic(TEST_MNEMONIC_12);
+      const jwk = await manager.ensureArweaveKey('dvm');
+      // Confirm the JWK starts populated.
+      expect(jwk.d).toBeTruthy();
+      expect(jwk.p).toBeTruthy();
+      manager.lock();
+      // Private exponents are emptied. (Public n + e remain — they
+      // are not secret. But the reference held by the caller is wiped.)
+      expect(jwk.d).toBe('');
+      expect(jwk.p).toBe('');
+      expect(jwk.q).toBe('');
+      expect(jwk.dp).toBe('');
+      expect(jwk.dq).toBe('');
+      expect(jwk.qi).toBe('');
+    }, 120_000);
   });
 });

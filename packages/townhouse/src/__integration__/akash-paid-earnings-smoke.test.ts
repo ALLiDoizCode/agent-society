@@ -62,7 +62,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
-import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools/pure';
+import {
+  generateSecretKey,
+  getPublicKey,
+  finalizeEvent,
+} from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 
 import {
@@ -87,9 +91,13 @@ import {
 
 const ajv = new Ajv({ strict: true });
 addFormats(ajv);
-const earningsResponse200 = (earningsResponseSchema.response as Record<number, unknown>)[200];
+const earningsResponse200 = (
+  earningsResponseSchema.response as Record<number, unknown>
+)[200];
 if (!earningsResponse200) {
-  throw new Error('earningsResponseSchema.response[200] is missing — schema import drift?');
+  throw new Error(
+    'earningsResponseSchema.response[200] is missing — schema import drift?'
+  );
 }
 const validateEarnings = ajv.compile(earningsResponse200);
 
@@ -147,10 +155,19 @@ const HS_VOLUMES = [HS_ANON_VOLUME, `${CONTAINER_PREFIX}hs-town-data`] as const;
 
 const thisFile = fileURLToPath(import.meta.url);
 const LEASES_PATH = join(
-  dirname(thisFile), '..', '..', '..', '..', 'deploy', 'akash', 'leases.json'
+  dirname(thisFile),
+  '..',
+  '..',
+  '..',
+  '..',
+  'deploy',
+  'akash',
+  'leases.json'
 );
 
-interface LeaseEntry { url: string }
+interface LeaseEntry {
+  url: string;
+}
 interface Leases {
   anvil: LeaseEntry;
   solana: LeaseEntry;
@@ -168,16 +185,28 @@ function cleanupContainersAndVolumes(): void {
   for (const name of HS_CONTAINER_NAMES) {
     try {
       execSync(`docker rm -f ${name}`, { stdio: 'pipe', timeout: 30_000 });
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
   for (const vol of HS_VOLUMES) {
     try {
-      execSync(`docker volume rm -f ${vol}`, { stdio: 'pipe', timeout: 30_000 });
-    } catch { /* best-effort */ }
+      execSync(`docker volume rm -f ${vol}`, {
+        stdio: 'pipe',
+        timeout: 30_000,
+      });
+    } catch {
+      /* best-effort */
+    }
   }
   try {
-    execSync(`docker network rm ${CONTAINER_PREFIX}hs-net`, { stdio: 'pipe', timeout: 10_000 });
-  } catch { /* best-effort — network may not exist */ }
+    execSync(`docker network rm ${CONTAINER_PREFIX}hs-net`, {
+      stdio: 'pipe',
+      timeout: 10_000,
+    });
+  } catch {
+    /* best-effort — network may not exist */
+  }
 }
 
 async function fetchWithTimeout(
@@ -189,11 +218,15 @@ async function fetchWithTimeout(
     return await fetch(url, { ...rest, signal: AbortSignal.timeout(budgetMs) });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`[fetch ${label ?? url}] failed within ${budgetMs}ms: ${msg}`);
+    throw new Error(
+      `[fetch ${label ?? url}] failed within ${budgetMs}ms: ${msg}`
+    );
   }
 }
 
-async function fetchEarnings(label = 'GET /api/earnings'): Promise<Record<string, unknown>> {
+async function fetchEarnings(
+  label = 'GET /api/earnings'
+): Promise<Record<string, unknown>> {
   const res = await fetchWithTimeout(EARNINGS_URL, { budgetMs: 10_000, label });
   if (!res.ok) throw new Error(`[${label}] HTTP ${res.status}`);
   const body = (await res.json()) as Record<string, unknown>;
@@ -218,11 +251,13 @@ function getPeerLifetime(
   const peers = earnings['peers'] as Record<string, unknown>[] | undefined;
   if (!peers) return 0n;
   const targetId = normPeerId(peerId);
-  const peer = peers.find((p) =>
-    typeof p['id'] === 'string' && normPeerId(p['id']) === targetId
+  const peer = peers.find(
+    (p) => typeof p['id'] === 'string' && normPeerId(p['id']) === targetId
   );
   if (!peer) return 0n;
-  const byAsset = peer['byAsset'] as Record<string, Record<string, string>> | undefined;
+  const byAsset = peer['byAsset'] as
+    | Record<string, Record<string, string>>
+    | undefined;
   if (!byAsset) return 0n;
   let total = 0n;
   for (const [assetCode, assetEarnings] of Object.entries(byAsset)) {
@@ -231,18 +266,20 @@ function getPeerLifetime(
     try {
       total += BigInt(lifetime);
     } catch {
-      console.warn(`[49.4] getPeerLifetime: malformed lifetime for peer ${peerId} asset ${assetCode}: ${lifetime}`);
+      console.warn(
+        `[49.4] getPeerLifetime: malformed lifetime for peer ${peerId} asset ${assetCode}: ${lifetime}`
+      );
     }
   }
   return total;
 }
 
 /** Sum apex routing fees across ALL asset codes (see getPeerLifetime comment). */
-function getApexRoutingFeeLifetime(
-  earnings: Record<string, unknown>
-): bigint {
+function getApexRoutingFeeLifetime(earnings: Record<string, unknown>): bigint {
   const apex = earnings['apex'] as Record<string, unknown> | undefined;
-  const fees = apex?.['routingFees'] as Record<string, Record<string, string>> | undefined;
+  const fees = apex?.['routingFees'] as
+    | Record<string, Record<string, string>>
+    | undefined;
   if (!fees) return 0n;
   let total = 0n;
   for (const [assetCode, assetEarnings] of Object.entries(fees)) {
@@ -251,7 +288,9 @@ function getApexRoutingFeeLifetime(
     try {
       total += BigInt(lifetime);
     } catch {
-      console.warn(`[49.4] getApexRoutingFeeLifetime: malformed lifetime for asset ${assetCode}: ${lifetime}`);
+      console.warn(
+        `[49.4] getApexRoutingFeeLifetime: malformed lifetime for asset ${assetCode}: ${lifetime}`
+      );
     }
   }
   return total;
@@ -277,7 +316,8 @@ function _getRecentClaimsTotalForPeer(
   const targetId = normPeerId(peerId);
   let total = 0n;
   for (const c of claims) {
-    const cPeer = typeof c['peerId'] === 'string' ? normPeerId(c['peerId']) : '';
+    const cPeer =
+      typeof c['peerId'] === 'string' ? normPeerId(c['peerId']) : '';
     const cDir = c['direction'];
     const cAmt = typeof c['amount'] === 'string' ? c['amount'] : null;
     if (cPeer !== targetId || cDir !== 'inbound' || !cAmt) continue;
@@ -288,7 +328,9 @@ function _getRecentClaimsTotalForPeer(
     try {
       total += BigInt(cAmt);
     } catch {
-      console.warn(`[49.4] getRecentClaimsTotalForPeer: malformed amount for peer ${peerId}: ${cAmt}`);
+      console.warn(
+        `[49.4] getRecentClaimsTotalForPeer: malformed amount for peer ${peerId}: ${cAmt}`
+      );
     }
   }
   return total;
@@ -316,14 +358,19 @@ function findInboundClaimForPeer(
   const lo = expectedAmount - tolerance;
   const hi = expectedAmount + tolerance;
   for (const c of claims) {
-    const cPeer = typeof c['peerId'] === 'string' ? normPeerId(c['peerId']) : '';
+    const cPeer =
+      typeof c['peerId'] === 'string' ? normPeerId(c['peerId']) : '';
     if (cPeer !== targetId || c['direction'] !== 'inbound') continue;
     const cAmt = typeof c['amount'] === 'string' ? c['amount'] : null;
     if (!cAmt) continue;
     const at = typeof c['at'] === 'string' ? Date.parse(c['at']) : NaN;
     if (!Number.isFinite(at) || at < sinceMs) continue;
     let amt: bigint;
-    try { amt = BigInt(cAmt); } catch { continue; }
+    try {
+      amt = BigInt(cAmt);
+    } catch {
+      continue;
+    }
     if (amt >= lo && amt <= hi) return c;
   }
   return null;
@@ -335,7 +382,11 @@ function parseLastJsonLine<T = unknown>(stdout: string, label: string): T {
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = (lines[i] ?? '').trim();
     if (!line.startsWith('{') && !line.startsWith('[')) continue;
-    try { return JSON.parse(line) as T; } catch { /* keep walking back */ }
+    try {
+      return JSON.parse(line) as T;
+    } catch {
+      /* keep walking back */
+    }
   }
   throw new Error(
     `[${label}] no parseable JSON in stdout. last 5: ${lines.slice(-5).join(' | ')}`
@@ -374,7 +425,11 @@ async function probeAkashEndpoint(
       budgetMs: 10_000,
       label,
       ...(rpcPayload
-        ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: rpcPayload }
+        ? {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: rpcPayload,
+          }
         : {}),
     });
     bodyText = await res.text();
@@ -388,7 +443,9 @@ async function probeAkashEndpoint(
     // We assert that the response carries a real `result` from the right method.
     if (rpcKind === 'evm') {
       let body: unknown;
-      try { body = JSON.parse(bodyText); } catch {
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
         throw new Error(
           `${label} RPC returned non-JSON body (first 200): ${bodyText.slice(0, 200)} — ${redeployHint}`
         );
@@ -401,7 +458,9 @@ async function probeAkashEndpoint(
       }
     } else if (rpcKind === 'solana') {
       let body: unknown;
-      try { body = JSON.parse(bodyText); } catch {
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
         throw new Error(
           `${label} RPC returned non-JSON body (first 200): ${bodyText.slice(0, 200)} — ${redeployHint}`
         );
@@ -504,7 +563,9 @@ describe.skipIf(!shouldRun)(
 
       // ── 0. Read leases.json ──────────────────────────────────────────────
       if (!existsSync(LEASES_PATH)) {
-        throw new Error(`leases.json not found at ${LEASES_PATH} — run scripts/akash-deploy.sh to initialize`);
+        throw new Error(
+          `leases.json not found at ${LEASES_PATH} — run scripts/akash-deploy.sh to initialize`
+        );
       }
       try {
         leases = JSON.parse(readFileSync(LEASES_PATH, 'utf-8')) as Leases;
@@ -514,9 +575,15 @@ describe.skipIf(!shouldRun)(
             `wait for scripts/akash-deploy.sh to complete, then retry`
         );
       }
-      podUrl = (POD_URL_FROM_ENV || leases['foreign-toon-client']?.url || '').replace(/\/+$/, '');
+      podUrl = (
+        POD_URL_FROM_ENV ||
+        leases['foreign-toon-client']?.url ||
+        ''
+      ).replace(/\/+$/, '');
       if (!podUrl) {
-        throw new Error('No foreign-toon-client URL: set AKASH_FOREIGN_POD_URL or run scripts/akash-deploy.sh foreign-toon-client');
+        throw new Error(
+          'No foreign-toon-client URL: set AKASH_FOREIGN_POD_URL or run scripts/akash-deploy.sh foreign-toon-client'
+        );
       }
       if (!podUrl.startsWith('http://') && !podUrl.startsWith('https://')) {
         throw new Error(
@@ -527,8 +594,14 @@ describe.skipIf(!shouldRun)(
       // ── 1. Probe Akash chains — fail-fast per AC #6 ─────────────────────
       const anvilUrl = leases['anvil']?.url;
       const solanaUrl = leases['solana']?.url;
-      if (!anvilUrl) throw new Error('anvil lease missing from leases.json — run scripts/akash-deploy.sh anvil');
-      if (!solanaUrl) throw new Error('solana lease missing from leases.json — run scripts/akash-deploy.sh solana');
+      if (!anvilUrl)
+        throw new Error(
+          'anvil lease missing from leases.json — run scripts/akash-deploy.sh anvil'
+        );
+      if (!solanaUrl)
+        throw new Error(
+          'solana lease missing from leases.json — run scripts/akash-deploy.sh solana'
+        );
 
       await probeAkashEndpoint(
         anvilUrl,
@@ -569,10 +642,14 @@ describe.skipIf(!shouldRun)(
         );
       }
       if (!healthz.anyoneReady) {
-        throw new Error(`Pod /healthz: anyoneReady=false — pod still booting. Retry in 30s.`);
+        throw new Error(
+          `Pod /healthz: anyoneReady=false — pod still booting. Retry in 30s.`
+        );
       }
       podEvmAddr = healthz.evmAddr;
-      console.log(`[49.4] Pod /healthz: anyoneReady=${healthz.anyoneReady}, evmAddr=${podEvmAddr}`);
+      console.log(
+        `[49.4] Pod /healthz: anyoneReady=${healthz.anyoneReady}, evmAddr=${podEvmAddr}`
+      );
 
       // ── 2. Pre-flight cleanup + init ─────────────────────────────────────
       cleanupContainersAndVolumes();
@@ -581,7 +658,9 @@ describe.skipIf(!shouldRun)(
       // dist/cli.js pre-flight
       const cliBin = join(dirname(thisFile), '..', '..', 'dist', 'cli.js');
       if (!existsSync(cliBin)) {
-        throw new Error(`dist/cli.js not found — run pnpm --filter @toon-protocol/townhouse build`);
+        throw new Error(
+          `dist/cli.js not found — run pnpm --filter @toon-protocol/townhouse build`
+        );
       }
 
       const init = runCli('init', {
@@ -591,7 +670,9 @@ describe.skipIf(!shouldRun)(
       });
       const initCode = await waitForExit(init.process, 30_000);
       if (initCode !== 0) {
-        throw new Error(`townhouse init exited ${initCode}. stdout: ${init.stdout.join('')}`);
+        throw new Error(
+          `townhouse init exited ${initCode}. stdout: ${init.stdout.join('')}`
+        );
       }
 
       // ── 3. Inject Akash-Anvil chainProviders into config.yaml ────────────
@@ -618,7 +699,11 @@ describe.skipIf(!shouldRun)(
           `    tokenAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3"`,
           `    keyId: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"`,
         ].join('\n');
-        writeFileSync(configPath, existing + '\n' + chainSection + '\n', 'utf-8');
+        writeFileSync(
+          configPath,
+          existing + '\n' + chainSection + '\n',
+          'utf-8'
+        );
         console.log(`[49.4] Injected Akash-Anvil chainProviders: ${anvilUrl}`);
       }
 
@@ -631,7 +716,9 @@ describe.skipIf(!shouldRun)(
       });
       const upCode = await waitForExit(up.process, 360_000);
       if (upCode !== 0) {
-        throw new Error(`townhouse hs up exited ${upCode}. stdout: ${up.stdout.join('')}`);
+        throw new Error(
+          `townhouse hs up exited ${upCode}. stdout: ${up.stdout.join('')}`
+        );
       }
 
       // Capture hostnameA
@@ -639,21 +726,33 @@ describe.skipIf(!shouldRun)(
       if (!existsSync(hostJsonPath)) {
         throw new Error(`host.json missing at ${hostJsonPath} after hs up`);
       }
-      const hostJson = JSON.parse(readFileSync(hostJsonPath, 'utf-8')) as { hostname: string };
+      const hostJson = JSON.parse(readFileSync(hostJsonPath, 'utf-8')) as {
+        hostname: string;
+      };
       expect(hostJson.hostname).toMatch(/^[a-z2-7]{55,57}\.(anyone|anon)$/);
       hostnameA = hostJson.hostname;
       console.log(`[49.4] A hostname: ${hostnameA}`);
 
-      await waitForUrl(HS_API_READY_URL, { maxMs: 30_000, label: 'townhouse-api /api/transport' });
+      await waitForUrl(HS_API_READY_URL, {
+        maxMs: 30_000,
+        label: 'townhouse-api /api/transport',
+      });
       adminClientA = new ConnectorAdminClient(CONNECTOR_ADMIN_URL, 10_000);
 
       // ── 4b. Capture connector startup logs to diagnose settlement init ────
       {
         try {
-          const connLogs = execSync(`docker logs ${HS_CONNECTOR_NAME} 2>&1 | grep -E "payment_channel|claim_receiver|per_packet|error|ERROR|failed|fail" | tail -30`, {
-            encoding: 'utf-8', shell: '/bin/bash', timeout: 10_000
-          });
-          console.log('[49.4] Connector settlement logs:\n' + connLogs.slice(0, 3000));
+          const connLogs = execSync(
+            `docker logs ${HS_CONNECTOR_NAME} 2>&1 | grep -E "payment_channel|claim_receiver|per_packet|error|ERROR|failed|fail" | tail -30`,
+            {
+              encoding: 'utf-8',
+              shell: '/bin/bash',
+              timeout: 10_000,
+            }
+          );
+          console.log(
+            '[49.4] Connector settlement logs:\n' + connLogs.slice(0, 3000)
+          );
         } catch (e) {
           console.warn(`[49.4] Connector log capture: ${(e as Error).message}`);
         }
@@ -661,7 +760,9 @@ describe.skipIf(!shouldRun)(
         if (existsSync(connectorYamlPath)) {
           const yaml = readFileSync(connectorYamlPath, 'utf-8');
           const hasChain = yaml.includes('chainProviders');
-          console.log(`[49.4] connector.yaml has chainProviders: ${hasChain}, length=${yaml.length}`);
+          console.log(
+            `[49.4] connector.yaml has chainProviders: ${hasChain}, length=${yaml.length}`
+          );
         }
       }
 
@@ -679,12 +780,15 @@ describe.skipIf(!shouldRun)(
       // SECURITY: this is the deterministic Anvil acct[4] private key — public,
       // documented in Foundry/Anvil examples. NEVER use on real chains. Same
       // posture as the Solana mock-USDC keys (project_solana_mock_usdc_keys memory).
-      const TOWN_EVM_PRIVATE_KEY = '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926b'; // gitleaks:allow Anvil dev key
+      const TOWN_EVM_PRIVATE_KEY =
+        '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926b'; // gitleaks:allow Anvil dev key
       const _TOWN_EVM_ADDRESS = '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65';
       {
         const townComposePath = join(tmpDirA, 'compose', 'townhouse-hs.yml');
         if (existsSync(townComposePath)) {
-          console.log('[49.4] Starting town relay (--profile town up -d town)...');
+          console.log(
+            '[49.4] Starting town relay (--profile town up -d town)...'
+          );
           execSync(
             `docker compose -f "${townComposePath}" --profile town up -d town`,
             {
@@ -695,7 +799,8 @@ describe.skipIf(!shouldRun)(
                 TOWNHOUSE_HOME: tmpDirA,
                 TOWNHOUSE_WALLET_DIR: tmpDirA,
                 TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD,
-                TOWN_SECRET_KEY: Buffer.from(generateSecretKey()).toString('hex'),
+                TOWN_SECRET_KEY:
+                  Buffer.from(generateSecretKey()).toString('hex'),
                 // Use deterministic Anvil acct[4] key so the connector can open
                 // a payment channel to this well-known address.
                 TOWN_SETTLEMENT_PRIVATE_KEY: TOWN_EVM_PRIVATE_KEY,
@@ -706,7 +811,10 @@ describe.skipIf(!shouldRun)(
               },
             }
           );
-          await waitForUrl(HS_TOWN_BLS_URL, { maxMs: 60_000, label: 'townhouse-hs-town BLS health' });
+          await waitForUrl(HS_TOWN_BLS_URL, {
+            maxMs: 60_000,
+            label: 'townhouse-hs-town BLS health',
+          });
 
           // Register town relay as a BTP peer (the relay dials UP to A on boot).
           // Do NOT add a route here — we add a self-delivery route below so the
@@ -717,7 +825,7 @@ describe.skipIf(!shouldRun)(
             id: 'town',
             url: `ws://${CONTAINER_PREFIX}hs-town:${NODE_BTP_PORT}/btp`,
             authToken: '',
-            routes: [],  // no route — we add the self-delivery route below
+            routes: [], // no route — we add the self-delivery route below
             transport: 'direct',
           } as Parameters<typeof adminClientA.registerPeer>[0]);
 
@@ -729,13 +837,20 @@ describe.skipIf(!shouldRun)(
           //
           // This route is LOAD-BEARING for AC #1. If it doesn't register, the publish
           // will fail with "no route" or hang waiting for a channel — we fail fast.
-          const routeRes = await fetchWithTimeout(`${CONNECTOR_ADMIN_URL}/admin/routes`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ prefix: 'g.townhouse.town', nextHop: 'g.townhouse', priority: 100 }),
-            budgetMs: 5_000,
-            label: 'POST /admin/routes (self-delivery)',
-          });
+          const routeRes = await fetchWithTimeout(
+            `${CONNECTOR_ADMIN_URL}/admin/routes`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                prefix: 'g.townhouse.town',
+                nextHop: 'g.townhouse',
+                priority: 100,
+              }),
+              budgetMs: 5_000,
+              label: 'POST /admin/routes (self-delivery)',
+            }
+          );
           const routeBodyText = await routeRes.text();
           if (!routeRes.ok) {
             throw new Error(
@@ -743,7 +858,9 @@ describe.skipIf(!shouldRun)(
                 `the route is load-bearing for AC #1; aborting beforeAll`
             );
           }
-          console.log(`[49.4] self-delivery route: HTTP ${routeRes.status} ${routeBodyText.slice(0, 100)}`);
+          console.log(
+            `[49.4] self-delivery route: HTTP ${routeRes.status} ${routeBodyText.slice(0, 100)}`
+          );
 
           // Wait for BTP handshake between connector and relay to complete.
           await sleep(8_000);
@@ -769,9 +886,13 @@ describe.skipIf(!shouldRun)(
               ],
             });
           }
-          console.log('[49.4] Town relay registered (peerId=town, g.townhouse.town)');
+          console.log(
+            '[49.4] Town relay registered (peerId=town, g.townhouse.town)'
+          );
         } else {
-          console.warn('[49.4] compose file not found — town relay not started');
+          console.warn(
+            '[49.4] compose file not found — town relay not started'
+          );
         }
       }
 
@@ -811,7 +932,9 @@ describe.skipIf(!shouldRun)(
             ],
           });
         }
-        console.log('[49.4] Mill registered synthetically (peerId=mill, g.townhouse.mill)');
+        console.log(
+          '[49.4] Mill registered synthetically (peerId=mill, g.townhouse.mill)'
+        );
       }
 
       // ── 7. Wait for local apex .anon HS to be globally reachable ─────────
@@ -827,32 +950,51 @@ describe.skipIf(!shouldRun)(
 
         const probeSocks5Connect = (): Promise<boolean> =>
           new Promise<boolean>((resolve) => {
-            const sock = createConnection({ host: PROXY_HOST, port: PROXY_PORT });
-            const cleanup = (ok: boolean): void => { sock.destroy(); resolve(ok); };
+            const sock = createConnection({
+              host: PROXY_HOST,
+              port: PROXY_PORT,
+            });
+            const cleanup = (ok: boolean): void => {
+              sock.destroy();
+              resolve(ok);
+            };
             const t = setTimeout(() => cleanup(false), PROBE_TIMEOUT_MS);
 
             let state: 'greeting' | 'connect' | 'done' = 'greeting';
-            sock.on('connect', () => { sock.write(Buffer.from([0x05, 0x01, 0x00])); });
+            sock.on('connect', () => {
+              sock.write(Buffer.from([0x05, 0x01, 0x00]));
+            });
             sock.on('data', (chunk: Buffer) => {
               if (state === 'greeting') {
                 if (chunk[0] === 0x05 && chunk[1] === 0x00) {
                   state = 'connect';
                   const hBuf = Buffer.from(TARGET_HOST, 'ascii');
                   const req = Buffer.alloc(7 + hBuf.length);
-                  req[0] = 0x05; req[1] = 0x01; req[2] = 0x00; req[3] = 0x03;
+                  req[0] = 0x05;
+                  req[1] = 0x01;
+                  req[2] = 0x00;
+                  req[3] = 0x03;
                   req[4] = hBuf.length;
                   hBuf.copy(req, 5);
                   req.writeUInt16BE(TARGET_PORT, 5 + hBuf.length);
                   sock.write(req);
-                } else { clearTimeout(t); cleanup(false); }
+                } else {
+                  clearTimeout(t);
+                  cleanup(false);
+                }
               } else if (state === 'connect') {
                 state = 'done';
                 clearTimeout(t);
                 cleanup(chunk[0] === 0x05 && chunk[1] === 0x00);
               }
             });
-            sock.on('error', () => { clearTimeout(t); cleanup(false); });
-            sock.setTimeout(PROBE_TIMEOUT_MS, () => { cleanup(false); });
+            sock.on('error', () => {
+              clearTimeout(t);
+              cleanup(false);
+            });
+            sock.setTimeout(PROBE_TIMEOUT_MS, () => {
+              cleanup(false);
+            });
           });
 
         const probeStart = Date.now();
@@ -863,12 +1005,16 @@ describe.skipIf(!shouldRun)(
           const reachable = await probeSocks5Connect();
           const elapsed = Math.round((Date.now() - probeStart) / 1000);
           if (reachable) {
-            console.log(`[49.4] HS reachable via ATOR after ${elapsed}s (attempt ${attempt})`);
+            console.log(
+              `[49.4] HS reachable via ATOR after ${elapsed}s (attempt ${attempt})`
+            );
             probeOk = true;
             break;
           }
           if (attempt % 5 === 0) {
-            console.log(`[49.4] HS not yet reachable (attempt ${attempt}, ${elapsed}s) — waiting for ATOR introduction points…`);
+            console.log(
+              `[49.4] HS not yet reachable (attempt ${attempt}, ${elapsed}s) — waiting for ATOR introduction points…`
+            );
           }
           await sleep(5_000);
         }
@@ -893,9 +1039,13 @@ describe.skipIf(!shouldRun)(
             { budgetMs: 10_000, label: 'GET /admin/earnings.json (direct)' }
           );
           const directBody = await directEarnings.text();
-          console.log(`[49.4] Direct connector earnings: HTTP ${directEarnings.status} ${directBody.slice(0, 200)}`);
+          console.log(
+            `[49.4] Direct connector earnings: HTTP ${directEarnings.status} ${directBody.slice(0, 200)}`
+          );
         } catch (e) {
-          console.warn(`[49.4] Direct connector earnings failed: ${(e as Error).message}`);
+          console.warn(
+            `[49.4] Direct connector earnings failed: ${(e as Error).message}`
+          );
         }
 
         // Check if API can see connector (test from container via docker exec)
@@ -904,8 +1054,12 @@ describe.skipIf(!shouldRun)(
             `docker exec ${HS_API_NAME} curl -fsS --max-time 5 http://connector:9401/admin/ping 2>&1 || echo "API_CANT_REACH_CONNECTOR"`,
             { encoding: 'utf-8', timeout: 15_000 }
           );
-          console.log(`[49.4] API→connector ping: ${apiPing.trim().slice(0, 100)}`);
-        } catch { /* best-effort */ }
+          console.log(
+            `[49.4] API→connector ping: ${apiPing.trim().slice(0, 100)}`
+          );
+        } catch {
+          /* best-effort */
+        }
 
         // Poll until the connector is reachable (status='ok') before capturing
         // the baseline.
@@ -914,13 +1068,17 @@ describe.skipIf(!shouldRun)(
         let lastErrorMsg: string | null = null;
         while (Date.now() < earningsDeadline) {
           try {
-            const candidate = await fetchEarnings('GET /api/earnings (connector-ready probe)');
+            const candidate = await fetchEarnings(
+              'GET /api/earnings (connector-ready probe)'
+            );
             lastStatus = candidate['status'];
             if (lastStatus === 'ok') {
               preEarnings = candidate;
               break;
             }
-            console.log(`[49.4] connector_unavailable — status: ${String(lastStatus)}`);
+            console.log(
+              `[49.4] connector_unavailable — status: ${String(lastStatus)}`
+            );
           } catch (e) {
             lastErrorMsg = (e as Error).message;
             console.log(`[49.4] earnings probe error: ${lastErrorMsg}`);
@@ -930,7 +1088,9 @@ describe.skipIf(!shouldRun)(
         if (!preEarnings) {
           // Fallback: one final attempt with strict failure semantics.
           try {
-            preEarnings = await fetchEarnings('GET /api/earnings (pre-publish baseline fallback)');
+            preEarnings = await fetchEarnings(
+              'GET /api/earnings (pre-publish baseline fallback)'
+            );
           } catch (e) {
             throw new Error(
               `[49.4] preEarnings baseline capture failed after 30s of polling. ` +
@@ -945,7 +1105,10 @@ describe.skipIf(!shouldRun)(
             );
           }
         }
-        console.log('[49.4] Pre-publish baseline captured, status=' + String(preEarnings['status']));
+        console.log(
+          '[49.4] Pre-publish baseline captured, status=' +
+            String(preEarnings['status'])
+        );
         testStartMs = Date.now();
       }
     }, 1200_000);
@@ -957,7 +1120,11 @@ describe.skipIf(!shouldRun)(
           // it (HS_CONTAINER_NAMES alone misses --profile-spawned containers
           // when the compose project namespace adds a prefix).
           try {
-            const townComposePath = join(tmpDirA, 'compose', 'townhouse-hs.yml');
+            const townComposePath = join(
+              tmpDirA,
+              'compose',
+              'townhouse-hs.yml'
+            );
             if (existsSync(townComposePath)) {
               execSync(
                 `docker compose -f "${townComposePath}" --profile town down -v --remove-orphans`,
@@ -974,7 +1141,9 @@ describe.skipIf(!shouldRun)(
               );
             }
           } catch (e) {
-            console.warn(`[49.4 afterAll] town compose down: ${(e as Error).message}`);
+            console.warn(
+              `[49.4 afterAll] town compose down: ${(e as Error).message}`
+            );
           }
 
           try {
@@ -1004,465 +1173,487 @@ describe.skipIf(!shouldRun)(
 
     // ── Test 4: EVM leg — AC #1, #3, #4, #7 ─────────────────────────────────
 
-    it(
-      'EVM leg: paid publish credits apex earnings within tolerance (AC #1, #3, #4, #7)',
-      async () => {
-        expect(podEvmAddr, 'podEvmAddr must be set by beforeAll').toBeTruthy();
-        expect(hostnameA, 'hostnameA must be set by beforeAll').toBeTruthy();
-        expect(preEarnings, 'preEarnings must be set by beforeAll').not.toBeNull();
-        const baseline = preEarnings!;
+    it('EVM leg: paid publish credits apex earnings within tolerance (AC #1, #3, #4, #7)', async () => {
+      expect(podEvmAddr, 'podEvmAddr must be set by beforeAll').toBeTruthy();
+      expect(hostnameA, 'hostnameA must be set by beforeAll').toBeTruthy();
+      expect(
+        preEarnings,
+        'preEarnings must be set by beforeAll'
+      ).not.toBeNull();
+      const baseline = preEarnings!;
 
-        // The `at` cutoff for "claims arriving after this test started".
-        // Set in beforeAll; used to filter sliding-window recentClaims.
-        const sinceMs = testStartMs;
+      // The `at` cutoff for "claims arriving after this test started".
+      // Set in beforeAll; used to filter sliding-window recentClaims.
+      const sinceMs = testStartMs;
 
-        const preExternal = getPeerLifetime(baseline, podEvmAddr);
-        const preApex = getApexRoutingFeeLifetime(baseline);
-        // preRecent intentionally NOT computed — we don't compare deltas of the
-        // sliding window (window eviction makes delta math unreliable). Instead
-        // we look for an inbound claim with the right peerId+amount+at-cutoff.
+      const preExternal = getPeerLifetime(baseline, podEvmAddr);
+      const preApex = getApexRoutingFeeLifetime(baseline);
+      // preRecent intentionally NOT computed — we don't compare deltas of the
+      // sliding window (window eviction makes delta math unreliable). Instead
+      // we look for an inbound claim with the right peerId+amount+at-cutoff.
 
-        try {
-          // ── Drive paid publish ─────────────────────────────────────────────
-          const event: NostrEvent = finalizeEvent(
-            {
-              kind: 1,
-              content: `49.4 paid-earnings smoke @ ${new Date().toISOString()}`,
-              tags: [['t', '49.4-smoke']],
-              created_at: Math.floor(Date.now() / 1000),
-            },
-            bSecretKey
-          );
+      try {
+        // ── Drive paid publish ─────────────────────────────────────────────
+        const event: NostrEvent = finalizeEvent(
+          {
+            kind: 1,
+            content: `49.4 paid-earnings smoke @ ${new Date().toISOString()}`,
+            tags: [['t', '49.4-smoke']],
+            created_at: Math.floor(Date.now() / 1000),
+          },
+          bSecretKey
+        );
 
-          const reqBody = { event, targetHostname: hostnameA };
-          let publishRes: Response | null = null;
-          let publishBodyText = '';
-          let publishBody: Record<string, unknown> = {};
-          let lastError: Error | null = null;
-          let succeededAttempt = 0;
-          let attemptDurationMs = 0;
-          const publishStart = Date.now();
-          const RETRY_BUDGET_MS = 270_000;
-          /** Per-attempt fetch budget AND the AC #1 90s wall-clock check. */
-          const PER_ATTEMPT_BUDGET_MS = 90_000;
-          /**
-           * If a single fetch attempt exceeds RETRY_TIMEOUT_THRESHOLD_MS, the
-           * pod may have processed the publish and we just missed the response.
-           * Retrying would drive a duplicate claim (AC #1 "no double-counting").
-           * Break out of the retry loop in that case.
-           */
-          const RETRY_TIMEOUT_THRESHOLD_MS = 5_000;
+        const reqBody = { event, targetHostname: hostnameA };
+        let publishRes: Response | null = null;
+        let publishBodyText = '';
+        let publishBody: Record<string, unknown> = {};
+        let lastError: Error | null = null;
+        let succeededAttempt = 0;
+        let attemptDurationMs = 0;
+        const publishStart = Date.now();
+        const RETRY_BUDGET_MS = 270_000;
+        /** Per-attempt fetch budget AND the AC #1 90s wall-clock check. */
+        const PER_ATTEMPT_BUDGET_MS = 90_000;
+        /**
+         * If a single fetch attempt exceeds RETRY_TIMEOUT_THRESHOLD_MS, the
+         * pod may have processed the publish and we just missed the response.
+         * Retrying would drive a duplicate claim (AC #1 "no double-counting").
+         * Break out of the retry loop in that case.
+         */
+        const RETRY_TIMEOUT_THRESHOLD_MS = 5_000;
 
-          for (let attempt = 1; Date.now() - publishStart < RETRY_BUDGET_MS; attempt++) {
-            const attemptStart = Date.now();
-            try {
-              publishRes = await fetchWithTimeout(podUrl + '/publish', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(reqBody),
-                budgetMs: PER_ATTEMPT_BUDGET_MS,
-                label: `POST /publish attempt ${attempt}`,
-              });
-              attemptDurationMs = Date.now() - attemptStart;
-              publishBodyText = await publishRes.text();
-              try {
-                publishBody = JSON.parse(publishBodyText) as Record<string, unknown>;
-              } catch (parseErr) {
-                console.warn(
-                  `[49.4 Test 4] attempt=${attempt} body JSON.parse failed (${(parseErr as Error).message}). ` +
-                    `body (first 300): ${publishBodyText.slice(0, 300)}`
-                );
-              }
-              console.log(
-                `[49.4 Test 4] attempt=${attempt} status=${publishRes.status} ` +
-                  `attempt=${attemptDurationMs}ms wall=${Date.now() - publishStart}ms ` +
-                  `body=${publishBodyText.slice(0, 200)}`
-              );
-              if (publishRes.status === 202) {
-                succeededAttempt = attempt;
-                break;
-              }
-              if (publishRes.status >= 400 && publishRes.status < 500 && publishBody['retryable'] !== true) break;
-            } catch (err) {
-              attemptDurationMs = Date.now() - attemptStart;
-              lastError = err as Error;
-              console.log(
-                `[49.4 Test 4] attempt=${attempt} fetch error after ${attemptDurationMs}ms: ${lastError.message}`
-              );
-              // If the attempt got far enough that the pod might have processed
-              // the publish, don't retry — duplicate claim risk.
-              if (attemptDurationMs >= RETRY_TIMEOUT_THRESHOLD_MS) {
-                console.warn(
-                  `[49.4 Test 4] attempt=${attempt} exceeded ${RETRY_TIMEOUT_THRESHOLD_MS}ms ` +
-                    `before failing — pod may have processed publish; not retrying`
-                );
-                break;
-              }
-            }
-            const elapsed = Date.now() - publishStart;
-            if (elapsed + 5_000 >= RETRY_BUDGET_MS) break;
-            await sleep(5_000);
-          }
-
-          lastPublishBody = publishBody;
-
-          if (!publishRes) {
-            throw new Error(
-              `AC #1 FAIL: all /publish attempts failed within ${RETRY_BUDGET_MS}ms. ` +
-                `lastError=${lastError?.message ?? 'none'}`
-            );
-          }
-
-          // AC #1: publish returns 202 within 90s wall-clock (per-attempt).
-          expect(
-            publishRes.status,
-            `Expected 202 from pod /publish — got ${publishRes.status}: ${publishBodyText.slice(0, 300)}\n` +
-              `Hint: if TOON_FEE_PER_EVENT=0 on pod, connector skips claim; ` +
-              `redeploy with fee=1000000 (scripts/akash-deploy.sh foreign-toon-client)`
-          ).toBe(202);
-          // AC #1 response-shape assertions: eventId + claimHash + chainId.
-          expect(publishBody['eventId']).toBe(event.id);
-          expect(
-            publishBody['claimHash'],
-            `Expected publishBody.claimHash to be a hex string — got ${String(publishBody['claimHash'])}`
-          ).toMatch(/^0x[0-9a-fA-F]{64}$/);
-          expect(
-            publishBody['chainId'],
-            `Expected publishBody.chainId === 31337 — got ${String(publishBody['chainId'])}`
-          ).toBe(31337);
-          // AC #1 per-attempt 90s wall-clock budget: the successful attempt
-          // must complete within 90s. (Total wall, with retries, may exceed
-          // this; the AC applies to the publish itself.)
-          expect(
-            attemptDurationMs,
-            `AC #1: publish attempt #${succeededAttempt} took ${attemptDurationMs}ms > 90_000ms budget`
-          ).toBeLessThanOrEqual(PER_ATTEMPT_BUDGET_MS);
-
-          const publishDurationMs = Date.now() - publishStart;
-          console.log(
-            `[49.4 Test 4] publish 202 in ${publishDurationMs}ms wall ` +
-              `(${attemptDurationMs}ms successful attempt), eventId=${event.id}`
-          );
-
-          // ── Poll /api/earnings for EVM credit ─────────────────────────────
-          // The connector processes the claim after the relay ACKs the event.
-          // Poll up to 90s for the inbound claim attributable to this publish:
-          //
-          //   a) recentClaims[peerId=podEvmAddr, direction=inbound, at >= sinceMs]
-          //      with amount within tolerance of EXPECTED_FEE  (PRIMARY path —
-          //      the connector's source-of-truth for unregistered inbound BTP
-          //      peers; recall OQ-1 resolution).
-          //   b) peers[podEvmAddr].byAsset[*].lifetime > preExternal
-          //      (only if the pod was promoted to a registered peer mid-test).
-          //   c) apex.routingFees[*].lifetime > preApex
-          //      (only if apex routing fees are configured).
-          //
-          // We require (a) to hold; (b) and (c) are accepted as additional
-          // confirmation. This change replaces the prior "any bucket grew"
-          // check, which was vulnerable to ambient apex traffic.
-          const POLL_BUDGET_MS = 90_000;
-          const POLL_INTERVAL_MS = 3_000;
-          const pollStart = Date.now();
-          let earningsAfter: Record<string, unknown> = baseline;
-          let externalDelta = 0n;
-          let apexDelta = 0n;
-          let matchedClaim: Record<string, unknown> | null = null;
-
-          while (Date.now() - pollStart < POLL_BUDGET_MS) {
-            try {
-              earningsAfter = await fetchEarnings(`GET /api/earnings (poll ${Math.round((Date.now() - pollStart) / 1000)}s)`);
-              if (earningsAfter['status'] !== 'ok') {
-                console.warn(
-                  `[49.4 Test 4 poll] status=${String(earningsAfter['status'])} — connector reading transient state`
-                );
-              }
-              externalDelta = getPeerLifetime(earningsAfter, podEvmAddr) - preExternal;
-              apexDelta = getApexRoutingFeeLifetime(earningsAfter) - preApex;
-              matchedClaim = findInboundClaimForPeer(
-                earningsAfter,
-                podEvmAddr,
-                EXPECTED_FEE,
-                TOLERANCE,
-                sinceMs
-              );
-              if (matchedClaim || externalDelta > 0n || apexDelta > 0n) break;
-            } catch (e) {
-              console.warn(`[49.4 Test 4 poll] ${(e as Error).message}`);
-            }
-            await sleep(POLL_INTERVAL_MS);
-          }
-
-          postPublishEarnings = earningsAfter;
-
-          // AC #1 strict assertion: at least ONE evidence bucket must show the
-          // attributable credit. Prefer recentClaims (the connector's truth for
-          // unregistered inbound peers, per OQ-1) — fall through to the
-          // registered-peer / apex-skim buckets if those grew instead.
-          if (!matchedClaim && externalDelta <= 0n && apexDelta <= 0n) {
-            throw new Error(
-              `AC #1 FAIL: no attributable credit found within ${POLL_BUDGET_MS}ms.\n` +
-                `  podEvmAddr: ${podEvmAddr}\n` +
-                `  sinceMs: ${new Date(sinceMs).toISOString()}\n` +
-                `  externalDelta: ${externalDelta}, apexDelta: ${apexDelta}, matchedClaim: null\n` +
-                `  Hint: verify pod TOON_FEE_PER_EVENT=1000000 ` +
-                `(redeploy: scripts/akash-deploy.sh foreign-toon-client). ` +
-                `With fee=0 the connector skips claim generation.`
-            );
-          }
-
-          const evidenceBucket =
-            matchedClaim ? 'recentClaims (4B.2 source-of-truth)' :
-            externalDelta > 0n ? 'peers[].byAsset[]' :
-            'apex.routingFees';
-          console.log(
-            `[49.4 Test 4] credited via ${evidenceBucket}: ` +
-              `matchedClaim=${matchedClaim ? JSON.stringify(matchedClaim).slice(0, 150) : 'null'} ` +
-              `externalDelta=${externalDelta} apexDelta=${apexDelta}`
-          );
-
-          // AC #1 two-sided tolerance: when we have a matched recentClaim, its
-          // amount is already within [EXPECTED_FEE-TOLERANCE, EXPECTED_FEE+TOLERANCE]
-          // (that's how findInboundClaimForPeer matches). When we fell through
-          // to peers[] / apex.routingFees, assert the delta two-sidedly.
-          if (!matchedClaim) {
-            const delta = externalDelta > 0n ? externalDelta : apexDelta;
-            expect(
-              delta >= EXPECTED_FEE - TOLERANCE && delta <= EXPECTED_FEE + TOLERANCE,
-              `AC #1 two-sided tolerance fail: delta=${delta} outside [${EXPECTED_FEE - TOLERANCE}, ${EXPECTED_FEE + TOLERANCE}]`
-            ).toBe(true);
-          }
-
-          // ── AC #4: pod's EVM addr resolves to type:'external' ──────────────
-          const peers = earningsAfter['peers'] as Record<string, unknown>[] | undefined ?? [];
-          const podEntry = peers.find(
-            (p) => typeof p['id'] === 'string' && normPeerId(p['id']) === normPeerId(podEvmAddr)
-          );
-          if (podEntry) {
-            expect(podEntry['type'], 'AC #4: pod must have type external').toBe('external');
-          } else {
-            // 47.5 4B.2 BLOCKED-PARTIAL fallback: connector doesn't surface zero-claim
-            // unregistered peers in earnings.peers[]. Fall back to direct PeerTypeResolver.
-            const nodesYaml = await readNodesYaml(join(tmpDirA, 'nodes.yaml'));
-            const resolver = new PeerTypeResolver(nodesYaml);
-            expect(
-              resolver.resolvePeerType(podEvmAddr),
-              `AC #4 fallback: PeerTypeResolver must return external for podEvmAddr`
-            ).toBe('external');
-            console.warn('[49.4 Test 4] AC #4 BLOCKED-PARTIAL: pod absent from /api/earnings.peers[] — fallback to direct resolver');
-          }
-
-          // ── AC #3: drill metrics parity (eventsRelayed ↔ packetsForwarded) ──
-          // OQ-4 resolution: drill metrics --json carries aggregate+per-peer
-          // packetsForwarded but NOT per-asset claimsReceivedTotal. Parity check
-          // narrows to eventsRelayed (from /api/earnings) vs total packetsForwarded
-          // (from drill metrics). DN3 amends AC #3 wording to match.
-          const drillResult = runCli('drill', {
-            configDir: tmpDirA,
-            password: TEST_PASSWORD,
-            env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
-            extraArgs: ['metrics', '--json'],
-          });
-          const drillCode = await waitForExit(drillResult.process, 15_000);
-          if (drillCode !== 0) {
-            throw new Error(
-              `AC #3 FAIL: drill metrics --json exited ${drillCode}. stdout: ${drillResult.stdout.join('').slice(0, 500)}`
-            );
-          }
-          const drillOut = drillResult.stdout.join('');
-          let drillJson: {
-            aggregate: { packetsForwarded: number };
-            peers: { peerId: string; packetsForwarded: number }[];
-            uptimeSeconds: number;
-          };
+        for (
+          let attempt = 1;
+          Date.now() - publishStart < RETRY_BUDGET_MS;
+          attempt++
+        ) {
+          const attemptStart = Date.now();
           try {
-            drillJson = parseLastJsonLine(drillOut, 'drill metrics');
-          } catch (e) {
-            throw new Error(
-              `AC #3 FAIL: drill metrics --json output unparseable: ${(e as Error).message}. ` +
-                `stdout (last 500): ${drillOut.slice(-500)}`
+            publishRes = await fetchWithTimeout(podUrl + '/publish', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(reqBody),
+              budgetMs: PER_ATTEMPT_BUDGET_MS,
+              label: `POST /publish attempt ${attempt}`,
+            });
+            attemptDurationMs = Date.now() - attemptStart;
+            publishBodyText = await publishRes.text();
+            try {
+              publishBody = JSON.parse(publishBodyText) as Record<
+                string,
+                unknown
+              >;
+            } catch (parseErr) {
+              console.warn(
+                `[49.4 Test 4] attempt=${attempt} body JSON.parse failed (${(parseErr as Error).message}). ` +
+                  `body (first 300): ${publishBodyText.slice(0, 300)}`
+              );
+            }
+            console.log(
+              `[49.4 Test 4] attempt=${attempt} status=${publishRes.status} ` +
+                `attempt=${attemptDurationMs}ms wall=${Date.now() - publishStart}ms ` +
+                `body=${publishBodyText.slice(0, 200)}`
             );
+            if (publishRes.status === 202) {
+              succeededAttempt = attempt;
+              break;
+            }
+            if (
+              publishRes.status >= 400 &&
+              publishRes.status < 500 &&
+              publishBody['retryable'] !== true
+            )
+              break;
+          } catch (err) {
+            attemptDurationMs = Date.now() - attemptStart;
+            lastError = err as Error;
+            console.log(
+              `[49.4 Test 4] attempt=${attempt} fetch error after ${attemptDurationMs}ms: ${lastError.message}`
+            );
+            // If the attempt got far enough that the pod might have processed
+            // the publish, don't retry — duplicate claim risk.
+            if (attemptDurationMs >= RETRY_TIMEOUT_THRESHOLD_MS) {
+              console.warn(
+                `[49.4 Test 4] attempt=${attempt} exceeded ${RETRY_TIMEOUT_THRESHOLD_MS}ms ` +
+                  `before failing — pod may have processed publish; not retrying`
+              );
+              break;
+            }
           }
-          const earningsEventsRelayed = earningsAfter['eventsRelayed'] as number ?? 0;
-          const metricsPackets =
-            drillJson.peers.length > 0
-              ? drillJson.peers.reduce((s, p) => s + (p.packetsForwarded ?? 0), 0)
-              : drillJson.aggregate.packetsForwarded;
-          // Parity: eventsRelayed (earnings) ≈ total packetsForwarded (metrics).
-          // Allow ±1 for race between the two fetches.
-          expect(
-            Math.abs(earningsEventsRelayed - metricsPackets) <= 1,
-            `AC #3 parity fail: eventsRelayed=${earningsEventsRelayed} metricsPackets=${metricsPackets}`
-          ).toBe(true);
-          console.log(
-            `[49.4 Test 4] AC #3 parity OK: eventsRelayed=${earningsEventsRelayed} ≈ metricsPackets=${metricsPackets}`
-          );
-        } catch (testError) {
-          // Capture logs on ANY Test 4 failure (per AC #7), not just no-credit.
-          await captureLogsOnFailure('test4-failure', {
-            preEarnings: baseline,
-            postEarnings: postPublishEarnings,
-            publishResponse: lastPublishBody,
-            podEvmAddr,
-            hostnameA,
-            error: (testError as Error).message,
-            errorStack: (testError as Error).stack,
-          });
-          throw testError;
+          const elapsed = Date.now() - publishStart;
+          if (elapsed + 5_000 >= RETRY_BUDGET_MS) break;
+          await sleep(5_000);
         }
-      },
-      // Test budget = RETRY_BUDGET (270s) + POLL_BUDGET (90s) + drill CLI (~20s) +
-      // overhead (~40s). Set to 7 minutes with cushion.
-      420_000
-    );
+
+        lastPublishBody = publishBody;
+
+        if (!publishRes) {
+          throw new Error(
+            `AC #1 FAIL: all /publish attempts failed within ${RETRY_BUDGET_MS}ms. ` +
+              `lastError=${lastError?.message ?? 'none'}`
+          );
+        }
+
+        // AC #1: publish returns 202 within 90s wall-clock (per-attempt).
+        expect(
+          publishRes.status,
+          `Expected 202 from pod /publish — got ${publishRes.status}: ${publishBodyText.slice(0, 300)}\n` +
+            `Hint: if TOON_FEE_PER_EVENT=0 on pod, connector skips claim; ` +
+            `redeploy with fee=1000000 (scripts/akash-deploy.sh foreign-toon-client)`
+        ).toBe(202);
+        // AC #1 response-shape assertions: eventId + claimHash + chainId.
+        expect(publishBody['eventId']).toBe(event.id);
+        expect(
+          publishBody['claimHash'],
+          `Expected publishBody.claimHash to be a hex string — got ${String(publishBody['claimHash'])}`
+        ).toMatch(/^0x[0-9a-fA-F]{64}$/);
+        expect(
+          publishBody['chainId'],
+          `Expected publishBody.chainId === 31337 — got ${String(publishBody['chainId'])}`
+        ).toBe(31337);
+        // AC #1 per-attempt 90s wall-clock budget: the successful attempt
+        // must complete within 90s. (Total wall, with retries, may exceed
+        // this; the AC applies to the publish itself.)
+        expect(
+          attemptDurationMs,
+          `AC #1: publish attempt #${succeededAttempt} took ${attemptDurationMs}ms > 90_000ms budget`
+        ).toBeLessThanOrEqual(PER_ATTEMPT_BUDGET_MS);
+
+        const publishDurationMs = Date.now() - publishStart;
+        console.log(
+          `[49.4 Test 4] publish 202 in ${publishDurationMs}ms wall ` +
+            `(${attemptDurationMs}ms successful attempt), eventId=${event.id}`
+        );
+
+        // ── Poll /api/earnings for EVM credit ─────────────────────────────
+        // The connector processes the claim after the relay ACKs the event.
+        // Poll up to 90s for the inbound claim attributable to this publish:
+        //
+        //   a) recentClaims[peerId=podEvmAddr, direction=inbound, at >= sinceMs]
+        //      with amount within tolerance of EXPECTED_FEE  (PRIMARY path —
+        //      the connector's source-of-truth for unregistered inbound BTP
+        //      peers; recall OQ-1 resolution).
+        //   b) peers[podEvmAddr].byAsset[*].lifetime > preExternal
+        //      (only if the pod was promoted to a registered peer mid-test).
+        //   c) apex.routingFees[*].lifetime > preApex
+        //      (only if apex routing fees are configured).
+        //
+        // We require (a) to hold; (b) and (c) are accepted as additional
+        // confirmation. This change replaces the prior "any bucket grew"
+        // check, which was vulnerable to ambient apex traffic.
+        const POLL_BUDGET_MS = 90_000;
+        const POLL_INTERVAL_MS = 3_000;
+        const pollStart = Date.now();
+        let earningsAfter: Record<string, unknown> = baseline;
+        let externalDelta = 0n;
+        let apexDelta = 0n;
+        let matchedClaim: Record<string, unknown> | null = null;
+
+        while (Date.now() - pollStart < POLL_BUDGET_MS) {
+          try {
+            earningsAfter = await fetchEarnings(
+              `GET /api/earnings (poll ${Math.round((Date.now() - pollStart) / 1000)}s)`
+            );
+            if (earningsAfter['status'] !== 'ok') {
+              console.warn(
+                `[49.4 Test 4 poll] status=${String(earningsAfter['status'])} — connector reading transient state`
+              );
+            }
+            externalDelta =
+              getPeerLifetime(earningsAfter, podEvmAddr) - preExternal;
+            apexDelta = getApexRoutingFeeLifetime(earningsAfter) - preApex;
+            matchedClaim = findInboundClaimForPeer(
+              earningsAfter,
+              podEvmAddr,
+              EXPECTED_FEE,
+              TOLERANCE,
+              sinceMs
+            );
+            if (matchedClaim || externalDelta > 0n || apexDelta > 0n) break;
+          } catch (e) {
+            console.warn(`[49.4 Test 4 poll] ${(e as Error).message}`);
+          }
+          await sleep(POLL_INTERVAL_MS);
+        }
+
+        postPublishEarnings = earningsAfter;
+
+        // AC #1 strict assertion: at least ONE evidence bucket must show the
+        // attributable credit. Prefer recentClaims (the connector's truth for
+        // unregistered inbound peers, per OQ-1) — fall through to the
+        // registered-peer / apex-skim buckets if those grew instead.
+        if (!matchedClaim && externalDelta <= 0n && apexDelta <= 0n) {
+          throw new Error(
+            `AC #1 FAIL: no attributable credit found within ${POLL_BUDGET_MS}ms.\n` +
+              `  podEvmAddr: ${podEvmAddr}\n` +
+              `  sinceMs: ${new Date(sinceMs).toISOString()}\n` +
+              `  externalDelta: ${externalDelta}, apexDelta: ${apexDelta}, matchedClaim: null\n` +
+              `  Hint: verify pod TOON_FEE_PER_EVENT=1000000 ` +
+              `(redeploy: scripts/akash-deploy.sh foreign-toon-client). ` +
+              `With fee=0 the connector skips claim generation.`
+          );
+        }
+
+        const evidenceBucket = matchedClaim
+          ? 'recentClaims (4B.2 source-of-truth)'
+          : externalDelta > 0n
+            ? 'peers[].byAsset[]'
+            : 'apex.routingFees';
+        console.log(
+          `[49.4 Test 4] credited via ${evidenceBucket}: ` +
+            `matchedClaim=${matchedClaim ? JSON.stringify(matchedClaim).slice(0, 150) : 'null'} ` +
+            `externalDelta=${externalDelta} apexDelta=${apexDelta}`
+        );
+
+        // AC #1 two-sided tolerance: when we have a matched recentClaim, its
+        // amount is already within [EXPECTED_FEE-TOLERANCE, EXPECTED_FEE+TOLERANCE]
+        // (that's how findInboundClaimForPeer matches). When we fell through
+        // to peers[] / apex.routingFees, assert the delta two-sidedly.
+        if (!matchedClaim) {
+          const delta = externalDelta > 0n ? externalDelta : apexDelta;
+          expect(
+            delta >= EXPECTED_FEE - TOLERANCE &&
+              delta <= EXPECTED_FEE + TOLERANCE,
+            `AC #1 two-sided tolerance fail: delta=${delta} outside [${EXPECTED_FEE - TOLERANCE}, ${EXPECTED_FEE + TOLERANCE}]`
+          ).toBe(true);
+        }
+
+        // ── AC #4: pod's EVM addr resolves to type:'external' ──────────────
+        const peers =
+          (earningsAfter['peers'] as Record<string, unknown>[] | undefined) ??
+          [];
+        const podEntry = peers.find(
+          (p) =>
+            typeof p['id'] === 'string' &&
+            normPeerId(p['id']) === normPeerId(podEvmAddr)
+        );
+        if (podEntry) {
+          expect(podEntry['type'], 'AC #4: pod must have type external').toBe(
+            'external'
+          );
+        } else {
+          // 47.5 4B.2 BLOCKED-PARTIAL fallback: connector doesn't surface zero-claim
+          // unregistered peers in earnings.peers[]. Fall back to direct PeerTypeResolver.
+          const nodesYaml = await readNodesYaml(join(tmpDirA, 'nodes.yaml'));
+          const resolver = new PeerTypeResolver(nodesYaml);
+          expect(
+            resolver.resolvePeerType(podEvmAddr),
+            `AC #4 fallback: PeerTypeResolver must return external for podEvmAddr`
+          ).toBe('external');
+          console.warn(
+            '[49.4 Test 4] AC #4 BLOCKED-PARTIAL: pod absent from /api/earnings.peers[] — fallback to direct resolver'
+          );
+        }
+
+        // ── AC #3: drill metrics parity (eventsRelayed ↔ packetsForwarded) ──
+        // OQ-4 resolution: drill metrics --json carries aggregate+per-peer
+        // packetsForwarded but NOT per-asset claimsReceivedTotal. Parity check
+        // narrows to eventsRelayed (from /api/earnings) vs total packetsForwarded
+        // (from drill metrics). DN3 amends AC #3 wording to match.
+        const drillResult = runCli('drill', {
+          configDir: tmpDirA,
+          password: TEST_PASSWORD,
+          env: { TOWNHOUSE_WALLET_PASSWORD: TEST_PASSWORD },
+          extraArgs: ['metrics', '--json'],
+        });
+        const drillCode = await waitForExit(drillResult.process, 15_000);
+        if (drillCode !== 0) {
+          throw new Error(
+            `AC #3 FAIL: drill metrics --json exited ${drillCode}. stdout: ${drillResult.stdout.join('').slice(0, 500)}`
+          );
+        }
+        const drillOut = drillResult.stdout.join('');
+        let drillJson: {
+          aggregate: { packetsForwarded: number };
+          peers: { peerId: string; packetsForwarded: number }[];
+          uptimeSeconds: number;
+        };
+        try {
+          drillJson = parseLastJsonLine(drillOut, 'drill metrics');
+        } catch (e) {
+          throw new Error(
+            `AC #3 FAIL: drill metrics --json output unparseable: ${(e as Error).message}. ` +
+              `stdout (last 500): ${drillOut.slice(-500)}`
+          );
+        }
+        const earningsEventsRelayed =
+          (earningsAfter['eventsRelayed'] as number) ?? 0;
+        const metricsPackets =
+          drillJson.peers.length > 0
+            ? drillJson.peers.reduce((s, p) => s + (p.packetsForwarded ?? 0), 0)
+            : drillJson.aggregate.packetsForwarded;
+        // Parity: eventsRelayed (earnings) ≈ total packetsForwarded (metrics).
+        // Allow ±1 for race between the two fetches.
+        expect(
+          Math.abs(earningsEventsRelayed - metricsPackets) <= 1,
+          `AC #3 parity fail: eventsRelayed=${earningsEventsRelayed} metricsPackets=${metricsPackets}`
+        ).toBe(true);
+        console.log(
+          `[49.4 Test 4] AC #3 parity OK: eventsRelayed=${earningsEventsRelayed} ≈ metricsPackets=${metricsPackets}`
+        );
+      } catch (testError) {
+        // Capture logs on ANY Test 4 failure (per AC #7), not just no-credit.
+        await captureLogsOnFailure('test4-failure', {
+          preEarnings: baseline,
+          postEarnings: postPublishEarnings,
+          publishResponse: lastPublishBody,
+          podEvmAddr,
+          hostnameA,
+          error: (testError as Error).message,
+          errorStack: (testError as Error).stack,
+        });
+        throw testError;
+      }
+    }, // Test budget = RETRY_BUDGET (270s) + POLL_BUDGET (90s) + drill CLI (~20s) +
+    // overhead (~40s). Set to 7 minutes with cushion.
+    420_000);
 
     // ── Test 5: SOL leg — BLOCKED-STRUCTURAL (AC #2) ─────────────────────────
 
-    it(
-      'SOL leg — Mill registered as type:mill (AC #2 BLOCKED-STRUCTURAL: Mill not on inbound claim path)',
-      async () => {
-        // OQ-2 resolution: AC #2 is BLOCKED-STRUCTURAL.
-        //
-        // Architecture analysis:
-        //   • The foreign pod sends ILP packets to g.townhouse.town (the relay).
-        //   • Mill is registered at g.townhouse.mill. Packets to town NEVER flow
-        //     to g.townhouse.mill — the connector routes by destination address.
-        //   • `townhouse node add mill` creates mill.config.json with
-        //     swapPairs:[] (empty). Even with Mill running, it has no SOL swap
-        //     capability configured.
-        //   • A's /api/earnings.peers['mill'].claimsReceivedTotal tracks money
-        //     Mill paid TO A (for upstream routing). Since Mill never routes
-        //     packets upstream (it's downstream), this stays 0.
-        //   • No routing logic exists in the current codebase to redirect apex
-        //     inbound EVM claims through Mill for SOL settlement.
-        //
-        // This AC is filed as Epic 49.5 close-out blocker. The SOL settlement
-        // architecture needs a new story before AC #2 can be implemented.
-        //
-        // Degraded assertion: Mill is correctly registered and resolves to
-        // type:'mill' via PeerTypeResolver.
+    it('SOL leg — Mill registered as type:mill (AC #2 BLOCKED-STRUCTURAL: Mill not on inbound claim path)', async () => {
+      // OQ-2 resolution: AC #2 is BLOCKED-STRUCTURAL.
+      //
+      // Architecture analysis:
+      //   • The foreign pod sends ILP packets to g.townhouse.town (the relay).
+      //   • Mill is registered at g.townhouse.mill. Packets to town NEVER flow
+      //     to g.townhouse.mill — the connector routes by destination address.
+      //   • `townhouse node add mill` creates mill.config.json with
+      //     swapPairs:[] (empty). Even with Mill running, it has no SOL swap
+      //     capability configured.
+      //   • A's /api/earnings.peers['mill'].claimsReceivedTotal tracks money
+      //     Mill paid TO A (for upstream routing). Since Mill never routes
+      //     packets upstream (it's downstream), this stays 0.
+      //   • No routing logic exists in the current codebase to redirect apex
+      //     inbound EVM claims through Mill for SOL settlement.
+      //
+      // This AC is filed as Epic 49.5 close-out blocker. The SOL settlement
+      // architecture needs a new story before AC #2 can be implemented.
+      //
+      // Degraded assertion: Mill is correctly registered and resolves to
+      // type:'mill' via PeerTypeResolver.
 
-        expect(tmpDirA, 'tmpDirA must be set by beforeAll').toBeTruthy();
+      expect(tmpDirA, 'tmpDirA must be set by beforeAll').toBeTruthy();
 
-        const nodesYaml = await readNodesYaml(join(tmpDirA, 'nodes.yaml'));
-        const millEntry = nodesYaml.entries.find((e) => e.peerId === 'mill');
+      const nodesYaml = await readNodesYaml(join(tmpDirA, 'nodes.yaml'));
+      const millEntry = nodesYaml.entries.find((e) => e.peerId === 'mill');
 
-        expect(
-          millEntry,
-          'AC #2 BLOCKED-STRUCTURAL: Mill entry must exist in nodes.yaml (synthetic registration)'
-        ).toBeDefined();
-        expect(millEntry?.type).toBe('mill');
+      expect(
+        millEntry,
+        'AC #2 BLOCKED-STRUCTURAL: Mill entry must exist in nodes.yaml (synthetic registration)'
+      ).toBeDefined();
+      expect(millEntry?.type).toBe('mill');
 
-        const resolver = new PeerTypeResolver(nodesYaml);
-        expect(
-          resolver.resolvePeerType('mill'),
-          'AC #2 BLOCKED-STRUCTURAL (degraded): PeerTypeResolver must return mill for peerId=mill'
-        ).toBe('mill');
+      const resolver = new PeerTypeResolver(nodesYaml);
+      expect(
+        resolver.resolvePeerType('mill'),
+        'AC #2 BLOCKED-STRUCTURAL (degraded): PeerTypeResolver must return mill for peerId=mill'
+      ).toBe('mill');
 
-        // Check connector knows about the mill peer
-        const connectorPeers = await adminClientA.getPeers();
-        const millConnectorPeer = connectorPeers.find((p) => p.id === 'mill');
-        expect(
-          millConnectorPeer,
-          'Mill must be registered in connector peer roster'
-        ).toBeDefined();
+      // Check connector knows about the mill peer
+      const connectorPeers = await adminClientA.getPeers();
+      const millConnectorPeer = connectorPeers.find((p) => p.id === 'mill');
+      expect(
+        millConnectorPeer,
+        'Mill must be registered in connector peer roster'
+      ).toBeDefined();
 
-        console.warn(
-          '⚠️  Test 5 BLOCKED-STRUCTURAL (AC #2 OQ-2 resolution):\n' +
-            '   Mill is registered (peerId=mill, type=mill) but receives no SOL claims\n' +
-            '   from the foreign pod. The inbound EVM claim path (g.townhouse.town) does\n' +
-            '   not route through Mill (g.townhouse.mill). A new story is needed to design\n' +
-            '   SOL settlement routing before AC #2 can be implemented.\n' +
-            '   → Epic 49.5 close-out blocker filed.'
-        );
-      },
-      30_000
-    );
+      console.warn(
+        '⚠️  Test 5 BLOCKED-STRUCTURAL (AC #2 OQ-2 resolution):\n' +
+          '   Mill is registered (peerId=mill, type=mill) but receives no SOL claims\n' +
+          '   from the foreign pod. The inbound EVM claim path (g.townhouse.town) does\n' +
+          '   not route through Mill (g.townhouse.mill). A new story is needed to design\n' +
+          '   SOL settlement routing before AC #2 can be implemented.\n' +
+          '   → Epic 49.5 close-out blocker filed.'
+      );
+    }, 30_000);
 
     // ── Test 6: Town peer distinctness — AC #5 ───────────────────────────────
 
-    it(
-      'Town peer resolves as type:town and is distinct from external+mill buckets (AC #5)',
-      async () => {
-        const nodesYaml = await readNodesYaml(join(tmpDirA, 'nodes.yaml'));
-        const resolver = new PeerTypeResolver(nodesYaml);
+    it('Town peer resolves as type:town and is distinct from external+mill buckets (AC #5)', async () => {
+      const nodesYaml = await readNodesYaml(join(tmpDirA, 'nodes.yaml'));
+      const resolver = new PeerTypeResolver(nodesYaml);
 
-        expect(
-          resolver.resolvePeerType('town'),
-          'AC #5: PeerTypeResolver must return town for peerId=town'
-        ).toBe('town');
-        expect(
-          resolver.resolvePeerType('mill'),
-          'AC #5: PeerTypeResolver must return mill for peerId=mill'
-        ).toBe('mill');
-        expect(
-          resolver.resolvePeerType(podEvmAddr),
-          'AC #5: PeerTypeResolver must return external for podEvmAddr'
-        ).toBe('external');
+      expect(
+        resolver.resolvePeerType('town'),
+        'AC #5: PeerTypeResolver must return town for peerId=town'
+      ).toBe('town');
+      expect(
+        resolver.resolvePeerType('mill'),
+        'AC #5: PeerTypeResolver must return mill for peerId=mill'
+      ).toBe('mill');
+      expect(
+        resolver.resolvePeerType(podEvmAddr),
+        'AC #5: PeerTypeResolver must return external for podEvmAddr'
+      ).toBe('external');
 
-        // Verify the three types are distinct
-        const types = new Set(['town', 'mill', 'external'] as const);
-        expect(types.size).toBe(3);
+      // Verify the three types are distinct
+      const types = new Set(['town', 'mill', 'external'] as const);
+      expect(types.size).toBe(3);
 
-        // If post-publish earnings is available, verify three distinct peer type buckets
-        if (postPublishEarnings) {
-          const peers = postPublishEarnings['peers'] as Record<string, unknown>[] ?? [];
-          const typesSeen = new Set(peers.map((p) => p['type']));
-          // We may not see all three in /api/earnings (zero-claim peers not surfaced).
-          // Asserting that the resolver correctly distinguishes all three is sufficient.
-          console.log(`[49.4 Test 6] peer types in earnings: [${[...typesSeen].join(', ')}]`);
-          // town or mill may show 'external' if they lack claims (4B.2 recurrence)
-          // — the resolver test above is the authoritative AC #5 assertion.
-        }
+      // If post-publish earnings is available, verify three distinct peer type buckets
+      if (postPublishEarnings) {
+        const peers =
+          (postPublishEarnings['peers'] as Record<string, unknown>[]) ?? [];
+        const typesSeen = new Set(peers.map((p) => p['type']));
+        // We may not see all three in /api/earnings (zero-claim peers not surfaced).
+        // Asserting that the resolver correctly distinguishes all three is sufficient.
+        console.log(
+          `[49.4 Test 6] peer types in earnings: [${[...typesSeen].join(', ')}]`
+        );
+        // town or mill may show 'external' if they lack claims (4B.2 recurrence)
+        // — the resolver test above is the authoritative AC #5 assertion.
+      }
 
-        console.log('[49.4 Test 6] AC #5: town/mill/external type resolution PASSED via direct resolver');
-      },
-      30_000
-    );
+      console.log(
+        '[49.4 Test 6] AC #5: town/mill/external type resolution PASSED via direct resolver'
+      );
+    }, 30_000);
 
     // ── Test 7: Structural — AC #8 ───────────────────────────────────────────
 
-    it(
-      'apex containers still running after smoke — persistent-deployment discipline (AC #8)',
-      () => {
-        const running = execSync(`docker ps --format "{{.Names}}"`, {
-          encoding: 'utf-8',
-          timeout: 10_000,
-        })
-          .trim()
-          .split('\n')
-          .filter(Boolean);
+    it('apex containers still running after smoke — persistent-deployment discipline (AC #8)', () => {
+      const running = execSync(`docker ps --format "{{.Names}}"`, {
+        encoding: 'utf-8',
+        timeout: 10_000,
+      })
+        .trim()
+        .split('\n')
+        .filter(Boolean);
 
-        expect(running, 'townhouse-hs-connector must still be running').toContain(HS_CONNECTOR_NAME);
-        expect(running, 'townhouse-hs-api must still be running').toContain(HS_API_NAME);
+      expect(running, 'townhouse-hs-connector must still be running').toContain(
+        HS_CONNECTOR_NAME
+      );
+      expect(running, 'townhouse-hs-api must still be running').toContain(
+        HS_API_NAME
+      );
 
-        // AC #8 discipline: leases.json entry-count is unchanged. Three pre-existing
-        // leases (anvil/faucet/foreign-toon-client) may have been REPLACED with
-        // fresh DSEQs mid-campaign (their original on-chain deployments auto-closed),
-        // but the entry COUNT must match the beforeAll baseline. Mill is registered
-        // SYNTHETICALLY (no container, no new lease).
-        const postLeasesText = readFileSync(LEASES_PATH, 'utf-8');
-        let postLeases: Leases;
-        try {
-          postLeases = JSON.parse(postLeasesText) as Leases;
-        } catch (e) {
-          throw new Error(
-            `AC #8 FAIL: leases.json unparseable post-smoke: ${(e as Error).message}`
-          );
-        }
-        const baselineCount = Object.keys(leases).length;
-        const postCount = Object.keys(postLeases).length;
-        expect(
-          postCount,
-          `AC #8: leases.json entry count grew from ${baselineCount} to ${postCount} — ` +
-            `new persistent leases must not be added by this story`
-        ).toBe(baselineCount);
-
-        console.log(
-          `[49.4 Test 7] AC #8: persistent-deployment discipline verified — ` +
-            `${postCount} leases (unchanged from baseline)`
+      // AC #8 discipline: leases.json entry-count is unchanged. Three pre-existing
+      // leases (anvil/faucet/foreign-toon-client) may have been REPLACED with
+      // fresh DSEQs mid-campaign (their original on-chain deployments auto-closed),
+      // but the entry COUNT must match the beforeAll baseline. Mill is registered
+      // SYNTHETICALLY (no container, no new lease).
+      const postLeasesText = readFileSync(LEASES_PATH, 'utf-8');
+      let postLeases: Leases;
+      try {
+        postLeases = JSON.parse(postLeasesText) as Leases;
+      } catch (e) {
+        throw new Error(
+          `AC #8 FAIL: leases.json unparseable post-smoke: ${(e as Error).message}`
         );
-      },
-      15_000
-    );
+      }
+      const baselineCount = Object.keys(leases).length;
+      const postCount = Object.keys(postLeases).length;
+      expect(
+        postCount,
+        `AC #8: leases.json entry count grew from ${baselineCount} to ${postCount} — ` +
+          `new persistent leases must not be added by this story`
+      ).toBe(baselineCount);
+
+      console.log(
+        `[49.4 Test 7] AC #8: persistent-deployment discipline verified — ` +
+          `${postCount} leases (unchanged from baseline)`
+      );
+    }, 15_000);
   }
 );

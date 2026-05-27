@@ -1654,7 +1654,9 @@ describe('DockerOrchestrator', () => {
         );
         const env: string[] = dvmCall?.[0]?.Env ?? [];
         // BOTH env vars must be present — entrypoint picks the preferred one.
-        expect(env.some((e) => e.startsWith('DVM_ARWEAVE_JWK_B64='))).toBe(true);
+        expect(env.some((e) => e.startsWith('DVM_ARWEAVE_JWK_B64='))).toBe(
+          true
+        );
         expect(env).toContain('TURBO_TOKEN=legacy-jwk-json');
       } finally {
         if (originalToken === undefined) {

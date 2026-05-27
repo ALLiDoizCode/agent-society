@@ -54,7 +54,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
-import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools/pure';
+import {
+  generateSecretKey,
+  getPublicKey,
+  finalizeEvent,
+} from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 
 import {
@@ -115,19 +119,31 @@ function cleanupContainersAndVolumes(): void {
   for (const name of HS_CONTAINER_NAMES) {
     try {
       execSync(`docker rm -f ${name}`, { stdio: 'pipe', timeout: 30_000 });
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
   for (const vol of HS_VOLUMES) {
     try {
-      execSync(`docker volume rm -f ${vol}`, { stdio: 'pipe', timeout: 30_000 });
-    } catch { /* best-effort */ }
+      execSync(`docker volume rm -f ${vol}`, {
+        stdio: 'pipe',
+        timeout: 30_000,
+      });
+    } catch {
+      /* best-effort */
+    }
   }
   // Remove the Docker network so the next run gets a fresh network ID.
   // docker rm -f doesn't remove networks; stale IDs in Docker's state
   // cause "network <id> not found" on the next compose up.
   try {
-    execSync(`docker network rm townhouse-hs-net`, { stdio: 'pipe', timeout: 10_000 });
-  } catch { /* best-effort — network may not exist */ }
+    execSync(`docker network rm townhouse-hs-net`, {
+      stdio: 'pipe',
+      timeout: 10_000,
+    });
+  } catch {
+    /* best-effort — network may not exist */
+  }
 }
 
 async function fetchWithTimeout(
@@ -142,7 +158,9 @@ async function fetchWithTimeout(
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`[fetch ${label ?? url}] failed within ${budgetMs}ms: ${msg}`);
+    throw new Error(
+      `[fetch ${label ?? url}] failed within ${budgetMs}ms: ${msg}`
+    );
   }
 }
 
@@ -163,10 +181,14 @@ function buildSchemaValidators(): {
     'foreign-publish.schema.json'
   );
   const schema = JSON.parse(readFileSync(schemaPath, 'utf-8')) as object;
-  const ajv = new Ajv({ strict: false, allErrors: true, allowUnionTypes: true });
+  const ajv = new Ajv({
+    strict: false,
+    allErrors: true,
+    allowUnionTypes: true,
+  });
   addFormats(ajv);
   ajv.addSchema(schema, 'foreign-publish');
-  const get = (name: string): (data: unknown) => boolean => {
+  const get = (name: string): ((data: unknown) => boolean) => {
     const v = ajv.getSchema(`foreign-publish#/definitions/${name}`);
     if (!v) throw new Error(`schema definition missing: ${name}`);
     return v as unknown as (data: unknown) => boolean;
@@ -236,10 +258,19 @@ describe.skipIf(!shouldRun)(
       {
         const thisFile = fileURLToPath(import.meta.url);
         const leasesPath = join(
-          dirname(thisFile), '..', '..', '..', '..', 'deploy', 'akash', 'leases.json'
+          dirname(thisFile),
+          '..',
+          '..',
+          '..',
+          '..',
+          'deploy',
+          'akash',
+          'leases.json'
         );
         try {
-          const leases = JSON.parse(readFileSync(leasesPath, 'utf-8')) as Record<string, { url?: string }>;
+          const leases = JSON.parse(
+            readFileSync(leasesPath, 'utf-8')
+          ) as Record<string, { url?: string }>;
           const anvilUrl = leases['anvil']?.url;
           if (anvilUrl) {
             const configPath = join(tmpDirA, 'config.yaml');
@@ -253,11 +284,19 @@ describe.skipIf(!shouldRun)(
               `    tokenAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3"`,
               `    keyId: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"`,
             ].join('\n');
-            writeFileSync(configPath, existing + '\n' + chainSection + '\n', 'utf-8');
-            console.log(`[49.3] Injected Akash Anvil URL into config.yaml: ${anvilUrl}`);
+            writeFileSync(
+              configPath,
+              existing + '\n' + chainSection + '\n',
+              'utf-8'
+            );
+            console.log(
+              `[49.3] Injected Akash Anvil URL into config.yaml: ${anvilUrl}`
+            );
           }
         } catch (e) {
-          console.warn(`[49.3] Could not inject chainProviders: ${(e as Error).message}`);
+          console.warn(
+            `[49.3] Could not inject chainProviders: ${(e as Error).message}`
+          );
         }
       }
 
@@ -307,15 +346,28 @@ describe.skipIf(!shouldRun)(
           // Try to get EVM_RPC_URL from leases.json for the town relay
           const thisFile2 = fileURLToPath(import.meta.url);
           const leasesPath = join(
-            dirname(thisFile2), '..', '..', '..', '..', 'deploy', 'akash', 'leases.json'
+            dirname(thisFile2),
+            '..',
+            '..',
+            '..',
+            '..',
+            'deploy',
+            'akash',
+            'leases.json'
           );
           let evmRpcUrl = '';
           try {
-            const leases = JSON.parse(readFileSync(leasesPath, 'utf-8')) as Record<string, { url?: string }>;
+            const leases = JSON.parse(
+              readFileSync(leasesPath, 'utf-8')
+            ) as Record<string, { url?: string }>;
             evmRpcUrl = leases['anvil']?.url ?? '';
-          } catch { /* leases.json absent — town starts without EVM RPC */ }
+          } catch {
+            /* leases.json absent — town starts without EVM RPC */
+          }
 
-          console.log('[49.3] Starting town relay (--profile town up -d town)...');
+          console.log(
+            '[49.3] Starting town relay (--profile town up -d town)...'
+          );
           execSync(
             `docker compose -f "${townComposePath}" --profile town up -d town`,
             {
@@ -355,9 +407,13 @@ describe.skipIf(!shouldRun)(
           });
           // Brief wait for the BTP channel to be established
           await new Promise((r) => setTimeout(r, 3_000));
-          console.log('[49.3] Town relay ready — connector has route to g.townhouse.town');
+          console.log(
+            '[49.3] Town relay ready — connector has route to g.townhouse.town'
+          );
         } else {
-          console.warn('[49.3] compose file not found — town relay not started');
+          console.warn(
+            '[49.3] compose file not found — town relay not started'
+          );
         }
       }
 
@@ -380,8 +436,14 @@ describe.skipIf(!shouldRun)(
 
         const probeSocks5Connect = (): Promise<boolean> =>
           new Promise<boolean>((resolve) => {
-            const sock = createConnection({ host: PROXY_HOST, port: PROXY_PORT });
-            const cleanup = (result: boolean): void => { sock.destroy(); resolve(result); };
+            const sock = createConnection({
+              host: PROXY_HOST,
+              port: PROXY_PORT,
+            });
+            const cleanup = (result: boolean): void => {
+              sock.destroy();
+              resolve(result);
+            };
             const t = setTimeout(() => cleanup(false), PROBE_TIMEOUT_MS);
 
             let state: 'greeting' | 'connect' | 'done' = 'greeting';
@@ -405,7 +467,10 @@ describe.skipIf(!shouldRun)(
                   hostBuf.copy(req, 5);
                   req.writeUInt16BE(TARGET_PORT, 5 + hostBuf.length);
                   sock.write(req);
-                } else { clearTimeout(t); cleanup(false); }
+                } else {
+                  clearTimeout(t);
+                  cleanup(false);
+                }
               } else if (state === 'connect') {
                 state = 'done';
                 clearTimeout(t);
@@ -413,8 +478,13 @@ describe.skipIf(!shouldRun)(
                 cleanup(chunk[0] === 0x05 && chunk[1] === 0x00);
               }
             });
-            sock.on('error', () => { clearTimeout(t); cleanup(false); });
-            sock.on('timeout', () => { cleanup(false); });
+            sock.on('error', () => {
+              clearTimeout(t);
+              cleanup(false);
+            });
+            sock.on('timeout', () => {
+              cleanup(false);
+            });
             sock.setTimeout(PROBE_TIMEOUT_MS);
           });
 
@@ -426,20 +496,24 @@ describe.skipIf(!shouldRun)(
           const reachable = await probeSocks5Connect();
           const elapsed = Math.round((Date.now() - probeStart) / 1000);
           if (reachable) {
-            console.log(`[49.3] HS reachable via ATOR proxy after ${elapsed}s (attempt ${attempt})`);
+            console.log(
+              `[49.3] HS reachable via ATOR proxy after ${elapsed}s (attempt ${attempt})`
+            );
             probeOk = true;
             break;
           }
           if (attempt % 5 === 0) {
-            console.log(`[49.3] HS not yet reachable (attempt ${attempt}, ${elapsed}s elapsed) — waiting for ATOR introduction points…`);
+            console.log(
+              `[49.3] HS not yet reachable (attempt ${attempt}, ${elapsed}s elapsed) — waiting for ATOR introduction points…`
+            );
           }
           await new Promise((r) => setTimeout(r, 5_000));
         }
         if (!probeOk) {
           throw new Error(
             `[49.3] Local apex .anon HS (${hostnameA}) not reachable via public ATOR proxy` +
-            ` after ${Math.round(PROBE_BUDGET_MS / 1000)}s — introduction points did not` +
-            ` become stable. This is a known ATOR network intermittency issue for fresh HSs.`
+              ` after ${Math.round(PROBE_BUDGET_MS / 1000)}s — introduction points did not` +
+              ` become stable. This is a known ATOR network intermittency issue for fresh HSs.`
           );
         }
       }
@@ -464,7 +538,9 @@ describe.skipIf(!shouldRun)(
             });
             await waitForExit(down.process, 60_000);
           } catch (e) {
-            console.warn(`[49.3 afterAll] hs down failed: ${(e as Error).message}`);
+            console.warn(
+              `[49.3 afterAll] hs down failed: ${(e as Error).message}`
+            );
           }
         }
         cleanupContainersAndVolumes();
@@ -491,7 +567,9 @@ describe.skipIf(!shouldRun)(
       console.log('[49.3 Test 1] /healthz body:', JSON.stringify(body));
 
       // Strict schema validation
-      expect(validators.validateHealthz(body), 'healthz schema mismatch').toBe(true);
+      expect(validators.validateHealthz(body), 'healthz schema mismatch').toBe(
+        true
+      );
 
       // Semantic checks
       expect(body['anyoneReady']).toBe(true);
@@ -510,16 +588,26 @@ describe.skipIf(!shouldRun)(
           label: `/signer-info (attempt ${attempt})`,
         });
         if (res.ok) break;
-        console.log(`[49.3 Test 2] attempt=${attempt} status=${res.status} — retrying in 5s`);
+        console.log(
+          `[49.3 Test 2] attempt=${attempt} status=${res.status} — retrying in 5s`
+        );
         if (attempt < 3) await new Promise((r) => setTimeout(r, 5_000));
       }
-      expect(res.ok, `/signer-info HTTP ${res.status} after 3 attempts`).toBe(true);
+      expect(res.ok, `/signer-info HTTP ${res.status} after 3 attempts`).toBe(
+        true
+      );
       const body = (await res.json()) as Record<string, unknown>;
       console.log('[49.3 Test 2] /signer-info body:', JSON.stringify(body));
 
-      expect(validators.validateSignerInfo(body), 'signer-info schema mismatch').toBe(true);
+      expect(
+        validators.validateSignerInfo(body),
+        'signer-info schema mismatch'
+      ).toBe(true);
 
-      const transport = body['transport'] as { type: string; socksProxy: string };
+      const transport = body['transport'] as {
+        type: string;
+        socksProxy: string;
+      };
       // AC #6: SOCKS5 with socks5h:// scheme (DNS-leak prevention)
       expect(transport.type).toBe('socks5');
       expect(transport.socksProxy.startsWith('socks5h://')).toBe(true);
@@ -582,7 +670,11 @@ describe.skipIf(!shouldRun)(
             label: `POST /publish (attempt ${attempt})`,
           });
           bodyText = await res.text();
-          try { body = JSON.parse(bodyText) as Record<string, unknown>; } catch { /* fall through */ }
+          try {
+            body = JSON.parse(bodyText) as Record<string, unknown>;
+          } catch {
+            /* fall through */
+          }
           const attemptMs = Date.now() - attemptStart;
           console.log(
             `[49.3 Test 3] attempt=${attempt} status=${res.status} wall=${attemptMs}ms body=${bodyText.slice(0, 200)}`
@@ -594,11 +686,15 @@ describe.skipIf(!shouldRun)(
           if (res.status >= 500) continue;
           if (!(body['retryable'] === true)) break;
         } catch (err) {
-          console.log(`[49.3 Test 3] attempt=${attempt} fetch error: ${(err as Error).message}`);
+          console.log(
+            `[49.3 Test 3] attempt=${attempt} fetch error: ${(err as Error).message}`
+          );
         }
         const elapsed = Date.now() - startMs;
         if (elapsed + RETRY_INTERVAL_MS >= RETRY_BUDGET_MS) break;
-        console.log(`[49.3 Test 3] waiting ${RETRY_INTERVAL_MS}ms before retry (elapsed ${Math.round(elapsed/1000)}s)…`);
+        console.log(
+          `[49.3 Test 3] waiting ${RETRY_INTERVAL_MS}ms before retry (elapsed ${Math.round(elapsed / 1000)}s)…`
+        );
         await new Promise((r) => setTimeout(r, RETRY_INTERVAL_MS));
       }
 
@@ -607,8 +703,14 @@ describe.skipIf(!shouldRun)(
         `[49.3 Test 3] final status=${res?.status} total_wall=${wallMs}ms attempts=${attempt}`
       );
 
-      expect(res.status, `expected 202, got ${res.status}: ${bodyText.slice(0, 200)}`).toBe(202);
-      expect(validators.validatePublishSuccess(body), 'response schema mismatch').toBe(true);
+      expect(
+        res.status,
+        `expected 202, got ${res.status}: ${bodyText.slice(0, 200)}`
+      ).toBe(202);
+      expect(
+        validators.validatePublishSuccess(body),
+        'response schema mismatch'
+      ).toBe(true);
       expect(body['eventId']).toBe(event.id);
       _publishedResponse = body;
     }, 330_000); // 5.5 min: propagation wait (4.5 min) + overhead
@@ -641,17 +743,26 @@ describe.skipIf(!shouldRun)(
           if (trimmed[i] === lastChar) depth++;
           else if (trimmed[i] === openChar) {
             depth--;
-            if (depth === 0) { jsonBlock = trimmed.slice(i); break; }
+            if (depth === 0) {
+              jsonBlock = trimmed.slice(i);
+              break;
+            }
           }
         }
-        try { return JSON.parse(jsonBlock) as { peerId: string; status: string }[]; }
-        catch { return []; }
+        try {
+          return JSON.parse(jsonBlock) as { peerId: string; status: string }[];
+        } catch {
+          return [];
+        }
       };
 
       // Use the async CLI invocation with retry
       let podChan: { peerId: string; status: string } | undefined;
       while (Date.now() - pollStart < POLL_BUDGET_MS) {
-        const result = runCli('channels', { configDir: tmpDirA, extraArgs: ['--json'] });
+        const result = runCli('channels', {
+          configDir: tmpDirA,
+          extraArgs: ['--json'],
+        });
         const code = await waitForExit(result.process, 10_000);
         if (code !== 0) break;
         const stdout = result.stdout.join('');
@@ -665,14 +776,24 @@ describe.skipIf(!shouldRun)(
             if (trimmed[i] === lastChar) depth++;
             else if (trimmed[i] === openChar) {
               depth--;
-              if (depth === 0) { jsonBlock = trimmed.slice(i); break; }
+              if (depth === 0) {
+                jsonBlock = trimmed.slice(i);
+                break;
+              }
             }
           }
           try {
-            channels = JSON.parse(jsonBlock) as { peerId: string; status: string }[];
-          } catch { channels = []; }
+            channels = JSON.parse(jsonBlock) as {
+              peerId: string;
+              status: string;
+            }[];
+          } catch {
+            channels = [];
+          }
         }
-        console.log(`[49.3 Test 4] channels: ${channels.length} entries (elapsed ${Math.round((Date.now() - pollStart) / 1000)}s)`);
+        console.log(
+          `[49.3 Test 4] channels: ${channels.length} entries (elapsed ${Math.round((Date.now() - pollStart) / 1000)}s)`
+        );
         podChan = channels.find(
           (c) =>
             typeof c.peerId === 'string' &&
