@@ -231,10 +231,10 @@ export async function createTurboAdapter(
     };
   }
 
-  // ── Unauthenticated free tier (≤100 KB uploads, no wallet required) ─────
-  // TurboFactory.unauthenticated() is read-only (getBalance, getUploadCosts).
-  // For uploads the Turbo service accepts authenticated requests from zero-credit
-  // accounts for payloads ≤100KB; an ephemeral JWK is sufficient (no deposit).
+  // ── Ephemeral JWK free tier (≤100 KB uploads, no wallet required) ─────────
+  // TurboFactory.authenticated({privateKey: ephemeralJwk}) with a zero-balance
+  // account gives Turbo upload access without a deposit. The JWK is ephemeral —
+  // it rotates on every DVM restart and cannot be funded.
   const { TurboFactory } = await importTurbo();
   const { default: Arweave } = await import('arweave');
   const arweave = Arweave.init({});
@@ -462,8 +462,9 @@ async function main(): Promise<ToonNode> {
   console.log(`[DVM Entrypoint] Arweave credit source: ${sourceLabel}`);
   if (turboResult.source === 'unauthenticated-free-tier') {
     console.warn(
-      '[DVM Entrypoint] WARNING: No Arweave credentials — uploads capped at ~100KB (free tier).' +
-      " Run 'townhouse credits buy --token sol --amount <n>' to fund larger uploads."
+      '[DVM Entrypoint] WARNING: No Arweave credentials — using ephemeral JWK for free-tier uploads (≤100KB).' +
+      ' Set DVM_ARWEAVE_JWK_B64 with a funded wallet to lift the size limit.' +
+      " Do NOT fund the ephemeral address — it rotates on every DVM restart."
     );
   }
   if (turboResult.arweaveAddress) {

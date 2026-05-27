@@ -31,12 +31,7 @@ jobs:
       - name: Build townhouse
         run: pnpm --filter @toon-protocol/townhouse build
 
-      - name: Bring up local-HS infra
-        run: bash scripts/townhouse-e2e-local-hs.sh up
-
+      # townhouse-dvm-arweave-e2e.test.ts is self-contained: manages its own hs up/down in beforeAll/afterAll.
+      # Do NOT run townhouse-e2e-local-hs.sh up before this step.
       - name: Run 49.5 gate
         run: bash scripts/townhouse-e2e-real-hs.sh
-
-      - name: Tear down infra
-        if: always()
-        run: bash scripts/townhouse-e2e-local-hs.sh down-v

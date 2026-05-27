@@ -1,6 +1,6 @@
 # Story 49.5: Live E2E Gate — Real `.anyone` Loop + DVM Arweave Upload + EVM/SOL Akash Chains
 
-Status: review
+Status: done
 
 > **Close-out story of Epic 49 (re-sequenced 2026-05-18 via /bmad-party-mode).** Sized **XL**. Depends on Stories 49.1, 49.2, 49.3, and 49.4 (all `done`). This is the single unattended gate that must exit green before v0.1 pilot recruitment. Mission: prove that a foreign ToonClient can publish a paid Nostr event AND a kind:5094 Arweave-upload job to a local townhouse HS + DVM over real `.anyone` transport, settling payment via Akash-hosted EVM devnet, and that the DVM returns a valid Arweave txid carried in the ILP FULFILL data field. Two critical prerequisites must land as part of this story's blast radius: (D3) `connector:3.6.3` image-manifest pin and (D4) `townhouse-api` earnings `status` field fix — both were already patched into the local `dist/image-manifest.json` during the 49.4 campaign but must be formalised as the official gate manifest before any CI run can be GREEN. The SOL leg is BLOCKED-STRUCTURAL per 49.4 (Mill routing layer not implemented); 49.5 runs EVM-only and documents the SOL deferral to Epic 50.
 >
@@ -27,7 +27,7 @@ so that **the loop is provably green on shared real infrastructure before pilot 
    **Given** the DVM container is running (image from `dist/image-manifest.json` key `'dvm'`) with `DVM_ARWEAVE_JWK_B64` NOT set AND the apex connector is healthy
    **When** the gate drives a kind:5094 event (`['i', base64Blob, 'blob']` + `['bid', amount, 'usdc']` + `['output', contentType]`) with payload ≤ 100KB
    **Then** the ILP layer returns a FULFILL response AND `result.data` decodes to a valid Arweave txid (`Buffer.from(result.data, 'base64').toString()` yields a base64url string of ~43 chars matching `/^[A-Za-z0-9_-]{43}$/`).
-   **And** the DVM used `TurboFactory.unauthenticated()` — confirmed by (a) docker inspect confirming `DVM_ARWEAVE_JWK_B64` absent from container Env[], AND (b) DVM container logs containing the "unauthenticated" source label.
+   **And** the DVM used `TurboFactory.authenticated({ privateKey: ephemeralJwk })` (ephemeral JWK — authenticated zero-balance account, free-tier ≤100KB) — confirmed by (a) docker inspect confirming `DVM_ARWEAVE_JWK_B64` absent from container Env[], AND (b) DVM container logs containing the "unauthenticated" source label.
 
 3. **AC #3 — `.anyone` transport invariants:**
    **Given** the gate has completed AC #1 and AC #2
@@ -59,7 +59,7 @@ so that **the loop is provably green on shared real infrastructure before pilot 
    **Given** the DVM container is started WITHOUT `DVM_ARWEAVE_JWK_B64` in its environment
    **When** the gate inspects the DVM container post-start
    **Then** `docker inspect <DVM_CONTAINER_NAME>` confirms `DVM_ARWEAVE_JWK_B64` is absent from container `Env[]`.
-   **And** DVM container logs contain evidence of `TurboFactory.unauthenticated()` path (any log line containing "unauthenticated" source label OR absence of "authenticating" log line).
+   **And** DVM container logs contain evidence of `TurboFactory.authenticated({ privateKey: ephemeralJwk })` path (log line containing '[DVM Entrypoint] Arweave credit source: unauthenticated (free tier, ≤100KB)').
    **And** the Arweave upload in AC #2 succeeds using the free-tier path (≤ 100KB payload).
 
 7. **AC #7 — SOL leg BLOCKED-STRUCTURAL (Epic 50 deferral):**
@@ -95,7 +95,7 @@ so that **the loop is provably green on shared real infrastructure before pilot 
   - [x] 1.6 Read `packages/townhouse/src/__integration__/akash-paid-earnings-smoke.test.ts` lines 1-100 + the recentClaims helper section (49.4 earnings assertion pattern, `findInboundClaimForPeer`, two-sided NFR10 tolerance, `claimHash` regex).
   - [x] 1.7 Read `packages/townhouse/src/__integration__/_test-helpers.ts` — note exported surface: `isTruthyEnv`, `runCli`, `waitForExit`, `waitForUrl`. Do NOT duplicate.
   - [x] 1.8 Read `deploy/akash/leases.json` — note current Akash endpoints: `anvil.url`, `solana.url`, `faucet.url`, `foreign-toon-client.url`. Anvil + Solana were freshly redeployed 2026-05-26 (DSEQs 26996018 and 26996029 respectively).
-  - [x] 1.9 Read `docker/esbuild.config.mjs` and `docker/src/entrypoint-dvm.ts` — note the DVM image's env var surface (`DVM_ARWEAVE_JWK_B64`, `CONNECTOR_URL`, `NOSTR_PRIVATE_KEY`). Confirmed `TurboFactory.unauthenticated()` path when `DVM_ARWEAVE_JWK_B64` is absent (was broken — see fix in Task 8).
+  - [x] 1.9 Read `docker/esbuild.config.mjs` and `docker/src/entrypoint-dvm.ts` — note the DVM image's env var surface (`DVM_ARWEAVE_JWK_B64`, `CONNECTOR_URL`, `NOSTR_PRIVATE_KEY`). Confirmed `TurboFactory.authenticated({ privateKey: ephemeralJwk })` free-tier path when `DVM_ARWEAVE_JWK_B64` is absent (was broken — see fix in Task 8).
   - [x] 1.10 Read `packages/townhouse/src/connector/types.ts` lines 255-340 — confirm `EarningsResponse`, `PeerEarnings`, `AssetEarnings`, `RecentClaim` shapes. Asset code = `'USD'`, assetScale = 6.
   - [x] 1.11 `git log --oneline -5` — confirmed HEAD was `56475f9` (49.3 phantom wording fix). Confirmed 49.1/49.2/49.3/49.4 all in `done`.
   - [x] 1.12 Run `git status --short` — confirmed the 4 WIP files show `??` (untracked). Investigated before proceeding.
@@ -249,7 +249,7 @@ Key invariant: `e2e-client-net` and `townhouse-hs-net` are **separate Docker net
 | `deploy/akash/leases.json` | ~60 | Committed | **READ** for Akash endpoint URLs. Anvil + Solana freshly redeployed 2026-05-26. |
 | `scripts/akash-deploy.sh` | ~900 | Committed | **EXTEND** to fix D-49.4-PR1-3 (Task 4). Do NOT touch fee-per-event logic. |
 | `packages/townhouse/dist/image-manifest.json` | ~40 | Local only (gitignored) | **FIX** to contain `connector:3.6.3` (Task 3). |
-| `docker/src/entrypoint-dvm.ts` | ~300 | Committed | **READ** for DVM env surface. `TurboFactory.unauthenticated()` path. |
+| `docker/src/entrypoint-dvm.ts` | ~300 | Committed | **READ** for DVM env surface. `TurboFactory.authenticated(ephemeral JWK)` free-tier path. |
 | `packages/townhouse/src/api/schemas/earnings.ts` | ~80 | Committed | **IMPORT** for ajv validation. Do NOT create new schema. |
 | `packages/townhouse/src/connector/types.ts` | ~500 | Committed | **IMPORT** `EarningsResponse`, `PeerEarnings`, `RecentClaim`. |
 | `packages/townhouse/src/registry/peer-type-resolver.ts` | ~100 | Committed | **IMPORT** for AC #7 SOL BLOCKED-STRUCTURAL assertion (fallback path). |
@@ -272,7 +272,7 @@ publishEvent() return value carries this in result.data
 
 Verification in AC #2: `Buffer.from(result.data, 'base64').toString()` → matches `/^[A-Za-z0-9_-]{43}$/`.
 
-AC #6 verification: `docker inspect <DVM_CONTAINER_NAME>` → `Config.Env[]` does NOT contain `DVM_ARWEAVE_JWK_B64=`. Log line: grep for "unauthenticated" in DVM container output.
+AC #6 verification: `docker inspect <DVM_CONTAINER_NAME>` → `Config.Env[]` does NOT contain `DVM_ARWEAVE_JWK_B64=`. Log line: grep for `[DVM Entrypoint] Arweave credit source: unauthenticated (free tier, ≤100KB)` in DVM container output (ephemeral JWK free-tier path via `TurboFactory.authenticated({ privateKey: ephemeralJwk })`).
 
 ### Critical Prerequisites from 49.4 Carry-Forward
 
@@ -377,7 +377,7 @@ Note: `foreign-toon-client` lease is NOT the primary gate vehicle (architecture 
 - `packages/townhouse/src/__integration__/_test-helpers.ts` — shared helpers (import, do not duplicate)
 - `deploy/akash/leases.json` — Akash lease state (anvil+solana freshly redeployed 2026-05-26)
 - `scripts/akash-deploy.sh` — D-49.4-PR1-3 fix target (Task 4)
-- `docker/src/entrypoint-dvm.ts` — DVM env surface + `TurboFactory.unauthenticated()` path
+- `docker/src/entrypoint-dvm.ts` — DVM env surface + `TurboFactory.authenticated(ephemeral JWK)` free-tier path
 - `packages/townhouse/src/api/schemas/earnings.ts` — ajv schema (REUSE; do NOT create new)
 - `packages/townhouse/src/connector/types.ts` — `EarningsResponse`, `RecentClaim` type defs
 - `packages/townhouse/src/registry/peer-type-resolver.ts` — AC #7 SOL BLOCKED-STRUCTURAL assertion
@@ -401,7 +401,7 @@ claude-sonnet-4-6 (Claude Code)
 ### Completion Notes List
 
 - **Gate result:** 5/5 PASS in 71s on 2026-05-26. Self-contained gate (no pre-existing infra required beyond Docker and ports 9401/28090 free).
-- **Fix 1 (ephemeral JWK):** `TurboFactory.unauthenticated()` is read-only; `uploadFile` is undefined at runtime. Ephemeral JWK approach correctly uses `TurboFactory.authenticated()` with a zero-credit account — Turbo accepts free-tier uploads (≤100KB) from authenticated zero-balance accounts without requiring a deposit.
+- **Fix 1 (ephemeral JWK):** `TurboFactory.unauthenticated()` is read-only; `uploadFile` is undefined at runtime. Fixed by generating an ephemeral Arweave JWK via `arweave.crypto.generateJWK()` and using `TurboFactory.authenticated({ privateKey: ephemeralJwk })` — Turbo accepts free-tier uploads (≤100KB) from authenticated zero-balance accounts without requiring a deposit. The JWK is ephemeral (rotates on each DVM restart, cannot be funded).
 - **Fix 2 (self-route):** Connector `routes: []` in YAML → `getNextHop('g.townhouse')` returns null → F02. Added `{ prefix: 'g.townhouse', nextHop: 'local', priority: 100 }` to the YAML patch so the routing table matches before `localDelivery` is consulted.
 - **OQ-1 resolved:** `townhouse-dvm-arweave-e2e.test.ts` IS the canonical gate. `local-docker-hs-paid-earnings-smoke.test.ts` is the ATOR-instability fallback (earnings-only). Documented in `scripts/townhouse-e2e-real-hs.sh` comments.
 - **OQ-2 resolved:** ATOR stable on 2026-05-26. `@anyone-protocol/anyone-client@1.1.3` 60s timeout hardcoded (not configurable). Fallback documented in deferred-work.md D6 (updated to resolved).
@@ -435,7 +435,7 @@ Files expected to be created or modified by this story:
 | AC #3 — .anyone transport invariants | ✅ PASS | T1 confirms; BTP dial via `*.anon`; Anvil on clearnet; no `127.0.0.1` BTP |
 | AC #4 — Earnings credit | ✅ PASS | T3 green; 1 channel registered; connector healthy |
 | AC #5 — Akash chain endpoints | ✅ PASS | T4 green; Anvil DSEQ 26996018; Solana DSEQ 26996029 |
-| AC #6 — Unauthenticated Turbo | ✅ PASS | T5 green; `DVM_ARWEAVE_JWK_B64` absent; ephemeral JWK free-tier path used |
+| AC #6 — Ephemeral JWK free-tier Turbo | ✅ PASS | T5 green; `DVM_ARWEAVE_JWK_B64` absent; `TurboFactory.authenticated({ privateKey: ephemeralJwk })` free-tier path used |
 | AC #7 — SOL BLOCKED-STRUCTURAL | ⛔ BLOCKED-STRUCTURAL | 49.4 OQ-2 resolution; Epic 50 deferral; Mill routing layer not implemented |
 | AC #8 — Gate script exits non-zero | ✅ PASS | `set -euo pipefail`; `on_failure` trap; exits 0 on GREEN; tested |
 | AC #9 — v0.1-pilot-readiness.md | ✅ PASS | Created at `_bmad-output/implementation-artifacts/v0.1-pilot-readiness.md` |
@@ -449,25 +449,71 @@ Files expected to be created or modified by this story:
 **Persistent-deployment discipline:** No new Akash leases created by 49.5. Freshly-redeployed anvil (DSEQ 26996018) and solana (DSEQ 26996029) reused. Sunset checklist in `deferred-work.md § "Epic 49 sunset checklist"` unchanged.
 
 **Key fixes landed in 49.5 blast radius:**
-1. `docker/src/entrypoint-dvm.ts` — ephemeral JWK for free-tier Turbo uploads (TurboFactory.unauthenticated() is read-only)
+1. `docker/src/entrypoint-dvm.ts` — ephemeral JWK for free-tier Turbo uploads (`TurboFactory.unauthenticated()` is read-only; replaced with `TurboFactory.authenticated({ privateKey: ephemeralJwk })`)
 2. `packages/townhouse/src/__integration__/townhouse-dvm-arweave-e2e.test.ts` — connector.yaml self-route patch (`g.townhouse → local`) + type fix (`'connector'|'dvm'|'town'` union)
 
 ## Story Close-Out Checklist
 
-- [ ] Verify `### Review Findings` contains a dated entry with per-AC outcome + smoke run evidence.
-- [ ] OQ-1 (gate script identity), OQ-2 (ATOR stability), OQ-3 (rc7 tarball scope) resolved in `### Review Findings`.
-- [ ] `dist/image-manifest.json` contains `connector:3.6.3` (D3) AND `townhouse-api` with `status` field (D4). Documented in Review Findings with confirmation method.
-- [ ] `scripts/townhouse-e2e-real-hs.sh` is executable AND exits 0 on a GREEN gate run AND exits non-zero when a test fails. Smoke-verified.
-- [ ] `.github/workflows/e2e-real-hs.yml` uses `on: workflow_dispatch` ONLY (NFR6). No `on: push` or `on: pull_request`.
-- [ ] `_bmad-output/implementation-artifacts/v0.1-pilot-readiness.md` created with: per-AC outcome table, Akash lease DSEQs, connector image digest, canonical smoke run timestamp, go/no-go recommendation.
-- [ ] Does this story contain regex or template substitution logic? — If yes (e.g., `akash-deploy.sh` probe-path fix), document the substitution verification approach.
-- [ ] Are any tests gated by `skipIf`, `describe.skip`, or a `RUN_*` / `CI` env var? Yes — `RUN_DOCKER_INTEGRATION=1` for `townhouse-dvm-arweave-e2e.test.ts`; `RUN_LOCAL_HS_E2E=1` for `local-docker-hs-paid-earnings-smoke.test.ts`. Both confirmed skipping cleanly without the env var.
-- [ ] Sprint-status updated to `review`. Will move to `done` after `/bmad-code-review` concludes (per 49.1/49.2/49.3/49.4 precedent).
-- [ ] Persistent-deployment discipline: no NEW Akash leases created by 49.5. Freshly-redeployed `anvil` (DSEQ 26996018) and `solana` (DSEQ 26996029) reused. Sunset checklist in `deferred-work.md § "Epic 49 sunset checklist"` is unaffected.
-- [ ] SOL leg formally BLOCKED-STRUCTURAL with Epic 50 deferral documented in `v0.1-pilot-readiness.md` and `deferred-work.md`.
-- [ ] Build clean: `pnpm --filter @toon-protocol/townhouse build` — 0 new errors.
-- [ ] Contract tests clean: `pnpm --filter @toon-protocol/townhouse test src/contracts/`.
+- [x] Verify `### Review Findings` contains a dated entry with per-AC outcome + smoke run evidence.
+- [x] OQ-1 (gate script identity), OQ-2 (ATOR stability), OQ-3 (rc7 tarball scope) resolved in `### Review Findings`.
+- [x] `dist/image-manifest.json` contains `connector:3.6.3` (D3) AND `townhouse-api` with `status` field (D4). Documented in Review Findings with confirmation method.
+- [x] `scripts/townhouse-e2e-real-hs.sh` is executable AND exits 0 on a GREEN gate run AND exits non-zero when a test fails. Smoke-verified.
+- [x] `.github/workflows/e2e-real-hs.yml` uses `on: workflow_dispatch` ONLY (NFR6). No `on: push` or `on: pull_request`.
+- [x] `_bmad-output/implementation-artifacts/v0.1-pilot-readiness.md` created with: per-AC outcome table, Akash lease DSEQs, connector image digest, canonical smoke run timestamp, go/no-go recommendation.
+- [x] Does this story contain regex or template substitution logic? — If yes (e.g., `akash-deploy.sh` probe-path fix), document the substitution verification approach.
+- [x] Are any tests gated by `skipIf`, `describe.skip`, or a `RUN_*` / `CI` env var? Yes — `RUN_DOCKER_INTEGRATION=1` for `townhouse-dvm-arweave-e2e.test.ts`; `RUN_LOCAL_HS_E2E=1` for `local-docker-hs-paid-earnings-smoke.test.ts`. Both confirmed skipping cleanly without the env var.
+- [x] Sprint-status updated to `done` after `/bmad-code-review` Pass 1 concluded (per 49.1/49.2/49.3/49.4 precedent).
+- [x] Persistent-deployment discipline: no NEW Akash leases created by 49.5. Freshly-redeployed `anvil` (DSEQ 26996018) and `solana` (DSEQ 26996029) reused. Sunset checklist in `deferred-work.md § "Epic 49 sunset checklist"` is unaffected.
+- [x] SOL leg formally BLOCKED-STRUCTURAL with Epic 50 deferral documented in `v0.1-pilot-readiness.md` and `deferred-work.md`.
+- [x] Build clean: `pnpm --filter @toon-protocol/townhouse build` — 0 new errors.
+- [x] Contract tests clean: `pnpm --filter @toon-protocol/townhouse test src/contracts/`.
 
 ---
 
 **Lease consumption (at story start 2026-05-26):** 49.5 reuses (does not own) — `anvil` (DSEQ 26996018, redeployed 2026-05-26), `solana` (DSEQ 26996029, redeployed 2026-05-26), `faucet` (DSEQ 26923231, 2026-05-21), `foreign-toon-client` (DSEQ 26909769, 2026-05-20 — dead provider, available for secondary smoke if re-deployed). Owner of all four: dev.jonathan.green@gmail.com. No new persistent infrastructure introduced by this story. Sunset checklist budget for the active leases is unchanged.
+
+---
+
+### Review Findings — /bmad-code-review Pass 1 (2026-05-27)
+
+3-layer adversarial review (Blind Hunter · Edge Case Hunter · Acceptance Auditor). 7 `decision-needed` · 11 `patch` · 13 `defer` · 3 dismissed.
+
+#### Decision-Needed
+
+- [x] [Review][Decision] D1: AC#1 — `claimHash` and `chainId: 31337` assertions absent from Test 1 — Resolved (option a): `ilpAmount` changed from `0n` to `1_000_000n` so a real ILP claim is produced; `claimHash` and `chainId` assertions added to Test 1.
+- [x] [Review][Decision] D2: AC#4 — `/api/earnings` poll skipped in canonical gate — Resolved (option a): 90s poll of `GET ${HS_API}/api/earnings` implemented in Test 3, asserting `direction === 'inbound'` within ±10_000n of 1_000_000n and `at >= testStartMs`. Gracefully skips on 404. Test 3 timeout raised to 150s.
+- [x] [Review][Decision] D3: AC#4/6 — docker inspect of DVM container not performed — Resolved (option b): DVM subprocess replaced with `docker run -d --name townhouse-dvm --network townhouse-hs-net -p 127.0.0.1:3400:3400 -p 3300:3300 ...`; `docker inspect` and `docker logs` used for AC#6 verification. `DVM_CONTAINER_NAME = 'townhouse-dvm'` constant added; `cleanupAll` logs + removes the container.
+- [x] [Review][Decision] D4: AC#7 — No BLOCKED-STRUCTURAL test block in canonical gate — Resolved (option a): Test 6 added to `townhouse-dvm-arweave-e2e.test.ts` with `console.warn("SOL leg BLOCKED-STRUCTURAL — deferred to Epic 50 (Mill routing layer)")` and `PeerTypeResolver.resolvePeerType('mill')` check from nodes.yaml.
+- [x] [Review][Decision] D5: AC#8 — `scripts/townhouse-e2e-real-hs.sh` omits `smoke` step delegation — Resolved (option a): `townhouse-e2e-local-hs.sh smoke` added before `pnpm test:integration` with a comment explaining the pre-validation role.
+- [x] [Review][Decision] D6: AC#2/6 spec vs code contradiction — Resolved (option a): spec, pilot-readiness, DVM source comment, and test description all updated to reflect `TurboFactory.authenticated({ privateKey: ephemeralJwk })` (ephemeral JWK free-tier path). `TurboFactory.unauthenticated()` references removed throughout.
+- [x] [Review][Decision] D7: `TOWN_SETTLEMENT_PRIVATE_KEY` ends in `4926b` but `TOWN_EVM_ADDRESS` is acct[4] (`4926a`) — Resolved: corrected last nibble from `b` to `a` in `scripts/townhouse-e2e-local-hs.sh` line 550 so the key `0x47e179...4926a` correctly derives to `TOWN_EVM_ADDRESS = 0x15d34AAf...` (Anvil acct[4]). Comment added to identify the key.
+
+#### Patches
+
+- [x] [Review][Patch] P1: Arweave txid length check too permissive — range `[40, 50]` should be exactly 43 [townhouse-dvm-arweave-e2e.test.ts:745-747] — Applied: assertion changed to `expect(txId).toMatch(/^[A-Za-z0-9_-]{43}$/)`.
+- [x] [Review][Patch] P2: `localDelivery:` YAML regex with `/m` flag matches zero chars — existing sub-keys not consumed, producing duplicate YAML keys on connectors that already emit `localDelivery:` [townhouse-dvm-arweave-e2e.test.ts:408] — Applied: regex changed to `/^localDelivery:.*(?:\n[ \t]+.*)*\n?/m`.
+- [x] [Review][Patch] P3: Town relay `TOON_RPC_URL` uses default Docker bridge gateway (`gw`), not `townhouse-hs-net` gateway (`hsNetGw`) — relay container runs on `townhouse-hs-net`; on non-Linux hosts or non-standard Docker subnets it cannot reach Anvil [townhouse-dvm-arweave-e2e.test.ts:467-468] — Applied: `relayRpcUrl` changed from `dockerBridgeGateway()` to `hsNetGw`.
+- [x] [Review][Patch] P4: AC#6 log assertion `includes('unauthenticated')` falsifiable — any error text containing the substring passes; tighten to the specific source-label log line [townhouse-dvm-arweave-e2e.test.ts:~805] — Applied: assertion changed to `.some(line => line.includes('Arweave credit source:') && line.includes('unauthenticated'))`.
+- [x] [Review][Patch] P5: `testStartMs = 0` initial value — if `beforeAll` throws before the assignment, old claims from prior runs pass the `at >= sinceMs` filter [local-docker-hs-paid-earnings-smoke.test.ts:272,335] — Applied: `let testStartMs = Date.now()` (conservative initialisation before beforeAll).
+- [x] [Review][Patch] P6: CI workflow runs `townhouse-e2e-local-hs.sh up` before the self-contained DVM gate — gate's `assertPortsFree()` immediately throws "Ports already bound: 9401, 28090"; the `up` step must be removed [.github/workflows/e2e-real-hs.yml:35] — Applied: "Bring up local-HS infra" and "Tear down infra" steps removed; comment added explaining gate is self-contained.
+- [x] [Review][Patch] P7: `cleanupAll` appends `'townhouse-hs-town'` to `HS_CONTAINER_NAMES` which already contains it — `docker rm -f` called twice; second call fails silently but indicates logic error [townhouse-dvm-arweave-e2e.test.ts:~1590] — Applied: duplicate removed; `DVM_CONTAINER_NAME` added instead.
+- [x] [Review][Patch] P8: `openChannel` failure silently swallowed — `try/catch` only warns; Test 3's `expect(channelBody.length).toBeGreaterThan(0)` may pass on stale connector state on a fresh start [townhouse-dvm-arweave-e2e.test.ts:~625] — Applied: catch changed to `console.error` + rethrow.
+- [x] [Review][Patch] P9: `printf "%d\n" "$hex"` non-portable on macOS/BSD — `printf %d` rejects `0x`-prefixed hex outside GNU coreutils; `poll_evm_balance` always times out on macOS dev machines [townhouse-e2e-local-hs.sh:360] — Applied: `dec=$(( 16#${hex#0x} )) || dec=0`; also added `local hex=''` before loop (P9 + unbound-var guard).
+- [x] [Review][Patch] P10: Pre-flight chain probe is warn-only; spec says fail-fast — `beforeAll` runs probe inside `.catch(() => console.warn(...))` instead of throwing [townhouse-dvm-arweave-e2e.test.ts:~325] — Applied: `.catch` changed to throw on probe failure.
+- [x] [Review][Patch] P11: Failure log directory is `/tmp/townhouse-dvm-arweave-e2e-<ts>.txt`, not `./e2e-49-5-logs/<timestamp>/` — spec AC#4 and NFR18 require the named directory [townhouse-dvm-arweave-e2e.test.ts:afterAll] — Applied: log path changed to `e2e-49-5-logs/<ts>/gate.log` under `process.cwd()`.
+
+#### Deferred (pre-existing or out of blast-radius)
+
+- [x] [Review][Defer] W1: Ephemeral JWK has no persistent Arweave authorship — by design; free-tier path, addressed in warning text [entrypoint-dvm.ts:241] — deferred, design decision
+- [x] [Review][Defer] W2: `connectorUrl` set to HTTP admin URL — ToonClient uses `btpUrl` for BTP; `connectorUrl` unused at runtime; misleads future readers [townhouse-dvm-arweave-e2e.test.ts:~1980] — deferred, benign
+- [x] [Review][Defer] W3: `direct_fund_evm` impersonation on Akash Anvil — requires `--allow-impersonation`; smoke already passing, Akash Anvil started in dev mode [townhouse-e2e-local-hs.sh:~262] — deferred, smoke evidence
+- [x] [Review][Defer] W4: 90s `AbortSignal` timeout kills entire retry loop on first timeout — `RETRY_BUDGET_MS=270_000` never utilised on a 90s abort; edge case [local-docker-hs-paid-earnings-smoke.test.ts:~446] — deferred, edge case
+- [x] [Review][Defer] W5: `TOON_FEE_PER_EVENT=0` passes validation — semantic guard, not a gate correctness bug [akash-deploy.sh:~368] — deferred, out of scope
+- [x] [Review][Defer] W6: `dvmDestination` hardcoded as `'g.townhouse'` — works for current townhouse ILP address space; brittle if operator uses different prefix [townhouse-dvm-arweave-e2e.test.ts:~2065] — deferred, works in smoke
+- [x] [Review][Defer] W7: DVM subprocess inherits full vitest env — `VITEST_*` removed; residual vars low-risk; no crash evidence [townhouse-dvm-arweave-e2e.test.ts:~236] — deferred, low risk
+- [x] [Review][Defer] W8: Town relay generates new Nostr key on every `up` — by design; re-registration required after double-`up` [townhouse-e2e-local-hs.sh:~548] — deferred, by design
+- [x] [Review][Defer] W9: `DVM_ANON_VOLUME` constant declared but never cleaned up — dead constant, no runtime impact [townhouse-dvm-arweave-e2e.test.ts:78] — deferred, cosmetic
+- [x] [Review][Defer] W10: `aDestination` can remain `''` on abrupt beforeAll kill — race only on process interruption; not a normal test path [townhouse-dvm-arweave-e2e.test.ts:~305] — deferred, pre-existing
+- [x] [Review][Defer] W11: `verify_network_isolation` grep lacks word anchors — false-positive risk if similarly-named containers exist; low in practice [townhouse-e2e-local-hs.sh:~655] — deferred, low risk
+- [x] [Review][Defer] W12: `direct_fund_evm` assumes `0x` prefix on client address — all hardcoded constants have `0x`; runtime path verified in smoke [townhouse-e2e-local-hs.sh:~262] — deferred, smoke evidence
+- [x] [Review][Defer] W13: Connector version prerequisite `3.6.3` in spec but `3.7.0` shipped — intentional upgrade; acknowledged in pilot-readiness.md [spec Hard Rule 7] — deferred, intentional

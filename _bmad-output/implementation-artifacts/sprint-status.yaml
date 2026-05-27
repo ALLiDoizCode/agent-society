@@ -593,10 +593,22 @@ development_status:
   #                 no app-layer idempotency — trust Nostr event-id dedup)
   #   49.4 (was 49.2) — Paid Packet → Earnings Receipt (EVM + SOL on Akash)
   #   49.5 (was 49.3) — Live E2E Gate — Real-`.anyone` Loop on Akash EVM + SOL
-  epic-49: in-progress
+  epic-49: done  # 2026-05-27: all 5 stories done; /bmad-code-review Pass 1 complete; v0.1-pilot-readiness.md GO
   49-1-toon-client-foreign-townhouse-hs-smoke: done  # 2026-05-18 Pass 2 code review applied 44 patches + 2 follow-ups; round-9b smoke 7/7 PASS in 117.06s
   49-2-akash-devnet-faucets-and-ui: done  # 2026-05-19 code review Pass 1 complete: 15 patches applied + chains redeployed (Anvil DSEQ 26888410, Solana DSEQ 26888424, Faucet DSEQ 26888459 at vpu5jnfjdde4154qpl0l1dhb54.ingress.boogle.cloud); smoke re-run 7/7 PASS in 16.23s. F4 resolved.
   49-3-persistent-akash-foreign-client-pod: done  # 2026-05-19 Smoke 7/7 PASS in 75.59s. AC #1 /healthz PASS (anyoneReady=true, evm=100ETH, sol=1SOL), AC #2 POST /publish 202 in 14314ms (first attempt, no retries), AC #4 channel peerId===podEvmAddr PASS, AC #5 peer-type external PASS (fallback), AC #6 socks5h:// PASS, AC #9 rate-limit 429 PASS, containers PASS. Key fixes this session: btpPeerId=evmAddress (was nostrPubkey), ilpAmount=0n in publishEvent (bypasses connector→relay channel requirement — connector skips per-packet claim for amount=0), 45s publish deadline (beats nginx 60s), schema added nostrPubkey, town relay APEX_EVM_ADDRESS=0x90F79bf6... (matches pod TARGET_SETTLEMENT_ADDRESS), FEE_PER_EVENT=0. Pod live DSEQ=26900019 at https://orq1lkcdutarlaeicvtt51ltno.ingress.akash-palmito.org (palmito, ator-public mode, proxy=socks5h://5.78.181.0:9052, evm=0xb872E094...).
   49-4-paid-packet-earnings-receipt-evm-and-sol-on-akash: done  # adversarial code review pass 1 complete 2026-05-20; AC #1 EVM leg BLOCKED-PARTIAL (round-6 recentClaims evidence real: publish 202+claimHash+1_000_000 USDC raw units; patched assertion + 4-provider Akash failure cascade blocked GREEN re-run; GREEN gate inherited by 49.5); AC #2 SOL leg BLOCKED-STRUCTURAL (Mill routing layer unimplemented; filed as 49.5 close-out blocker); 40 patches + 5 decisions resolved; 10 items deferred to deferred-work.md
-  49-5-live-e2e-gate-real-anyone-loop-akash-evm-sol: review  # 2026-05-26 5/5 PASS 71s; DVM txid ENO_lSHMz672WRtBru3PFHVKPCGZyYkLzuRCxPHRuus; 2 fixes: ephemeral JWK (TurboFactory.unauthenticated read-only), connector.yaml self-route g.townhouse→local (F02 without it); SOL BLOCKED-STRUCTURAL Epic 50; v0.1-pilot-readiness.md GO
+  49-5-live-e2e-gate-real-anyone-loop-akash-evm-sol: done  # 2026-05-26 5/5 PASS 71s; DVM txid ENO_lSHMz672WRtBru3PFHVKPCGZyYkLzuRCxPHRuus; 2 fixes: ephemeral JWK (TurboFactory.unauthenticated read-only), connector.yaml self-route g.townhouse→local (F02 without it); SOL BLOCKED-STRUCTURAL Epic 50; v0.1-pilot-readiness.md GO; /bmad-code-review Pass 1 2026-05-27: 7 decisions + 11 patches applied (D1–D7, P1–P11); 13 deferred to deferred-work.md
   epic-49-retrospective: optional
+
+  # Epic 50: SOL Settlement via Mill Routing
+  # Closes BLOCKED-STRUCTURAL from Epic 49.4 + 49.5 (Test 6). Mill is production-ready;
+  # gap is swapPairs provisioning + E2E harness + real streamSwap to g.townhouse.mill.
+  # 3 stories, critical path 50.1 → 50.2 → 50.3. No connector cross-repo work needed.
+  # Spec: _bmad-output/planning-artifacts/epics-townhouse-hs-v1.md § Epic 50
+  # Akash Solana devnet: DSEQ 26996029 (live). streamSwap: packages/sdk/src/stream-swap.ts
+  epic-50: backlog
+  50-1-mill-hs-mode-swap-pair-provisioning: backlog
+  50-2-mill-container-streamswap-driver-e2e-harness: backlog
+  50-3-sol-settlement-e2e-gate-remove-blocked-structural: backlog
+  epic-50-retrospective: optional

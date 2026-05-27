@@ -375,7 +375,7 @@ render_foreign_toon_client_sdl() {
     env_lines_before="$(echo "$rendered" | grep -cE "^[[:space:]]*-[[:space:]]+TOON_FEE_PER_EVENT=[0-9]+" || true)"
     rendered="$(echo "$rendered" | sed -E "s#^([[:space:]]*-[[:space:]]+)TOON_FEE_PER_EVENT=[0-9]+#\1TOON_FEE_PER_EVENT=${TOON_FEE_PER_EVENT}#g")"
     local env_lines_after
-    env_lines_after="$(echo "$rendered" | grep -cE "^[[:space:]]*-[[:space:]]+TOON_FEE_PER_EVENT=${TOON_FEE_PER_EVENT}$" || true)"
+    env_lines_after="$(echo "$rendered" | grep -cE "^[[:space:]]*-[[:space:]]+TOON_FEE_PER_EVENT=${TOON_FEE_PER_EVENT}[[:space:]]*$" || true)"
     if [ "$env_lines_before" -lt 1 ] || [ "$env_lines_after" -lt 1 ]; then
       echo "[foreign-toon-client] TOON_FEE_PER_EVENT override did not substitute (env_lines before=$env_lines_before, after=$env_lines_after with value=${TOON_FEE_PER_EVENT}) — SDL formatting drift?" >&2
       exit 1

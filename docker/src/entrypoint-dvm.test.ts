@@ -302,15 +302,17 @@ describe('createTurboAdapter — DVM_ARWEAVE_JWK_B64 + TURBO_TOKEN resolution', 
     expect(TurboFactoryCalls[0]?.args).toMatchObject({ privateKey: expect.any(Object) });
   });
 
-  it('Both absent → unauthenticated free-tier adapter (≤100KB uploads work without credentials)', async () => {
+  it('Both absent → ephemeral JWK free-tier adapter (≤100KB uploads via TurboFactory.authenticated)', async () => {
     const result = await createTurboAdapter(undefined, undefined);
 
     expect(result.source).toBe('unauthenticated-free-tier');
     expect(result.client).toBeDefined();
     expect(result.arweaveAddress).toBeUndefined();
     expect(ArweaveSignerCalls).toHaveLength(0);
-    expect(TurboFactoryCalls).toHaveLength(0);
-    expect(TurboFactoryUnauthCalls).toHaveLength(1);
+    // Free-tier path uses an ephemeral JWK via TurboFactory.authenticated() so
+    // Turbo accepts ≤100KB uploads without a funded wallet.
+    expect(TurboFactoryCalls).toHaveLength(1);
+    expect(TurboFactoryUnauthCalls).toHaveLength(0);
     // Adapter is functional — does not throw on upload.
     await expect(
       result.adapter.upload({} as Parameters<typeof result.adapter.upload>[0])

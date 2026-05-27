@@ -346,6 +346,7 @@ direct_fund_sol_usdc() {
 poll_evm_balance() {
   local addr="$1" min_wei="$2" budget_s="${3:-30}"
   local deadline=$(( $(date +%s) + budget_s ))
+  local hex=''
   while (( $(date +%s) < deadline )); do
     local body
     body=$(curl -sfk --max-time 5 -X POST "$EVM_RPC_URL" \
@@ -357,7 +358,7 @@ poll_evm_balance() {
     [[ -z "$hex" || "$hex" == "0x0" ]] && { sleep 2; continue; }
     # Convert hex to decimal
     local dec
-    dec=$(printf "%d\n" "$hex" 2>/dev/null || echo "0")
+    dec=$(( 16#${hex#0x} )) || dec=0
     if (( dec >= min_wei )); then
       log "balance OK: $addr = $hex ($dec wei)"
       return 0
@@ -542,11 +543,12 @@ start_town_relay() {
   [[ -f "$town_compose" ]] || { warn "town compose missing at $town_compose — skipping town"; return 0; }
 
   log "Starting town relay (--profile town)…"
+  # Anvil acct[4] — must match TOWN_EVM_ADDRESS
   TOWNHOUSE_HOME="$TOWNHOUSE_HOME" \
   TOWNHOUSE_WALLET_DIR="$TOWNHOUSE_HOME" \
   TOWNHOUSE_WALLET_PASSWORD="$TEST_PASSWORD" \
   TOWN_SECRET_KEY="$(openssl rand -hex 32)" \
-  TOWN_SETTLEMENT_PRIVATE_KEY='0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926b' \
+  TOWN_SETTLEMENT_PRIVATE_KEY='0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a' \
   APEX_EVM_ADDRESS="$APEX_EVM_ADDRESS" \
   FEE_PER_EVENT='0' \
   EVM_RPC_URL="$EVM_RPC_URL" \

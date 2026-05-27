@@ -81,7 +81,7 @@ services:
       NODE_TLS_REJECT_UNAUTHORIZED: "0"
 
     healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "8080"]
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/healthz"]
       interval: 5s
       timeout: 3s
       retries: 60       # generous: ~5min budget covers anon daemon bootstrap

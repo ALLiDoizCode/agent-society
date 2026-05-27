@@ -53,6 +53,11 @@ echo "[e2e-real-hs] Logs: ${LOG_DIR}/gate.log"
 echo "[e2e-real-hs] Wall budget: ~20-25 min (B anon ~4min, apex ~5min, publishes ~3min)"
 echo ""
 
+# townhouse-dvm-arweave-e2e.test.ts is self-contained: manages its own hs up/down
+# in beforeAll/afterAll. The smoke step below pre-validates the local-HS stack
+# (chain RPCs reachable, containers healthy) before the full self-contained gate runs.
+bash "${SCRIPT_DIR}/townhouse-e2e-local-hs.sh" smoke 2>&1 | tee "${LOG_DIR}/smoke.log"
+
 pnpm --filter @toon-protocol/townhouse test:integration \
   src/__integration__/townhouse-dvm-arweave-e2e.test.ts \
   2>&1 | tee "${LOG_DIR}/gate.log"

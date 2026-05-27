@@ -269,7 +269,7 @@ describe.skipIf(!shouldRun)('local-Docker HS paid-earnings smoke', () => {
   let bPubkey: string;
   let evmRpcUrl: string;
   let preEarnings: Record<string, unknown> | null = null;
-  let testStartMs = 0;
+  let testStartMs = Date.now(); // initialised conservatively; overwritten in beforeAll
   let publishBody: Record<string, unknown> = {};
 
   beforeAll(async () => {
