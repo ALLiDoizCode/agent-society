@@ -3,8 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TOON Token Faucet</title>
+    <title>TOON Dev Faucet — Anvil + Solana</title>
     <style>
+      :root {
+        --bg: #f6f6f7;
+        --surface: #ffffff;
+        --border: #e0e0e3;
+        --text: #1a1a1c;
+        --muted: #6a6a72;
+        --quiet: #8e8e95;
+        --accent: #4f46e5;
+        --accent-soft: #eef0ff;
+        --ok: #1f7d3b;
+        --ok-soft: #e6f5ec;
+        --warn: #8a6200;
+        --warn-soft: #fff4d6;
+        --error: #b3261e;
+        --error-soft: #fbe9e8;
+        --mono:
+          ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      }
+
       * {
         margin: 0;
         padding: 0;
@@ -13,548 +32,603 @@
 
       body {
         font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
-          Cantarell, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
         min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
+        padding: 24px 16px;
+        line-height: 1.5;
       }
 
-      .container {
-        background: white;
-        border-radius: 20px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        padding: 40px;
-        max-width: 600px;
-        width: 100%;
+      .wrap {
+        max-width: 640px;
+        margin: 0 auto;
       }
 
-      h1 {
-        font-size: 2.5em;
-        margin-bottom: 10px;
-        color: #667eea;
-        text-align: center;
-      }
-
-      .subtitle {
-        text-align: center;
-        color: #666;
-        margin-bottom: 30px;
-        font-size: 1.1em;
-      }
-
-      .chain-toggle {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 24px;
-        background: #f0f1f5;
-        border-radius: 10px;
-        padding: 4px;
-      }
-
-      .chain-toggle button {
-        flex: 1;
-        padding: 10px;
-        background: transparent;
-        color: #666;
-        border: none;
-        border-radius: 8px;
-        font-size: 1em;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s, color 0.2s, box-shadow 0.2s;
-      }
-
-      .chain-toggle button.active {
-        background: white;
-        color: #667eea;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-      }
-
-      .chain-toggle button:hover:not(.active) {
-        color: #333;
-      }
-
-      .info-box {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 30px;
-      }
-
-      .info-row {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 10px;
-        font-size: 0.95em;
-        gap: 12px;
-      }
-
-      .info-row:last-child {
-        margin-bottom: 0;
-      }
-
-      .info-label {
-        color: #666;
-        font-weight: 500;
-        flex-shrink: 0;
-      }
-
-      .info-value {
-        color: #333;
-        font-weight: 600;
-        text-align: right;
-        word-break: break-all;
-      }
-
-      .form-group {
+      header.hero {
         margin-bottom: 20px;
+      }
+
+      header.hero h1 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+
+      header.hero p {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-top: 4px;
+      }
+
+      header.hero a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      header.hero a:hover {
+        text-decoration: underline;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 16px;
+      }
+
+      .banner {
+        padding: 10px 14px;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        margin-bottom: 16px;
+        display: none;
+      }
+
+      .banner.warn {
+        background: var(--warn-soft);
+        color: var(--warn);
+        border: 1px solid #f0d27a;
+      }
+
+      .banner.warn.show {
+        display: block;
+      }
+
+      .row {
+        margin-bottom: 14px;
       }
 
       label {
         display: block;
-        margin-bottom: 8px;
-        color: #333;
+        font-size: 0.85rem;
         font-weight: 500;
+        color: var(--muted);
+        margin-bottom: 6px;
       }
 
-      input {
+      select,
+      input[type="text"],
+      input[type="number"] {
         width: 100%;
-        padding: 12px;
-        border: 2px solid #e0e0e0;
-        border-radius: 8px;
-        font-size: 1em;
-        transition: border-color 0.3s;
-        font-family: 'Courier New', monospace;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 0.95rem;
+        font-family: var(--mono);
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
       }
 
+      select {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      }
+
+      select:focus,
       input:focus {
         outline: none;
-        border-color: #667eea;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
       }
 
-      .hint {
-        margin-top: 6px;
-        font-size: 0.85em;
-        color: #999;
-        font-family: 'Courier New', monospace;
+      input:disabled {
+        background: var(--bg);
+        color: var(--muted);
       }
 
-      button {
+      .chain-badge {
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        color: var(--quiet);
+        margin-top: 4px;
+      }
+
+      .detect {
+        margin-top: 4px;
+        font-size: 0.8rem;
+        font-family: var(--mono);
+      }
+
+      .detect.ok {
+        color: var(--ok);
+      }
+
+      .detect.bad {
+        color: var(--error);
+      }
+
+      .help {
+        font-size: 0.8rem;
+        color: var(--quiet);
+        margin-top: 4px;
+        font-family: var(--mono);
+      }
+
+      button.primary {
         width: 100%;
-        padding: 14px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 11px;
+        border: 1px solid var(--accent);
+        background: var(--accent);
         color: white;
-        border: none;
-        border-radius: 8px;
-        font-size: 1.1em;
-        font-weight: 600;
+        font-size: 0.95rem;
+        font-weight: 500;
+        border-radius: 6px;
         cursor: pointer;
         transition:
-          transform 0.2s,
-          box-shadow 0.2s;
+          background 0.15s,
+          transform 0.05s;
       }
 
-      button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      button.primary:hover:not(:disabled) {
+        background: #4338ca;
       }
 
-      button:active {
-        transform: translateY(0);
+      button.primary:active:not(:disabled) {
+        transform: translateY(1px);
       }
 
-      button:disabled {
-        background: #ccc;
+      button.primary:disabled {
+        background: var(--quiet);
+        border-color: var(--quiet);
         cursor: not-allowed;
-        transform: none;
-        box-shadow: none;
       }
 
-      .message {
-        padding: 12px;
-        border-radius: 8px;
-        margin-top: 20px;
-        display: none;
+      .status {
+        margin-top: 14px;
+        padding: 10px 12px;
+        background: var(--bg);
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-family: var(--mono);
+        color: var(--muted);
+        min-height: 20px;
         word-break: break-all;
       }
 
-      .message.success {
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
+      .status.error {
+        background: var(--error-soft);
+        color: var(--error);
       }
 
-      .message.error {
-        background: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f5c6cb;
+      .status.ok {
+        background: var(--ok-soft);
+        color: var(--ok);
       }
 
-      .message.show {
-        display: block;
-      }
-
-      .tx-link {
-        color: #667eea;
-        text-decoration: none;
-        font-weight: 600;
-      }
-
-      .tx-link:hover {
+      .status a {
+        color: inherit;
         text-decoration: underline;
       }
 
-      .loading {
-        display: none;
-        text-align: center;
+      .recent {
+        margin-top: 16px;
+      }
+
+      .recent h3 {
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--quiet);
+        margin-bottom: 8px;
+      }
+
+      .recent-list {
+        font-family: var(--mono);
+        font-size: 0.85rem;
+        max-height: 260px;
+        overflow-y: auto;
+      }
+
+      .recent-list .row-item {
+        display: flex;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+      }
+
+      .recent-list .row-item:last-child {
+        border-bottom: none;
+      }
+
+      .recent-list .tag {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      .tag.evm {
+        background: #eaf3ff;
+        color: #1d5fbf;
+      }
+
+      .tag.sol {
+        background: #f0eaff;
+        color: #6c2ec5;
+      }
+
+      .empty {
+        color: var(--quiet);
+        font-style: italic;
+        font-size: 0.85rem;
+      }
+
+      footer.meta {
         margin-top: 20px;
-      }
-
-      .spinner {
-        border: 3px solid #f3f3f3;
-        border-top: 3px solid #667eea;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        animation: spin 1s linear infinite;
-        margin: 0 auto;
-      }
-
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-
-      .footer {
+        font-size: 0.8rem;
+        color: var(--quiet);
         text-align: center;
-        margin-top: 30px;
-        color: #999;
-        font-size: 0.9em;
       }
 
-      .not-ready {
-        background: #fff3cd;
-        color: #856404;
-        border: 1px solid #ffeaa7;
-        padding: 12px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        text-align: center;
+      footer.meta a {
+        color: var(--quiet);
+        text-decoration: underline;
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <h1>🚰 Token Faucet</h1>
-      <p class="subtitle">
-        Get free dev tokens — EVM (ETH + USDC) or Solana (SOL + USDC)
-      </p>
+    <div class="wrap">
+      <header class="hero">
+        <h1>TOON Dev Faucet — Anvil + Solana</h1>
+        <p>
+          Free tokens for testing publishes. Not real money. Resets on lease
+          churn. <a href="https://github.com/toon-protocol/town" target="_blank" rel="noopener">repo ↗</a>
+        </p>
+      </header>
 
-      <div class="chain-toggle" role="tablist">
-        <button id="chainEvm" class="active" type="button" data-chain="evm">
-          EVM
-        </button>
-        <button id="chainSol" type="button" data-chain="solana">
-          Solana
-        </button>
-      </div>
+      <div id="downBanner" class="banner warn"></div>
 
-      <div id="notReady" class="not-ready" style="display: none"></div>
-
-      <div class="info-box">
-        <div class="info-row">
-          <span class="info-label">Native per request:</span>
-          <span class="info-value" id="nativeAmount">-</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">USDC per request:</span>
-          <span class="info-value" id="tokenAmount">-</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Rate limit:</span>
-          <span class="info-value" id="rateLimit">-</span>
-        </div>
-        <div class="info-row" id="evmContractRow">
-          <span class="info-label">Token contract:</span>
-          <span
-            class="info-value"
-            id="tokenAddress"
-            style="font-size: 0.8em; font-family: monospace"
-            >-</span
-          >
-        </div>
-        <div class="info-row" id="solanaMintRow" style="display: none">
-          <span class="info-label">USDC mint:</span>
-          <span
-            class="info-value"
-            id="solanaMint"
-            style="font-size: 0.8em; font-family: monospace"
-            >-</span
-          >
-        </div>
-      </div>
-
-      <form id="faucetForm">
-        <div class="form-group">
-          <label for="address" id="addressLabel">Your Ethereum Address</label>
-          <input type="text" id="address" required />
-          <p class="hint" id="addressHint">Format: 0x followed by 40 hex chars</p>
+      <div class="card">
+        <div class="row">
+          <label for="chain">Chain</label>
+          <select id="chain" autocomplete="off">
+            <option value="auto" selected>Auto</option>
+            <option value="evm">EVM</option>
+            <option value="solana">SOL</option>
+          </select>
+          <div id="chainBadge" class="chain-badge">—</div>
         </div>
 
-        <div class="form-group">
-          <label for="amount">USDC amount (optional)</label>
+        <div class="row">
+          <label for="address">Address</label>
           <input
-            type="number"
-            id="amount"
-            min="1"
-            step="1"
-            placeholder="(use default)"
+            type="text"
+            id="address"
+            placeholder="0x… or base58…"
+            autocomplete="off"
+            spellcheck="false"
           />
+          <div id="detect" class="detect">awaiting input</div>
         </div>
 
-        <button type="submit" id="submitBtn">Drip 💧</button>
-      </form>
+        <div class="row">
+          <label for="amount">Amount</label>
+          <input type="number" id="amount" min="1" step="1" placeholder="100" />
+          <div class="help">USDC (+1 ETH or +1 SOL native gas)</div>
+        </div>
 
-      <div class="loading" id="loading">
-        <div class="spinner"></div>
-        <p style="margin-top: 10px">Processing your request...</p>
+        <button id="submit" class="primary" type="button" disabled>
+          Drip me tokens
+        </button>
+
+        <div id="status" class="status">idle</div>
       </div>
 
-      <div class="message" id="message"></div>
+      <div class="recent card">
+        <h3>Recent drips</h3>
+        <div id="recentList" class="recent-list">
+          <div class="empty">no drips yet</div>
+        </div>
+      </div>
 
-      <div class="footer">TOON Local Development Faucet</div>
+      <footer class="meta">
+        TOON Local Development Faucet ·
+        <a href="https://github.com/toon-protocol/town/tree/main/deploy/akash" target="_blank" rel="noopener">deploy docs ↗</a>
+      </footer>
     </div>
 
     <script>
-      const form = document.getElementById('faucetForm');
-      const addressInput = document.getElementById('address');
-      const amountInput = document.getElementById('amount');
-      const submitBtn = document.getElementById('submitBtn');
-      const message = document.getElementById('message');
-      const loading = document.getElementById('loading');
-      const notReady = document.getElementById('notReady');
-      const chainEvmBtn = document.getElementById('chainEvm');
-      const chainSolBtn = document.getElementById('chainSol');
-      const addressLabel = document.getElementById('addressLabel');
-      const addressHint = document.getElementById('addressHint');
-      const evmContractRow = document.getElementById('evmContractRow');
-      const solanaMintRow = document.getElementById('solanaMintRow');
-
       const EVM_RE = /^0x[0-9a-fA-F]{40}$/;
       const SOL_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+      const CHAIN_BADGE = {
+        evm: "Anvil · 31337",
+        solana: "Solana devnet · local",
+        auto: "—",
+      };
 
-      let currentChain = 'evm';
-      let lastInfo = null;
+      const $ = (id) => document.getElementById(id);
+      const chainSel = $("chain");
+      const chainBadge = $("chainBadge");
+      const addrInput = $("address");
+      const detect = $("detect");
+      const amountInput = $("amount");
+      const submitBtn = $("submit");
+      const statusEl = $("status");
+      const recentList = $("recentList");
+      const downBanner = $("downBanner");
 
-      function setChain(chain) {
-        currentChain = chain;
-        chainEvmBtn.classList.toggle('active', chain === 'evm');
-        chainSolBtn.classList.toggle('active', chain === 'solana');
+      let countdownTimer = null;
+      let lastValidChain = null;
 
-        if (chain === 'evm') {
-          addressLabel.textContent = 'Your Ethereum Address';
-          addressInput.placeholder = '0x...';
-          addressHint.textContent = 'Format: 0x followed by 40 hex chars';
-          evmContractRow.style.display = '';
-          solanaMintRow.style.display = 'none';
-        } else {
-          addressLabel.textContent = 'Your Solana Address';
-          addressInput.placeholder = 'Base58 pubkey...';
-          addressHint.textContent =
-            'Format: base58 pubkey (32-44 chars, no 0OIl)';
-          evmContractRow.style.display = 'none';
-          solanaMintRow.style.display = '';
-        }
-
-        addressInput.value = '';
-        amountInput.value = '';
-        hideMessage();
-        applyInfoToView();
+      function classifyAddress(addr) {
+        if (!addr) return { chain: null, kind: "empty" };
+        if (EVM_RE.test(addr)) return { chain: "evm", kind: "ok" };
+        if (SOL_RE.test(addr)) return { chain: "solana", kind: "ok" };
+        return { chain: null, kind: "bad" };
       }
 
-      chainEvmBtn.addEventListener('click', () => setChain('evm'));
-      chainSolBtn.addEventListener('click', () => setChain('solana'));
+      function renderDetect() {
+        const addr = addrInput.value.trim();
+        const { chain, kind } = classifyAddress(addr);
+        const userChain = chainSel.value;
 
-      function applyInfoToView() {
-        if (!lastInfo) return;
-
-        document.getElementById('rateLimit').textContent =
-          `${lastInfo.rateLimitHours} hour(s)`;
-
-        if (currentChain === 'evm') {
-          document.getElementById('nativeAmount').textContent =
-            `${lastInfo.ethAmount} ETH`;
-          document.getElementById('tokenAmount').textContent =
-            `${lastInfo.tokenAmount} ${lastInfo.tokenSymbol}`;
-          document.getElementById('tokenAddress').textContent =
-            lastInfo.tokenAddress || 'Not deployed yet';
-
-          if (!lastInfo.ready) {
-            notReady.textContent =
-              '⚠️ Waiting for token contract deployment...';
-            notReady.style.display = 'block';
-            submitBtn.disabled = true;
+        if (kind === "empty") {
+          detect.textContent = "awaiting input";
+          detect.className = "detect";
+          lastValidChain = null;
+          submitBtn.disabled = true;
+          if (userChain === "auto") {
+            chainBadge.textContent = "—";
           } else {
-            notReady.style.display = 'none';
-            submitBtn.disabled = false;
+            chainBadge.textContent = CHAIN_BADGE[userChain];
           }
-        } else {
-          const sol = lastInfo.solana || {};
-          document.getElementById('nativeAmount').textContent = '1 SOL';
-          document.getElementById('tokenAmount').textContent = sol.usdcAmount
-            ? `${sol.usdcAmount} USDC`
-            : '-';
-          document.getElementById('solanaMint').textContent =
-            sol.usdcMint || '-';
-
-          if (!sol.ready) {
-            notReady.textContent =
-              '⚠️ Solana faucet not configured (SOLANA_RPC_URL unset)';
-            notReady.style.display = 'block';
-            submitBtn.disabled = true;
-          } else if (!sol.faucetAuthority) {
-            notReady.textContent =
-              '⚠️ USDC drip disabled — faucet authority keypair missing. SOL airdrops still work.';
-            notReady.style.display = 'block';
-            submitBtn.disabled = false;
-          } else {
-            notReady.style.display = 'none';
-            submitBtn.disabled = false;
-          }
-        }
-      }
-
-      // Load faucet info
-      async function loadInfo() {
-        try {
-          const response = await fetch('/api/info');
-          lastInfo = await response.json();
-          applyInfoToView();
-        } catch (error) {
-          console.error('Failed to load faucet info:', error);
-        }
-      }
-
-      // Show message
-      function showMessage(text, type) {
-        message.innerHTML = text;
-        message.className = `message ${type} show`;
-      }
-
-      // Hide message
-      function hideMessage() {
-        message.className = 'message';
-      }
-
-      function explorerLinkEvm(hash) {
-        // Local Anvil has no real explorer; render the hash as text.
-        return `<code>${hash}</code>`;
-      }
-
-      function explorerLinkSol(sig) {
-        // Same — local test-validator has no explorer. Render the sig.
-        return `<code>${sig}</code>`;
-      }
-
-      // Handle form submission
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        hideMessage();
-
-        const address = addressInput.value.trim();
-        const re = currentChain === 'evm' ? EVM_RE : SOL_RE;
-        if (!re.test(address)) {
-          showMessage(
-            currentChain === 'evm'
-              ? 'Invalid Ethereum address format'
-              : 'Invalid Solana address format (must be base58, 32-44 chars)',
-            'error'
-          );
           return;
         }
 
-        const amountRaw = amountInput.value.trim();
-        const amount = amountRaw ? parseInt(amountRaw, 10) : undefined;
+        if (kind === "bad") {
+          detect.textContent = "invalid";
+          detect.className = "detect bad";
+          lastValidChain = null;
+          submitBtn.disabled = true;
+          return;
+        }
 
-        // Disable form and show loading
+        // Address looks valid for `chain`. If the user picked Auto, snap. If
+        // they picked a specific chain that disagrees, show the mismatch as
+        // invalid (their selection wins — they may know something we don't,
+        // but we'd rather refuse than send a SOL drip to a 0x address).
+        if (userChain === "auto") {
+          lastValidChain = chain;
+          chainBadge.textContent = CHAIN_BADGE[chain];
+          detect.textContent = chain === "evm" ? "EVM ✓" : "SOL ✓";
+          detect.className = "detect ok";
+          submitBtn.disabled = false;
+          return;
+        }
+
+        if (userChain === chain) {
+          lastValidChain = chain;
+          chainBadge.textContent = CHAIN_BADGE[chain];
+          detect.textContent = chain === "evm" ? "EVM ✓" : "SOL ✓";
+          detect.className = "detect ok";
+          submitBtn.disabled = false;
+        } else {
+          lastValidChain = null;
+          chainBadge.textContent = CHAIN_BADGE[userChain];
+          detect.textContent = `mismatch — address looks like ${chain.toUpperCase()}, dropdown says ${userChain.toUpperCase()}`;
+          detect.className = "detect bad";
+          submitBtn.disabled = true;
+        }
+      }
+
+      addrInput.addEventListener("input", renderDetect);
+      chainSel.addEventListener("change", renderDetect);
+
+      function setStatus(text, level) {
+        statusEl.textContent = text;
+        statusEl.className = `status${level ? " " + level : ""}`;
+      }
+
+      function setStatusHtml(html, level) {
+        statusEl.innerHTML = html;
+        statusEl.className = `status${level ? " " + level : ""}`;
+      }
+
+      async function pollHealth() {
+        try {
+          const r = await fetch("/health", { cache: "no-store" });
+          if (!r.ok) {
+            downBanner.textContent =
+              "Faucet drained, operator notified, try again after the next lease cycle.";
+            downBanner.classList.add("show");
+            return;
+          }
+          const j = await r.json();
+          if (j.solanaConfigured && !j.solanaAuthorityReady) {
+            downBanner.textContent =
+              "Solana faucet authority unavailable — USDC drip disabled. SOL airdrops still work.";
+            downBanner.classList.add("show");
+          } else if (!j.tokenReady && (!chainSel.value || chainSel.value === "evm" || chainSel.value === "auto")) {
+            downBanner.textContent =
+              "EVM token contract not yet deployed. Wait a moment and reload.";
+            downBanner.classList.add("show");
+          } else {
+            downBanner.classList.remove("show");
+          }
+        } catch {
+          downBanner.textContent =
+            "Faucet unreachable — check your connection or try again in a moment.";
+          downBanner.classList.add("show");
+        }
+      }
+
+      function startRetryCountdown(seconds, baseMessage) {
+        if (countdownTimer) clearInterval(countdownTimer);
+        let remaining = seconds;
         submitBtn.disabled = true;
-        loading.style.display = 'block';
+        const tick = () => {
+          if (remaining <= 0) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+            renderDetect(); // re-enables submit if address is still valid
+            setStatus("ready", null);
+            return;
+          }
+          setStatus(`${baseMessage} — next drip in ${remaining}s`, "error");
+          remaining -= 1;
+        };
+        tick();
+        countdownTimer = setInterval(tick, 1000);
+      }
+
+      async function loadRecent() {
+        try {
+          const r = await fetch("/faucet/recent?limit=10", { cache: "no-store" });
+          if (!r.ok) return;
+          const items = await r.json();
+          if (!Array.isArray(items) || items.length === 0) {
+            recentList.innerHTML = '<div class="empty">no drips yet</div>';
+            return;
+          }
+          recentList.innerHTML = items
+            .map((d) => {
+              const tag = d.chain === "evm" ? "EVM" : "SOL";
+              const cls = d.chain === "evm" ? "evm" : "sol";
+              const rel = relativeTime(d.ts);
+              return `<div class="row-item"><span class="tag ${cls}">${tag}</span><span>${d.address}</span><span>← ${d.amount}</span><span>· ${rel}</span></div>`;
+            })
+            .join("");
+        } catch {
+          // Non-fatal — keep last-known render.
+        }
+      }
+
+      function relativeTime(iso) {
+        const then = new Date(iso).getTime();
+        if (!Number.isFinite(then)) return iso;
+        const diff = Math.max(0, Math.floor((Date.now() - then) / 1000));
+        if (diff < 60) return `${diff}s ago`;
+        if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        return `${Math.floor(diff / 86400)}d ago`;
+      }
+
+      submitBtn.addEventListener("click", async () => {
+        const addr = addrInput.value.trim();
+        const { chain: detectedChain, kind } = classifyAddress(addr);
+        if (kind !== "ok") return;
+        const userChain = chainSel.value;
+        const chain =
+          userChain === "auto" ? detectedChain : userChain;
+        if (!chain) return;
+
+        const amountRaw = amountInput.value.trim();
+        const amount = amountRaw ? Number(amountRaw) : undefined;
+
+        submitBtn.disabled = true;
+        setStatus("requesting…", null);
 
         try {
-          if (currentChain === 'evm') {
-            const response = await fetch('/api/evm/request', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ address }),
-            });
-            const data = await response.json();
-            if (response.ok) {
-              showMessage(
-                `✅ Sent ${data.transactions.eth.amount} ETH (${explorerLinkEvm(data.transactions.eth.hash)}) and ${data.transactions.token.amount} ${data.transactions.token.symbol} (${explorerLinkEvm(data.transactions.token.hash)}) to ${address}`,
-                'success'
-              );
-              addressInput.value = '';
-              amountInput.value = '';
-            } else {
-              showMessage(
-                `❌ ${data.error}${data.message ? ': ' + data.message : ''}`,
-                'error'
-              );
-            }
-          } else {
-            const body = { recipient: address };
-            if (typeof amount === 'number' && !Number.isNaN(amount))
-              body.amount = amount;
-            const response = await fetch('/api/sol/request', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body),
-            });
-            const data = await response.json();
-            if (response.ok) {
-              const usdcLine = data.usdcSig
-                ? ` and USDC (${explorerLinkSol(data.usdcSig)})`
-                : ' (USDC drip skipped — mint not found or authority unavailable)';
-              showMessage(
-                `✅ Airdropped 1 SOL (${explorerLinkSol(data.airdropSig)})${usdcLine} to ${address}`,
-                'success'
-              );
-              addressInput.value = '';
-              amountInput.value = '';
-            } else if (data.airdropSig) {
-              // Soft fail: SOL went out, USDC didn't.
-              showMessage(
-                `⚠️ ${data.error}: ${data.message}<br>SOL airdrop succeeded: ${explorerLinkSol(data.airdropSig)}`,
-                'error'
-              );
-            } else {
-              showMessage(
-                `❌ ${data.error}${data.message ? ': ' + data.message : ''}`,
-                'error'
-              );
-            }
+          const path = chain === "evm" ? "/faucet/evm" : "/faucet/sol";
+          const body = { address: addr };
+          if (typeof amount === "number" && !Number.isNaN(amount)) {
+            body.amount = amount;
           }
-        } catch (error) {
-          showMessage(`❌ Request failed: ${error.message}`, 'error');
-        } finally {
-          loading.style.display = 'none';
-          submitBtn.disabled = false;
+          const r = await fetch(path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+
+          if (r.status === 429) {
+            const retryAfterHeader = Number(r.headers.get("Retry-After") || 0);
+            const j = await r.json().catch(() => ({}));
+            const retryFromBody = Number(j.waitMinutes ?? 0) * 60;
+            const seconds = Math.max(retryAfterHeader, retryFromBody, 1);
+            startRetryCountdown(seconds, j.error || "rate limit exceeded");
+            return;
+          }
+
+          const data = await r.json().catch(() => ({}));
+
+          if (!r.ok) {
+            const msg = data.error || `error: HTTP ${r.status}`;
+            if (data.airdropSig) {
+              setStatusHtml(
+                `${escapeHtml(msg)} — SOL airdrop landed: <code>${escapeHtml(data.airdropSig)}</code>`,
+                "error"
+              );
+            } else {
+              setStatus(`error: ${msg}`, "error");
+            }
+            renderDetect();
+            return;
+          }
+
+          const txLine = data.tx ? `tx: ${escapeHtml(data.tx)}` : "ok";
+          const balLine =
+            data.balanceAfter !== undefined
+              ? ` · balanceAfter: ${escapeHtml(String(data.balanceAfter))}`
+              : "";
+          // Only allow https:// URLs — prevents javascript: XSS via a
+          // misconfigured EVM_EXPLORER_URL_BASE / SOL_EXPLORER_URL_BASE env.
+          const safeExplorerUrl =
+            typeof data.explorerUrl === "string" &&
+            data.explorerUrl.startsWith("https://")
+              ? data.explorerUrl
+              : null;
+          const explorer = safeExplorerUrl
+            ? ` <a href="${escapeAttr(safeExplorerUrl)}" target="_blank" rel="noopener">view ↗</a>`
+            : "";
+          setStatusHtml(`sent! ${txLine}${explorer}${balLine}`, "ok");
+          renderDetect();
+          loadRecent();
+        } catch (err) {
+          setStatus(`error: ${err.message || err}`, "error");
+          renderDetect();
         }
       });
 
-      // Load info on page load
-      loadInfo();
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c]);
+      }
 
-      // Refresh info every 10 seconds
-      setInterval(loadInfo, 10000);
+      function escapeAttr(s) {
+        return escapeHtml(s);
+      }
+
+      // Initial render + periodic refresh
+      renderDetect();
+      pollHealth();
+      loadRecent();
+      setInterval(pollHealth, 15000);
+      setInterval(loadRecent, 10000);
     </script>
   </body>
 </html>

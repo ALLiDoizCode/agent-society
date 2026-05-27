@@ -84,6 +84,18 @@ The decomposition below derives requirements from the consolidated planning doc 
 
 **Cross-Repo (Connector Upstream)**
 
+**SOL Settlement via Mill Routing (Epic 50 — added 2026-05-27)**
+
+- **FR39:** When `townhouse node add mill` completes, `mill.config.json` SHALL be written with a non-empty `swapPairs` array containing at least one EVM-USDC → SOL-USDC entry — writing `swapPairs: []` (current behaviour) causes Mill to reject boot with `MillConfig.swapPairs MUST be a non-empty array`
+- **FR40:** The EVM swap-pair `from.chain` SHALL be derived from the operator's active chain config (`config.chainProviders[0].chainId`, defaulting to `'31337'` for Anvil devnet); the SOL swap-pair `to.chain` SHALL default to `'solana:devnet'`; both SHALL be overridable via `nodes.yaml nodes.mill.chains`
+- **FR41:** The generated swap pair SHALL include `assetCode: 'USDC'`, `assetScale: 6`, `rate: '1.0'`, `minAmount: '1000'`, `maxAmount: '1000000000'`; `chains: ['evm', 'solana']` SHALL replace the current `['evm']`-only entry
+- **FR42:** The E2E gate harness (`townhouse-dvm-arweave-e2e.test.ts`) SHALL start a Mill container via `docker run -d --network townhouse-hs-net` (image from `dist/image-manifest.json` key `'mill'`) and confirm BLS health at `127.0.0.1:3200` within 60s
+- **FR43:** The E2E gate SHALL discover Mill's pubkey and swap pair from a kind:10032 event subscribed on the apex relay, then drive a SOL-settlement ILP payment to `g.townhouse.mill` using `streamSwap` from `packages/sdk/src/stream-swap.ts`; the `StreamSwapResult` MUST have `status: 'success'`
+- **FR44:** Post-swap, `GET ${HS_API}/api/earnings` SHALL return at least one claim entry with `type: 'mill'` within 150s (poll 5s interval); this entry SHALL be distinct from the EVM apex bucket
+- **FR45:** Test 6 in `townhouse-dvm-arweave-e2e.test.ts` SHALL be promoted from BLOCKED-STRUCTURAL to a live PASS; `scripts/townhouse-e2e-real-hs.sh --chain=sol` SHALL run the SOL leg end-to-end
+
+**Cross-Repo (Connector Upstream)**
+
 - **FR35:** The connector SHALL expose `GET /admin/hs-hostname` returning `{hostname: string|null, publishedAt: string|null}` with 503 on `anon-disabled` configuration (CR-1) — eliminates the host-side `dockerode exec cat /var/lib/anon/hs/hostname` shellout. Consumers treat `hostname !== null` as the ready signal. *(Contract resolved via [connector#58](https://github.com/toon-protocol/connector/issues/58) review on 2026-05-07: the originally-proposed `ready` field was dropped as redundant with `hostname !== null`; ships in connector v3.5.0.)*
 - **FR36:** The connector image build pipeline SHALL produce multi-arch `linux/amd64` AND `linux/arm64` images (CR-2)
 - **FR37:** The connector image build pipeline SHALL cosign-sign published images via keyless OIDC (CR-3)
@@ -124,6 +136,14 @@ The decomposition below derives requirements from the consolidated planning doc 
 - **NFR17:** Pre-publish quality gate SHALL require all of: unit + integration green, connector contract canary green at the digest pinned in source (NOT `:latest`), image-contract test green at pinned digest, real-CLI E2E green via `scripts/townhouse-test-infra.sh`, Playwright `e2e:real` green, cosign signature verification green
 - **NFR18:** The Epic 49 live E2E gate SHALL exit with a PASS/FAIL code; non-zero on any AC miss, with relevant connector + drill logs captured to `./e2e-real-hs-logs/<timestamp>/`. Prior NFR18 ("median-weekly-USDC validation fork") archived with the Epic 49 re-scope.
 - **NFR19:** Empty-state copy library SHALL ship in the same PR as the TUI scaffold story — not as a follow-up ticket
+
+**SOL Settlement via Mill Routing (Epic 50 — added 2026-05-27)**
+
+- **NFR20:** Mill container launched by the E2E harness SHALL be stopped and removed in `afterAll` alongside DVM and HS containers — no orphaned containers on test failure or early exit
+- **NFR21:** The swap pair written by `townhouse node add mill` SHALL pass Mill's own `startMill()` validation (`MillConfig.swapPairs MUST be a non-empty array`) with zero code changes to the Mill package itself
+- **NFR22:** `pnpm --filter @toon-protocol/townhouse build` and `pnpm --filter @toon-protocol/townhouse test` SHALL both stay clean (0 new errors, 0 new failures) after the swap-pair provisioning change
+- **NFR23:** SOL settlement test (Test 6) SHALL fail fast with a clear message if Akash Solana devnet (DSEQ 26996029) is unreachable at gate boot time — it SHALL NOT silently degrade to a local devnet fixture
+- **NFR24:** Test 6 total timeout SHALL be ≥ 180s to account for Mill boot + kind:10032 discovery + SOCKS5 bootstrap + `streamSwap` packet RTT + Solana confirmation + earnings poll
 
 ### Additional Requirements
 
@@ -1264,7 +1284,17 @@ So that rendering, refresh-tick, drill subcommands, and empty-state copy are vis
 
 ## Epic 49: End-to-End TOON-Client → Townhouse HS Loop
 
-Any TOON client (operator A's, operator B's, third-party) targets a Townhouse operator's `.anyone` HS endpoint, publishes a Nostr event carrying an ILP-paid packet, and the operator observes (a) the inbound event on the connector via existing drill subcommands AND (b) the earnings credit on their local data plane. Three stories. Re-scoped 2026-05-18 from the prior 7-story "Telemetry & Validation Gate"; old stories archived to `_bmad-output/implementation-artifacts/deferred-work.md` § "Epic 49-future: Aggregated Pilot Telemetry".
+Any TOON client (operator A's, operator B's, third-party) targets a Townhouse operator's `.anyone` HS endpoint, publishes a Nostr event carrying an ILP-paid packet, and the operator observes (a) the inbound event on the connector via existing drill subcommands AND (b) the earnings credit on their local data plane. **Five stories** (re-scoped + re-sequenced 2026-05-18). Re-scoped from the prior 7-story "Telemetry & Validation Gate"; old stories archived to `_bmad-output/implementation-artifacts/deferred-work.md` § "Epic 49-future: Aggregated Pilot Telemetry".
+
+**Re-sequence 2026-05-18 (party mode):** Two infrastructure precursor stories inserted as 49.2 + 49.3 to give the settlement + close-out gate stories a real Akash-hosted foreign client. Previous 49.2 → 49.4, previous 49.3 → 49.5.
+
+| # | Title | Status |
+|---|---|---|
+| 49.1 | TOON Client → Foreign Townhouse HS Smoke (in-host two-stack) | done |
+| 49.2 | Akash Devnet Faucets + Unified Faucet UI | backlog |
+| 49.3 | Persistent Akash Foreign-Client Pod | backlog |
+| 49.4 | Paid Packet → Earnings Receipt (EVM + SOL on Akash) | backlog |
+| 49.5 | Live E2E Gate — Real-`.anyone` Loop on Akash EVM + SOL | backlog |
 
 **Settlement-chain scope (decided 2026-05-18):** Gate runs against **EVM + Solana on Akash devnets** (Akash-Anvil + Akash-Solana, already deployed — see `deploy/akash/leases.json`). EVM settles directly via the connector's USDC adapter; Solana settles via the **Mill swap peer** (Epic 12 / 13) mediating EVM-USDC → SOL-USDC. Mina is out of scope — no Akash deployment exists today and Mina is not on the v0.1 pilot revenue path.
 
@@ -1296,7 +1326,168 @@ So that I prove the public protocol surface advertised by `townhouse hs up` is a
 
 ---
 
-### Story 49.2: Paid Packet → Earnings Receipt (EVM + SOL on Akash)
+### Story 49.2: Akash Devnet Faucets + Unified Faucet UI
+
+As a TOON dev or external tester who wants to drive paid publishes against a townhouse `.anyone` HS,
+I want the existing Akash-Anvil and Akash-Solana devnet leases to each expose a HTTP faucet endpoint plus a single unified web UI,
+So that any client (the Akash foreign-client pod from 49.3, my laptop, or a third-party developer) can self-serve unlimited devnet ETH/USDC and SOL/SPL-USDC against the same chain state operator A's local townhouse settles on.
+
+**Source decisions:** Party Mode 2026-05-18 — chains stay on clearnet (user: "we don't need to wrap the anvil or SOL wrapped behind a HS thats not in scope for hs"); persistent foreign pod with ephemeral signer keys requires unlimited-supply faucets (user: "the foreign pod can be persitent and the anvil and sol akash nodes should just have a faucet with unlimited supply"); UI must serve both chains in one surface (user: "evm and sol").
+
+**Hard rules (carry forward from 47.5 / 48.7 / 49.1):**
+1. Modifies two shipped SDLs (`deploy/akash/anvil.sdl.yaml` + `deploy/akash/solana.sdl.yaml`) — those are existing pre-existing infra, so this story DOES touch shipped product source; that exception is authorized for the faucet sidecar service only.
+2. Single unified `index.html` shipped to BOTH SDL containers (byte-identical) — no proxy, no third Akash lease. Cross-chain glue is CORS.
+3. ONE new integration test file: `packages/townhouse/src/__integration__/akash-faucet-smoke.test.ts`.
+4. Faucet authority key is a checked-in deterministic fixture (same posture as `project_solana_mock_usdc_keys` MEMORY note) — devnet only, no production secrets.
+
+**Acceptance Criteria:**
+
+**AC #1 — Faucet API on both SDLs:**
+**Given** `deploy/akash/anvil.sdl.yaml` and `deploy/akash/solana.sdl.yaml` are deployed
+**When** a client `POST`s `/faucet/evm` (anvil) or `/faucet/sol` (solana) with `{address, amount?}`
+**Then** the faucet returns `200 {txHash, balanceAfter, chain}` within 10s, transferring native + USDC/SPL-USDC to the address.
+**And** request shape validates against `packages/townhouse/contracts/faucet.schema.json` (ajv strict mode, `additionalProperties: false`).
+**And** rate-limit is 1 req/sec per source address (token-bucket, in-memory), 5 req/min per source IP.
+**And** unlimited supply — no daily cap, no faucet-drained state under normal devnet load.
+
+**AC #2 — Faucet UI served from BOTH SDLs:**
+**Given** the same `deploy/akash/faucet-ui/index.html` is shipped to both faucet containers
+**When** a developer loads either Akash ingress URL in a browser
+**Then** the UI renders a single-page form with chain dropdown (`Auto | EVM | SOL`), address input (auto-detects `0x…` → EVM, base58 → SOL), amount field, and "Drip" button.
+**And** `curl <evm-ingress>/index.html` and `curl <sol-ingress>/index.html` return byte-identical bodies (sha256 match).
+
+**AC #3 — Cross-chain CORS:**
+**Given** the UI is loaded on the SOL ingress
+**When** the user requests an EVM drip (different origin from the page)
+**Then** the EVM faucet's `Access-Control-Allow-Origin` header allows the request and the drip succeeds.
+**And** the OPTIONS preflight is handled with a 204.
+
+**AC #4 — Recent drips feed (interleaved):**
+**Given** each faucet maintains a 10-entry in-memory ring buffer of recent drips
+**When** the UI calls `GET /faucet/recent?limit=10` on both ingresses and merges client-side
+**Then** the feed shows interleaved EVM+SOL rows sorted desc by `ts` with a `[EVM]` or `[SOL]` chain tag on each row.
+
+**AC #5 — UI status states:**
+**Given** the UI form
+**When** the user submits
+**Then** the status panel cycles through `idle → requesting… → sent! tx: 0x… [view ↗] → balanceAfter: <amt>` on success, or `error: <message>` on failure.
+**And** rate-limit response renders as a countdown ("next drip in 27s"), not a raw 429.
+**And** invalid address shows inline red text under the field, not a toast.
+**And** chain-ID badge under the dropdown shows `Anvil · 31337` or `Solana devnet · local` once a chain is picked.
+
+**AC #6 — Schema-contract test:**
+**Given** `pnpm --filter @toon-protocol/townhouse test`
+**When** the faucet-contract test runs
+**Then** it ajv-validates request + response shapes against `packages/townhouse/contracts/faucet.schema.json` without dialing a live faucet.
+
+**AC #7 — E2E smoke against live Akash:**
+**Given** anvil + solana Akash leases are running with the faucet sidecars
+**When** the smoke test boots
+**Then** a fresh EVM address receives a drip AND a fresh SOL address receives a drip AND both balances reflect within 30s of the POST.
+**And** results documented in `### Review Findings` with `_Smoke run YYYY-MM-DD — …_` format per 47.5/48.7/49.1 precedent.
+
+**Out of scope:**
+- Authentication, wallet-connect, dark mode, branding, i18n, per-address history
+- Canonical DNS URL (e.g. `faucet.toon.dev`) — both Akash ingresses are equivalent entry points for this story
+- Persistent drips log on disk (in-memory ring buffer only)
+
+**FRs:** FR30, FR32 (faucet is infra for the paid-packet loop) | **NFRs:** NFR8 (faucet authority key file `0o600`)
+
+---
+
+### Story 49.3: Persistent Akash Foreign-Client Pod
+
+As the TOON protocol team validating that ANY foreign TOON client can publish through a townhouse `.anyone` HS,
+I want a persistent Akash-hosted pod that exposes `POST /publish {event, targetHostname}` and uses `@toon-protocol/client` + `@anyone-protocol/anyone-client` to send EIP-712-signed Nostr events through a townhouse HS on the operator's local machine,
+So that 49.4's settlement assertions and 49.5's close-out gate can drive the foreign-publish loop against real cross-network infrastructure — not the in-process foreign client from 49.1.
+
+**Source decisions:** Party Mode 2026-05-18 — HTTP `POST /publish` contract (user picked option (a) over cron/CLI/HS-only); persistent pod (user: "the foreign pod can be persitent"); ephemeral signer keys auto-funded by 49.2's faucet on boot (user: "the key can be empherial since there will be a faucet that can supply it with tokens"); runtime-mutable target HS so a laptop reboot doesn't need a pod redeploy (user: "the client also needs to eb configurable at runtime with the hs to send the packet to"); no app-layer idempotency — Nostr event-id dedup at the relay is sufficient for a dev fixture (user: "is idempotency cache useful since this is just for development").
+
+**Hard rules (carry forward from 47.5 / 48.7 / 49.1):**
+1. Single new test file: `packages/townhouse/src/__integration__/akash-foreign-pod-smoke.test.ts`.
+2. Test process is Tor-aware (dials the pod's clearnet ingress, but the pod itself dials the target HS via SOCKS5 — that's the path under test).
+3. Bugs found during the smoke → separate PRs → re-run smoke → THEN flip to `done` (49.1 / 47.5 precedent).
+4. Foreign-publish schema lives at `packages/townhouse/contracts/foreign-publish.schema.json`. Schema drift = build break.
+5. Tor binary pinned in the Dockerfile (MEMORY note `connector_anyone_postinstall` — runtime fetch = guaranteed flake).
+6. Persistent-deployment discipline: named lease owner in story footer; monthly AKT-burn budget AC; sunset calendar reminder; orphan-lease detector cron.
+
+**Acceptance Criteria:**
+
+**AC #1 — Pod boot + ephemeral signer keys + faucet auto-fund:**
+**Given** the SDL `deploy/akash/foreign-toon-client.sdl.yaml` is deployed and a lease accepted
+**When** the pod entrypoint runs
+**Then** it (a) generates a fresh secp256k1 keypair (EVM) + ed25519 keypair (Solana) in memory only, (b) logs both pubkeys (NEVER privkeys), (c) POSTs to `${FAUCET_EVM_URL}/faucet/evm` and `${FAUCET_SOL_URL}/faucet/sol` with the derived addrs, (d) polls chain RPCs for balance ≥ threshold within 30s, (e) starts the `@anyone-protocol/anyone-client` SOCKS5 daemon, (f) marks `GET /healthz` ready.
+**And** `GET /signer-info` returns `{evm: "0x...", sol: "...", balances: {...}}` — pubkeys only, never privkeys.
+
+**AC #2 — `POST /publish` round-trip:**
+**Given** the pod is healthy AND `targetHostname` is a reachable `.anyone` HS
+**When** a client POSTs `/publish` with body `{event: <signed Nostr event>, targetHostname: "<hostname>.anyone"}`
+**Then** the pod SOCKS5-dials the target HS, signs an EIP-712 BTP claim, publishes via `@toon-protocol/client`, and returns `202 {eventId, claimHash, chainId, publishedAt}` within 90s.
+**And** request + response shapes validate against `packages/townhouse/contracts/foreign-publish.schema.json` (ajv strict mode).
+**And** non-OK relay response returns `502 {error, relayAck}` — no silent swallow.
+
+**AC #3 — Runtime-mutable target HS (no restart):**
+**Given** the pod has just published to `targetHostname: hs-A`
+**When** the same pod is called with `targetHostname: hs-B` (different `.anyone` hostname)
+**Then** the second publish succeeds without a pod restart, dialing hs-B via SOCKS5, and both publishes land on their respective relays.
+**And** the pod has no `TARGET_HOSTNAME` env var baked at deploy time — the target is per-request.
+
+**AC #4 — Local townhouse sees Akash-rooted channel (carry-forward from 49.1 AC #2):**
+**Given** AC #2 has succeeded against operator A's local `townhouse hs up` apex
+**When** the test invokes `townhouse channels --json` against A's connector
+**Then** the output contains a channel with `peerId === <pod's EVM pubkey>` AND `status === 'open'`.
+
+**AC #5 — Peer-type classification (carry-forward from 49.1 AC #4):**
+**Given** AC #4's channel is open
+**When** A's peer-type-resolver runs over the post-publish channels snapshot
+**Then** the Akash pod's pubkey resolves to `'external'` (NOT `'self'`, NOT `'town'`, NOT `'mill'`).
+
+**AC #6 — Real `.anyone` transport, no clearnet bypass:**
+**Given** the pod environment
+**When** the test inspects the publish path
+**Then** the SOCKS5 dial goes through the pod's local `@anyone-protocol/anyone-client` daemon; no `127.0.0.1`, no direct clearnet WSS to the relay.
+**And** `targetHostname` matches `/^[a-z2-7]+\.(anyone|anon)$/` (v3 base32 alphabet, per 49.1 AC #3.2).
+**And** chain RPCs ARE on clearnet (NOT routed through SOCKS5) — assert via inspecting `connector.rpcTransport !== 'socks5'`.
+
+**AC #7 — No app-layer idempotency (trust event-id dedup):**
+**Given** retries reuse the SAME signed event object (no `created_at` re-stamping)
+**When** the same event is POSTed twice
+**Then** the relay deduplicates by `event.id` (SHA-256 of the canonical event) — pod has no idempotency cache, no `X-Idempotency-Key` header.
+**And** documented in the schema-contract spec: "Idempotency is handled at the Nostr layer. Pod is stateless w.r.t. replay."
+
+**AC #8 — Persistent-deployment discipline:**
+**Given** the pod is a long-lived Akash lease (NOT ephemeral per CI run)
+**When** the story closes
+**Then** the story footer names ONE lease owner (a pubkey, not "the team").
+**And** a monthly AKT-burn budget AC is stated with a 50% drain alert threshold.
+**And** a sunset calendar reminder is filed for when Epic 49 retires (close the lease).
+**And** an orphan-lease detector cron is added to CI listing active leases vs an allowlist, paging on unknown.
+
+**AC #9 — Pod rate limit (faucet-burn guard):**
+**Given** a fat-finger hostname could cause the pod to publish into the void, draining faucet funds
+**When** `POST /publish` exceeds N publishes/min from a single source IP
+**Then** the pod returns `429 {error: "rate_limited", retryAfterSec}`.
+**And** the rate-limit is at the POD, not the faucet (faucet stays dumb per 49.2).
+
+**AC #10 — Smoke runs against live Akash AND local townhouse:**
+**Given** the local `townhouse hs up` apex is running and `targetHostname` is the local `.anyone` hostname
+**When** the test POSTs `/publish` to the live Akash foreign-pod ingress
+**Then** the event lands on the local connector AND AC #4 + AC #5 + AC #6 all hold AND the AC #3 hot-swap demonstrates with a second hostname.
+**And** results documented in `### Review Findings` per 47.5/48.7/49.1 precedent.
+
+**Out of scope:**
+- Auth on `/publish` beyond IP-based rate limit (no JWT/mTLS this story)
+- Multi-event batching / streaming publish (one event per request)
+- Idempotency / replay cache (AC #7 — trust Nostr semantics)
+- AKT balance alerting wire-up (filed as 49.3-followup; this story documents the budget AC + cron, ops wire-up is a separate concern)
+
+**Dependencies:** 49.2 (faucet — for ephemeral key funding); 49.1 (foreign client smoke — precedent for connector + drill assertions); `townhouse hs up` (45.4); existing `deploy/akash/anvil.sdl.yaml` + `solana.sdl.yaml` leases as chain backends.
+
+**FRs:** FR30, FR31 | **NFRs:** NFR5 (real `.anyone` transport), NFR8 (`0o600` mode on any pod-side secret file, though signer keys live in memory only), NFR9 (pod-side admin endpoints `127.0.0.1`-bound where applicable)
+
+---
+
+### Story 49.4: Paid Packet → Earnings Receipt (EVM + SOL on Akash)
 
 As the Townhouse operator,
 I want a TOON client's ILP-paid packet to land on my connector and the resulting claim to appear in my earnings data plane on both EVM and Solana settlement chains via the Akash-hosted devnets,
@@ -1336,7 +1527,7 @@ So that the revenue loop is proven end-to-end on shared real infrastructure — 
 
 ---
 
-### Story 49.3: Live E2E Gate — Real-`.anyone` Loop on Akash EVM + SOL
+### Story 49.5: Live E2E Gate — Real-`.anyone` Loop on Akash EVM + SOL
 
 As a townhouse release engineer closing out Epic 49,
 I want a single unattended script that runs the full TOON-client → HS → connector → Mill → earnings loop against real `.anyone` transport AND the Akash-hosted EVM + Solana devnets,
@@ -1346,13 +1537,13 @@ So that the loop is provably green on shared real infrastructure before pilot re
 
 **Given** the gate script `scripts/townhouse-e2e-real-hs.sh`
 **When** invoked with no arguments (default chain profile = `evm+sol`)
-**Then** it (a) reads the Akash-Anvil and Akash-Solana endpoints from `deploy/akash/leases.json`, (b) probes both for liveness via `scripts/akash-status.sh`, (c) stands up two `.anyone`-HS endpoints (real two-host OR two Docker containers running real anon transport — implementation choice documented in the script header), (d) executes Story 49.1's smoke, (e) executes Story 49.2's EVM leg, (f) executes Story 49.2's SOL leg (Mill-mediated), and (g) exits 0 iff all succeed.
+**Then** it (a) reads the Akash-Anvil and Akash-Solana endpoints from `deploy/akash/leases.json`, (b) probes both for liveness via `scripts/akash-status.sh`, (c) confirms the persistent Akash foreign-client pod from Story 49.3 is reachable at its ingress AND the Akash devnet faucets from Story 49.2 are healthy, (d) executes Story 49.1's smoke topology checks, (e) drives Story 49.4's EVM leg via `POST /publish` against the 49.3 pod with chain=evm, (f) drives Story 49.4's SOL leg (Mill-mediated) via `POST /publish` with chain=sol, and (g) exits 0 iff all succeed.
 
 **Given** the operator wants to scope the gate
 **When** invoked with `--chain=evm` OR `--chain=sol`
-**Then** only that chain's leg of Story 49.2 runs; default remains `evm+sol`. No `--chain=mina` option exists (out of scope per Epic 49 settlement-chain scope decision; would require an Akash Mina SDL deployment first).
+**Then** only that chain's leg of Story 49.4 runs; default remains `evm+sol`. No `--chain=mina` option exists (out of scope per Epic 49 settlement-chain scope decision; would require an Akash Mina SDL deployment first).
 
-**Given** any AC from Story 49.1 or 49.2 (either chain leg) fails
+**Given** any AC from Story 49.1 or 49.4 (either chain leg) fails
 **When** the failure is detected
 **Then** the gate exits non-zero AND prints which AC failed AND which chain leg failed AND captures relevant connector + drill + Mill logs to `./e2e-real-hs-logs/<timestamp>/` for triage.
 
@@ -1366,8 +1557,205 @@ So that the loop is provably green on shared real infrastructure before pilot re
 
 **Given** the gate completes
 **When** the story is marked done
-**Then** findings (or "no issues found") are documented in `### Review Findings` with a date stamp AND any spec-vs-implementation drift is captured in `_bmad-output/implementation-artifacts/49-3-live-e2e-gate-real-anyone-loop.md`. The gate output AND Akash lease state at gate-time are committed to `_bmad-output/implementation-artifacts/v0.1-pilot-readiness.md` as the v0.1 readiness artifact.
+**Then** findings (or "no issues found") are documented in `### Review Findings` with a date stamp AND any spec-vs-implementation drift is captured in `_bmad-output/implementation-artifacts/49-5-live-e2e-gate-real-anyone-loop.md`. The gate output AND Akash lease state at gate-time are committed to `_bmad-output/implementation-artifacts/v0.1-pilot-readiness.md` as the v0.1 readiness artifact.
 
 **FRs:** FR34 | **NFRs:** NFR5, NFR6, NFR18
+
+---
+
+## Epic 50: SOL Settlement via Mill Routing
+
+Operators who run a Mill peer can now receive Solana-USDC settlement from EVM-paying foreign clients via Mill's cross-chain swap routing. Closes the BLOCKED-STRUCTURAL gap carried forward from Epic 49 (Test 6 in `townhouse-dvm-arweave-e2e.test.ts` documented the deferral — Epic 50 replaces that deferral with a live PASS). **Three stories, critical path 50.1 → 50.2 → 50.3.** No new connector cross-repo work required — this is entirely within the `town` mono-repo.
+
+> **Root-cause of BLOCKED-STRUCTURAL (Epic 49.4 OQ-2 resolution):** `townhouse node add mill` writes `mill.config.json` with `swapPairs: []`, which causes `startMill()` to throw `MillConfig.swapPairs MUST be a non-empty array`. Even if Mill started, the foreign pod sends ILP to `g.townhouse.town` (the relay address), not `g.townhouse.mill`. Epic 50 fixes both: (1) swap-pair provisioning so Mill can boot, and (2) the E2E gate drives a payment to `g.townhouse.mill` using `streamSwap` from the SDK (already implemented, Story 12.5). Model 2 (client directly targets Mill) is the viable routing path — per 49.4 OQ-2 investigation, Model 1 (connector routing rules) and Model 3 (background inventory swap) are NOT implementable with current connector code.
+
+**Dependencies:** Epic 49 (all 5 stories done — BLOCKED-STRUCTURAL formally deferred); `packages/mill` (production-ready); `packages/sdk/src/stream-swap.ts` (production-ready); Akash Solana devnet DSEQ 26996029 (live).
+
+| # | Title | Status |
+|---|---|---|
+| 50.1 | Mill HS-Mode Swap Pair Provisioning | backlog |
+| 50.2 | Mill Container + streamSwap Driver in E2E Harness | backlog |
+| 50.3 | SOL Settlement E2E Gate — Remove BLOCKED-STRUCTURAL | backlog |
+
+---
+
+### Story 50.1: Mill HS-Mode Swap Pair Provisioning
+
+As the Townhouse operator,
+I want `townhouse node add mill` to provision Mill with a working EVM→SOL swap pair configuration,
+So that Mill can actually boot and advertise its swap capabilities via kind:10032 without throwing `MillConfig.swapPairs MUST be a non-empty array`.
+
+**Acceptance Criteria:**
+
+**AC #1 — Swap pair written, not empty:**
+**Given** the operator runs `townhouse node add mill`
+**When** the provisioning pipeline reaches step 3b (write `mill.config.json`)
+**Then** the written JSON contains `swapPairs` as a non-empty array with at least one entry where `from.assetCode === 'USDC'`, `from.assetScale === 6`, `from.chain` matches `/^evm:base:\d+$/`, `to.assetCode === 'USDC'`, `to.assetScale === 6`, `to.chain` matches `/^solana:(devnet|mainnet)$/`.
+**And** `chains` in the written JSON includes both `'evm'` AND `'solana'` (not just `'evm'` as currently).
+
+**AC #2 — Chain ID derives from operator config:**
+**Given** the operator's townhouse config has `chainProviders[0].chainId = '31337'` (Anvil devnet default)
+**When** `mill.config.json` is written
+**Then** `swapPairs[0].from.chain === 'evm:base:31337'`.
+**And** if `chainProviders` is absent or empty, `from.chain` defaults to `'evm:base:31337'` (same Anvil devnet constant used throughout the test suite).
+
+**AC #3 — SOL network defaults to devnet:**
+**Given** `nodes.yaml` does NOT contain an explicit `nodes.mill.chains.solana.rpcUrl` override
+**When** `mill.config.json` is written
+**Then** `swapPairs[0].to.chain === 'solana:devnet'`.
+
+**AC #4 — Swap pair canonical amounts:**
+**Given** any provisioning run
+**When** `mill.config.json` is written
+**Then** `swapPairs[0].rate === '1.0'`, `swapPairs[0].minAmount === '1000'`, `swapPairs[0].maxAmount === '1000000000'`.
+
+**AC #5 — Mill starts without validation error:**
+**Given** the provisioned `mill.config.json` (from AC #1–#4)
+**When** it is passed to `startMill()` from `packages/mill/src/mill.ts`
+**Then** `startMill()` does NOT throw `MillConfig.swapPairs MUST be a non-empty array` — the config is structurally valid.
+
+**AC #6 — `feeBasisPoints` forwarded:**
+**Given** the operator has set `nodes.mill.feeBasisPoints: 30` in their config
+**When** Mill is provisioned and started
+**Then** the `FEE_BASIS_POINTS=30` env var is passed to the Mill container (current orchestrator already reads `feeBasisPoints`; this AC verifies no regression).
+
+**AC #7 — Unit test coverage:**
+**Given** `pnpm --filter @toon-protocol/townhouse test src/api/routes/nodes-lifecycle.test.ts`
+**When** the test suite runs
+**Then** the Mill provisioning branch includes a test asserting `swapPairs[0].from.chain` starts with `'evm:base:'` AND `swapPairs[0].to.chain` starts with `'solana:'`.
+
+**AC #8 — Build clean:**
+**Given** `pnpm --filter @toon-protocol/townhouse build`
+**When** run after the swapPairs provisioning change
+**Then** 0 new TypeScript errors.
+
+**Out of scope:** swap-pair UI (nodes.yaml editor), Mill inventory pre-funding, mainnet swap pair configuration (devnet default is sufficient for v0.1 pilot).
+
+**FRs:** FR39, FR40, FR41 | **NFRs:** NFR21, NFR22
+
+---
+
+### Story 50.2: Mill Container + streamSwap Driver in E2E Harness
+
+As the townhouse release engineer,
+I want the live E2E gate to start a Mill container and drive a SOL-settlement payment through it using the SDK's `streamSwap` function,
+So that the full EVM→Mill→SOL swap path is exercised in the same harness that already tests the DVM Arweave upload and ILP earnings loop.
+
+**Acceptance Criteria:**
+
+**AC #1 — Mill container launched in harness:**
+**Given** `beforeAll` in `townhouse-dvm-arweave-e2e.test.ts` runs
+**When** the HS stack (connector + town relay + DVM) is up and healthy
+**Then** a Mill container is started via `docker run -d --name townhouse-hs-mill --network townhouse-hs-net -p 127.0.0.1:3200:3200 ...` using the Mill image from `dist/image-manifest.json` key `'mill'`.
+**And** `CONNECTOR_URL` is set to the connector BTP WebSocket URL reachable within `townhouse-hs-net`.
+**And** `MILL_CONFIG_JSON` is set to the swap-pair-populated config (from Story 50.1 provisioning path).
+**And** `NODE_NOSTR_SECRET_KEY` is set to the deterministic Mill secret key derived from the test HD wallet.
+
+**AC #2 — Mill BLS health:**
+**Given** the Mill container was started (AC #1)
+**When** `GET http://127.0.0.1:3200/health` is polled
+**Then** it returns HTTP 200 with `{status: 'ok'}` within 60s wall-clock.
+
+**AC #3 — kind:10032 discovery:**
+**Given** Mill is healthy (AC #2)
+**When** the test subscribes to the apex town relay for kind:10032 events from Mill's pubkey
+**Then** at least one kind:10032 event is received within 30s, and its `swapPairs` field contains an EVM→SOL entry matching the provisioned config.
+
+**AC #4 — streamSwap drive:**
+**Given** Mill's pubkey and swap pair discovered from kind:10032 (AC #3)
+**When** the test drives `streamSwap({ client, millPubkey, millIlpAddress: 'g.townhouse.mill', pair, senderSecretKey: B_SECRET_KEY_BYTES, chainRecipient: B_SOL_ADDRESS, totalAmount: 1_000_000n, packetCount: 1 })`
+**Then** `result.status === 'success'` AND `result.packets.fulfilled === 1`.
+
+**AC #5 — FULFILL contains SOL claim:**
+**Given** `streamSwap` returns `status: 'success'` (AC #4)
+**When** `result.claims[0]` is inspected
+**Then** `claim.chain` matches `/^solana:/` AND `claim.recipient === B_SOL_ADDRESS` AND `claim.amount` is within ±1 of `1_000_000n × (1 − mill_fee_bps / 10_000)`.
+
+**AC #6 — Mill container cleaned up:**
+**Given** `afterAll` runs (whether tests pass or fail)
+**When** cleanup executes
+**Then** `docker rm -f townhouse-hs-mill` is called AND `docker logs townhouse-hs-mill` is captured to the `e2e-49-5-logs/<ts>/mill.log` failure log directory before removal.
+
+**AC #7 — `MILL_CONTAINER_NAME` constant:**
+**Given** the test file
+**When** the Mill container name is referenced
+**Then** it uses a `MILL_CONTAINER_NAME = 'townhouse-hs-mill'` constant (matching the DVM pattern: `DVM_CONTAINER_NAME = 'townhouse-dvm'`).
+
+**AC #8 — Build clean:**
+**Given** `pnpm --filter @toon-protocol/townhouse build`
+**When** run after harness changes
+**Then** 0 new TypeScript errors.
+
+**Out of scope:** multi-packet streaming (packetCount: 1 is sufficient for gate validation), Mill inventory pre-funding automation (test uses faucet-funded addresses from `deploy/akash/leases.json`), Mill TUI dashboard integration.
+
+**Dev Notes:**
+- `B_SOL_ADDRESS`: derive from `B_PRIVATE_KEY`'s HD path for Solana (`m/44'/501'/4'/0'`) using `ed25519-hd-key` (same approach as `entrypoint-mill.ts`); OR use the deterministic Akash Solana devnet faucet address from `infra/solana/keys/faucet-authority.json`.
+- `MILL_CONFIG_JSON`: construct inline in `beforeAll` using the same chain-ID and swap-pair logic as Story 50.1's provisioning path — do NOT call `townhouse node add mill` (test manages containers directly).
+- Mill's Nostr secret key: read from the test HD wallet at the `'mill'` node derivation path (same path the orchestrator uses via `deriveNodeKey('mill', …)`).
+
+**FRs:** FR42, FR43 | **NFRs:** NFR20, NFR23, NFR24
+
+---
+
+### Story 50.3: SOL Settlement E2E Gate — Remove BLOCKED-STRUCTURAL
+
+As the townhouse release engineer closing out the Epic 49 BLOCKED-STRUCTURAL deferral,
+I want Test 6 in `townhouse-dvm-arweave-e2e.test.ts` to exercise a real SOL settlement loop (using the Mill container and `streamSwap` driver from Story 50.2) and exit green,
+So that the SOL leg is provably live on Akash Solana devnet and the BLOCKED-STRUCTURAL marker is retired.
+
+**Acceptance Criteria:**
+
+**AC #1 — BLOCKED-STRUCTURAL removed:**
+**Given** `townhouse-dvm-arweave-e2e.test.ts`
+**When** Test 6 runs
+**Then** the `console.warn("SOL leg BLOCKED-STRUCTURAL — deferred to Epic 50 (Mill routing layer)")` call is gone AND `it.skip` is NOT used — Test 6 is a live, non-skipped test that asserts real settlement.
+
+**AC #2 — streamSwap result passes:**
+**Given** the Mill container is healthy (Story 50.2 AC #2)
+**When** Test 6 drives `streamSwap` to `g.townhouse.mill`
+**Then** `result.status === 'success'` AND the FULFILL SOL claim is non-null (Story 50.2 AC #4–#5 assertions).
+
+**AC #3 — Solana devnet confirmation:**
+**Given** the SOL claim from AC #2
+**When** the claim's `chain` is `solana:devnet` AND its `chainId` matches the Akash Solana devnet DSEQ 26996029 chain
+**Then** the claim amount matches the `totalAmount` within ±1 USDC-cent rounding.
+
+**AC #4 — `/api/earnings` type:'mill' entry:**
+**Given** `streamSwap` completed (AC #2)
+**When** the test polls `GET ${HS_API}/api/earnings` for up to 150s (5s interval)
+**Then** at least one claim entry with `direction === 'inbound'` AND `type === 'mill'` AND `amount` within ±10_000n of `1_000_000n` AND `at >= testStartMs` is found.
+**And** if the endpoint returns HTTP 404, the assertion is gracefully skipped (matching the same 404-guard pattern as Test 3's earnings poll, AC #4 Epic 49.5).
+
+**AC #5 — `PeerTypeResolver.resolvePeerType('mill')` still passes:**
+**Given** Mill is registered in `nodes.yaml` by the test harness
+**When** `PeerTypeResolver.resolvePeerType('mill')` is called
+**Then** it returns `'mill'` — the resolver integration from Story 49.4 Test 5 is NOT regressed.
+
+**AC #6 — Gate script SOL leg:**
+**Given** `scripts/townhouse-e2e-real-hs.sh` is invoked with `--chain=sol`
+**When** it runs
+**Then** the SOL leg executes (not a stub comment) AND exits 0 on success, non-zero on failure.
+**And** the SOL leg emits `SOL leg PASS (Mill streamSwap, txid: <claim>)` to stdout on success.
+
+**AC #7 — Full gate still green:**
+**Given** `RUN_DOCKER_INTEGRATION=1 pnpm --filter @toon-protocol/townhouse test:integration`
+**When** all 6 tests in `townhouse-dvm-arweave-e2e.test.ts` run (Tests 1–6)
+**Then** all 6 PASS — no regression to Tests 1–5 from adding Test 6's real Mill interaction.
+
+**AC #8 — Test 6 timeout:**
+**Given** Test 6 runs
+**When** it is registered
+**Then** it has a vitest `{ timeout: 200_000 }` option (200s ≥ NFR24's 180s minimum, matching the 150s Test 3 budget + Mill overhead).
+
+**AC #9 — Review Findings:**
+**Given** the story is complete
+**When** the story is marked done
+**Then** `### Review Findings` in the story file contains a dated entry with per-AC outcome + gate run evidence, and `_bmad-output/implementation-artifacts/v0.1-pilot-readiness.md` is updated to reflect SOL leg status: PASS.
+
+**Out of scope:** Mina settlement (no Akash Mina deployment; deferred to a future epic); multi-Mill load balancing; Mill inventory refill automation.
+
+**Dependencies:** Story 50.1 (swap-pair provisioning); Story 50.2 (Mill container + streamSwap driver).
+
+**FRs:** FR43, FR44, FR45 | **NFRs:** NFR20, NFR23, NFR24
 
 ---

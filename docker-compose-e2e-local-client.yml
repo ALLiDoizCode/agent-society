@@ -1,0 +1,88 @@
+# Local-Docker E2E foreign client (parallel to 49.4 Akash deployment)
+#
+# Brings up the 49.3 foreign-toon-client image as a LOCAL Docker container on
+# an isolated network. Pair with `townhouse hs up` running on the same host to
+# exercise the full paid-publish → earnings loop without depending on Akash
+# provider stability for the client itself.
+#
+# Architecture:
+#   - Container runs the published 49.3 image VERBATIM
+#     (ghcr.io/toon-protocol/akash-foreign-toon-client:demo)
+#   - Network `e2e-client-net` is a separate bridge with NO direct link to
+#     `townhouse-hs-net`. The two halves can only reach each other through the
+#     public ATOR network (via the pod's in-process anon SOCKS5 daemon).
+#   - Akash chains + faucet are still consumed (the only Akash dependency that
+#     remains stable). RPC URLs are passed via the parent orchestrator's env.
+#
+# Orchestrator: scripts/townhouse-e2e-local-hs.sh
+#
+# Run:
+#   FAUCET_URL=https://<akash-faucet>.ingress.<provider> \
+#   EVM_RPC_URL=https://<akash-anvil>.ingress.<provider> \
+#   SOLANA_RPC_URL=https://<akash-solana>.ingress.<provider> \
+#     docker compose -f docker-compose-e2e-local-client.yml up -d
+#
+# Tear down:
+#   docker compose -f docker-compose-e2e-local-client.yml down -v
+
+networks:
+  e2e-client-net:
+    name: e2e-client-net
+    driver: bridge
+
+services:
+  toon-client-e2e:
+    image: ghcr.io/toon-protocol/akash-foreign-toon-client:demo
+    container_name: toon-client-e2e
+    networks: [e2e-client-net]
+    restart: unless-stopped
+    ports:
+      # POST /publish, GET /healthz, GET /signer-info — bind to host loopback
+      - "127.0.0.1:29200:8080"
+    environment:
+      # Akash devnet endpoints — supplied by orchestrator from deploy/akash/leases.json
+      FAUCET_URL:        ${FAUCET_URL:?FAUCET_URL is required (read from deploy/akash/leases.json)}
+      EVM_RPC_URL:       ${EVM_RPC_URL:?EVM_RPC_URL is required (read from deploy/akash/leases.json)}
+      SOLANA_RPC_URL:    ${SOLANA_RPC_URL:?SOLANA_RPC_URL is required (read from deploy/akash/leases.json)}
+
+      # Pod surface
+      POD_PORT:                   "8080"
+      ANON_SOCKS_PORT:            "9050"
+      PUBLISH_RATE_LIMIT_PER_MIN: "30"
+      LOG_LEVEL:                  "info"
+
+      # Route through public ATOR proxies. NOTE: the foreign-pod entrypoint only
+      # uses the FIRST proxy in this list (no runtime fallback yet) — comma-
+      # separated form is for forward-compat. Put a known-good proxy FIRST.
+      # Three known instances (per packages/client/src/transport/socks5-public.integration.test.ts):
+      #   - 5.78.181.0:9052     (Oregon)   — flaky 2026-05-21; intermittent timeouts
+      #   - 157.90.113.23:9052  (Nürnberg) — preferred
+      #   - 57.128.249.250:9052 (Warsaw)   — backup
+      # Skipping the pod's local anon daemon because it can't always find
+      # introduction points for a freshly-published .anon HS.
+      ANYONE_PROXY_URLS:          "socks5h://157.90.113.23:9052,socks5h://57.128.249.250:9052,socks5h://5.78.181.0:9052"
+
+      # Chain context (deterministic Akash-Anvil USDC + TokenNetwork)
+      TOON_CHAIN_KEY:             "evm:base:31337"
+      TOON_CHAIN_ID:              "31337"
+      TOON_TOKEN_ADDRESS:         "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+      TOON_TOKEN_NETWORK_ADDRESS: "0xCafac3dD18aC6c6e92c921884f9E4176737C052c"
+
+      # Target = local townhouse hs apex (Anvil acct[3], deterministic across
+      # the dev stacks). The .anyone hostname is per-request via POST /publish.
+      TARGET_SETTLEMENT_ADDRESS:  "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+
+      # Drives the paid-claim path (1 USDC at scale=6). 49.4's round-6 verified
+      # this fee setting produces a real signed claim that lands on the apex.
+      TOON_FEE_PER_EVENT:         "1000000"
+
+      # Self-signed TLS on some Akash provider ingresses — scoped to the client
+      # container only (matches 49.4 carry-forward).
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 60       # generous: ~5min budget covers anon daemon bootstrap
+      start_period: 10s

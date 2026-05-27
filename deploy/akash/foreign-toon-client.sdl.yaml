@@ -1,0 +1,137 @@
+---
+# Persistent Akash Foreign-TOON-Client Pod (Story 49.3)
+#
+# Long-lived Akash deployment that wraps 49.1's proven in-process publish flow
+# behind a Fastify HTTP control plane. On boot, the pod:
+#   1. Generates ephemeral signer keypairs (EVM secp256k1 + Solana ed25519)
+#      in memory ONLY — no on-disk wallet, no Akash secret mount (NFR8).
+#   2. Starts a Fastify server on 0.0.0.0:8080 IMMEDIATELY (clearnet ingress
+#      via Akash L7) — /healthz is reachable within ~100ms.
+#   3. Spawns a LOCAL `anon` daemon (ator-onion mode) with a SOCKS-only torrc
+#      bound to 127.0.0.1:9050. No HiddenServiceDir — the pod is a CLIENT of
+#      the operator's .anyone HS, not a host.
+#   4. POSTs the public keys to the 49.2 dev-faucet (FAUCET_URL) for a drip
+#      on each chain and polls balances. Flips `anyoneReady = true` once anon
+#      SOCKS5 binds and faucet funding completes.
+#
+# HTTP surface (see packages/townhouse/contracts/foreign-publish.schema.json
+# for the wire contract):
+#   GET  /healthz       — readiness probe + balances
+#   GET  /signer-info   — same + transport details (PUBLIC keys only)
+#   POST /publish       — { event, targetHostname } → 202 { eventId, claimHash, ... }
+#
+# Image: ghcr.io/toon-protocol/akash-foreign-toon-client:demo
+#   Built from docker/Dockerfile.foreign-toon-client with the repo root as
+#   build context so the entrypoint bundle can be esbuild'ed from
+#   docker/src/entrypoint-foreign-pod.ts.
+#
+# Lease lifecycle: PERSISTENT (NOT ephemeral per CI run). The pod amortizes
+# the ~30-90s anon transport bootstrap across all callers. See
+# _bmad-output/implementation-artifacts/49-3-persistent-akash-foreign-client-pod.md
+# § "Persistent-Deployment Discipline" + "Story Close-Out Checklist" for the
+# named lease owner + monthly AKT-burn budget. Sunset reminder filed in
+# _bmad-output/implementation-artifacts/deferred-work.md § "Epic 49 sunset
+# checklist".
+#
+# Story 49.4 post-state (2026-05-20): TOON_FEE_PER_EVENT flipped from 0 → 1000000
+# (= 1 USDC at scale=6) under Option B authority (Task 4.1). The connector now
+# processes a real EVM claim on every /publish, crediting A's earnings plane.
+# 49.5's gate consumes whatever TOON_FEE_PER_EVENT is set at gate time. To
+# revert, redeploy with TOON_FEE_PER_EVENT=0 env override in scripts/akash-deploy.sh.
+#
+# Pricing: 1500 uakt per block (~$3-5/mo). Slightly larger than the faucet
+# lease because the local anon daemon + viem clients need ~1Gi RAM headroom.
+#
+# Template tokens substituted by scripts/akash-deploy.sh cmd_foreign_toon_client:
+#   __FAUCET_URL__     - default: leases.faucet.url (story 49.2)
+#   __EVM_RPC_URL__    - default: leases.anvil.url
+#   __SOLANA_RPC_URL__ - default: leases.solana.url
+# Static env vars with devnet defaults (no template substitution needed):
+#   SOLANA_USDC_MINT   - SPL Mock USDC mint (infra/solana/keys/usdc-mint.json default)
+#   TOON_TOKEN_ADDRESS - EVM Mock USDC contract (Anvil Account #0 deploy default)
+#   TOON_FEE_PER_EVENT - ILP units per publish (0 = free relay, default)
+
+version: "2.0"
+
+services:
+  foreign-toon-client:
+    image: ghcr.io/toon-protocol/akash-foreign-toon-client:demo
+    env:
+      # Faucet ingress + chain RPCs templated from leases.json at deploy time.
+      - FAUCET_URL=__FAUCET_URL__
+      - EVM_RPC_URL=__EVM_RPC_URL__
+      - SOLANA_RPC_URL=__SOLANA_RPC_URL__
+      - POD_PORT=8080
+      # Public ATOR proxy URL(s) for outbound BTP transport (ator-public mode,
+      # Epic 23 D23-003). The smoke test's beforeAll SOCKS5 probe confirms
+      # the proxy can reach the local apex .anon HS before POST /publish runs.
+      # The pod picks the first URL from this comma-separated list.
+      # See docker/src/entrypoint-foreign-pod.ts for the ator-onion fallback.
+      - ANYONE_PROXY_URLS=socks5h://5.78.181.0:9052
+      # Rate limit per source IP (AC #9, story 49.3). Generous for a
+      # persistent fixture, tight enough to deter accidental publish loops.
+      - PUBLISH_RATE_LIMIT_PER_MIN=30
+      - LOG_LEVEL=info
+      # Chain context defaults — match Anvil/SDK-E2E deterministic fixtures
+      # (DEFAULT_HS_CHAIN_PROVIDERS + 49.1 smoke constants). Override if
+      # the target apex is not using the default chain set.
+      - TOON_CHAIN_KEY=evm:base:31337
+      - TOON_CHAIN_ID=31337
+      - TOON_TOKEN_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+      - TOON_TOKEN_NETWORK_ADDRESS=0xCafac3dD18aC6c6e92c921884f9E4176737C052c
+      # Solana SPL USDC mint — deterministic devnet key baked into every Akash
+      # Solana boot (infra/solana/keys/usdc-mint.json). Override if using a
+      # different Solana devnet deployment.
+      - SOLANA_USDC_MINT=6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q
+      # Target apex's EVM settlement address (Anvil Account #3 — the
+      # DEFAULT_HS_CHAIN_PROVIDERS keyId). Override for non-default apex.
+      - TARGET_SETTLEMENT_ADDRESS=0x90F79bf6EB2c4f870365E785982E1f101E93b906
+      # ILP fee per publish event (ILP units). 0 = free relay; the connector
+      # skips per-packet claim generation for amount=0, and the relay accepts
+      # with FEE_PER_EVENT=0. Set to a positive integer for paid relays.
+      # Story 49.4 Option B: set to 1000000 (1 USDC at scale=6) so the
+      # connector processes a real EVM claim and credits A's earnings plane.
+      # Re-deployed with TOON_FEE_PER_EVENT=1000000 for the 49.4 smoke gate.
+      # Story 49.5's gate will use whatever fee is set here at gate time.
+      - TOON_FEE_PER_EVENT=1000000
+      # NOTE: targetHostname is per-request via POST /publish body (AC #3).
+      # NO TARGET_HOSTNAME env var here — the pod accepts ANY .anyone HS
+      # at runtime, no redeploy needed when the operator's laptop reboots.
+    expose:
+      # `as: 80` triggers Akash's L7 HTTPS ingress (Let's Encrypt). The
+      # /healthz + /signer-info + /publish surface is reachable over public
+      # HTTPS without mixed-content blocking. The internal anon SOCKS5
+      # (127.0.0.1:9050) is NOT exposed — that's by design.
+      - port: 8080
+        as: 80
+        proto: tcp
+        to:
+          - global: true
+
+profiles:
+  compute:
+    foreign-toon-client:
+      resources:
+        cpu:
+          units: 1.0
+        memory:
+          size: 1Gi
+        storage:
+          - size: 2Gi
+  placement:
+    dcloud:
+      pricing:
+        foreign-toon-client:
+          denom: uakt
+          amount: 1500
+
+deployment:
+  foreign-toon-client:
+    dcloud:
+      # count: 1 — single replica; persistent. If the lease ends or the
+      # provider evicts, the operator must redeploy via
+      # scripts/akash-deploy.sh foreign-toon-client. The pod is stateless
+      # w.r.t. publish replay (Nostr layer dedupes by event.id) and
+      # holds no on-disk wallet, so a clean replacement is safe.
+      profile: foreign-toon-client
+      count: 1

@@ -1,4 +1,77 @@
 
+## Deferred from: Epic 21.18 — Arweave Turbo Credit Funding (2026-05-22)
+
+- ~~**D1 — human-crypto-keys vendoring**~~ **RESOLVED 2026-05-22** — Replaced `human-crypto-keys@0.1.4` + `node-forge@0.8.5` with `rsa-from-seed.ts` (HMAC-DRBG via `@noble/hashes` + `node-forge@1.3.3`). Byte-identical RSA-4096 derivation; CVE-free; 126/126 wallet tests pass.
+
+- **D2 — live DVM integration smoke against real orchestrator** — `townhouse up --dvm` live test (verify `DVM_ARWEAVE_JWK_B64` appears in container env) was deferred because running it requires stopping the HS stack. Unit tests in `orchestrator.test.ts:1537–1694` cover the 4 code paths. Do live smoke before 21.18 ships as `done`. [`packages/townhouse/src/docker/orchestrator.ts`]
+
+- **D3 — cold pull narration smoke** — `pull-narrator.ts` was added but live pull-narration (removing a Docker image and re-running `hs up`) was not smoke-tested in this session. Run once before 21.18 ships. [`packages/townhouse/src/cli/pull-narrator.ts`]
+
+- ~~**D6 — Story 49-5 ATOR green run**~~ **RESOLVED 2026-05-26** — `townhouse-dvm-arweave-e2e.test.ts` gate ran **5/5 PASS in 71s**. ATOR network stable; B anon SOCKS5 ready before channel open. Arweave txid `ENO_lSHMz672WRtBru3PFHVKPCGZyYkLzuRCxPHRuus` confirmed in ILP FULFILL data. Two fixes landed: (1) ephemeral JWK for free-tier Turbo uploads (`TurboFactory.unauthenticated()` is read-only); (2) connector.yaml self-route `g.townhouse → local` (missing route caused F02 before localDelivery check). `@anyone-protocol/anyone-client@1.1.3` 60s timeout is hardcoded (not configurable). Fallback gate (`local-docker-hs-paid-earnings-smoke.test.ts`, `RUN_LOCAL_HS_E2E=1`) documented in `scripts/townhouse-e2e-real-hs.sh` comments for ATOR-instability conditions.
+
+- **D4 — `credits buy` live on-chain test** — `--quote-only` was tested live with Turbo devnet. Full `topUpWithTokens` submit path (real on-chain tx) was not tested. Requires funded DVM SOL/EVM address. Smoke once before v0.1 pilot. [`packages/townhouse/src/credits/buy.ts`]
+
+- **D5 — `wallet.arweave.enc` export from `wallet/index.ts`** — `ar-cache.ts` functions are not currently re-exported from the wallet index (only consumed internally via manager.ts). Expose if scripting access is needed.
+
+## Epic 49 sunset checklist
+
+Track-forward: when Epic 49 retires (or by 2026-08-31, whichever comes first),
+close these long-lived Akash leases. Each runs ~$2-5/mo and has NO consumer
+outside Epic 49 — closing the epic = closing the leases.
+
+- **49.3 foreign-toon-client lease** — close via `scripts/akash-deploy.sh close foreign-toon-client`.
+  Lease URL recorded in `deploy/akash/leases.json["foreign-toon-client"].url` after deploy.
+  Owner: `dev.jonathan.green@gmail.com`. Monthly AKT-burn budget: ~$3-5/mo at
+  1500 uakt/block × 30 days; alert at 50% drain (manual eyeball discipline
+  for now — wire to monthly cron if pilot extends past 2026-08-31). The pod
+  holds ZERO persistent state (ephemeral signer keys, no on-disk wallet); a
+  clean close + redeploy is safe at any time.
+- **49.2 faucet lease** — close at the same time as 49.3. The faucet has no
+  consumers once 49.3 closes (49.4/49.5 also retire alongside).
+- **anvil + solana chain leases** — close after 49.3 + 49.2 (they're the only
+  remaining consumers; downstream Mock USDC state is throwaway).
+
+Orphan-lease detector follow-up (NOT blocking 49.3): wire
+`scripts/akash-status.sh --orphan-check` into CI nightly to page on any
+unknown leases under the toon-protocol Akash Console wallet. Currently
+manual via the Console UI. Belongs in a small infra-hardening story.
+
+## Deferred from: code review of 49-2-akash-devnet-faucets-and-ui (2026-05-19)
+
+- **W1 — Smoke test 5 exercises IP rate-limit, not per-address token-bucket** — `Promise.all` fires 6 requests concurrently; all 6 see no prior hit at check-time before any `recordFaucetHit` runs; the IP 5/min cap is what actually fires. A sequential per-address sub-test (two requests 500ms apart to the same address, expect second=429) would properly gate AC#1's 1/sec address limit. Low impact in devnet context. [`packages/townhouse/src/__integration__/akash-faucet-smoke.test.ts:188`]
+
+- **W2 — `"unknown"` IP bucket shared by all clients lacking a resolvable IP** — `clientIp()` returns `"unknown"` when both `X-Forwarded-For` and `req.socket.remoteAddress` are absent; all such callers share one IP rate-limit slot (5/min aggregate cap). Akash L7 `accept-http-hosts` SDL rule does propagate XFF; best-effort in devnet context. [`packages/faucet/src/index.js:547`]
+
+- **W3 — `render_faucet_sdl` sed injection via leases.json URL values** — `$evm_rpc`, `$evm_usdc`, `$sol_rpc`, `$sol_usdc` are interpolated unquoted into sed `|`-delimited expressions; a `|` in a URL value corrupts the command. `leases.json` is operator-controlled; HTTP URLs don't normally contain `|`. Same pattern as other deploy scripts. [`scripts/akash-deploy.sh` `render_faucet_sdl`]
+
+- **W4 — Sequential EVM transactions: ETH disbursed even if token transfer fails** — `dripEvmCore` sends ETH then sends token; if `tokenTx.wait()` rejects, the caller receives a 502 even though ETH was already transferred. Inherent blockchain limitation; no atomic rollback possible. Devnet context, spec doesn't require partial-win surface. [`packages/faucet/src/index.js`]
+
+- **W5 — `startRetryCountdown` doesn't re-disable submit button when user edits address during countdown** — `renderDetect` re-enables submit for a valid address while countdown is ticking; next `tick()` shows rate-limit message but button is clickable and a new request can fire. UX-only, devnet tool, low impact. [`packages/faucet/public/index.html`]
+
+## Deferred from: 49-2-akash-devnet-faucets-and-ui (2026-05-18)
+
+- **F1 — Create the `akash-faucet` GHCR package + push canonical tag** — Story 49.2 spec calls for `ghcr.io/toon-protocol/akash-faucet:demo` to match the `akash-{anvil,solana}:demo` convention. The current PAT in `~/.docker/config.json` (`toon-protocol`) only has push rights on existing packages, so `docker push akash-faucet:demo` fails with `permission_denied: token doesn't match expected scopes`. Workaround: `deploy/akash/faucet.sdl.yaml` uses the `townhouse-faucet:demo` alias (same image content, scope-pushable today). Right fix: create the GHCR package via `gh api orgs/toon-protocol/packages` or the GitHub UI, grant the existing PAT push perms, then `scripts/akash-deploy.sh build-faucet` will push both tags cleanly. After that, flip `faucet.sdl.yaml`'s image reference to `akash-faucet:demo` and remove this entry.
+
+- **F2 — Refactor faucet drip logic into a shared module imported by both `packages/faucet/src/index.js` AND `packages/townhouse/src/api/routes/faucet.ts`** — Story 49.2 Task 1.4 confirmed the drip logic is duplicated between the standalone Express faucet (story 49.2 deployment target) and the townhouse dashboard's Fastify route (used by the React `FaucetPanel`). Story 49.2 explicitly recommended (a) leave both in place — refactoring is scope creep — but flagged it as a follow-up. The shared module would live at `packages/faucet/src/drip-core.{evm,sol}.mjs` and be imported by both, eliminating drift risk on the address regex, the SOL+USDC compose flow, and the `MINT_NOT_FOUND` partial-success path. Separate-PR work; do not bundle with another story.
+
+- **F3 — Epic 49 sunset checklist — close the faucet lease** — When Epic 49 retires, close the `faucet` Akash lease via `scripts/akash-deploy.sh close faucet`. The lease has no rollback dependency (downstream consumers 49.3/49.4/49.5 are all Epic 49 stories that retire alongside). Tracked here so the close step isn't forgotten when the epic is rolled up; the close also refunds the unconsumed escrow.
+
+- ~~**F4 — Redeploy dead Akash-Anvil + Akash-Solana leases**~~ **RESOLVED 2026-05-19** — Anvil redeployed as DSEQ 26888410, Solana as DSEQ 26888424; faucet redeployed as DSEQ 26888459. Smoke 7/7 PASS. — Story 49.2 smoke surfaced that both upstream chain leases listed in `deploy/akash/leases.json` are non-responsive at the HTTP layer (`scripts/akash-status.sh` reports `down`; `curl -k` also returns empty). Leases were deployed 2026-05-07; appear to have died sometime between then and 2026-05-18. Direct impact on 49.2: Tests 3+4 of the smoke (`POST /faucet/evm` and `POST /faucet/sol` strict-success paths) are BLOCKED-EXTERNAL until the chains come back. Fix: `./scripts/akash-deploy.sh redeploy anvil` + `./scripts/akash-deploy.sh redeploy solana`, then re-run the faucet smoke (it will auto-pick the new URLs from `leases.json`). Downstream impact: stories 49.3/49.4/49.5 all depend on these chains being up. Should be sequenced BEFORE Epic 49 progresses past 49.2.
+
+- **F5 — Akash provider image-cache stickiness** — When `cmd_faucet` redeploys, the Akash provider's docker daemon serves the cached `:demo` tag even if GHCR's `:demo` has been re-pushed with a new digest. Worked around in 49.2 by tagging the corrected build as `townhouse-faucet:v49-2-fix` and updating the SDL. Long-term fix: pin SDL `image:` lines to SHA-pinned tags (e.g., `townhouse-faucet:sha-XXXX`) via the existing `image_digest()` helper, the same way `ANVIL_IMAGE_TAGGED` works. Lifting this to `cmd_faucet` matches the existing anvil/solana SHA-pinning pattern. Belongs in a small infra hardening story.
+
+## Deferred from: code review of 49-1-toon-client-foreign-townhouse-hs-smoke (2026-05-18, Pass 2)
+
+- **D1 — Real SOCKS5 handshake probe for `waitForBSocks5`** — Current gate is a raw TCP `connect()` to `127.0.0.1:9050`, which succeeds the instant the anon-client daemon binds the listener (5–30s) but BEFORE anon circuits are usable for `.anon` SOCKS5 tunnels (60–180s). Three downstream `ToonClient.start()` retries (~3 min slack) mask the gap today, but the gate is misleading and inflates failure-diagnostic time. Right fix: SOCKS5 greeting exchange + CONNECT to a known `.anon` target (or at minimum the SOCKS5 protocol greeting). Re-raised by both Blind Hunter (B6) and Edge Case Hunter (E5) in Pass 2 review. [`packages/townhouse/src/__integration__/townhouse-foreign-hs-smoke.test.ts:402-423, 1079-1100`]
+
+- **D-DN4 — `build-app.ts` package.json path resolution unit test (follow-up for Hard Rule #2 exception d)** — `build-app.ts` was edited in 49.1 under Hard Rule #2 exception (d) (createRequire rename + relative path fix from `'../../package.json'` to `'../package.json'`). Exception (c) socks5.ts has a documented follow-up PR (D2 above); exception (d) had none. Resolved 2026-05-18 Pass 2 (DN4) by mirroring the commitment: write a unit test that asserts package.json resolution from BOTH `dist/cli.js` (current bundle target) AND a future chunked `dist/api/build-app.js` (hypothetical tsup-config change). Catches the fragility flagged in Pass 2 patch P37. [`packages/townhouse/src/api/build-app.ts:28-30`]
+
+- **D2 — `socks5.ts` CJS/ESM unit test for the `(WS as any).default ?? WS` constructor fallback** — Production fallback added by the Pass 1 socks5.ts edit (Hard Rule #2 exception c) has no unit test. Test should pin both CJS (`{ default: WSClass }`) and ESM (`WSClass` directly) shapes, plus the malformed-default boundary (namespace object with no `WebSocket` named export). Originally deferred in Pass 1 (Decision D2 → "follow-up PR"); re-raised by Blind Hunter (B7) in Pass 2 because the runtime ladder is still incomplete. The constructor-ladder code patch (P40, Pass 2) is independent of and complementary to this test. [`packages/client/src/transport/socks5.ts:71-78`]
+
+## Deferred from: code review of 49-1-toon-client-foreign-townhouse-hs-smoke (2026-05-18, Pass 1)
+
+- `townhouse logs` SIGKILL race in Test 2 — outer 15s timer + `waitForExit`'s own SIGKILL fire near-simultaneously; the child exits with `code=null` (killed-by-signal). The current raw `waitForExit` swallows this fine, but if anyone later swaps to `waitForExitLabelled`, the labelled wrapper throws on null exit and would mis-classify normal teardown as a failure. Works as-is today; the right fix is a broader teardown-helper refactor that consolidates SIGKILL ownership, outside the scope of a single story. [`packages/townhouse/src/__integration__/townhouse-foreign-hs-smoke.test.ts:947-962`]
+
 ## Deferred from: Epic 49 re-scope (2026-05-18) — Aggregated Pilot Telemetry
 
 Epic 49 was originally scoped as a 7-story "Telemetry & Validation Gate" — pilot operators opt in to anonymous weekly earnings pings; the median across all pilot operators fires a $1.00 / $0.10 / <$0.10 validation gate at pilot day-30 that decides v1.0 marketing copy. Receiver server at `telemetry.toon-protocol.dev` behind Cloudflare (IP-stripping at the edge per NFR5 "no PII") and Let's Encrypt SSL.
@@ -462,3 +535,47 @@ All findings target `packages/townhouse/src/__integration__/townhouse-tui-e2e.te
 - `/api/transport` readiness check at lines 340-343 doesn't confirm `/api/earnings` plugin registered. Plugin-order regression would surface as opaque 404 in Test 2.
 - `parseLastJsonLine` at lines 177-193 walks back to first line starting with `{` — could parse a structured log envelope as the success body. Mitigated today by `expect(addBody.ok).toBe(true)` at line 383 but fragile.
 - ActivityTicker disjunction `/no settlements yet|press \[a\] when|activity arrives|\[a\] activity/` at lines 485-487 accepts wildly different ticker states — broad assertion misses regressions where ticker copy renders the wrong empty-state variant.
+
+## Deferred from: code review of 49-3-persistent-akash-foreign-client-pod (2026-05-19)
+
+- **D1: Raw TCP probe in waitForSocks5Bound** — `docker/src/entrypoint-foreign-pod.ts` uses a raw TCP connect probe to detect SOCKS5 readiness. A real SOCKS5 protocol greeting probe would be more accurate. Pre-existing from 49.1 deferred-work.md D1; the 3× retry inside ToonClient.start() absorbs the gap for now.
+- **D2: Tor circuits not fully built when SOCKS5 binds** — The SOCKS5 port binds before Tor circuits are usable for outbound .anyone tunnels. Real fix is the same as D1 (SOCKS5 greeting probe confirms circuits); current workaround is ToonClient.start() retry.
+- **D3: Lease owner pubkey pending Task 8 deploy** — Story footer records `dev.jonathan.green@gmail.com` as owner; Akash Console wallet pubkey must be appended after the first `scripts/akash-deploy.sh foreign-toon-client` run.
+- **D4: AKASH_FOREIGN_POD_URL trailing slash in smoke test URL composition** — `packages/townhouse/src/__integration__/akash-foreign-pod-smoke.test.ts` constructs URLs as `${AKASH_FOREIGN_POD_URL}/healthz`; a trailing slash in the env var produces double-slash. Low risk for operator-controlled env; fix with `url.replace(/\/$/, '')`.
+- **D5: AC #2 publish fails against fresh test apex (HS propagation delay)** — `socks5.ts` uses a 2s socket timeout for the SOCKS5 connect. A freshly-started `townhouse hs up` apex has not yet had its HS descriptor indexed by the public ATOR DHT; the pod's ATOR proxy (ator-public mode, 5.78.181.0:9052) accepts the SOCKS5 CONNECT but can't route within 2s. Smoke tests 3, 4, 9 fail against a 60-second-old apex. In production (operator apex running for hours/days), the descriptor IS indexed and the first connect succeeds within 2s. Fix: extend the socks5.ts socket timeout from 2s to 30s for the initial connect attempt, OR add a "HS readiness probe" that confirms the DHT has indexed the descriptor before running the publish tests. Belongs in a small transport-hardening story alongside D1.
+
+## Deferred from: code review of 49-4-paid-packet-earnings-receipt-evm-and-sol-on-akash (2026-05-20)
+
+- **D1 (49.4): Hardcoded ATOR proxy `5.78.181.0:9052`** — `packages/townhouse/src/__integration__/akash-paid-earnings-smoke.test.ts:813-815` hardcodes the public ATOR introduction proxy. Should be env-overridable (`ATOR_SOCKS5_PROXY`) with a fallback to localhost; deferred to next transport-config refactor.
+- **D2 (49.4): Hardcoded apex EVM address `0x90F79bf6…`** — `packages/townhouse/src/__integration__/akash-paid-earnings-smoke.test.ts:700` is the deterministic Anvil acct[1]; runtime parse from pod `/healthz` is a polish item, not a correctness gap.
+- **D3 (49.4): `EXPECTED_FEE = 1_000_000n` hand-linked to SDL value** — Test file duplicates the value baked into `deploy/akash/foreign-toon-client.sdl.yaml`. Future polish: parse `TOON_FEE_PER_EVENT` from pod `/healthz` at runtime; deferred to next test-helpers refactor.
+- **D4 (49.4): `parseLastJsonLine` duplicated from 47.5** — Same helper exists in `townhouse-earnings-e2e.test.ts` and `akash-paid-earnings-smoke.test.ts`. Extract to `_test-helpers.ts` in a follow-up cleanup PR.
+- **D5 (49.4): `townhouse hs up` exit semantics assumption** — Test assumes `hs up` returns exit code 0 after orchestration completes (works per 49.3 precedent). Document the assumption explicitly if the orchestrator behavior changes.
+- **D6 (49.4): Fixed 8s sleep for BTP handshake** — `akash-paid-earnings-smoke.test.ts:741` waits a magic 8s for connector↔relay BTP handshake. Replace with poll on `adminClientA.getPeers()` for `connected: true` in a future refactor.
+- **D7 (49.4): `example.invalid` DNS resolver pitfalls** — Preflight unit tests (AC #6) probe `https://example.invalid/*`. RFC 6761 guarantees no resolution, but corporate DNS / split-horizon resolvers / captive portals may answer. Switch to `http://127.0.0.1:1/` (ECONNREFUSED) if false-positive resolution becomes a CI issue.
+- **D8 (49.4): Single provider for two critical leases (anvil+faucet)** — Both currently on `akash1hgulk6…`. Multi-provider distribution is an Epic 49.5 stability concern; campaign artifact, not a blocking issue.
+- **D9 (49.4): AC #2 Mill `node add mill` synthetic substitution** — Test substitutes a synthetic Mill registration (nodes.yaml write + `connectorAdmin.registerPeer`) for the real `townhouse node add mill` 6-step lifecycle. Acknowledged in AC #2 BLOCKED-STRUCTURAL scope; revisit when Mill SOL settlement routing layer ships.
+- **D10 (49.4): `captureLogsOnFailure` writes to `process.cwd()`** — Inconsistent with workspace-rooted logs. 47.5 has the same pattern; anchor to `WORKSPACE_ROOT` from `_test-helpers.ts` in the next test-helpers refactor.
+
+## Deferred from: 49-4 post-review-pass-1 GREEN re-run attempt (2026-05-20)
+
+- **D-49.4-PR1-1 (49.5 prerequisite): Akash provider quality is the binding constraint on a deterministic GREEN gate.** 4 consecutive provider failures across 1 hour of redeploy churn (Solana validator io_uring crash, two foreign-pod providers with broken outbound HTTPS / dead ingress). 49.5 should either pre-vet a small allow-list of known-good providers, use a private Akash provider, or switch the foreign-pod off Akash for the gate. Capture this as an Epic 49.5 architecture decision before its CI gate runs.
+- **D-49.4-PR1-2 (49.5 prerequisite): pod boot resilience now landed but unverified in live evidence.** Patch in `docker/src/entrypoint-foreign-pod.ts` lines ~725-746 makes drip best-effort + lets `pollEvmBalance`/`pollSolBalance` run regardless. Pod self-heals when operator pre-funds via `anvil_setBalance` / Solana `requestAirdrop`. Image rebuilt + pushed: `ghcr.io/toon-protocol/akash-foreign-toon-client:demo@sha256:571e0e66920b206b34d63bc08eabb456bab410b2586b38824b18cec3d9044cf8`. 49.5's gate inherits this — first live evidence that the resilience path actually fires is owed to 49.5.
+- **D-49.4-PR1-3: `scripts/akash-deploy.sh` readiness probe is broken for `/healthz`-only services.** Currently probes the bare ingress URL `/` and expects 2xx, but Fastify-served pods (foreign-toon-client) return 404 for `/`. Probe times out the full 300s waiting for `/` to respond, even when the pod is healthy. Fix: parameterize the readiness path per service (e.g. `READINESS_PATH=/healthz`) or default it to `/healthz` for foreign-pod-class deployments.
+- **D-49.4-PR1-4: P2 substitution-verification guard refined.** Original implementation counted text occurrences of `TOON_FEE_PER_EVENT=`, which broke after the SDL header was extended with the same string in comments. Now counts env-LINE matches via a regex-anchored grep. Documented inline in `scripts/akash-deploy.sh:render_foreign_toon_client_sdl`. No further action needed; flagged here only for awareness during the next SDL-template audit.
+
+## Deferred from: code review of 49-5-live-e2e-gate-real-anyone-loop-akash-evm-sol (2026-05-27)
+
+- **W1 (49.5): Ephemeral JWK has no persistent Arweave authorship** — `docker/src/entrypoint-dvm.ts:241`. By design for free-tier path; ephemeral key rotates on restart. Revisit if persistent DVM identity becomes a product requirement.
+- **W2 (49.5): `connectorUrl` set to HTTP admin URL in ToonClient config** — `townhouse-dvm-arweave-e2e.test.ts`. ToonClient uses `btpUrl` for actual BTP; `connectorUrl` is unused at runtime. Misleads future readers but benign.
+- **W3 (49.5): `direct_fund_evm` impersonation on Akash Anvil requires `--allow-impersonation`** — `townhouse-e2e-local-hs.sh`. Akash Anvil started in dev mode so it works; verify Anvil flags if ever redeployed in non-dev mode.
+- **W4 (49.5): 90s `AbortSignal` timeout kills entire retry loop in earnings poll** — `local-docker-hs-paid-earnings-smoke.test.ts:~446`. On a 90s abort, the `RETRY_BUDGET_MS=270_000` budget is never utilised. Revisit if earnings poll becomes flaky on slow CI.
+- **W5 (49.5): `TOON_FEE_PER_EVENT=0` accepted without minimum guard** — `scripts/akash-deploy.sh:~368`. Zero silently creates a free-publish SDL. Add a minimum-value guard in a future SDL validation refactor.
+- **W6 (49.5): `dvmDestination` hardcoded as `'g.townhouse'`** — `townhouse-dvm-arweave-e2e.test.ts:~2065`. Brittle if operator uses a different ILP address prefix. Parameterise when multi-operator support lands.
+- **W7 (49.5): DVM subprocess inherits full vitest env** — `townhouse-dvm-arweave-e2e.test.ts:~236`. `VITEST_*` vars removed; residual vars low-risk. Add an explicit allowlist if spurious env interference occurs.
+- **W8 (49.5): Town relay generates new Nostr key on every `hs up`** — `townhouse-e2e-local-hs.sh:~548`. By design; double-`up` requires re-registration. Document in operator runbook.
+- **W9 (49.5): `DVM_ANON_VOLUME` constant declared but never cleaned up** — `townhouse-dvm-arweave-e2e.test.ts:78`. Dead constant, no runtime impact. Remove in next test-file pass.
+- **W10 (49.5): `aDestination` remains `''` on abrupt `beforeAll` kill** — `townhouse-dvm-arweave-e2e.test.ts:~305`. Race only on process interruption; not a normal test path.
+- **W11 (49.5): `verify_network_isolation` grep lacks word anchors** — `townhouse-e2e-local-hs.sh:~655`. False-positive risk if similarly-named containers exist on CI; low in practice.
+- **W12 (49.5): `direct_fund_evm` assumes `0x` prefix on client EVM address** — `townhouse-e2e-local-hs.sh:~262`. All hardcoded constants carry `0x`; runtime path verified in smoke. Harden if client image ever returns bare-hex address.
+- **W13 (49.5): Connector `3.6.3` prerequisite in spec but `3.7.0` shipped** — Intentional upgrade; acknowledged in `v0.1-pilot-readiness.md`. No action needed; spec Hard Rule 7 should be amended during review resolution.

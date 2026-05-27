@@ -192,6 +192,8 @@ All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Con
 | Townhouse dev stack fixtures | `docker/dev-fixtures/` (Mill JSON configs + README) |
 | **Townhouse real-CLI E2E** | `scripts/townhouse-test-infra.sh` (Story 21.16) |
 | Townhouse real-CLI E2E docs | `packages/townhouse/README.md` § "Running E2E Tests" |
+| **Local-HS E2E (Akash chains)** | `scripts/townhouse-e2e-local-hs.sh` + `docker-compose-e2e-local-client.yml` |
+| Local-HS E2E smoke test | `packages/townhouse/src/__integration__/local-docker-hs-paid-earnings-smoke.test.ts` (gated by `RUN_LOCAL_HS_E2E=1`) |
 | **Townhouse npm-tarball compose templates** | `packages/townhouse/compose/` (source) → `dist/compose/` (built output) |
 | Compose loader + materializer API | `packages/townhouse/src/compose-loader.ts` |
 | Image-manifest digest registry (per release) | `packages/townhouse/dist/image-manifest.json` (CI-produced; not committed) |
