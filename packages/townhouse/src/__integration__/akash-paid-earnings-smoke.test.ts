@@ -1505,9 +1505,7 @@ describe.skipIf(!shouldRun)(
         });
         throw testError;
       }
-    }, // Test budget = RETRY_BUDGET (270s) + POLL_BUDGET (90s) + drill CLI (~20s) +
-    // overhead (~40s). Set to 7 minutes with cushion.
-    420_000);
+    }, 420_000); // overhead (~40s). Set to 7 minutes with cushion. // Test budget = RETRY_BUDGET (270s) + POLL_BUDGET (90s) + drill CLI (~20s) +
 
     // ── Test 5: SOL leg — BLOCKED-STRUCTURAL (AC #2) ─────────────────────────
 
