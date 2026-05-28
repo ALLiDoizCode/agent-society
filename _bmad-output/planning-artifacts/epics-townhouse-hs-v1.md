@@ -1569,10 +1569,15 @@ Operators who run a Mill peer can now receive Solana-USDC settlement from EVM-pa
 
 > **Root-cause of BLOCKED-STRUCTURAL (Epic 49.4 OQ-2 resolution):** `townhouse node add mill` writes `mill.config.json` with `swapPairs: []`, which causes `startMill()` to throw `MillConfig.swapPairs MUST be a non-empty array`. Even if Mill started, the foreign pod sends ILP to `g.townhouse.town` (the relay address), not `g.townhouse.mill`. Epic 50 fixes both: (1) swap-pair provisioning so Mill can boot, and (2) the E2E gate drives a payment to `g.townhouse.mill` using `streamSwap` from the SDK (already implemented, Story 12.5). Model 2 (client directly targets Mill) is the viable routing path — per 49.4 OQ-2 investigation, Model 1 (connector routing rules) and Model 3 (background inventory swap) are NOT implementable with current connector code.
 
-**Dependencies:** Epic 49 (all 5 stories done — BLOCKED-STRUCTURAL formally deferred); `packages/mill` (production-ready); `packages/sdk/src/stream-swap.ts` (production-ready); Akash Solana devnet DSEQ 26996029 (live).
+**Decision rationale:** see `_bmad-output/planning-artifacts/research/mill-routing-architecture-decision-2026-05-27.md`.
+
+**Pre-flight gate before Story 50.1:** that decision artifact's § "Verification Gate Before Story 50.1" defines a 3-step apex↔Mill peering smoke (peer-list check + Mill admin probe + synthetic streamSwap routing test) that MUST complete before 50.1 starts `swapPairs` provisioning. Added 2026-05-27 per Story 50.0 review DN2 — the Model 2 routing assumption has never been exercised end-to-end (49.4/49.5 BLOCKED-STRUCTURAL never reached the SOL leg), and 50.1 implementation budget should not begin until that assumption is verified live.
+
+**Dependencies:** Epic 49 (all 5 stories done — BLOCKED-STRUCTURAL formally deferred); `packages/mill` (production-ready); `packages/sdk/src/stream-swap.ts` (production-ready); Akash Solana devnet DSEQ 26996029 (live); Story 50.0 (carry-forward gate — A9'+A10'+A11'+A12' + Mill routing decision); pre-flight peering verification per the gate above.
 
 | # | Title | Status |
 |---|---|---|
+| 50.0 | Epic 50 Prerequisite Carry-Forward Gate | review |
 | 50.1 | Mill HS-Mode Swap Pair Provisioning | backlog |
 | 50.2 | Mill Container + streamSwap Driver in E2E Harness | backlog |
 | 50.3 | SOL Settlement E2E Gate — Remove BLOCKED-STRUCTURAL | backlog |
