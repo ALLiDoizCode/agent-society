@@ -508,6 +508,28 @@ describe('POST /api/nodes success path', () => {
     const yaml = await readNodesYaml(nodesYamlPath);
     expect(yaml.entries.filter((e) => e.type === 'mill')).toHaveLength(0);
   });
+
+  it('mill: returns 400 with step=preflight when MILL_RELAYS is whitespace-only', async () => {
+    // Whitespace-only is truthy for !process.env['MILL_RELAYS'] but should be
+    // caught by the .trim() guard — an all-space relay URL would make Mill crash
+    // at boot instead of returning a fast 400.
+    vi.stubEnv('MILL_RELAYS', '   ');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/nodes',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'mill' }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body);
+    expect(body.step).toBe('preflight');
+    expect(body.err).toMatch(/MILL_RELAYS/);
+    await expect(fs.access(millConfigPath)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
 });
 
 // ── Rollback state-machine — individual failure injection tests (AC #3) ────────
@@ -613,6 +635,27 @@ describe('POST /api/nodes rollback — step failures (AC #3)', () => {
     expect(yaml.entries).toHaveLength(0);
     expect(orchestrator.stopNodeViaComposeFn).toHaveBeenCalledWith('town');
     expect(await connectorAdmin.getPeers()).toHaveLength(0);
+  });
+
+  it('mill: write-mill-config failure → 500 with step=write-mill-config, yaml rolled back, partial file cleaned up', async () => {
+    // Pre-create millConfigPath as a directory to force fs.writeFile to throw
+    // EISDIR. The rollback must still remove the yaml entry even though the
+    // mill-config removal itself will fail (can't rm a directory without recursive).
+    await fs.mkdir(millConfigPath, { recursive: true });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/nodes',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'mill' }),
+    });
+
+    expect(res.statusCode).toBe(500);
+    const body = JSON.parse(res.body);
+    expect(body.step).toBe('write-mill-config');
+    // Yaml must be rolled back even when mill-config cleanup fails
+    const yaml = await readNodesYaml(nodesYamlPath);
+    expect(yaml.entries.filter((e) => e.type === 'mill')).toHaveLength(0);
   });
 
   it('mill: start-container failure removes mill.config.json on rollback', async () => {

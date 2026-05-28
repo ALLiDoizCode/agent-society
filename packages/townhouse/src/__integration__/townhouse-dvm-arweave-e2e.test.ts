@@ -60,6 +60,11 @@ import { ConnectorAdminClient } from '../connector/admin-client.js';
 import type { RecentClaim } from '../connector/types.js';
 import { readNodesYaml } from '../state/nodes-yaml.js';
 import { PeerTypeResolver } from '../registry/peer-type-resolver.js';
+import { streamSwap } from '@toon-protocol/sdk';
+import type { StreamSwapResult } from '@toon-protocol/sdk';
+import { parseIlpPeerInfo } from '@toon-protocol/core';
+import { SimplePool } from 'nostr-tools/pool';
+import type { Filter as NostrFilter } from 'nostr-tools/filter';
 
 // ── Skip gate ────────────────────────────────────────────────────────────────
 
@@ -101,6 +106,16 @@ const DVM_NOSTR_SECRET_KEY =
 const TOWN_NOSTR_SECRET_KEY =
   'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
 
+const MILL_CONTAINER_NAME = 'townhouse-hs-mill';
+const MILL_BLS_PORT = 3200;
+const TOWN_RELAY_WS_PORT = 7100; // mapped to host loopback for kind:10032 subscription
+// Fixed test Mill Nostr key (32 bytes, not a real wallet). gitleaks:allow
+const MILL_NOSTR_SECRET_KEY =
+  'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+// Solana SOL address for chainRecipient — deterministic Akash Solana devnet faucet authority.
+// Derived from infra/solana/keys/faucet-authority.json bytes[32..63] base58-encoded.
+const B_SOL_ADDRESS = 'ATEh3koyCrwmCMr3cNBVEmARhSFmP9tHokjDxhtaE8m3';
+
 const CONNECTOR_ADMIN_URL = 'http://127.0.0.1:9401';
 const HS_API = 'http://127.0.0.1:28090';
 const HS_API_READY_URL = `${HS_API}/api/transport`;
@@ -126,7 +141,7 @@ const CHAIN_ID = 31337;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-function loadImageFromManifest(key: 'connector' | 'dvm' | 'town'): string {
+function loadImageFromManifest(key: 'connector' | 'dvm' | 'town' | 'mill'): string {
   const p = join(
     dirname(fileURLToPath(import.meta.url)),
     '..',
@@ -212,6 +227,8 @@ async function assertPortsFree(): Promise<void> {
     B_BTP_PORT,
     B_HEALTH_PORT,
     DVM_BLS_PORT,
+    MILL_BLS_PORT,      // 3200 — Mill BLS health
+    TOWN_RELAY_WS_PORT, // 7100 — town relay WS (mapped to host for kind:10032 subscription)
   ];
   const bound = (
     await Promise.all(
@@ -243,7 +260,7 @@ async function waitForExitLabelled(
 function cleanupAll(): void {
   // 'townhouse-hs-town' is already in HS_CONTAINER_NAMES — do not append separately.
   // DVM_CONTAINER_NAME is the Docker DVM container (D3).
-  const cs = [...HS_CONTAINER_NAMES, B_CONNECTOR_NAME, DVM_CONTAINER_NAME];
+  const cs = [...HS_CONTAINER_NAMES, B_CONNECTOR_NAME, DVM_CONTAINER_NAME, MILL_CONTAINER_NAME];
   const vs = [...HS_VOLUMES, B_ANON_VOLUME];
   for (const n of cs) {
     try {
@@ -385,6 +402,89 @@ async function startDvm(): Promise<void> {
   }
 }
 
+function buildTestMillConfig(connectorBtpUrl: string): object {
+  return {
+    swapPairs: [
+      {
+        from: { assetCode: 'USDC', assetScale: 6, chain: CHAIN_KEY }, // 'evm:base:31337'
+        to: { assetCode: 'USDC', assetScale: 6, chain: 'solana:devnet' },
+        rate: '1.0',
+        minAmount: '1000',
+        maxAmount: '1000000000',
+      },
+    ],
+    chains: ['evm', 'solana'],
+    // Bootstrap: validateConfig() requires a non-empty channels array for
+    // each distinct pair.to.chain. The zero channelId is a valid-format
+    // sentinel that will never match a real on-chain channel.
+    channels: {
+      'solana:devnet': [
+        { channelId: '0x' + '0'.repeat(64), cumulativeAmount: '0', nonce: '0' },
+      ],
+    },
+    // Zero initial SOL inventory; parsed to 0n by the Mill CLI.
+    inventory: { 'solana:devnet': '0' },
+    // Embedded-with-parent wiring: connectorUrl activates Mill's embedded
+    // connector which BTP-dials the apex connector and registers g.townhouse.mill.
+    connectorUrl: connectorBtpUrl,
+    ilpAddress: 'g.townhouse.mill',
+    nodeId: 'mill',
+    parentPeerId: 'apex',
+    parentAuthToken: '',
+    // Relay for kind:10032 advertisement (within townhouse-hs-net).
+    relayUrls: ['ws://townhouse-hs-town:7100'],
+  };
+}
+
+const millLogs: string[] = [];
+
+async function startMill(bConfigDir: string): Promise<void> {
+  const millImage = loadImageFromManifest('mill');
+  if (!dvmBtpConnectorUrl) {
+    throw new Error(
+      'dvmBtpConnectorUrl is empty — connector bridge IP lookup failed before startMill()'
+    );
+  }
+  const millConfigObj = buildTestMillConfig(dvmBtpConnectorUrl);
+  // Write config to file to avoid shell-quoting issues with nested JSON.
+  const millConfigFile = join(bConfigDir, `mill-config-${Date.now()}.json`);
+  writeFileSync(millConfigFile, JSON.stringify(millConfigObj), { encoding: 'utf-8', mode: 0o644 });
+
+  try {
+    execSync(`docker rm -f ${MILL_CONTAINER_NAME}`, { stdio: 'pipe', timeout: 15_000 });
+  } catch {
+    /* ok */
+  }
+
+  execSync(
+    `docker run -d \
+      --name ${MILL_CONTAINER_NAME} \
+      --network townhouse-hs-net \
+      --platform linux/amd64 \
+      -p 127.0.0.1:${MILL_BLS_PORT}:${MILL_BLS_PORT} \
+      -e NODE_NOSTR_SECRET_KEY=${MILL_NOSTR_SECRET_KEY} \
+      -v ${millConfigFile}:/mill.config.json:ro \
+      -e MILL_CONFIG_PATH=/mill.config.json \
+      ${millImage}`,
+    { stdio: 'pipe', timeout: 30_000 }
+  );
+  await sleep(2_000);
+  const state = execSync(
+    `docker inspect ${MILL_CONTAINER_NAME} --format '{{.State.Status}}'`,
+    { encoding: 'utf-8', timeout: 5_000 }
+  ).trim();
+  if (state !== 'running') {
+    const logs = execSync(`docker logs --tail 30 ${MILL_CONTAINER_NAME} 2>&1`, {
+      encoding: 'utf-8',
+      timeout: 5_000,
+    });
+    millLogs.push(...logs.split('\n').filter(Boolean));
+    throw new Error(
+      `${MILL_CONTAINER_NAME} state=${state} (expected running). Logs:\n${logs.trim()}`
+    );
+  }
+}
+
 async function waitForSocks5(timeoutMs = 240_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -440,6 +540,15 @@ describe.skipIf(!shouldRun)(
       error: 'beforeAll incomplete',
     };
     let testStartMs = 0;
+
+    // Mill state (AC #1–#5)
+    let millPubkey = '';
+    let millSwapPair: {
+      from: { assetCode: string; assetScale: number; chain: string };
+      to: { assetCode: string; assetScale: number; chain: string };
+      rate: string;
+    } | null = null;
+    let millStreamSwapResult: StreamSwapResult | null = null;
 
     beforeAll(async () => {
       testStartMs = Date.now();
@@ -691,6 +800,7 @@ describe.skipIf(!shouldRun)(
             --name townhouse-hs-town \
             --network townhouse-hs-net \
             --platform linux/amd64 \
+            -p 127.0.0.1:${TOWN_RELAY_WS_PORT}:7100 \
             -e CONNECTOR_URL=ws://connector:3000 \
             -e ILP_ADDRESS=g.townhouse.town \
             -e NODE_ID=town \
@@ -810,6 +920,58 @@ describe.skipIf(!shouldRun)(
       // the localDelivery config after its restart.
       await sleep(2_000);
 
+      // ── Start Mill container (AC #1) ────────────────────────────────────────
+      console.log('[49-5] Starting Mill container...');
+      await startMill(bConfigDir!);
+      await waitForUrl(`http://127.0.0.1:${MILL_BLS_PORT}/health`, {
+        maxMs: 60_000,
+        label: 'Mill BLS /health',
+      });
+      console.log('[49-5] Mill healthy');
+
+      // ── kind:10032 subscription (AC #3) ────────────────────────────────────
+      // Subscribe to the town relay WS (mapped to host loopback) for Mill's
+      // kind:10032 advertisement carrying swapPairs.
+      const millPubkeyHex = getPublicKey(
+        new Uint8Array(Buffer.from(MILL_NOSTR_SECRET_KEY, 'hex'))
+      );
+      const relayUrl = `ws://127.0.0.1:${TOWN_RELAY_WS_PORT}`;
+      const pool = new SimplePool();
+
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pool.close([relayUrl]);
+          reject(new Error('kind:10032 from Mill not received within 30s'));
+        }, 30_000);
+
+        const millFilter: NostrFilter = { kinds: [10032], authors: [millPubkeyHex], limit: 1 };
+        const sub = pool.subscribeMany(
+          [relayUrl],
+          millFilter,
+          {
+            onevent(event) {
+              try {
+                const peerInfo = parseIlpPeerInfo(event);
+                if (Array.isArray(peerInfo.swapPairs) && peerInfo.swapPairs.length > 0) {
+                  millSwapPair = peerInfo.swapPairs[0] as typeof millSwapPair;
+                  millPubkey = millPubkeyHex;
+                }
+              } catch {
+                /* malformed event — keep waiting */
+              }
+              clearTimeout(timer);
+              sub.close();
+              pool.close([relayUrl]);
+              resolve();
+            },
+            oneose() {
+              // EOSE received — no stored events yet; keep waiting for live events
+            },
+          }
+        );
+      });
+      console.log(`[49-5] Mill kind:10032 received, swapPair: ${JSON.stringify(millSwapPair)}`);
+
       // ── Build ToonClient for B ──────────────────────────────────────────────
       const bIlpAddress = `g.toon.foreign.${bPubkey.slice(0, 16)}`;
       const clientConfig = {
@@ -898,6 +1060,34 @@ describe.skipIf(!shouldRun)(
         throw err;
       }
 
+      // ── Drive streamSwap (AC #4) ─────────────────────────────────────────────
+      // toonClient is now started and BTP-connected. Drive streamSwap to
+      // g.townhouse.mill using the swap pair discovered from kind:10032.
+      if (millSwapPair && millPubkey) {
+        console.log('[49-5] Driving streamSwap to g.townhouse.mill...');
+        try {
+          millStreamSwapResult = await streamSwap({
+            client: toonClient,
+            millPubkey,
+            millIlpAddress: 'g.townhouse.mill',
+            pair: millSwapPair as Parameters<typeof streamSwap>[0]['pair'],
+            senderSecretKey: bSecretKey,
+            chainRecipient: B_SOL_ADDRESS,
+            totalAmount: 1_000_000n,
+            packetCount: 1,
+          });
+          console.log(
+            `[49-5] streamSwap: state=${millStreamSwapResult.state}, claims=${millStreamSwapResult.claims.length}`
+          );
+        } catch (e) {
+          console.error(`[49-5] streamSwap threw: ${(e as Error).message}`);
+          // Do NOT rethrow — let the tests assert the null result and fail descriptively
+          millStreamSwapResult = null;
+        }
+      } else {
+        console.warn('[49-5] Mill kind:10032 not received or swapPair absent — skipping streamSwap');
+      }
+
       // ── Publish kind:1 (AC #1 baseline) ─────────────────────────────────────
       // FEE_PER_EVENT=0 in the HS compose template → relay accepts events for free.
       // Publishing without a proof sets ILP amount=0, bypassing the payment-channel
@@ -979,6 +1169,17 @@ describe.skipIf(!shouldRun)(
         /* container may not exist */
       }
 
+      // Capture Mill container logs before teardown (parallel to DVM log capture)
+      try {
+        const millContainerLogs = execSync(
+          `docker logs ${MILL_CONTAINER_NAME} 2>&1`,
+          { encoding: 'utf-8', timeout: 10_000 }
+        );
+        millLogs.push(...millContainerLogs.split('\n').filter(Boolean));
+      } catch {
+        /* container may not exist */
+      }
+
       // Write all logs to a structured output directory (P11)
       try {
         const logDir = join(process.cwd(), 'e2e-49-5-logs', String(Date.now()));
@@ -996,7 +1197,11 @@ describe.skipIf(!shouldRun)(
         lines.push(
           `\n===== ${DVM_CONTAINER_NAME} (Docker) =====\n${dvmLogs.slice(-80).join('\n')}`
         );
+        lines.push(
+          `\n===== ${MILL_CONTAINER_NAME} (Docker) =====\n${millLogs.slice(-80).join('\n')}`
+        );
         writeFileSync(join(logDir, 'gate.log'), lines.join(''), 'utf-8');
+        writeFileSync(join(logDir, 'mill.log'), millLogs.slice(-80).join('\n'), 'utf-8');
         console.log(`[49-5 afterAll] logs → ${logDir}/gate.log`);
       } catch {
         /* best-effort */
@@ -1261,6 +1466,68 @@ describe.skipIf(!shouldRun)(
       ).toBe(true);
       console.log('[49-5 T5] PASS');
     }, 15_000);
+
+    // ── Test 7: AC #1 + #2 ───────────────────────────────────────────────────
+
+    it('Mill BLS /health returns ok — container running (AC #1+#2)', async () => {
+      const health = await fetch(`http://127.0.0.1:${MILL_BLS_PORT}/health`, {
+        signal: AbortSignal.timeout(5_000),
+      });
+      expect(health.ok, `AC #2: Mill health returned ${health.status}`).toBe(true);
+      const body = (await health.json()) as { status?: string };
+      expect(body.status, 'AC #2: Mill health status not ok').toBe('ok');
+      console.log('[49-5 T7] PASS');
+    }, 30_000);
+
+    // ── Test 8: AC #3 ────────────────────────────────────────────────────────
+
+    it('Mill kind:10032 advertises EVM→SOL swapPairs (AC #3)', () => {
+      expect(
+        millSwapPair,
+        'AC #3: kind:10032 from Mill not received or swapPairs absent'
+      ).not.toBeNull();
+      expect(millSwapPair!.from.chain).toMatch(/^evm:base:/);
+      expect(millSwapPair!.to.chain).toMatch(/^solana:/);
+      expect(millSwapPair!.from.assetCode).toBe('USDC');
+      expect(millSwapPair!.to.assetCode).toBe('USDC');
+      console.log(`[49-5 T8] PASS — pair: ${millSwapPair!.from.chain} → ${millSwapPair!.to.chain}`);
+    }, 15_000);
+
+    // ── Test 9: AC #4 ────────────────────────────────────────────────────────
+
+    it('streamSwap to g.townhouse.mill completes — 1 fulfilled packet (AC #4)', () => {
+      expect(
+        millStreamSwapResult,
+        `AC #4 FAIL: streamSwap returned null (threw or was not reached)`
+      ).not.toBeNull();
+      expect(
+        millStreamSwapResult!.state,
+        `AC #4 FAIL: state=${millStreamSwapResult!.state}, rejections=${JSON.stringify(millStreamSwapResult!.rejections)}, errors=${JSON.stringify(millStreamSwapResult!.errors)}`
+      ).toBe('completed');
+      expect(millStreamSwapResult!.claims.length, 'AC #4: expected 1 claim').toBe(1);
+      console.log('[49-5 T9] PASS');
+    }, 30_000);
+
+    // ── Test 10: AC #5 ───────────────────────────────────────────────────────
+
+    it('streamSwap FULFILL claim chain is SOL, amount within ±1 (AC #5)', () => {
+      expect(millStreamSwapResult?.claims.length).toBeGreaterThanOrEqual(1);
+      const claim = millStreamSwapResult!.claims[0]!;
+      expect(claim.pair.to.chain).toMatch(/^solana:/);
+      // rate=1.0, assetScale=6 both sides, no fee (FEE_BASIS_POINTS default=0)
+      const expectedAmount = 1_000_000n;
+      expect(
+        claim.targetAmount,
+        `AC #5: targetAmount=${claim.targetAmount} not within ±1 of ${expectedAmount}`
+      ).toBeGreaterThanOrEqual(expectedAmount - 1n);
+      expect(claim.targetAmount).toBeLessThanOrEqual(expectedAmount + 1n);
+      // claimBytes must be non-empty (raw SOL claim from Mill FULFILL)
+      expect(claim.claimBytes.length, 'AC #5: claimBytes empty').toBeGreaterThan(0);
+      if (claim.recipient !== undefined) {
+        expect(claim.recipient).toBe(B_SOL_ADDRESS);
+      }
+      console.log(`[49-5 T10] PASS — chain=${claim.pair.to.chain}, target=${claim.targetAmount}`);
+    }, 30_000);
 
     // ── Test 6: AC #7 BLOCKED-STRUCTURAL ────────────────────────────────────
 

@@ -290,10 +290,10 @@ export function registerNodeLifecycleRoutes(
         // array, producing a silent 60-second healthcheck timeout. Catching the
         // missing var here — before writeNodesYaml (step 3) — means no rollback
         // is needed and the caller gets an actionable 400 with zero side-effects.
-        if (type === 'mill' && !process.env['MILL_RELAYS']) {
+        if (type === 'mill' && !process.env['MILL_RELAYS']?.trim()) {
           return reply.status(400).send({
             step: 'preflight',
-            err: 'MILL_RELAYS is not set. Export a comma-separated list of relay URLs before provisioning Mill (e.g. export MILL_RELAYS=wss://relay.example.com). See packages/townhouse/README.md.',
+            err: 'MILL_RELAYS is not set or is blank. Export a comma-separated list of relay URLs before provisioning Mill (e.g. export MILL_RELAYS=wss://relay.example.com). See packages/townhouse/README.md.',
           });
         }
 
@@ -448,20 +448,28 @@ export function registerNodeLifecycleRoutes(
             request.log.error(
               {
                 event: 'node_lifecycle_failure',
-                step: 'write-yaml',
+                step: 'write-mill-config',
                 err: errMsg,
               },
               'Step 3b failed: write mill.config.json'
             );
-            // Rollback: remove the yaml entry we just added
-            const rollbackError = await safeRollbackYaml(
+            // Rollback: remove any partial mill.config.json first, then the yaml entry.
+            const rollbackMillError = await safeRollbackMillConfig(
+              millConfigPath,
+              request
+            );
+            const rollbackYamlError = await safeRollbackYaml(
               nodesYamlPath,
               peerId,
               request
             );
+            const rollbackError = combineRollbackErrors(
+              rollbackMillError,
+              rollbackYamlError
+            );
             return reply
               .status(500)
-              .send({ step: 'write-yaml', err: errMsg, rollbackError });
+              .send({ step: 'write-mill-config', err: errMsg, rollbackError });
           }
         }
 

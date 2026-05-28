@@ -77,7 +77,17 @@ cleanup_all() {
       log "Tearing down warmed stack (townhouse-test-infra.sh down)"
       bash "$REPO_ROOT/scripts/townhouse-test-infra.sh" down || true
     else
-      log "--keep-stack was set; leaving Docker stack warm for the next rerun."
+      # Only print the "warm for next rerun" message when the gate actually
+      # completed (non-zero exit from the gate itself, not from infra-up).
+      # If infra-up failed, INFRA_WARMED=1 is set but the stack was never
+      # started — printing "warm" would mislead the operator into skipping
+      # infra-up on the next rerun. We check whether the test phase was
+      # reached by inspecting whether GATE_EXIT is set.
+      if [[ -n "${GATE_EXIT+x}" ]]; then
+        log "--keep-stack was set; leaving Docker stack warm for the next rerun."
+      else
+        log "--keep-stack was set; but infra-up failed so no stack is running. Run without --keep-stack or fix the infra-up failure before rerunning."
+      fi
     fi
   fi
 }
@@ -248,8 +258,8 @@ verify_connector_digest_alignment
 
 # ── Step 3: warm Docker image cache ─────────────────────────────────────────
 log "Warming Docker image cache (townhouse-test-infra.sh up)"
-bash "$REPO_ROOT/scripts/townhouse-test-infra.sh" up
 INFRA_WARMED=1
+bash "$REPO_ROOT/scripts/townhouse-test-infra.sh" up
 # Teardown (and the SKIP_FETCH backup cleanup) are handled by cleanup_all
 # (trap EXIT registered at the top of the script).
 

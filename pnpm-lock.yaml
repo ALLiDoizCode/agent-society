@@ -902,9 +902,15 @@ importers:
       '@toon-protocol/client':
         specifier: workspace:^
         version: link:../client
+      '@toon-protocol/core':
+        specifier: workspace:^
+        version: link:../core
       '@toon-protocol/relay':
         specifier: workspace:^
         version: link:../relay
+      '@toon-protocol/sdk':
+        specifier: workspace:^
+        version: link:../sdk
       '@types/dockerode':
         specifier: ^3.3.0
         version: 3.3.47
