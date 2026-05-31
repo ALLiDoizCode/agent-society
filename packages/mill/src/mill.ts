@@ -42,14 +42,20 @@ import {
   buildIlpPeerInfoEvent,
   createDirectIlpClient,
   encodeEventToToon,
+  decodeEventFromToon,
+  shallowParseToon,
+  ilpCodeToSemantic,
   VERSION,
 } from '@toon-protocol/core';
 import type {
   ConnectorNodeLike,
   EmbeddableConnectorLike,
+  HandlePacketRequest,
+  HandlePacketResponse,
   IlpPeerInfo,
   SwapPair,
 } from '@toon-protocol/core';
+import { createHandlerContext } from '@toon-protocol/sdk';
 
 import { deriveMillKeys } from './wallet.js';
 import type { MillKeys, MillChainKind } from './wallet.js';
@@ -884,6 +890,123 @@ export async function startMill(config: MillConfig): Promise<MillInstance> {
         err: errSummary(err),
       });
     }
+  }
+
+  // 11a. Wire the HandlerRegistry to the connector's local-delivery path.
+  //
+  // Story 50.3 (SOL settlement leg, AC#4): inbound kind:1059 (NIP-59 gift-wrap)
+  // swap-request packets destined for Mill's OWN ILP address MUST be dispatched
+  // to `swapHandler` so Mill returns a signed claim in the FULFILL `data`. Mill
+  // does NOT route through `createToonNode()` (the SDK helper that performs this
+  // wiring for town nodes), so without an explicit `setPacketHandler()` call the
+  // embedded ConnectorNode has no `localDeliveryHandler` set. With
+  // `localDelivery: { enabled: false }`, the connector's PacketHandler then falls
+  // through to its auto-fulfill stub, returning the literal string
+  // `"Local delivery - auto-fulfill stub"` as FULFILL data — which the sender's
+  // streamSwap decoder cannot JSON.parse (`FULFILL_DECODE_FAILED`).
+  //
+  // This handler mirrors the canonical pipeline in
+  // `@toon-protocol/sdk` `create-node.ts`:
+  //   1. Shallow-parse the TOON to recover the real event kind for routing.
+  //   2. Build a HandlerContext and dispatch to the registry (kind:1059 →
+  //      swapHandler). Verification/replay-protection happen INSIDE the swap
+  //      handler (it unwraps + verifies the gift-wrap itself); payment was
+  //      already gated by the apex parent on the inbound hop.
+  //   3. Serialize the handler's `accept()` metadata → base64-JSON FULFILL
+  //      `data` (connector v3.3.2 PaymentHandlerAdapter consumes `data`, not
+  //      `metadata`). This is the exact shape streamSwap's FULFILL decoder reads.
+  //   4. Reverse-map the handler's ILP reject code → the connector adapter's
+  //      semantic `rejectReason` (otherwise every reject collapses to F99).
+  const toonDecoder = (toon: string): NostrEvent =>
+    decodeEventFromToon(Buffer.from(toon, 'base64'));
+
+  const handlePacket = async (
+    request: HandlePacketRequest
+  ): Promise<HandlePacketResponse> => {
+    let meta;
+    try {
+      meta = shallowParseToon(Buffer.from(request.data, 'base64'));
+    } catch {
+      return {
+        accept: false,
+        code: 'F06',
+        message: 'Invalid TOON payload',
+      };
+    }
+
+    let amount: bigint;
+    try {
+      amount = BigInt(request.amount);
+    } catch {
+      return { accept: false, code: 'T00', message: 'Invalid payment amount' };
+    }
+
+    const ctx = createHandlerContext({
+      toon: request.data,
+      meta,
+      amount,
+      destination: request.destination,
+      toonDecoder,
+    });
+
+    let result: HandlePacketResponse;
+    try {
+      result = (await registry.dispatch(ctx)) as HandlePacketResponse;
+    } catch (err) {
+      logger.error?.('mill.packet.dispatch_failed', { err: errSummary(err) });
+      return { accept: false, code: 'T00', message: 'Internal error' };
+    }
+
+    // Connector v3.3.2: the embedded ConnectorNode's PaymentHandlerAdapter
+    // consumes `response.data` (base64) and ignores `response.metadata`.
+    // The swap handler returns the signed claim via `ctx.accept(metadata)`;
+    // serialize it into `data` as the base64-JSON shape streamSwap expects.
+    if (result.accept && result.metadata && !result.data) {
+      try {
+        const json = JSON.stringify(result.metadata);
+        (result as { data?: string }).data = Buffer.from(json, 'utf8').toString(
+          'base64'
+        );
+      } catch (err) {
+        logger.error?.('mill.packet.metadata_serialize_failed', {
+          err: errSummary(err),
+        });
+      }
+    }
+
+    // Connector v3.3.2: the adapter's reject path reads
+    // `response.rejectReason.{code,message}` and feeds `code` through
+    // `mapRejectCode()` (semantic-reason → ILP-code). The handler's
+    // `ctx.reject(ilpCode, message)` returns the ILP code directly, so
+    // reverse-map it to the semantic reason or every reject collapses to F99.
+    if (
+      !result.accept &&
+      !(result as { rejectReason?: unknown }).rejectReason &&
+      (result as { code?: string }).code
+    ) {
+      const ilpCode = (result as { code: string }).code;
+      (
+        result as { rejectReason?: { code: string; message: string } }
+      ).rejectReason = {
+        code: ilpCodeToSemantic(ilpCode),
+        message: (result as { message?: string }).message ?? 'Payment rejected',
+      };
+    }
+
+    return result;
+  };
+
+  // Register the handler as the connector's local-delivery callback. Guarded
+  // because `setPacketHandler` is optional on EmbeddableConnectorLike (HTTP-mode
+  // connectors and test doubles may omit it).
+  if (effectiveConnector?.setPacketHandler) {
+    effectiveConnector.setPacketHandler(handlePacket);
+    logger.debug?.('mill.connector.packet_handler_wired', {});
+  } else {
+    logger.warn?.('mill.connector.packet_handler_unavailable', {
+      reason:
+        'connector exposes no setPacketHandler; inbound kind:1059 swap packets cannot be dispatched to the swap handler',
+    });
   }
 
   // 11b. Start the auto-created connector.

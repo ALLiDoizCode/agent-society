@@ -49,6 +49,7 @@ import {
 import type { NostrEvent } from 'nostr-tools/pure';
 import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
 import { ToonClient } from '@toon-protocol/client';
+import type { SignedBalanceProof } from '@toon-protocol/client';
 
 import {
   isTruthyEnv,
@@ -406,6 +407,20 @@ async function startDvm(): Promise<void> {
     throw new Error(
       `${DVM_CONTAINER_NAME} state=${state} (expected running). Logs:\n${logs.trim()}`
     );
+  }
+
+  // Capture the FULL boot log now (no --tail). The "Arweave credit source: ..."
+  // line is emitted once at boot (entrypoint-dvm.ts); after the DVM has served
+  // requests it scrolls past a `--tail N` window, so AC #6 (which runs before
+  // afterAll's full-log capture) needs these early lines recorded up front.
+  try {
+    const bootLogs = execSync(`docker logs ${DVM_CONTAINER_NAME} 2>&1`, {
+      encoding: 'utf-8',
+      timeout: 10_000,
+    });
+    dvmLogs.push(...bootLogs.split('\n').filter(Boolean));
+  } catch {
+    /* boot-log capture is best-effort; afterAll captures full logs too */
   }
 }
 
@@ -906,6 +921,13 @@ describe.skipIf(!shouldRun)(
             url: relayBtpUrl,
             authToken: '',
             transport: 'direct',
+            // B2' (Story 50.3): the town relay is a CHILD of the apex — writes to
+            // it are FREE (children don't pay each other). Without this the apex's
+            // per-packet-claim-service tries to open a settlement channel to
+            // g.townhouse.town, fails ("Peer address not found"), and rejects the
+            // paid kind:1 publish with T00. `relation:'child'` makes
+            // requiresSettlementClaim() return false → no settlement → free route.
+            relation: 'child',
             routes: [{ prefix: 'g.townhouse.town', priority: 100 }],
           });
           aDestination = 'g.townhouse.town';
@@ -1054,11 +1076,57 @@ describe.skipIf(!shouldRun)(
         if (Array.isArray(peerInfo.swapPairs) && peerInfo.swapPairs.length > 0) {
           millSwapPair = peerInfo.swapPairs[0] as typeof millSwapPair;
           millPubkey = millPubkeyHex;
+        } else {
+          // Parsed, but no swapPairs — surface it loudly (this used to be a
+          // silent path that masked the btpEndpoint parse asymmetry, Story 50.3).
+          console.error(
+            `[49-5] Mill kind:10032 parsed but swapPairs absent/empty — content=${String(advertisement.content).slice(0, 300)}`
+          );
         }
-      } catch {
-        /* malformed event — millSwapPair stays unset; downstream AC asserts it */
+      } catch (err) {
+        // Do NOT swallow: a parse throw here (e.g. the historical empty-btpEndpoint
+        // asymmetry) silently nulled millSwapPair and made the SOL leg look like a
+        // discovery miss. Surface the real reason. (Story 50.3.)
+        console.error(
+          `[49-5] parseIlpPeerInfo THREW on Mill kind:10032: ${(err as Error).message} — content=${String(advertisement.content).slice(0, 300)}`
+        );
       }
       console.log(`[49-5] Mill kind:10032 received, swapPair: ${JSON.stringify(millSwapPair)}`);
+
+      // B2' (Story 50.3): register Mill as an apex CHILD so the EVM→Mill→SOL
+      // streamSwap routes correctly. Two defects this fixes, observed in the
+      // gate log: (1) ROUTING — a swap PREPARE to g.townhouse.mill (kind:1059)
+      // matched the `g.townhouse → local` catch-all and was delivered to the DVM
+      // handler, which rejected it `F00 "No handler registered for kind 1059"`;
+      // there was no g.townhouse.mill route to Mill. (2) SETTLEMENT — a settled
+      // (non-child) peer would T00. Per the production model ("the apex dials
+      // btp+ws://<svc>:3000" for its children), the apex DIALS Mill's BTP server
+      // (townhouse-hs-mill:3000, on townhouse-hs-net) and registers it as a child
+      // with an explicit, more-specific g.townhouse.mill route (wins longest-prefix
+      // over g.townhouse→local). relation:'child' → requiresSettlementClaim()=false
+      // → free apex→mill forwarding.
+      try {
+        await adminClientA.registerPeer({
+          id: 'g.townhouse.mill',
+          url: `ws://${MILL_CONTAINER_NAME}:3000/btp`,
+          authToken: '',
+          // transport:'direct' — dial Mill DIRECTLY on townhouse-hs-net, NOT through
+          // the apex's `.anyone` SOCKS5 proxy (which can't resolve internal Docker
+          // hosts → "Socks5 proxy rejected connection - HostUnreachable"). The town
+          // relay uses 'direct' for the same reason; production: "the apex dials
+          // btp+ws://<svc>:3000" for children directly.
+          transport: 'direct',
+          relation: 'child',
+          routes: [{ prefix: 'g.townhouse.mill', priority: 100 }],
+        });
+        console.log(
+          '[49-5] Mill registered as child (route g.townhouse.mill → mill, free)'
+        );
+      } catch (e) {
+        console.warn(
+          `[49-5] Mill child registration failed: ${(e as Error).message} — streamSwap may misroute/T00`
+        );
+      }
 
       // ── Build ToonClient for B ──────────────────────────────────────────────
       const bIlpAddress = `g.toon.foreign.${bPubkey.slice(0, 16)}`;
@@ -1123,8 +1191,8 @@ describe.skipIf(!shouldRun)(
       // ── Open channel to register BTP peer mapping in ToonClient ─────────────
       // ToonClient.resolvePeerId() requires an open channel or known peer to
       // route packets. openChannel also sets up the on-chain settlement channel.
-      // We DO NOT pass the resulting proof to publishEvent (FEE_PER_EVENT=0 in
-      // the compose template means ILP amount=0, bypassing the channel check).
+      // The resulting channel (bChannelId) is later used to sign a balance-proof
+      // claim that rides the kind:1 PREPARE (Story 50.3 — see the kind:1 block).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const negotiations = (toonClient as any).peerNegotiations as Map<
         string,
@@ -1140,13 +1208,29 @@ describe.skipIf(!shouldRun)(
           tokenNetwork: TOKEN_NETWORK,
         });
       }
+      let bChannelId: string | null = null;
       try {
         await toonClient.openChannel(aDestination);
-        console.log('[49-5] Channel opened (BTP peer registered)');
+        const bChannels = toonClient.getTrackedChannels();
+        bChannelId = bChannels.length > 0 ? bChannels[0]! : null;
+        console.log(
+          `[49-5] Channel opened (BTP peer registered); channelId=${bChannelId?.slice(0, 16) ?? 'none'}`
+        );
       } catch (err) {
         console.error('[49-5] openChannel failed:', err);
         throw err;
       }
+
+      // B2' (Story 50.3 — diagnosed from the live gate run): paid forwards to the
+      // apex's CHILD peers fail with `T00 "No payment channel available"`. Root
+      // cause is NOT a race on B's channel (that opens+verifies fine): the connector
+      // logs `"Peer address not found for peerId: g.townhouse.town" → On-demand
+      // channel creation failed`. The child peers (g.townhouse.town relay,
+      // g.townhouse.mill) are registered via registerPeer() WITHOUT an on-chain
+      // settlement address, so the apex cannot open a settlement channel to them —
+      // blocking the paid kind:1 publish AND the EVM→Mill→SOL streamSwap. Fixing
+      // this requires registering each child peer's settlement address (or
+      // pre-establishing the apex↔child channels). Tracked in deferred-work.md.
 
       // ── Drive streamSwap (AC #4) ─────────────────────────────────────────────
       // toonClient is now started and BTP-connected. Drive streamSwap to
@@ -1176,12 +1260,24 @@ describe.skipIf(!shouldRun)(
         console.warn('[49-5] Mill kind:10032 not received or swapPair absent — skipping streamSwap');
       }
 
-      // ── Publish kind:1 (AC #1 baseline) ─────────────────────────────────────
-      // FEE_PER_EVENT=0 in the HS compose template → relay accepts events for free.
-      // Publishing without a proof sets ILP amount=0, bypassing the payment-channel
-      // requirement (same pattern as the 49.3 smoke fixes: ilpAmount=0n bypasses
-      // connector→relay channel check). Using the proof would require an on-chain
-      // channel between B and the relay which hasn't been set up.
+      // ── Publish kind:1 (AC #1 baseline) — PAID, with attached claim ─────────
+      // Story 50.3 (Layer A): B is an EXTERNAL client, so the B→apex hop is paid even
+      // though the relay's FEE_PER_EVENT=0 (the town write itself is free as a child).
+      // The apex's InboundClaimValidator validates the claim from the BTP MESSAGE's
+      // `payment-channel-claim` protocol-data on EVERY non-zero PREPARE, BEFORE routing
+      // — so the claim must ride the SAME packet, regardless of whether the destination
+      // is local-delivery (g.townhouse) or a forwarded BTP child (g.townhouse.town).
+      //
+      // The earlier "claim isn't propagated for forwarded destinations" hypothesis was
+      // wrong: ToonClient.publishEvent(event, { claim }) attaches the claim as BTP
+      // protocol-data via sendIlpPacketWithClaim → IsomorphicBtpClient.sendPacket()
+      // for ANY destination — there is NO destination-based branch that drops it. The
+      // real defect was here in the gate: kind:1 was published with NO claim and NO
+      // ilpAmount, so the client priced it by bytes (non-zero) and sent no claim → F06.
+      //
+      // Fix: sign a balance proof over B's open channel for the expected fee and attach
+      // it (Story 49.1 pattern). ilpAmount is pinned to KIND1_FEE so the inbound
+      // earnings assertion (T3/D2: 1_000_000n ±10_000n) matches.
       const ev1: NostrEvent = finalizeEvent(
         {
           kind: 1,
@@ -1192,12 +1288,32 @@ describe.skipIf(!shouldRun)(
         bSecretKey
       );
       kind1EventId = ev1.id;
-      console.log('[49-5] Publishing kind:1 (paid relay, 1_000_000n fee)...');
+      const KIND1_FEE = 1_000_000n;
+      let kind1Claim: SignedBalanceProof | undefined;
+      if (bChannelId) {
+        try {
+          kind1Claim = await toonClient.signBalanceProof(bChannelId, KIND1_FEE);
+          console.log(
+            `[49-5] Signed kind:1 claim: channel=${bChannelId.slice(0, 16)}..., nonce=${kind1Claim.nonce}, amount=${KIND1_FEE}`
+          );
+        } catch (e) {
+          console.error(
+            `[49-5] signBalanceProof failed: ${(e as Error).message} — publishing kind:1 without a claim (will F06 if paid).`
+          );
+        }
+      } else {
+        console.warn(
+          '[49-5] No channel tracked for B — cannot sign kind:1 claim.'
+        );
+      }
+      console.log('[49-5] Publishing kind:1 (paid, with claim)...');
       try {
-        // ilpAmount=1_000_000n: real payment path — channel manager signs balance proof.
-        kind1Result = await toonClient.publishEvent(ev1, {
-          ilpAmount: 1_000_000n,
-        });
+        kind1Result = kind1Claim
+          ? await toonClient.publishEvent(ev1, {
+              claim: kind1Claim,
+              ilpAmount: KIND1_FEE,
+            })
+          : await toonClient.publishEvent(ev1);
       } catch (e) {
         kind1Result = { success: false, error: (e as Error).message };
       }

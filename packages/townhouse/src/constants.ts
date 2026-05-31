@@ -24,11 +24,13 @@ export const NODE_BTP_PORT = 3000;
  *   manifest.images.connector.tag
  */
 export const DEFAULT_CONNECTOR_IMAGE =
-  // v3.6.3 — adds `_claimReceiver` field + AdminServer wiring + safe shutdown
-  // ordering. Required by Story 47.5 (Earnings Data Plane gate); without
-  // this fix `/admin/earnings.json` returns 503 even on a fully-wired
-  // connector. PR: https://github.com/toon-protocol/connector/pull/72
-  'ghcr.io/toon-protocol/connector@sha256:3642f5397131ebd0c24321b2226ddc62f9d43bc05fa0a16d6734c3b9ccb00ba3';
+  // v3.7.1 — latest published connector (Story 50.3 bump). Carries forward the
+  // v3.6.3 `_claimReceiver` field + AdminServer wiring + safe-shutdown ordering
+  // required by Story 47.5 (Earnings Data Plane gate). No breaking changes to
+  // the SDK/admin contract within 3.x (verified >=3.3.2 through 3.7.1 — see
+  // packages/sdk/CONNECTOR_MIGRATION.md). Digest resolved via GHCR registry API
+  // for tag 3.7.1. To bump: see CONNECTOR_RELEASE_CONTRACT.md.
+  'ghcr.io/toon-protocol/connector@sha256:c2785da9c12ba89f338524e0a13911a0e7a4d1a4a18c12c20fcf935d61a1fd3f';
 
 /**
  * HD wallet account indices per node type (Story 21.4, D21-008).

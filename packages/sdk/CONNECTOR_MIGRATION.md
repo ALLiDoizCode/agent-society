@@ -24,10 +24,18 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.7.1)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
+
+> **Verified range:** No breaking changes to the consumed surface within 3.x.
+> The contract holds from `>=3.3.2` through `3.7.1` — the current
+> `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor, bumped in Story 50.3.
+> Connector `3.7.0+` additionally exposes `packetsLocallyDelivered` in
+> `getMetrics().peers[]` (toon-protocol/connector#73), consumed additively by
+> Townhouse's earnings aggregator (`eventsRelayed`); this is purely additive and
+> does not change the documented shapes below.
 
 ### `sendPacket(params: SendPacketParams): Promise<ILPFulfillPacket | ILPRejectPacket>`
 

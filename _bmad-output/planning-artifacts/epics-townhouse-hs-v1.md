@@ -1743,7 +1743,7 @@ So that the SOL leg is provably live on Akash Solana devnet and the BLOCKED-STRU
 **Given** `scripts/townhouse-e2e-real-hs.sh` is invoked with `--chain=sol`
 **When** it runs
 **Then** the SOL leg executes (not a stub comment) AND exits 0 on success, non-zero on failure.
-**And** the SOL leg emits `SOL leg PASS (Mill streamSwap, txid: <claim>)` to stdout on success.
+**And** the SOL leg emits `SOL leg PASS (Mill streamSwap, claim: <claim>)` to stdout on success. (Amended Story 50.3 review 2026-05-31, was `txid:` — `streamSwap` produces an off-chain signed payment-channel claim, not a broadcast on-chain transaction, so there is no tx signature to surface; the label is `claim:`.)
 
 **AC #7 — Full gate still green:**
 **Given** `RUN_DOCKER_INTEGRATION=1 pnpm --filter @toon-protocol/townhouse test:integration`
@@ -1765,6 +1765,18 @@ So that the SOL leg is provably live on Akash Solana devnet and the BLOCKED-STRU
 **Dependencies:** Story 50.1 (swap-pair provisioning); Story 50.2 (Mill container + streamSwap driver).
 
 **FRs:** FR43, FR44, FR45 | **NFRs:** NFR20, NFR23, NFR24
+
+### Review Findings (2026-05-31 — /bmad-code-review, infra scope: connector bump + gate scripts + CI + leases + pilot-readiness; Test 6 settlement code reviewed under Story 50.4)
+
+_Three-layer adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor). 3 decision-needed, 0 patch, 4 defer, ~9 dismissed. Connector consistency VERIFIED clean: digest `c2785da9` byte-identical across constants.ts + docker-compose-townhouse.yml; tag `3.7.1` aligned across all 4 compose files + 6 package.json floors + lockfile + publish-workflow `CONNECTOR_VERSION_DEFAULT` + local-hs.sh pin + migration doc._
+
+- [ ] [Review][Decision] AC #9 spec says SOL leg "PASS" but pilot-readiness honestly reports ⛔ BLOCKED — `v0.1-pilot-readiness.md` (AC #7 row + § "SOL Leg") reports the 2026-05-30 live gate as BLOCKED (Mill never advertised kind:10032); AC #9 (epics:1761) literally mandates "SOL leg status: PASS". The doc is also now STALE vs Story 50.4 (done 2026-05-31, advertisement blocker resolved + live-verified). 50.3 is correctly held at `review` until the operator settlement gate (local anvil@18545 + Akash SOL devnet) proves green. Reconcile: refresh the doc post-50.4 and keep 50.3 at `review` until PASS, OR amend AC #9 wording.
+- [ ] [Review][Decision] AC #6 marker text — script emits `claim:`, spec says `txid:` — `townhouse-e2e-real-hs.sh` emits `SOL leg PASS (Mill streamSwap, claim: …)`; spec AC #6 (epics:1746) literally says `txid:`. The script is technically correct (streamSwap is an off-chain signed channel claim, not a broadcast tx — review P5). Recommend amending AC #6 wording to `claim:` in-place (mirrors how AC #3 DN3 was handled), rather than leaving a literal spec-vs-artifact contradiction.
+- [ ] [Review][Decision] Connector bump 3.6.3/3.3.3→3.7.1 is outside all 50.3 ACs — No Story 50.3 AC mentions a connector bump; story scope is "exercise a real SOL settlement loop + retire BLOCKED-STRUCTURAL". The bump (~15 files: constants digest, 6 package.json floors, 4 compose pins, publish-workflow default, local-hs.sh pin, migration doc, lockfile) is a user directive ("pull latest connector"). Accept as in-scope for 50.3, or split into its own connector-maintenance story? Either way, confirm the contract canary passes @3.7.1 before merge (see W4).
+- [x] [Review][Defer] Live-host Akash SDL still on connector:3.4.1 [deploy/akash/townhouse.sdl.yaml:90] — deferred, pre-existing (already W1); needs operator redeploy of the live apex host.
+- [x] [Review][Defer] leases.json solana+anvil `image_digest` blanked to "" [deploy/akash/leases.json] — deferred; provenance regression from the 2026-05-30 redeploy. No gate reads it today; operator to repopulate from live lease.
+- [x] [Review][Defer] SOL-leg PASS marker couples to a free-text console.log wording [scripts/townhouse-e2e-real-hs.sh] — deferred; `grep`-on-human-string is false-FAIL-fragile (not false-PASS; `set -euo pipefail` guards genuine failures). A machine-stable marker contract would harden it.
+- [x] [Review][Defer] Connector bump lacks contract-canary evidence in the diff [packages/sdk/tests/integration/connector-contract.test.ts] — deferred; CLAUDE.md mandates running the canary on every bump. Sprint notes record "13/13 PASS @3.7.1" but it is not a diff artifact (no API drift = no file change). Re-run pre-merge to substantiate the migration-doc "verified through 3.7.1" claim.
 
 ---
 

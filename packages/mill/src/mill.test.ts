@@ -31,6 +31,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { describe, it, expect } from 'vitest';
+import { encodeEventToToon } from '@toon-protocol/core';
+import type { NostrEvent } from 'nostr-tools/pure';
 
 // NOTE: the following imports reference symbols that DO NOT YET EXIST.
 // TypeScript will error on these lines until Story 12.7's dev work lands.
@@ -56,6 +58,8 @@ interface MillInstanceShape {
     inventory: Record<string, string>;
   };
   _handlerRegistry?: { get(kind: number): unknown };
+  connector?: { _packetHandler?: (req: unknown) => Promise<unknown>;
+    _calls?: string[] };
 }
 
 // Dynamic import so TS doesn't fail at collection time.
@@ -82,8 +86,21 @@ const VALID_MNEMONIC =
 
 function fakeConnector(): any {
   const calls: string[] = [];
-  return {
+  const conn: any = {
     _calls: calls,
+    // Captures the local-delivery callback startMill wires via setPacketHandler
+    // so tests can drive an inbound ILP packet through the real dispatch path.
+    _packetHandler: undefined as
+      | ((req: {
+          amount: string;
+          destination: string;
+          data: string;
+        }) => Promise<unknown>)
+      | undefined,
+    setPacketHandler(handler: any) {
+      calls.push('setPacketHandler');
+      conn._packetHandler = handler;
+    },
     close: async () => {
       calls.push('close');
     },
@@ -91,6 +108,7 @@ function fakeConnector(): any {
     // the real interface turns out to be larger (see `@toon-protocol/core`).
     send: async () => ({ ok: true }),
   };
+  return conn;
 }
 
 function baseConfig(overrides: Record<string, unknown> = {}) {
@@ -177,6 +195,131 @@ describe('T-055 startMill boots and registers swap handler (AC-4, AC-8, AC-10)',
       expect(h.uptimeSec).toBeGreaterThanOrEqual(0);
       // Inventory serialized as bigint → decimal string (MAX_SAFE_INTEGER guard).
       expect(h.inventory['evm:8453']).toBe('1000000');
+    } finally {
+      await instance.stop();
+    }
+  });
+});
+
+// ===========================================================================
+// Story 50.3 (SOL settlement leg, AC#4): inbound kind:1059 dispatch
+//
+// Regression guard for the swap-handler DISPATCH bug — an inbound gift-wrap
+// (kind:1059) ILP packet destined for Mill's OWN address MUST be routed to the
+// registered swap handler, NOT fall through to the connector's auto-fulfill
+// "Local delivery - auto-fulfill stub" (which the sender's streamSwap FULFILL
+// decoder cannot JSON.parse → FULFILL_DECODE_FAILED).
+// ===========================================================================
+
+describe('Story 50.3 inbound kind:1059 dispatches to swap handler (AC#4)', () => {
+  it('[P0] wires the registry to the connector via setPacketHandler', async () => {
+    const startMill = await loadStartMill();
+    const cfg = baseConfig();
+    const instance = (await startMill(cfg)) as MillInstanceShape;
+    try {
+      const conn = cfg.connector as ReturnType<typeof fakeConnector>;
+      expect(conn._calls).toContain('setPacketHandler');
+      expect(typeof conn._packetHandler).toBe('function');
+    } finally {
+      await instance.stop();
+    }
+  });
+
+  it('[P0] routes an inbound kind:1059 packet to the swap handler (NOT the local-delivery stub)', async () => {
+    const startMill = await loadStartMill();
+    const cfg = baseConfig();
+    const instance = (await startMill(cfg)) as MillInstanceShape;
+    try {
+      const conn = cfg.connector as ReturnType<typeof fakeConnector>;
+      const handlePacket = conn._packetHandler!;
+      expect(handlePacket).toBeDefined();
+
+      // A kind:1059-shaped event whose content is NOT a real gift wrap. The swap
+      // handler will reject it with its OWN code ('F01' Invalid gift wrap), which
+      // PROVES dispatch reached the swap handler rather than the connector's
+      // default auto-fulfill stub.
+      const fakeGiftWrap: NostrEvent = {
+        id: '0'.repeat(64),
+        pubkey: '1'.repeat(64),
+        created_at: Math.floor(Date.now() / 1000),
+        kind: 1059,
+        tags: [],
+        content: 'not a real gift wrap',
+        sig: '0'.repeat(128),
+      };
+      const data = Buffer.from(encodeEventToToon(fakeGiftWrap)).toString(
+        'base64'
+      );
+
+      const res = (await handlePacket({
+        amount: '1000000',
+        destination: 'g.townhouse.mill',
+        data,
+      })) as {
+        accept: boolean;
+        code?: string;
+        data?: string;
+        rejectReason?: { code: string; message: string };
+      };
+
+      // Reached the swap handler → swap-specific reject, NOT a local-delivery ACK.
+      expect(res.accept).toBe(false);
+      expect(res.code).toBe('F01');
+      // The connector adapter requires a semantic rejectReason (else collapses to F99).
+      expect(res.rejectReason).toBeDefined();
+      // Must NOT be the auto-fulfill stub literal.
+      if (res.data) {
+        expect(Buffer.from(res.data, 'base64').toString('utf8')).not.toContain(
+          'Local delivery'
+        );
+      }
+    } finally {
+      await instance.stop();
+    }
+  });
+
+  it('[P0] returns swap-handler FULFILL metadata as base64-JSON data (not a stub string)', async () => {
+    // Verifies the metadata→data serialization: when the registered kind:1059
+    // handler accepts with metadata, the wired packet handler MUST surface that
+    // metadata as base64-JSON FULFILL `data` (the shape streamSwap decodes).
+    const startMill = await loadStartMill();
+    const cfg = baseConfig();
+    const instance = (await startMill(cfg)) as MillInstanceShape;
+    try {
+      const registry = instance._handlerRegistry as unknown as {
+        on(kind: number, handler: (ctx: unknown) => Promise<unknown>): void;
+      };
+      // Swap out the kind:1059 handler with a stub that accepts + emits metadata,
+      // mirroring createSwapHandler's `ctx.accept({ claim, ... })` shape.
+      const claim = { claim: 'BASE64CLAIM', claimId: 'abc', chain: 'solana' };
+      registry.on(1059, async (ctx: any) => ctx.accept(claim));
+
+      const conn = cfg.connector as ReturnType<typeof fakeConnector>;
+      const handlePacket = conn._packetHandler!;
+
+      const evt: NostrEvent = {
+        id: '0'.repeat(64),
+        pubkey: '1'.repeat(64),
+        created_at: Math.floor(Date.now() / 1000),
+        kind: 1059,
+        tags: [],
+        content: 'x',
+        sig: '0'.repeat(128),
+      };
+      const data = Buffer.from(encodeEventToToon(evt)).toString('base64');
+
+      const res = (await handlePacket({
+        amount: '1000000',
+        destination: 'g.townhouse.mill',
+        data,
+      })) as { accept: boolean; data?: string };
+
+      expect(res.accept).toBe(true);
+      expect(typeof res.data).toBe('string');
+      const decoded = JSON.parse(
+        Buffer.from(res.data as string, 'base64').toString('utf8')
+      );
+      expect(decoded).toMatchObject(claim);
     } finally {
       await instance.stop();
     }

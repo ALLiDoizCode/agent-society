@@ -26,6 +26,25 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+# --chain selects which settlement leg the gate must prove (Story 50.3 AC #6).
+#   evm (default) — the original 49.5 EVM-settlement gate.
+#   sol           — additionally requires Test 6 (EVM→Mill→SOL settlement) green
+#                   and emits the SOL-leg PASS marker.
+#   all           — same suite; reports both legs.
+# The self-contained gate always runs the full Tests 1–6 suite; --chain only
+# controls which leg the script asserts/reports on exit.
+CHAIN="evm"
+for arg in "$@"; do
+  case "$arg" in
+    --chain=*) CHAIN="${arg#--chain=}" ;;
+    *) echo "Unknown arg: $arg (expected --chain=evm|sol|all)" >&2; exit 2 ;;
+  esac
+done
+case "$CHAIN" in
+  evm|sol|all) ;;
+  *) echo "Invalid --chain=$CHAIN (expected evm|sol|all)" >&2; exit 2 ;;
+esac
+
 export RUN_DOCKER_INTEGRATION=1
 export NODE_TLS_REJECT_UNAUTHORIZED=0
 
@@ -62,5 +81,22 @@ pnpm --filter @toon-protocol/townhouse test:integration \
   src/__integration__/townhouse-dvm-arweave-e2e.test.ts \
   2>&1 | tee "${LOG_DIR}/gate.log"
 
+# SOL leg reporting (Story 50.3 AC #6). The gate (above) exits non-zero if any
+# test — including Test 6 (EVM→Mill→SOL settlement) — fails, so reaching here
+# means the SOL leg is green. Surface the SOL claim evidence from the gate log.
+if [ "$CHAIN" = "sol" ] || [ "$CHAIN" = "all" ]; then
+  SOL_CLAIM="$(grep -oE '\[49-5 T6\] AC #2\+#3 PASS — SOL claim chain=[^,]+, target=[0-9]+' "${LOG_DIR}/gate.log" | tail -1 || true)"
+  if [ -z "$SOL_CLAIM" ]; then
+    echo "FAIL: SOL leg — Test 6 settlement evidence not found in gate log." >&2
+    echo "  gate log: ${LOG_DIR}/gate.log" >&2
+    exit 1
+  fi
+  CLAIM_DETAIL="${SOL_CLAIM#*PASS — }"
+  # `streamSwap` produces an off-chain signed payment-channel claim, not a
+  # broadcast Solana transaction — there is no on-chain tx signature here. Label
+  # the surfaced evidence as `claim:` rather than `txid:` (Story 50.3 review P5).
+  echo "SOL leg PASS (Mill streamSwap, claim: ${CLAIM_DETAIL})"
+fi
+
 echo ""
-echo "PASS: 49.5 gate green. Logs: ${LOG_DIR}"
+echo "PASS: 49.5 gate green (chain=${CHAIN}). Logs: ${LOG_DIR}"

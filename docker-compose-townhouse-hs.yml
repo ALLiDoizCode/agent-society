@@ -224,7 +224,7 @@ services:
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   connector:
     # Image must match DEFAULT_CONNECTOR_IMAGE in packages/townhouse/src/constants.ts
-    image: ghcr.io/toon-protocol/connector:3.4.1
+    image: ghcr.io/toon-protocol/connector:3.7.1
     container_name: townhouse-hs-connector
     # `connector` DNS name (matches HS_TARGET_HOST in the sidecar) — the
     # sidecar's HiddenServicePort directive forwards to connector:3000.
