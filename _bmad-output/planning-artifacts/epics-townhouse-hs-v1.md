@@ -1824,3 +1824,53 @@ So that `streamSwap` can discover `g.townhouse.mill` and the EVM→Mill→SOL se
 **Status (2026-05-31 — `done`, advertisement blocker resolved + verified live):** `/bmad-code-review` ran the AC #4 gate live (Docker + the live Akash anvil/solana devnets) and confirmed the Mill kind:10032 advertisement works end-to-end (`mill.peerInfo.published` on attempt 1; apex FULFILL; relay stores it). Reaching `beforeAll`-clear required **three harness fixes** the live run exposed, all in `townhouse-dvm-arweave-e2e.test.ts` (none in Mill runtime): (1) advertisement destination `g.townhouse` → **`g.townhouse.town`** (the bare `g.townhouse` is `localDelivery`-routed to the kind:5094-only DVM, which rejects kind:10032 with `F00`; `g.townhouse.town` is the town relay's event store); (2) **TOON-aware read** — the kind:10032 subscription used nostr-tools `SimplePool`, but a TOON relay emits every WS `EVENT` as a TOON string (`ConnectionHandler.ts:174`), silently dropped by nostr-tools — replaced with a raw `ws` reader that `decodeEventFromToon`s and polls until the ILP-stored event commits; (3) pubkey-scrape anchored to the `mill_ready` line (review patch P3). With these, `beforeAll` clears into the EVM settlement (`openChannel`) — **AC #4's bar met** ("advertisement no longer blocks"). The run then fails at `ECONNREFUSED 127.0.0.1:18545` (no local EVM RPC; the test expects `sdk-e2e-infra.sh up` anvil@18545) — that, plus the settlement assertions, are **Story 50.3's gate**, now unblocked. Verified Mill image: `ghcr.io/toon-protocol/mill@sha256:05bb5b4f…` (rebuilt from patched source; contains the fix). Code-review applied 5 patches (P1 loud `ilp_destination_ignored`; P2 entrypoint price guard; P3 pubkey anchor; P4 `TOON_CONNECTOR_URL` alias; P5/D1 digest reconcile) + 2 deferred (W1/W2). Full diagnostic + live-run evidence: `deferred-work.md` § "Epic 50: Mill HS-mode kind:10032 advertisement" → "Live verification (2026-05-31)". **— Earlier (2026-05-30, code-complete):** AC #1 diagnosis found the dominant blocker was deeper than the (a)/(b)/(c) candidate list: a TOON relay is **pay-to-write** — its WS `EVENT` handler (`packages/relay/src/websocket/ConnectionHandler.ts:134`) rejects every unpaid write with `'restricted: writes require ILP payment'`, and there is **no kind:10032 exception / no self-write bypass**, so Mill's `SimplePool` Nostr publish could never be stored regardless of relayUrls/logger. A second latent defect: the auto-created embedded `ConnectorNode` was **never `.start()`-ed**, so even an ILP send had no live session. **Fix (production / Model 2):** `startMill()` now starts the auto-created connector and, when `peerInfoIlpDestination` is set, advertises kind:10032 by routing the TOON-encoded event through the connector via an ILP PREPARE to that address (mirrors `startTown()`), with bounded retries + a loud `error` on exhaustion (AC #2). The harness points Mill at `g.townhouse` (`TOON_PEERINFO_ILP_ADDRESS`, price 0 since apex `FEE_PER_EVENT=0`). AC #2 also fixed the swallowed no-op logger (`entrypoint-mill.ts` now passes a real `MillLogger`; warn/error→stderr). **Verified:** mill build clean, 179/180 unit pass (4 new 50.4 tests), docker `entrypoint-mill` tsc clean, eslint 0 errors, dist probe shows `via:'ilp'` → `mill.peerInfo.published` to `g.townhouse`. Mill image rebuilt (`sha256:99e96cf8…`, tagged `ghcr.io/toon-protocol/mill:latest`), connector stays 3.7.1 (AC #5). **AC #4** (full live Docker+Akash gate past the kind:10032 wait) is the operator post-merge ritual — needs live Akash EVM+Solana devnets + `.anyone`, deferred to operator as with 50.0/50.2/50.3. File List in deferred-work.md.
 
 ---
+
+### Story 50.5: DVM Arweave Upload — Rebuild + Diagnose Turbo internal_error + AC#6 credit-source log
+
+As the townhouse release engineer closing out the Story 50.3 DVM deferral,
+I want the `ghcr.io/toon-protocol/dvm` image rebuilt from the current `@toon-protocol/sdk` source (which already carries Story 50.3's un-swallowed server-side Turbo error log + the gate's `dvmLogs` boot-log capture), so the Story 50.3 gate (`townhouse-dvm-arweave-e2e.test.ts`) surfaces the *real* cause of the kind:5094 `internal_error` instead of a swallowed one,
+So that I can determine whether the upload failure is code-fixable or an external Turbo-egress requirement, land the fix or document the requirement, and turn Story 50.3's AC #2 + AC #6 green.
+
+**Context (2026-05-31 live gate runs):** The DVM's kind:5094 Arweave upload returns `400 {"code":"T00","message":"Arweave upload failed","rejectReason":{"code":"internal_error"}}` in every run since the 2026-05-29/30 gate reopen (2/2 then persistently). The DVM's upload path is correct — ephemeral-JWK `TurboFactory.authenticated({privateKey: ephemeralJwk})` is the right free-tier path for `@ardrive/turbo-sdk` 1.40.x (`unauthenticated()` has no `uploadFile`), and the **same path produced a real Arweave txid** (`ENO_lSHMz672WRtBru3PFHVKPCGZyYkLzuRCxPHRuus`) on the green 2026-05-26 run (5/5 PASS). So the failure is most likely **external Turbo egress/network from the DVM container** OR a regression — but the handler **swallowed the real Turbo error** (CWE-209), giving zero diagnostics (blob is 32 bytes — not a size limit). Story 50.3 already committed the diagnostic groundwork into `@toon-protocol/sdk` (which is bundled into the DVM image): server-side error logging in `packages/sdk/src/arweave/arweave-dvm-handler.ts` (un-swallows the real Turbo error), a corrected stale comment in `packages/sdk/src/arweave/turbo-adapter.ts`, and the gate test now captures the DVM boot log into `dvmLogs`. **None of this takes effect until the DVM image is rebuilt** — the gate pins `ghcr.io/toon-protocol/dvm@sha256:26a2aff…`, which predates the diagnostics. This story owns the rebuild + diagnose + fix-or-document closeout; the kind:5094/6094 Arweave DVM **protocol itself is already implemented** (Epic 8). Diagnostics: `deferred-work.md` § "Story 50.3 live gate run (2026-05-31)" (B3) + the AC#2/#6 residual notes.
+
+**Acceptance Criteria:**
+
+**AC #1 — DVM image rebuilt from current sdk source + manifest re-pinned:**
+**Given** Story 50.3's `@toon-protocol/sdk` diagnostics (`arweave-dvm-handler.ts` un-swallowed Turbo error + `turbo-adapter.ts` comment) are committed
+**When** the DVM image is rebuilt via `docker build -f docker/Dockerfile.dvm -t toon:dvm .`
+**Then** the new image bundles the current sdk (the un-swallowed `console.error` is present in the running container) AND the gate's `image-manifest.json` DVM digest is re-pinned from `sha256:26a2aff…` to the rebuilt digest (or the build path is documented), with the connector pin staying at 3.7.1.
+
+**AC #2 — Gate re-run surfaces the real Turbo error (no more swallowed `internal_error`):**
+**Given** the rebuilt DVM image (AC #1) and `RUN_DOCKER_INTEGRATION=1 pnpm --filter @toon-protocol/townhouse test:integration`
+**When** the kind:5094 upload fails
+**Then** the DVM container's runtime log (captured into the test's `dvmLogs`) contains the **real** underlying Turbo failure (endpoint, HTTP status, or network error) — not just the opaque `rejectReason:{code:'internal_error'}` — so the root cause is observable rather than swallowed.
+
+**AC #3 — Root-cause determination (external-Turbo-egress vs code-fixable) documented:**
+**Given** the surfaced Turbo error from AC #2
+**When** the failure is analyzed
+**Then** the root cause is classified as either **(a) code-fixable** (e.g. wrong Turbo endpoint, missing retry, ephemeral-JWK funding/account-creation gap) — in which case the fix is applied — or **(b) external Turbo egress** (the DVM container cannot reach Turbo's upload service in this environment) — in which case the env/network requirement is documented in `deferred-work.md`. The decision and its evidence are recorded.
+
+**AC #4 — If code-fixable, kind:5094 returns a real Arweave txid in the ILP FULFILL:**
+**Given** AC #3 classified the failure as code-fixable AND the fix is applied + the DVM image rebuilt
+**When** the gate's Test 2 runs the kind:5094 upload
+**Then** the ILP FULFILL `data` carries a valid Arweave txid (matching the 2026-05-26 green-run shape, e.g. `ENO_lSHMz672…`) AND `kind:5094: success=true` — i.e. Story 50.3's AC #2 row turns green. (If AC #3 classified the failure as external Turbo egress, this AC is satisfied by the documented env requirement instead, and AC #2's green is gated on that env being present.)
+
+**AC #5 — AC#6 credit-source log captured (green):**
+**Given** the gate's `dvmLogs` capture (committed under Story 50.3) and the rebuilt DVM image
+**When** the DVM boots
+**Then** its boot log contains `Arweave credit source: … unauthenticated` AND the test reads `dvmLogs` *after* it is populated (the earlier failure was the test reading `dvmLogs` before population) — i.e. Story 50.3's AC #6 row turns green.
+
+**AC #6 — Story 50.3 AC#2/#6 rows updated in pilot-readiness:**
+**Given** AC #4 + AC #5 outcomes
+**When** the story is marked done
+**Then** `_bmad-output/implementation-artifacts/v0.1-pilot-readiness.md`'s AC #2 (kind:5094 DVM returns Arweave txid) + AC #6 (DVM ephemeral-JWK free-tier Turbo) rows — and the SOL-leg/AC #7 narrative where it references B3 — are updated to reflect the new state (green if code-fixable + verified; or external-egress requirement documented with the gate's expected behavior), superseding the prior `internal_error` notes.
+
+**Out of scope:** AC #1 (connector parent/child inbound-claim asymmetry — filed as a connector-repo issue/release, not this repo's product code) and AC #4 (Mill SOL provisioning — Story 50.1 scope); the SOL settlement assertions themselves (Story 50.3 AC #3/#4); the kind:5094/6094 Arweave DVM **protocol** (already implemented, Epic 8 — this story is only upload-reliability + image-rebuild + diagnostics closeout); Mina; multi-Mill. Persistent/funded DVM Arweave identity (ephemeral JWK by design, W1 49.5).
+
+**Dependencies:** Story 50.3 (the `townhouse-dvm-arweave-e2e.test.ts` gate + the already-committed `@toon-protocol/sdk` server-side Turbo diagnostics + the `dvmLogs` boot-log capture). **Unblocks:** Story 50.3's AC #2 + AC #6.
+
+**Diagnostics:** `_bmad-output/implementation-artifacts/deferred-work.md` § "Story 50.3 live gate run (2026-05-31)" (B3) + "Agent-fix integration run" / "Second agent pass" AC#2/#6 residual notes.
+
+**FRs:** FR43, FR44, FR45 | **NFRs:** NFR20, NFR23, NFR24 (same gate as Story 50.3 — `townhouse-dvm-arweave-e2e.test.ts`; this story closes out 50.3's deferred AC #2/#6 rows on that gate).
+
+---
