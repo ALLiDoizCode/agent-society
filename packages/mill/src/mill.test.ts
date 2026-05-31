@@ -33,6 +33,14 @@
 import { describe, it, expect } from 'vitest';
 import { encodeEventToToon } from '@toon-protocol/core';
 import type { NostrEvent } from 'nostr-tools/pure';
+import { generateSecretKey } from 'nostr-tools/pure';
+import {
+  wrapSwapPacketToToon,
+  decryptFulfillClaim,
+  generateSolanaKeypair,
+  __streamSwapTesting,
+} from '@toon-protocol/sdk';
+import { createPaymentHandlerAdapter, createLogger } from '@toon-protocol/connector';
 
 // NOTE: the following imports reference symbols that DO NOT YET EXIST.
 // TypeScript will error on these lines until Story 12.7's dev work lands.
@@ -320,6 +328,172 @@ describe('Story 50.3 inbound kind:1059 dispatches to swap handler (AC#4)', () =>
         Buffer.from(res.data as string, 'base64').toString('utf8')
       );
       expect(decoded).toMatchObject(claim);
+    } finally {
+      await instance.stop();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Story 50.3 AC#4 — END-TO-END FULFILL-DATA CONTRACT (SOL leg).
+  //
+  // The single most load-bearing assertion for the SOL settlement gate: an
+  // inbound REAL kind:1059 gift-wrap swap (built by the SDK's own
+  // `wrapSwapPacketToToon`) dispatched to Mill's REAL `createSwapHandler` +
+  // `MultiChainClaimIssuer` + Solana signer MUST produce a FULFILL whose
+  // `data`, after passing through the REAL connector
+  // (`createPaymentHandlerAdapter` → `convertLocalDeliveryResponse`
+  // re-encode/decode) and the client-side base64 re-encode, round-trips
+  // through `streamSwap`'s OWN `decodeFulfillMetadata` decoder AND
+  // `decryptFulfillClaim` to a NON-EMPTY signed claim.
+  //
+  // This locks the mill-handler ↔ sdk-streamSwap serialization contract:
+  // any future drift in the metadata→base64-JSON shape, the connector
+  // adapter's `validateResponseData` canonical-base64 gate, or the
+  // settlement-context field set fails HERE rather than only in the live
+  // Docker+Akash gate. Mirrors the wire hops in
+  // `packages/mill/tests/e2e/helpers/build-live-sender.ts` (FULFILL
+  // `ilpResult.data.toString('base64')`) and the client's
+  // `BtpRuntimeClient._sendIlpPacketWithClaimOnce` (`toBase64(response.data)`).
+  it('[P0] inbound kind:1059 SOL swap → FULFILL data round-trips through streamSwap decoder to a non-empty claim', async () => {
+    const startMill = await loadStartMill();
+
+    // Sender + SOL payout identities (the sender's chain-recipient).
+    const senderSecretKey = generateSecretKey();
+    const solRecipient = generateSolanaKeypair().publicKey; // base58 32-byte
+
+    // A valid base58 32-byte Solana channelId so streamSwap's per-chain
+    // `decodeFulfillMetadata(data, 'solana:devnet')` accepts the channelId
+    // (length-only checks would pass too, but we exercise the strict path).
+    const solChannelId = generateSolanaKeypair().publicKey;
+
+    const SOL_CHAIN = 'solana:devnet';
+    const pair = {
+      from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:8453' },
+      to: { assetCode: 'USDC', assetScale: 6, chain: SOL_CHAIN },
+      rate: '1.0',
+    };
+
+    const cfg = baseConfig({
+      swapPairs: [pair],
+      chains: ['evm', 'solana'] as const,
+      channels: {
+        [SOL_CHAIN]: [
+          {
+            channelId: solChannelId,
+            cumulativeAmount: 0n,
+            nonce: 0n,
+            updatedAt: 0,
+          },
+        ],
+      },
+      inventory: { [SOL_CHAIN]: 1_000_000n },
+    });
+    const instance = (await startMill(cfg)) as MillInstanceShape & {
+      identity: { pubkey: string };
+    };
+
+    try {
+      // Build a REAL gift-wrapped swap PREPARE via the SDK using streamSwap's
+      // own rumor builder so the rumor tags (swap-from/to, chain-recipient)
+      // match exactly what streamSwap emits on the wire.
+      const sourceAmount = 1_000_000n;
+      const rumor = __streamSwapTesting.buildSwapRumor({
+        senderPubkey: '', // overwritten by getPublicKey inside the wrap
+        pair,
+        sourceAmount,
+        packetIndex: 1,
+        totalPackets: 1,
+        nonce: new Uint8Array(16),
+        createdAt: Math.floor(Date.now() / 1000),
+        chainRecipient: solRecipient,
+      });
+
+      const wrapped = wrapSwapPacketToToon({
+        rumor,
+        senderSecretKey,
+        recipientPubkey: instance.identity.pubkey,
+        destination: 'g.townhouse.mill',
+        amount: sourceAmount,
+      });
+      // `wrapped.ilpPrepare.data` is already base64 of the TOON gift-wrap —
+      // exactly the `request.data` shape Mill's handlePacket receives.
+      const requestData = wrapped.ilpPrepare.data;
+
+      // 1) Drive Mill's REAL packet handler (real createSwapHandler +
+      //    MultiChainClaimIssuer + Solana signer).
+      const handlePacket = (cfg.connector as ReturnType<typeof fakeConnector>)
+        ._packetHandler!;
+      const millResult = (await handlePacket({
+        amount: sourceAmount.toString(),
+        destination: 'g.townhouse.mill',
+        data: requestData,
+      })) as {
+        accept: boolean;
+        data?: string;
+        code?: string;
+        rejectReason?: { code: string; message: string };
+      };
+
+      // The swap MUST be accepted (provisioned SOL channel + inventory +
+      // signer). A reject here is the real "claims=0" gate failure.
+      expect(
+        millResult.accept,
+        `swap handler rejected: code=${millResult.code} reason=${JSON.stringify(
+          millResult.rejectReason
+        )}`
+      ).toBe(true);
+      expect(typeof millResult.data).toBe('string');
+
+      // 2) Pass Mill's response through the REAL connector
+      //    PaymentHandlerAdapter (what ConnectorNode.setPacketHandler wraps
+      //    the handler with) → `{ fulfill: { data } }`.
+      const adapter = createPaymentHandlerAdapter(
+        async () => millResult as never,
+        createLogger('mill-test-fulfill-roundtrip', 'error') as never
+      );
+      const adapterOut = (await adapter({
+        destination: 'g.townhouse.mill',
+        amount: sourceAmount.toString(),
+        expiresAt: new Date(Date.now() + 30_000).toISOString(),
+        data: requestData,
+      } as never)) as { fulfill?: { data?: string }; reject?: unknown };
+
+      // The adapter MUST NOT drop the data (validateResponseData canonical
+      // base64 gate) and MUST take the fulfill branch.
+      expect(adapterOut.reject, 'connector adapter rejected the FULFILL').toBeUndefined();
+      expect(adapterOut.fulfill).toBeDefined();
+      expect(typeof adapterOut.fulfill!.data).toBe('string');
+
+      // 3) `convertLocalDeliveryResponse` ships the FULFILL wire bytes as
+      //    `Buffer.from(fulfill.data, 'base64')` — the raw JSON bytes.
+      const fulfillWireBytes = Buffer.from(adapterOut.fulfill!.data!, 'base64');
+      expect(fulfillWireBytes.length).toBeGreaterThan(0);
+
+      // 4) The client (BtpRuntimeClient / build-live-sender) re-encodes the
+      //    FULFILL packet bytes as `toBase64(response.data)` before handing
+      //    them to streamSwap.
+      const streamSwapInputData = fulfillWireBytes.toString('base64');
+
+      // 5) streamSwap's OWN decoder — the canonical contract surface.
+      const meta = __streamSwapTesting.decodeFulfillMetadata(
+        streamSwapInputData,
+        SOL_CHAIN
+      );
+      expect(meta.recipient).toBe(solRecipient);
+      expect(meta.channelId).toBe(solChannelId);
+      expect(meta.nonce).toBeDefined();
+      expect(meta.cumulativeAmount).toBe(sourceAmount.toString());
+      expect(meta.millSignerAddress).toBeDefined();
+
+      // 6) Decrypt the NIP-44 claim exactly as streamSwap does and assert a
+      //    NON-EMPTY signed SOL claim (the AC#4 settlement payload).
+      const claimBytes = decryptFulfillClaim({
+        ciphertext: new Uint8Array(Buffer.from(meta.claim, 'base64')),
+        ephemeralPubkey: meta.ephemeralPubkey,
+        recipientSecretKey: senderSecretKey,
+      });
+      expect(claimBytes).toBeInstanceOf(Uint8Array);
+      expect(claimBytes.length).toBeGreaterThan(0);
     } finally {
       await instance.stop();
     }
