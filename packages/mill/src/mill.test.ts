@@ -839,3 +839,150 @@ describe('Story 12.8 AC-13 — publisher injection', () => {
     await instance.stop();
   });
 });
+
+// ===========================================================================
+// Story 50.4 — kind:10032 ILP advertisement via the embedded connector
+//
+// A TOON relay is pay-to-write (its WS EVENT handler rejects unpaid writes),
+// so the legacy SimplePool publish is silently dropped. When a connector and
+// `peerInfoIlpDestination` are present, Mill must instead route the
+// TOON-encoded kind:10032 to that ILP address via an ILP PREPARE.
+// ===========================================================================
+
+describe('Story 50.4 — kind:10032 ILP advertisement (peerInfoIlpDestination)', () => {
+  // Fake connector that fulfills sendPacket and records each call. Operator-
+  // supplied (config.connector), so startMill does NOT call .start() on it.
+  function fulfillingConnector() {
+    const calls: { destination: string; amount: string; data: string }[] = [];
+    return {
+      _calls: calls,
+      close: async () => {},
+      sendPacket: async (p: any) => {
+        calls.push({
+          destination: p.destination,
+          amount: String(p.amount),
+          data: Buffer.from(p.data).toString('base64'),
+        });
+        return { type: 'fulfill' as const };
+      },
+    };
+  }
+
+  it('[P1] routes the kind:10032 through the connector via ILP PREPARE to peerInfoIlpDestination', async () => {
+    const startMill = await loadStartMill();
+    const connector = fulfillingConnector();
+    let built: any;
+    const { connector: _ignored, ...withoutConnector } = baseConfig();
+    const instance = (await startMill({
+      ...withoutConnector,
+      connector,
+      peerInfoIlpDestination: 'g.townhouse',
+      peerInfoPricePerByte: 0n,
+      __testHooks: { onPeerInfoBuilt: (e: unknown) => (built = e) },
+    } as any)) as MillInstanceShape;
+    try {
+      const deadline = Date.now() + 2_000;
+      while (connector._calls.length === 0 && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      // The advertisement went out via ILP (sendPacket), not the Nostr WS path.
+      expect(connector._calls.length).toBe(1);
+      expect(connector._calls[0]!.destination).toBe('g.townhouse');
+      // amount = toonBytes * 0n = 0 (pilot relays advertise FEE_PER_EVENT=0).
+      expect(connector._calls[0]!.amount).toBe('0');
+      expect(connector._calls[0]!.data.length).toBeGreaterThan(0);
+      // The dispatched payload is the signed kind:10032 peer-info event.
+      expect(built.kind).toBe(10032);
+    } finally {
+      await instance.stop();
+    }
+  });
+
+  it('[P1] ILP path takes priority over the relayUrls Nostr publish', async () => {
+    const startMill = await loadStartMill();
+    const connector = fulfillingConnector();
+    const { connector: _ignored, ...withoutConnector } = baseConfig();
+    const instance = (await startMill({
+      ...withoutConnector,
+      connector,
+      // A relayUrls is still present; with a destination set the ILP path wins.
+      relayUrls: ['ws://localhost:0'],
+      peerInfoIlpDestination: 'g.townhouse',
+    } as any)) as MillInstanceShape;
+    try {
+      const deadline = Date.now() + 2_000;
+      while (connector._calls.length === 0 && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      expect(connector._calls.length).toBe(1);
+    } finally {
+      await instance.stop();
+    }
+  });
+
+  it('[P1] a rejecting relay does NOT fail Mill boot but logs a loud error (AC #2)', async () => {
+    const startMill = await loadStartMill();
+    const connector = {
+      close: async () => {},
+      sendPacket: async () => ({
+        type: 'reject' as const,
+        code: 'F02',
+        message: 'no route to destination',
+      }),
+    };
+    const errors: { msg: string; fields?: Record<string, unknown> }[] = [];
+    const logger = {
+      debug: () => undefined,
+      info: () => undefined,
+      warn: () => undefined,
+      error: (msg: string, fields?: Record<string, unknown>) =>
+        errors.push({ msg, fields }),
+    };
+    const { connector: _ignored, ...withoutConnector } = baseConfig();
+    const instance = (await startMill({
+      ...withoutConnector,
+      connector,
+      logger,
+      peerInfoIlpDestination: 'g.townhouse',
+      // Collapse the retry window so the exhausted-retry path completes fast.
+      __testHooks: { peerInfoPublishRetry: { maxAttempts: 2, delayMs: 5 } },
+    } as any)) as MillInstanceShape;
+    // Boot resolves immediately regardless of the (fire-and-forget) publish.
+    expect(instance.health().status).toBe('ok');
+    // Let the bounded retry loop exhaust + log its terminal error (AC #2:
+    // failure is surfaced loudly rather than swallowed).
+    const deadline = Date.now() + 2_000;
+    while (
+      !errors.some((e) => e.msg === 'mill.peerInfo.publish_failed') &&
+      Date.now() < deadline
+    ) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    const failLog = errors.find(
+      (e) => e.msg === 'mill.peerInfo.publish_failed'
+    );
+    expect(failLog).toBeDefined();
+    expect(failLog!.fields?.['destination']).toBe('g.townhouse');
+    await instance.stop();
+  });
+
+  it('[P1] falls back to the Nostr WS publish when no peerInfoIlpDestination is set', async () => {
+    const startMill = await loadStartMill();
+    const connector = fulfillingConnector();
+    const { connector: _ignored, ...withoutConnector } = baseConfig();
+    const instance = (await startMill({
+      ...withoutConnector,
+      connector,
+      relayUrls: ['ws://localhost:0'],
+      // peerInfoIlpDestination intentionally omitted → legacy WS path.
+    } as any)) as MillInstanceShape;
+    try {
+      // No ILP advertisement was attempted (connector.sendPacket untouched).
+      await new Promise((r) => setTimeout(r, 100));
+      expect(connector._calls.length).toBe(0);
+      expect(instance.health().status).toBe('ok');
+    } finally {
+      await instance.stop();
+    }
+  });
+});
