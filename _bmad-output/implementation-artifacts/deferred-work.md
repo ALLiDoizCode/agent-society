@@ -795,3 +795,5 @@ Two independent subagents, each with rigorous file:line + live-log evidence, est
 - **AC#2/#6 — external Turbo + DVM image rebuild** (unchanged): rebuild `ghcr.io/toon-protocol/dvm` for agent 3's diagnostics; `internal_error` likely external Turbo egress from the container.
 
 **Definitive status:** every fixable-in-product-code issue is fixed + verified (B1, B2', Fix B, Mill setPacketHandler, + 6 regression tests across core/client/mill/sdk). The 3 residuals are: connector inbound-claim asymmetry (AC#1 — connector release or topology), Mill SOL provisioning (AC#4 — Story 50.1), DVM Turbo/image (AC#2). None is patchable in this repo's product code. Gate stable at 6/4 (AC#3 + AC#5 green). Story 50.3 stays `review`.
+
+_AC#1 connector inbound-claim asymmetry filed: toon-protocol/connector#78 (https://github.com/toon-protocol/connector/issues/78)._
