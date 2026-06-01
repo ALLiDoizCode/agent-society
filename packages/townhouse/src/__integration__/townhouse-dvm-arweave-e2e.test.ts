@@ -440,16 +440,35 @@ function buildTestMillConfig(connectorBtpUrl: string): object {
       },
     ],
     chains: ['evm', 'solana'],
-    // Bootstrap: validateConfig() requires a non-empty channels array for
-    // each distinct pair.to.chain. The zero channelId is a valid-format
-    // sentinel that will never match a real on-chain channel.
+    // Bootstrap: validateConfig() requires a non-empty channels array for each
+    // distinct pair.to.chain. channelId MUST be a Solana-format value (base58,
+    // 32-byte) — the EVM-format zero sentinel ('0x'+64 zeros) fails the FULFILL
+    // decoder's solana validateChainAddress check (base58 + 32-44 chars + decodes
+    // to 32 bytes), producing FULFILL metadata.channelId malformed. This is a
+    // deterministic base58 32-byte channel reference (sha256 of a fixed label);
+    // the FULFILL claim is an off-chain signed balance proof that decodes + passes
+    // structure checks. (A fully on-chain SOL channel PDA would require opening +
+    // funding a channel on the Akash solana payment_channel program; there is no
+    // SOL channel-open tooling yet, and the test validates claim issuance/decode,
+    // not on-chain settlement.)
     channels: {
       'solana:devnet': [
-        { channelId: '0x' + '0'.repeat(64), cumulativeAmount: '0', nonce: '0' },
+        {
+          channelId: '4915MN8VmqABAXjDkF3ccUHEo8CnpguYYn2Go85ojyJx',
+          cumulativeAmount: '0',
+          nonce: '0',
+        },
       ],
     },
-    // Zero initial SOL inventory; parsed to 0n by the Mill CLI.
-    inventory: { 'solana:devnet': '0' },
+    // SOL inventory provisioned (Story 50.1): Mill's swap claim-issuer debits
+    // this configured liquidity when issuing a Solana USDC claim (claim-issuer.ts
+    // makes NO on-chain RPC — inventory is the in-memory liquidity ledger). Mill's
+    // Solana wallet (7MJCp1arCr2vKGMvUykJ9WB3dQjtdTbPvaVSHM1LK126, derived from the
+    // mnemonic) is SOL-funded via scripts/faucet-sol.sh on the Akash solana devnet;
+    // 1000 USDC (1e9 base units @ 6 decimals) here covers the 1_000_000 swap leg
+    // with headroom. Was '0' (a deliberate "blocked" sentinel) → T04 insufficient
+    // liquidity.
+    inventory: { 'solana:devnet': '1000000000' },
     // Embedded-with-parent wiring: connectorUrl activates Mill's embedded
     // connector which BTP-dials the apex connector and registers g.townhouse.mill.
     connectorUrl: connectorBtpUrl,
