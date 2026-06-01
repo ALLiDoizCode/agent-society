@@ -130,9 +130,12 @@ export interface MillConfig {
   connectorUrl?: string;
   /**
    * Peer ID of the parent connector when `connectorUrl` is set. Default `'apex'`.
-   * Pure-routing identifier; the connector's `PeerConfig` has no `relation`
-   * field — parent semantics live in the routing table (default `g.` route
-   * points to this peer).
+   * MUST equal the parent connector's **nodeId** — the embedded ConnectorNode
+   * registers this peer with `relation: 'parent'`, and connector >=3.8.0 keys
+   * peerRelations by the auth-declared peerId of the inbound BTP session (= the
+   * parent's nodeId). A mismatch means the relation-aware inbound-claim skip
+   * (toon-protocol/connector#78) never fires and parent-forwarded claimless
+   * paid packets are F06-rejected.
    */
   parentPeerId?: string;
   /**
@@ -770,6 +773,16 @@ export async function startMill(config: MillConfig): Promise<MillInstance> {
             id: parentPeerId,
             url: config.connectorUrl,
             authToken: parentAuthToken,
+            // Tag the upstream as our PARENT so the embedded connector's
+            // relation-aware inbound claim validation (toon-protocol/connector#78)
+            // skips the per-packet-claim requirement for PREPAREs forwarded by the
+            // parent (which settles in aggregate and attaches no per-packet claim
+            // to a child). Without this the peer defaults to 'peer' and Mill
+            // F06-rejects any claimless parent-forwarded paid packet. NOTE:
+            // `parentPeerId` MUST equal the parent connector's nodeId — the
+            // connector keys peerRelations by the auth-declared peerId of the
+            // inbound BTP session, not a local alias.
+            relation: 'parent',
             // Advertise our EVM treasury to the parent so the apex's
             // PerPacketClaimService can open a settlement channel toward
             // this Mill without needing kind:10032 discovery first.

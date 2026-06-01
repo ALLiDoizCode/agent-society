@@ -455,7 +455,11 @@ function buildTestMillConfig(connectorBtpUrl: string): object {
     connectorUrl: connectorBtpUrl,
     ilpAddress: 'g.townhouse.mill',
     nodeId: 'mill',
-    parentPeerId: 'apex',
+    // MUST equal the apex connector's nodeId (its BTP auth identity) so the
+    // embedded connector's relation-aware inbound-claim skip (connector#78)
+    // matches the parent-forwarded packet's source peerId. 'apex' was a fixture
+    // alias that never matched 'g.townhouse'.
+    parentPeerId: 'g.townhouse',
     parentAuthToken: '',
     // Relay for kind:10032 advertisement (within townhouse-hs-net).
     relayUrls: ['ws://townhouse-hs-town:7100'],
@@ -497,7 +501,7 @@ async function startMill(bConfigDir: string): Promise<void> {
       -e MILL_MNEMONIC='${TEST_MILL_MNEMONIC}' \
       -e MILL_RELAYS=ws://townhouse-hs-town:${TOWN_RELAY_WS_PORT} \
       -e TOON_CONNECTOR_URL=${dvmBtpConnectorUrl} \
-      -e TOON_PARENT_PEER_ID=apex \
+      -e TOON_PARENT_PEER_ID=g.townhouse \
       -e TOON_PARENT_AUTH_TOKEN= \
       -e TOON_ILP_ADDRESS=g.townhouse.mill \
       -e TOON_PEERINFO_ILP_ADDRESS=g.townhouse.town \
