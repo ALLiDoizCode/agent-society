@@ -173,7 +173,15 @@ RUN set -eux; \
 # if value-bearing packets are claim-gated; install libsql via npm (robust
 # platform-binding resolution) so the subsystem initializes instead of silently
 # degrading. libsql ships a prebuilt linux-x64-musl NAPI binding for node:20-alpine.
-RUN cd /tmp && npm init -y && npm install --omit=dev @libsql/client@0.14.0 libsql@0.4.7 && \
+#
+# viem (transitive of the externalized @solana/kit settlement SDK): connector
+# 3.8.0's dependency-tree shift left `viem` reachable at runtime but its deep dep
+# closure (abitype, @noble/*, @scure/*, isows, ox, ws) outside the manual
+# cherry-pick lists above — the DVM crashed at boot with
+# "Cannot find package 'abitype' imported from .../viem/_esm/index.js". Pulling
+# viem via npm flattens its FULL closure into /runtime (robust vs enumerating each
+# transitive dep). Keep the pin in sync with pnpm-lock's resolved viem version.
+RUN cd /tmp && npm init -y && npm install --omit=dev @libsql/client@0.14.0 libsql@0.4.7 viem@2.23.2 && \
     cp -rL /tmp/node_modules/. /runtime/node_modules/ && \
     find /runtime/node_modules -name '*.d.ts' -delete && \
     find /runtime/node_modules -name '*.d.ts.map' -delete && \
