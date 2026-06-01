@@ -871,3 +871,22 @@ AKASH_CONSOLE_API_KEY=ac.sk.production.… scripts/akash-deploy.sh redeploy sola
 # then re-derive leases.json URLs, re-faucet Mill's SOL wallet, re-run the gate
 ```
 Until then: AC#1/#3 GREEN (proven while Akash was up); AC#4/#5 fixes committed + validated-in-principle (final green pending redeploy); AC#2/#6 needs the dvm packaging overhaul + redeploy.
+
+##### ✅ GATE 10/10 GREEN (2026-06-01) — full EVM→Mill→SOL + DVM-Arweave loop verified end-to-end
+
+After redeploying the lapsed Akash devnets (operator key) and the SOL-provisioning + apex-fee + DVM-packaging fixes below, `townhouse-dvm-arweave-e2e.test.ts` ran **10 passed / 10** on the redeployed Akash anvil+solana devnets (new leases: anvil DSEQ 27086976 rtgroup.com, solana DSEQ 27086990 digitalfrontier.so):
+- **AC#1** kind:1 F06 → FULFILL (connector#78 relation-aware skip via the town/mill `relation:'parent'` fix).
+- **AC#2** DVM kind:5094 → real Arweave txid (e.g. `KZkw91rOUEvbxDM_tfTDCp_zRB0Gd6UMOrkAUWjDzOk`).
+- **AC#3 + AC#5** SOL claim chain=solana:devnet, targetAmount=1000000 (±1).
+- **AC#4** streamSwap state=completed, 1 claim.
+- **AC#6** unauthenticated Turbo credit-source log present.
+- T3/T4/T7/T8 channels / Akash endpoints / Mill health / kind:10032 advertise.
+
+**The fixes that closed the loop (all committed):**
+1. **SOL provisioning (AC#4/#5):** Mill `inventory:{'solana:devnet'}` `'0'→'1000000000'` (the T04 cause); channelId EVM-sentinel → valid Solana base58 (the FULFILL_DECODE cause). Mill's SOL wallet airdropped via `faucet-sol.sh`.
+2. **Apex fee (AC#3/#5):** patch the apex connector.yaml `settlement.connectorFeePercentage: 0` — a single-operator HS hub must not take the default 0.1% cut routing to its own child Mill (else the SOL claim lands at 999000, not 1000000).
+3. **DVM Arweave (AC#2/#6):** `docker/Dockerfile.dvm` installs the FULL `@ardrive/turbo-sdk@1.40.2` closure via npm (no viem pin) so turbo-sdk owns one self-consistent dep set — resolving the abitype→x402→mnemonist→viem/eduChain cascade the manual cherry-pick couldn't. The prior `internal_error` was the stale bundled turbo-sdk, NOT the Turbo service (the same code uploads fine standalone). AC#6 re-captures fresh `docker logs` (the credit-source line races the beforeAll snapshot).
+
+**Operational note:** the gate requires live Akash anvil+solana leases; they lapse on a ~weekly cadence and are redeployed with `scripts/akash-deploy.sh anvil|solana` (plain deploy, not `redeploy` — the latter 400s on already-dead leases) using the operator's `AKASH_CONSOLE_API_KEY`, then re-faucet Mill's SOL wallet. The gate ran with town `d354d37e` (#78), mill `3816ff7f`, dvm `<turbo-closure rebuild>`, connector `3.8.0`; mill's committed `relation:'parent'` fix is defensive (the streamSwap path doesn't trip the F06) so the pre-fix mill image still passed.
+
+_Story 50.3/50.4 SOL-settlement + DVM-Arweave gate: 10/10 GREEN on 2026-06-01._
