@@ -341,7 +341,10 @@ describe('POST /api/nodes success path', () => {
     expect(body.healthCheckUrl).toBe('http://townhouse-hs-mill:3200/health');
 
     const raw = await fs.readFile(millConfigPath, 'utf-8');
-    const config = JSON.parse(raw) as { swapPairs: unknown[]; chains: string[] };
+    const config = JSON.parse(raw) as {
+      swapPairs: unknown[];
+      chains: string[];
+    };
     expect(config.chains).toContain('evm');
     expect(config.chains).toContain('solana');
     expect(Array.isArray(config.swapPairs)).toBe(true);

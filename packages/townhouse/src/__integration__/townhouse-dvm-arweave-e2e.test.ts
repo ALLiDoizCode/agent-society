@@ -149,7 +149,9 @@ const CHAIN_ID = 31337;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-function loadImageFromManifest(key: 'connector' | 'dvm' | 'town' | 'mill'): string {
+function loadImageFromManifest(
+  key: 'connector' | 'dvm' | 'town' | 'mill'
+): string {
   const p = join(
     dirname(fileURLToPath(import.meta.url)),
     '..',
@@ -235,7 +237,7 @@ async function assertPortsFree(): Promise<void> {
     B_BTP_PORT,
     B_HEALTH_PORT,
     DVM_BLS_PORT,
-    MILL_BLS_PORT,      // 3200 — Mill BLS health
+    MILL_BLS_PORT, // 3200 — Mill BLS health
     TOWN_RELAY_WS_PORT, // 7100 — town relay WS (mapped to host for kind:10032 subscription)
   ];
   const bound = (
@@ -268,7 +270,12 @@ async function waitForExitLabelled(
 function cleanupAll(): void {
   // 'townhouse-hs-town' is already in HS_CONTAINER_NAMES — do not append separately.
   // DVM_CONTAINER_NAME is the Docker DVM container (D3).
-  const cs = [...HS_CONTAINER_NAMES, B_CONNECTOR_NAME, DVM_CONTAINER_NAME, MILL_CONTAINER_NAME];
+  const cs = [
+    ...HS_CONTAINER_NAMES,
+    B_CONNECTOR_NAME,
+    DVM_CONTAINER_NAME,
+    MILL_CONTAINER_NAME,
+  ];
   const vs = [...HS_VOLUMES, B_ANON_VOLUME];
   for (const n of cs) {
     try {
@@ -502,10 +509,16 @@ async function startMill(bConfigDir: string): Promise<void> {
   const millConfigObj = buildTestMillConfig(dvmBtpConnectorUrl);
   // Write config to file to avoid shell-quoting issues with nested JSON.
   const millConfigFile = join(bConfigDir, `mill-config-${Date.now()}.json`);
-  writeFileSync(millConfigFile, JSON.stringify(millConfigObj), { encoding: 'utf-8', mode: 0o644 });
+  writeFileSync(millConfigFile, JSON.stringify(millConfigObj), {
+    encoding: 'utf-8',
+    mode: 0o644,
+  });
 
   try {
-    execSync(`docker rm -f ${MILL_CONTAINER_NAME}`, { stdio: 'pipe', timeout: 15_000 });
+    execSync(`docker rm -f ${MILL_CONTAINER_NAME}`, {
+      stdio: 'pipe',
+      timeout: 15_000,
+    });
   } catch {
     /* ok */
   }
@@ -1047,7 +1060,11 @@ describe.skipIf(!shouldRun)(
         );
       }
       const relayUrl = `ws://127.0.0.1:${TOWN_RELAY_WS_PORT}`;
-      const millFilter: NostrFilter = { kinds: [10032], authors: [millPubkeyHex], limit: 1 };
+      const millFilter: NostrFilter = {
+        kinds: [10032],
+        authors: [millPubkeyHex],
+        limit: 1,
+      };
 
       // Read Mill's kind:10032 advertisement via a RAW WebSocket + TOON decode —
       // NOT nostr-tools `SimplePool`. A TOON relay serializes every WS `EVENT`
@@ -1118,7 +1135,10 @@ describe.skipIf(!shouldRun)(
       }
       try {
         const peerInfo = parseIlpPeerInfo(advertisement);
-        if (Array.isArray(peerInfo.swapPairs) && peerInfo.swapPairs.length > 0) {
+        if (
+          Array.isArray(peerInfo.swapPairs) &&
+          peerInfo.swapPairs.length > 0
+        ) {
           millSwapPair = peerInfo.swapPairs[0] as typeof millSwapPair;
           millPubkey = millPubkeyHex;
         } else {
@@ -1136,7 +1156,9 @@ describe.skipIf(!shouldRun)(
           `[49-5] parseIlpPeerInfo THREW on Mill kind:10032: ${(err as Error).message} — content=${String(advertisement.content).slice(0, 300)}`
         );
       }
-      console.log(`[49-5] Mill kind:10032 received, swapPair: ${JSON.stringify(millSwapPair)}`);
+      console.log(
+        `[49-5] Mill kind:10032 received, swapPair: ${JSON.stringify(millSwapPair)}`
+      );
 
       // B2' (Story 50.3): register Mill as an apex CHILD so the EVM→Mill→SOL
       // streamSwap routes correctly. Two defects this fixes, observed in the
@@ -1302,7 +1324,9 @@ describe.skipIf(!shouldRun)(
           millStreamSwapResult = null;
         }
       } else {
-        console.warn('[49-5] Mill kind:10032 not received or swapPair absent — skipping streamSwap');
+        console.warn(
+          '[49-5] Mill kind:10032 not received or swapPair absent — skipping streamSwap'
+        );
       }
 
       // ── Publish kind:1 (AC #1 baseline) — PAID, with attached claim ─────────
@@ -1450,7 +1474,11 @@ describe.skipIf(!shouldRun)(
           `\n===== ${MILL_CONTAINER_NAME} (Docker) =====\n${millLogs.slice(-80).join('\n')}`
         );
         writeFileSync(join(logDir, 'gate.log'), lines.join(''), 'utf-8');
-        writeFileSync(join(logDir, 'mill.log'), millLogs.slice(-80).join('\n'), 'utf-8');
+        writeFileSync(
+          join(logDir, 'mill.log'),
+          millLogs.slice(-80).join('\n'),
+          'utf-8'
+        );
         console.log(`[49-5 afterAll] logs → ${logDir}/gate.log`);
       } catch {
         /* best-effort */
@@ -1708,10 +1736,13 @@ describe.skipIf(!shouldRun)(
       // only "Starting DVM node..."). It is reliably present in the live container
       // by the time this test runs — refresh dvmLogs from it.
       try {
-        const freshDvmLogs = execSync(`docker logs ${DVM_CONTAINER_NAME} 2>&1`, {
-          encoding: 'utf-8',
-          timeout: 10_000,
-        });
+        const freshDvmLogs = execSync(
+          `docker logs ${DVM_CONTAINER_NAME} 2>&1`,
+          {
+            encoding: 'utf-8',
+            timeout: 10_000,
+          }
+        );
         dvmLogs.push(...freshDvmLogs.split('\n').filter(Boolean));
       } catch {
         /* best-effort; fall back to the snapshots captured in beforeAll */
@@ -1736,7 +1767,9 @@ describe.skipIf(!shouldRun)(
       const health = await fetch(`http://127.0.0.1:${MILL_BLS_PORT}/health`, {
         signal: AbortSignal.timeout(5_000),
       });
-      expect(health.ok, `AC #2: Mill health returned ${health.status}`).toBe(true);
+      expect(health.ok, `AC #2: Mill health returned ${health.status}`).toBe(
+        true
+      );
       const body = (await health.json()) as { status?: string };
       expect(body.status, 'AC #2: Mill health status not ok').toBe('ok');
       console.log('[49-5 T7] PASS');
@@ -1753,7 +1786,9 @@ describe.skipIf(!shouldRun)(
       expect(millSwapPair!.to.chain).toMatch(/^solana:/);
       expect(millSwapPair!.from.assetCode).toBe('USDC');
       expect(millSwapPair!.to.assetCode).toBe('USDC');
-      console.log(`[49-5 T8] PASS — pair: ${millSwapPair!.from.chain} → ${millSwapPair!.to.chain}`);
+      console.log(
+        `[49-5 T8] PASS — pair: ${millSwapPair!.from.chain} → ${millSwapPair!.to.chain}`
+      );
     }, 15_000);
 
     // ── Test 9: AC #4 ────────────────────────────────────────────────────────
@@ -1767,7 +1802,10 @@ describe.skipIf(!shouldRun)(
         millStreamSwapResult!.state,
         `AC #4 FAIL: state=${millStreamSwapResult!.state}, rejections=${JSON.stringify(millStreamSwapResult!.rejections)}, errors=${JSON.stringify(millStreamSwapResult!.errors)}`
       ).toBe('completed');
-      expect(millStreamSwapResult!.claims.length, 'AC #4: expected 1 claim').toBe(1);
+      expect(
+        millStreamSwapResult!.claims.length,
+        'AC #4: expected 1 claim'
+      ).toBe(1);
       console.log('[49-5 T9] PASS');
     }, 30_000);
 
@@ -1785,11 +1823,16 @@ describe.skipIf(!shouldRun)(
       ).toBeGreaterThanOrEqual(expectedAmount - 1n);
       expect(claim.targetAmount).toBeLessThanOrEqual(expectedAmount + 1n);
       // claimBytes must be non-empty (raw SOL claim from Mill FULFILL)
-      expect(claim.claimBytes.length, 'AC #5: claimBytes empty').toBeGreaterThan(0);
+      expect(
+        claim.claimBytes.length,
+        'AC #5: claimBytes empty'
+      ).toBeGreaterThan(0);
       if (claim.recipient !== undefined) {
         expect(claim.recipient).toBe(B_SOL_ADDRESS);
       }
-      console.log(`[49-5 T10] PASS — chain=${claim.pair.to.chain}, target=${claim.targetAmount}`);
+      console.log(
+        `[49-5 T10] PASS — chain=${claim.pair.to.chain}, target=${claim.targetAmount}`
+      );
     }, 30_000);
 
     // ── Test 6: SOL settlement loop — BLOCKED-STRUCTURAL retired (Story 50.3) ──
@@ -1798,173 +1841,169 @@ describe.skipIf(!shouldRun)(
     // `streamSwap` driver, and this story asserts the real settlement loop
     // exited green. AC #1: no `console.warn("SOL leg BLOCKED-STRUCTURAL …")`,
     // no `it.skip` — this is a live, non-skipped settlement assertion.
-    it(
-      'Test 6 — SOL settlement loop green: streamSwap → SOL FULFILL claim, earnings, resolver (AC #1-#5)',
-      async () => {
-        // AC #2 — streamSwap (driven to g.townhouse.mill in beforeAll) succeeded
-        // with a non-null FULFILL SOL claim.
-        expect(
-          millStreamSwapResult,
-          'AC #2: streamSwap returned null (threw, or Mill kind:10032 not discovered)'
-        ).not.toBeNull();
-        expect(
-          millStreamSwapResult!.state,
-          `AC #2: streamSwap state=${millStreamSwapResult!.state}, rejections=${JSON.stringify(millStreamSwapResult!.rejections)}, errors=${JSON.stringify(millStreamSwapResult!.errors.map((e) => e.cause.message))}`
-        ).toBe('completed');
-        expect(
-          millStreamSwapResult!.claims.length,
-          'AC #2: expected ≥1 FULFILL SOL claim'
-        ).toBeGreaterThanOrEqual(1);
-        const claim = millStreamSwapResult!.claims[0]!;
-        expect(
-          claim.claimBytes.length,
-          'AC #2: SOL claim bytes empty — FULFILL not signed'
-        ).toBeGreaterThan(0);
+    it('Test 6 — SOL settlement loop green: streamSwap → SOL FULFILL claim, earnings, resolver (AC #1-#5)', async () => {
+      // AC #2 — streamSwap (driven to g.townhouse.mill in beforeAll) succeeded
+      // with a non-null FULFILL SOL claim.
+      expect(
+        millStreamSwapResult,
+        'AC #2: streamSwap returned null (threw, or Mill kind:10032 not discovered)'
+      ).not.toBeNull();
+      expect(
+        millStreamSwapResult!.state,
+        `AC #2: streamSwap state=${millStreamSwapResult!.state}, rejections=${JSON.stringify(millStreamSwapResult!.rejections)}, errors=${JSON.stringify(millStreamSwapResult!.errors.map((e) => e.cause.message))}`
+      ).toBe('completed');
+      expect(
+        millStreamSwapResult!.claims.length,
+        'AC #2: expected ≥1 FULFILL SOL claim'
+      ).toBeGreaterThanOrEqual(1);
+      const claim = millStreamSwapResult!.claims[0]!;
+      expect(
+        claim.claimBytes.length,
+        'AC #2: SOL claim bytes empty — FULFILL not signed'
+      ).toBeGreaterThan(0);
 
-        // AC #3 — Solana devnet confirmation. The swap target is the Akash Solana
-        // devnet recorded in deploy/akash/leases.json `solana`. With rate=1.0,
-        // assetScale=6 both sides, and FEE_BASIS_POINTS default=0, the signed
-        // target amount equals totalAmount within ±1 USDC-cent rounding.
-        expect(
-          claim.pair.to.chain,
-          'AC #3: claim target chain is not solana:devnet'
-        ).toBe('solana:devnet');
-        const leases = loadLeases();
-        expect(
-          leases.solana?.url,
-          'AC #3: leases.json missing solana entry (Akash Solana devnet lease)'
-        ).toBeTruthy();
-        // AC #3 binds the claim to the deployed Akash Solana devnet lease. The
-        // DSEQ is environment-coupled — it changes whenever the devnet is
-        // redeployed — so assert leases.json carries a well-formed Akash
-        // deployment sequence rather than a brittle hardcoded literal
-        // (Story 50.3 review P2 → DN3: DSEQ-agnostic).
-        expect(
-          leases.solana?.dseq,
-          'AC #3: leases.json solana.dseq must be a non-empty Akash deployment sequence'
-        ).toMatch(/^\d+$/);
-        const totalAmount = 1_000_000n;
-        expect(
-          claim.targetAmount,
-          `AC #3: targetAmount=${claim.targetAmount} not within ±1 of ${totalAmount}`
-        ).toBeGreaterThanOrEqual(totalAmount - 1n);
-        expect(claim.targetAmount).toBeLessThanOrEqual(totalAmount + 1n);
-        console.log(
-          `[49-5 T6] AC #2+#3 PASS — SOL claim chain=${claim.pair.to.chain}, target=${claim.targetAmount}`
-        );
+      // AC #3 — Solana devnet confirmation. The swap target is the Akash Solana
+      // devnet recorded in deploy/akash/leases.json `solana`. With rate=1.0,
+      // assetScale=6 both sides, and FEE_BASIS_POINTS default=0, the signed
+      // target amount equals totalAmount within ±1 USDC-cent rounding.
+      expect(
+        claim.pair.to.chain,
+        'AC #3: claim target chain is not solana:devnet'
+      ).toBe('solana:devnet');
+      const leases = loadLeases();
+      expect(
+        leases.solana?.url,
+        'AC #3: leases.json missing solana entry (Akash Solana devnet lease)'
+      ).toBeTruthy();
+      // AC #3 binds the claim to the deployed Akash Solana devnet lease. The
+      // DSEQ is environment-coupled — it changes whenever the devnet is
+      // redeployed — so assert leases.json carries a well-formed Akash
+      // deployment sequence rather than a brittle hardcoded literal
+      // (Story 50.3 review P2 → DN3: DSEQ-agnostic).
+      expect(
+        leases.solana?.dseq,
+        'AC #3: leases.json solana.dseq must be a non-empty Akash deployment sequence'
+      ).toMatch(/^\d+$/);
+      const totalAmount = 1_000_000n;
+      expect(
+        claim.targetAmount,
+        `AC #3: targetAmount=${claim.targetAmount} not within ±1 of ${totalAmount}`
+      ).toBeGreaterThanOrEqual(totalAmount - 1n);
+      expect(claim.targetAmount).toBeLessThanOrEqual(totalAmount + 1n);
+      console.log(
+        `[49-5 T6] AC #2+#3 PASS — SOL claim chain=${claim.pair.to.chain}, target=${claim.targetAmount}`
+      );
 
-        // AC #4 — /api/earnings carries an inbound, mill-typed claim. The route
-        // attributes node `type` per peer via PeerTypeResolver (response field
-        // `peers[]`); `recentClaims[]` carries `peerId` but not `type`, so we
-        // correlate recentClaims.peerId → peers[type==='mill'].id. A 404 (older HS
-        // image) is gracefully skipped — same guard as Test 3 (Epic 49.5 AC #4).
-        const earningsUrl = `${HS_API}/api/earnings`;
-        const EXPECTED = 1_000_000n;
-        const TOLERANCE = 10_000n;
-        const earningsDeadline = Date.now() + 150_000;
-        let millEarningFound = false;
-        let earningsSkipped = false;
-        let lastEarningsError = '';
-        while (Date.now() < earningsDeadline) {
-          try {
-            const res = await fetch(earningsUrl, {
-              signal: AbortSignal.timeout(5_000),
-            });
-            if (res.status === 404) {
-              console.warn(
-                '[49-5 T6] /api/earnings 404 (older HS image) — AC #4 gracefully skipped'
-              );
-              earningsSkipped = true;
-              break;
-            }
-            if (res.ok) {
-              const body = (await res.json()) as {
-                status?: string;
-                peers?: { id: string; type: string }[];
-                recentClaims?: {
-                  peerId: string;
-                  amount: string;
-                  direction: string;
-                  at: string;
-                }[];
-              };
-              if (body.status === 'connector_unavailable') {
-                lastEarningsError = 'connector_unavailable';
-              } else {
-                const millPeerIds = new Set(
-                  (body.peers ?? [])
-                    .filter((p) => p.type === 'mill')
-                    .map((p) => p.id)
-                );
-                millEarningFound = (body.recentClaims ?? []).some((c) => {
-                  if (c.direction !== 'inbound') return false;
-                  if (!millPeerIds.has(c.peerId)) return false;
-                  let amt: bigint;
-                  try {
-                    amt = BigInt(c.amount);
-                  } catch {
-                    return false;
-                  }
-                  if (amt < EXPECTED - TOLERANCE || amt > EXPECTED + TOLERANCE)
-                    return false;
-                  return new Date(c.at).getTime() >= testStartMs;
-                });
-                if (millEarningFound) break;
-              }
-            } else {
-              lastEarningsError = `HTTP ${res.status}`;
-            }
-          } catch (e) {
-            lastEarningsError = (e as Error).message;
+      // AC #4 — /api/earnings carries an inbound, mill-typed claim. The route
+      // attributes node `type` per peer via PeerTypeResolver (response field
+      // `peers[]`); `recentClaims[]` carries `peerId` but not `type`, so we
+      // correlate recentClaims.peerId → peers[type==='mill'].id. A 404 (older HS
+      // image) is gracefully skipped — same guard as Test 3 (Epic 49.5 AC #4).
+      const earningsUrl = `${HS_API}/api/earnings`;
+      const EXPECTED = 1_000_000n;
+      const TOLERANCE = 10_000n;
+      const earningsDeadline = Date.now() + 150_000;
+      let millEarningFound = false;
+      let earningsSkipped = false;
+      let lastEarningsError = '';
+      while (Date.now() < earningsDeadline) {
+        try {
+          const res = await fetch(earningsUrl, {
+            signal: AbortSignal.timeout(5_000),
+          });
+          if (res.status === 404) {
+            console.warn(
+              '[49-5 T6] /api/earnings 404 (older HS image) — AC #4 gracefully skipped'
+            );
+            earningsSkipped = true;
+            break;
           }
-          await sleep(5_000);
+          if (res.ok) {
+            const body = (await res.json()) as {
+              status?: string;
+              peers?: { id: string; type: string }[];
+              recentClaims?: {
+                peerId: string;
+                amount: string;
+                direction: string;
+                at: string;
+              }[];
+            };
+            if (body.status === 'connector_unavailable') {
+              lastEarningsError = 'connector_unavailable';
+            } else {
+              const millPeerIds = new Set(
+                (body.peers ?? [])
+                  .filter((p) => p.type === 'mill')
+                  .map((p) => p.id)
+              );
+              millEarningFound = (body.recentClaims ?? []).some((c) => {
+                if (c.direction !== 'inbound') return false;
+                if (!millPeerIds.has(c.peerId)) return false;
+                let amt: bigint;
+                try {
+                  amt = BigInt(c.amount);
+                } catch {
+                  return false;
+                }
+                if (amt < EXPECTED - TOLERANCE || amt > EXPECTED + TOLERANCE)
+                  return false;
+                return new Date(c.at).getTime() >= testStartMs;
+              });
+              if (millEarningFound) break;
+            }
+          } else {
+            lastEarningsError = `HTTP ${res.status}`;
+          }
+        } catch (e) {
+          lastEarningsError = (e as Error).message;
         }
-        if (earningsSkipped) {
-          // AC #4 not enforced on a legacy HS image without /api/earnings.
-        } else if (millEarningFound) {
-          console.log(
-            '[49-5 T6] AC #4 PASS — inbound type:mill earnings claim found'
-          );
-        } else {
-          // AC #4 (Story 50.3 review DN1 → hard-fail): the endpoint was reachable
-          // (not 404) but no inbound type:mill claim surfaced within the 150s
-          // budget. The spec sanctions exactly one non-find — a 404 skip; a
-          // reachable `/api/earnings` that never attributes the swap-routed
-          // settlement to a mill peer is a real failure, not a soft warning.
-          throw new Error(
-            `[49-5 T6] AC #4 FAIL — no inbound type:mill claim in /api/earnings within 150s ` +
-              `(lastErr='${lastEarningsError || 'none'}'). Not a 404 skip — a reachable-but-` +
-              `empty poll, a persistent connector_unavailable, or repeated transport errors ` +
-              `all fail AC #4: swap-routed SOL settlement was not attributed to a mill peer within budget.`
-          );
-        }
-
-        // AC #5 — PeerTypeResolver.resolvePeerType('mill') === 'mill' (Story 49.4
-        // Test 5 non-regression). The harness registers Mill in a NodesYaml; the
-        // resolver must type it as 'mill', not 'external'.
-        const nodesConfig: NodesYaml = {
-          entries: [
-            {
-              id: 'mill',
-              type: 'mill',
-              peerId: 'mill',
-              ilpAddress: 'g.townhouse.mill',
-              derivationIndex: 1,
-              enabledAt: '2026-05-29T00:00:00.000Z',
-              lastSeenAt: null,
-            },
-          ],
-        };
-        const resolver = new PeerTypeResolver(nodesConfig);
-        expect(
-          resolver.resolvePeerType('mill'),
-          "AC #5: resolvePeerType('mill') must return 'mill'"
-        ).toBe('mill');
+        await sleep(5_000);
+      }
+      if (earningsSkipped) {
+        // AC #4 not enforced on a legacy HS image without /api/earnings.
+      } else if (millEarningFound) {
         console.log(
-          "[49-5 T6] AC #5 PASS — PeerTypeResolver.resolvePeerType('mill') = 'mill'"
+          '[49-5 T6] AC #4 PASS — inbound type:mill earnings claim found'
         );
-      },
-      200_000
-    );
+      } else {
+        // AC #4 (Story 50.3 review DN1 → hard-fail): the endpoint was reachable
+        // (not 404) but no inbound type:mill claim surfaced within the 150s
+        // budget. The spec sanctions exactly one non-find — a 404 skip; a
+        // reachable `/api/earnings` that never attributes the swap-routed
+        // settlement to a mill peer is a real failure, not a soft warning.
+        throw new Error(
+          `[49-5 T6] AC #4 FAIL — no inbound type:mill claim in /api/earnings within 150s ` +
+            `(lastErr='${lastEarningsError || 'none'}'). Not a 404 skip — a reachable-but-` +
+            `empty poll, a persistent connector_unavailable, or repeated transport errors ` +
+            `all fail AC #4: swap-routed SOL settlement was not attributed to a mill peer within budget.`
+        );
+      }
+
+      // AC #5 — PeerTypeResolver.resolvePeerType('mill') === 'mill' (Story 49.4
+      // Test 5 non-regression). The harness registers Mill in a NodesYaml; the
+      // resolver must type it as 'mill', not 'external'.
+      const nodesConfig: NodesYaml = {
+        entries: [
+          {
+            id: 'mill',
+            type: 'mill',
+            peerId: 'mill',
+            ilpAddress: 'g.townhouse.mill',
+            derivationIndex: 1,
+            enabledAt: '2026-05-29T00:00:00.000Z',
+            lastSeenAt: null,
+          },
+        ],
+      };
+      const resolver = new PeerTypeResolver(nodesConfig);
+      expect(
+        resolver.resolvePeerType('mill'),
+        "AC #5: resolvePeerType('mill') must return 'mill'"
+      ).toBe('mill');
+      console.log(
+        "[49-5 T6] AC #5 PASS — PeerTypeResolver.resolvePeerType('mill') = 'mill'"
+      );
+    }, 200_000);
   }
 );

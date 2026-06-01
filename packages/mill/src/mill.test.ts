@@ -40,7 +40,10 @@ import {
   generateSolanaKeypair,
   __streamSwapTesting,
 } from '@toon-protocol/sdk';
-import { createPaymentHandlerAdapter, createLogger } from '@toon-protocol/connector';
+import {
+  createPaymentHandlerAdapter,
+  createLogger,
+} from '@toon-protocol/connector';
 
 // NOTE: the following imports reference symbols that DO NOT YET EXIST.
 // TypeScript will error on these lines until Story 12.7's dev work lands.
@@ -66,8 +69,10 @@ interface MillInstanceShape {
     inventory: Record<string, string>;
   };
   _handlerRegistry?: { get(kind: number): unknown };
-  connector?: { _packetHandler?: (req: unknown) => Promise<unknown>;
-    _calls?: string[] };
+  connector?: {
+    _packetHandler?: (req: unknown) => Promise<unknown>;
+    _calls?: string[];
+  };
 }
 
 // Dynamic import so TS doesn't fail at collection time.
@@ -460,7 +465,10 @@ describe('Story 50.3 inbound kind:1059 dispatches to swap handler (AC#4)', () =>
 
       // The adapter MUST NOT drop the data (validateResponseData canonical
       // base64 gate) and MUST take the fulfill branch.
-      expect(adapterOut.reject, 'connector adapter rejected the FULFILL').toBeUndefined();
+      expect(
+        adapterOut.reject,
+        'connector adapter rejected the FULFILL'
+      ).toBeUndefined();
       expect(adapterOut.fulfill).toBeDefined();
       expect(typeof adapterOut.fulfill!.data).toBe('string');
 

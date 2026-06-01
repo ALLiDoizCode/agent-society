@@ -24,7 +24,10 @@ import type { ApiDeps } from '../types.js';
 import type { NodeType } from '../types.js';
 import type { TownhouseConfig } from '../../config/schema.js';
 import { readNodesYaml, writeNodesYaml } from '../../state/nodes-yaml.js';
-import { readImageManifest, isSyntheticDigest } from '../../state/image-manifest.js';
+import {
+  readImageManifest,
+  isSyntheticDigest,
+} from '../../state/image-manifest.js';
 import {
   CONTAINER_PREFIX,
   NODE_BTP_PORT,
@@ -75,8 +78,7 @@ function buildMillSwapPairConfig(config: TownhouseConfig): object {
   // Both absent (undefined) and explicitly empty ([]) fall through to the
   // dev-Anvil sentinel — if a live EVM chain is configured, ensure
   // chainProviders has at least one entry with the correct chainId.
-  const fromChain =
-    config.chainProviders?.[0]?.chainId ?? 'evm:base:31337';
+  const fromChain = config.chainProviders?.[0]?.chainId ?? 'evm:base:31337';
   // toChain is fixed at 'solana:devnet' for the v0.1 pilot — TownhouseConfig
   // has no Solana chain-ID field yet. Add one and read it here when mainnet
   // support is needed.

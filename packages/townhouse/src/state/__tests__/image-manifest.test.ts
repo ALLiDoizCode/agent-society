@@ -170,37 +170,43 @@ describe('SYNTHETIC_DIGEST_SENTINEL', () => {
     ).toBe(false);
   });
 
-  it.skipIf(!existsSync(WORKFLOW_PATH))('matches the literal hardcoded in connector-publish-smoke.yml', () => {
-    const workflowSource = readFileSync(WORKFLOW_PATH, 'utf-8');
-    // The workflow defines:
-    //   SYNTHETIC_DIGEST: 'sha256:dead000…'
-    // The match below intentionally requires the SYNTHETIC_DIGEST key name so
-    // we don't accidentally match the sentinel inside a comment.
-    const match = workflowSource.match(
-      /SYNTHETIC_DIGEST:\s*['"](sha256:[a-f0-9]{64})['"]/
-    );
-    expect(
-      match,
-      `connector-publish-smoke.yml must define SYNTHETIC_DIGEST: 'sha256:<64hex>' — got no match at ${WORKFLOW_PATH}`
-    ).not.toBeNull();
-    expect(match?.[1]).toBe(SYNTHETIC_DIGEST_SENTINEL);
-  });
+  it.skipIf(!existsSync(WORKFLOW_PATH))(
+    'matches the literal hardcoded in connector-publish-smoke.yml',
+    () => {
+      const workflowSource = readFileSync(WORKFLOW_PATH, 'utf-8');
+      // The workflow defines:
+      //   SYNTHETIC_DIGEST: 'sha256:dead000…'
+      // The match below intentionally requires the SYNTHETIC_DIGEST key name so
+      // we don't accidentally match the sentinel inside a comment.
+      const match = workflowSource.match(
+        /SYNTHETIC_DIGEST:\s*['"](sha256:[a-f0-9]{64})['"]/
+      );
+      expect(
+        match,
+        `connector-publish-smoke.yml must define SYNTHETIC_DIGEST: 'sha256:<64hex>' — got no match at ${WORKFLOW_PATH}`
+      ).not.toBeNull();
+      expect(match?.[1]).toBe(SYNTHETIC_DIGEST_SENTINEL);
+    }
+  );
 
-  it.skipIf(!existsSync(RERUN_SCRIPT_PATH))('matches the bash literal in scripts/rerun-earnings-gate.sh', () => {
-    const rerunSource = readFileSync(RERUN_SCRIPT_PATH, 'utf-8');
-    // The script defines:
-    //   SYNTHETIC_DIGEST_SENTINEL="sha256:dead000…"
-    // Require the variable-name anchor so we don't accidentally match the
-    // sentinel inside a comment.
-    const match = rerunSource.match(
-      /SYNTHETIC_DIGEST_SENTINEL=["'](sha256:[a-f0-9]{64})["']/
-    );
-    expect(
-      match,
-      `rerun-earnings-gate.sh must define SYNTHETIC_DIGEST_SENTINEL="sha256:<64hex>" — got no match at ${RERUN_SCRIPT_PATH}`
-    ).not.toBeNull();
-    expect(match?.[1]).toBe(SYNTHETIC_DIGEST_SENTINEL);
-  });
+  it.skipIf(!existsSync(RERUN_SCRIPT_PATH))(
+    'matches the bash literal in scripts/rerun-earnings-gate.sh',
+    () => {
+      const rerunSource = readFileSync(RERUN_SCRIPT_PATH, 'utf-8');
+      // The script defines:
+      //   SYNTHETIC_DIGEST_SENTINEL="sha256:dead000…"
+      // Require the variable-name anchor so we don't accidentally match the
+      // sentinel inside a comment.
+      const match = rerunSource.match(
+        /SYNTHETIC_DIGEST_SENTINEL=["'](sha256:[a-f0-9]{64})["']/
+      );
+      expect(
+        match,
+        `rerun-earnings-gate.sh must define SYNTHETIC_DIGEST_SENTINEL="sha256:<64hex>" — got no match at ${RERUN_SCRIPT_PATH}`
+      ).not.toBeNull();
+      expect(match?.[1]).toBe(SYNTHETIC_DIGEST_SENTINEL);
+    }
+  );
 });
 
 describe('readImageManifest', () => {

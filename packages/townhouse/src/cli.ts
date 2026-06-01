@@ -57,7 +57,10 @@ import {
   type PortCollision,
 } from './cli/preflight-ports.js';
 import { PullNarrator } from './cli/pull-narrator.js';
-import { readImageManifest, isSyntheticDigest } from './state/image-manifest.js';
+import {
+  readImageManifest,
+  isSyntheticDigest,
+} from './state/image-manifest.js';
 import {
   handleNodeAdd,
   handleNodeRemove,
