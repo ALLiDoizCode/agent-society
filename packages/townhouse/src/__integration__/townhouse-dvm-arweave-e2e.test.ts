@@ -809,6 +809,28 @@ describe.skipIf(!shouldRun)(
       } else if (!/routes:/.test(patched)) {
         patched += `\nroutes:\n${selfRouteEntry}\n`;
       }
+      // Zero the apex's connector fee so the EVM→Mill→SOL streamSwap is a clean
+      // 1:1 (Mill rate 1.0). A townhouse HS is a single-operator stack (apex +
+      // mill same operator), so the apex must NOT take the default 0.1%
+      // connectorFeePercentage cut on routing to its own child Mill — otherwise
+      // Mill receives 999000 (1000 fee) and the SOL claim lands at 999000, not
+      // the 1000000 (±1) AC#3/AC#5 expect. (connector-node.js:570 defaults the
+      // fee to 0.1 when settlement.connectorFeePercentage is absent.)
+      if (/^settlement:/m.test(patched)) {
+        if (/connectorFeePercentage:/.test(patched)) {
+          patched = patched.replace(
+            /connectorFeePercentage:\s*[\d.]+/g,
+            'connectorFeePercentage: 0'
+          );
+        } else {
+          patched = patched.replace(
+            /^(settlement:)/m,
+            '$1\n  connectorFeePercentage: 0'
+          );
+        }
+      } else {
+        patched += `\nsettlement:\n  connectorFeePercentage: 0\n`;
+      }
       writeFileSync(yamlPath, patched, { mode: 0o600 });
       execSync(`docker restart ${HS_CONNECTOR_NAME}`, {
         stdio: 'pipe',
