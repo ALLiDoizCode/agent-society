@@ -1702,6 +1702,20 @@ describe.skipIf(!shouldRun)(
 
       // DVM logs must contain the specific unauthenticated source label line:
       // "[DVM Entrypoint] Arweave credit source: unauthenticated (free tier, ≤100KB)"
+      // Re-capture fresh container logs at assert time: the credit-source line is
+      // emitted a few seconds into boot (after RSA-JWK generation + Turbo client
+      // init), which races the beforeAll boot-log snapshot (that often catches
+      // only "Starting DVM node..."). It is reliably present in the live container
+      // by the time this test runs — refresh dvmLogs from it.
+      try {
+        const freshDvmLogs = execSync(`docker logs ${DVM_CONTAINER_NAME} 2>&1`, {
+          encoding: 'utf-8',
+          timeout: 10_000,
+        });
+        dvmLogs.push(...freshDvmLogs.split('\n').filter(Boolean));
+      } catch {
+        /* best-effort; fall back to the snapshots captured in beforeAll */
+      }
       const allLogs = dvmLogs.join('\n');
       expect(
         allLogs
