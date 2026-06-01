@@ -1,0 +1,86 @@
+name: Release
+
+# Automated versioning + tagging for @toon-protocol/townhouse, mirroring the
+# connector repo's semantic-release flow. On a push to main, semantic-release
+# analyzes conventional-commit messages, computes the next version, writes
+# CHANGELOG.md, bumps packages/townhouse/package.json, commits that
+# (`chore(release): X.Y.Z [skip ci]`), and creates the **git tag `vX.Y.Z`** + a
+# GitHub release. It does NOT publish (`npmPublish:false` in .releaserc.json).
+#
+# The tag it creates is what triggers `publish-townhouse-images.yml` (on
+# `tags: v*`), which builds + pushes the 4 GHCR images AND npm-publishes
+# `@toon-protocol/townhouse` — both from the SAME tagged commit, so the image
+# tags and the npm version are always aligned (single source of truth = the
+# semantic-release-computed version).
+#
+# First run: trigger via workflow_dispatch with dry_run=true to preview the
+# computed version before the real release (the last tag is a v0.1.0-rcN
+# prerelease, so confirm the graduation target first).
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (compute + log the next version, no tag/commit/release)'
+        required: false
+        default: false
+        type: boolean
+
+# Never run two releases at once.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    # Skip the release commit itself (semantic-release tags `[skip ci]`), and
+    # allow an explicit `[skip release]` escape hatch on manual pushes.
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip release]')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      # semantic-release with npmPublish:false needs only its own plugins, not a
+      # full workspace build. Install at the root (the plugins are root devDeps).
+      # GITHUB_TOKEN raises the @anyone-protocol/anyone-client postinstall's
+      # api.github.com rate limit from 60→5000/hr (same fix as the connector repo).
+      - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Semantic Release (dry run)
+        if: github.event.inputs.dry_run == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm exec semantic-release --dry-run
+
+      - name: Semantic Release
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm exec semantic-release

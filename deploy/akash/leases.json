@@ -19,13 +19,13 @@
     "deployed_at": "2026-05-07T03:12:54Z"
   },
   "solana": {
-    "dseq": "26996029",
-    "provider": "akash18ga02jzaq8cw52anyhzkwta5wygufgu6zsz6xc",
-    "host": "re4glcv67h8hr7g5ju9lemh3e0.ingress.europlots.com",
+    "dseq": "27086990",
+    "provider": "akash1hgulk6aekakqzc0v6wukrd3dy9n90f5gkl4ezk",
+    "host": "h3a2fa5rqhcd3cr30c5ioniemo.ingress.h4i-dedicated.eu-sw-2.digitalfrontier.so",
     "port": 443,
-    "url": "https://re4glcv67h8hr7g5ju9lemh3e0.ingress.europlots.com",
-    "image_digest": "sha256:764f57d8390e184e0013795502ada32c886b3abcbecc399668861e59f28d83a1",
-    "deployed_at": "2026-05-26T13:37:30Z"
+    "url": "https://h3a2fa5rqhcd3cr30c5ioniemo.ingress.h4i-dedicated.eu-sw-2.digitalfrontier.so",
+    "image_digest": "",
+    "deployed_at": "2026-06-01T18:37:28Z"
   },
   "foreign-toon-client": {
     "dseq": "26909769",
@@ -37,13 +37,13 @@
     "deployed_at": "2026-05-20T15:57:27Z"
   },
   "anvil": {
-    "dseq": "26996018",
-    "provider": "akash1k94uya5rhrtj9rfw850az9aq2d6vdpjmtnlgd0",
-    "host": "5tsr6of8g1eh3dh4k1koglp7vg.ingress.boogle.cloud",
+    "dseq": "27086976",
+    "provider": "akash1st7fqtuqk6hj06fkkavq0fxtw0w9sm4zzt3r5g",
+    "host": "02ootvur9lejh4co4rbdnu22u0.ingress.rtgroup.com",
     "port": 443,
-    "url": "https://5tsr6of8g1eh3dh4k1koglp7vg.ingress.boogle.cloud",
-    "image_digest": "sha256:af3208f87cfd468af8ed9a5d1263b05c37d6ec92d61283f2de64c4e95b975abc",
-    "deployed_at": "2026-05-26T13:36:18Z"
+    "url": "https://02ootvur9lejh4co4rbdnu22u0.ingress.rtgroup.com",
+    "image_digest": "",
+    "deployed_at": "2026-06-01T18:36:10Z"
   },
   "faucet": {
     "dseq": "26923231",

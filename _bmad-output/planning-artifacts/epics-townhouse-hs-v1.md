@@ -1565,17 +1565,25 @@ So that the loop is provably green on shared real infrastructure before pilot re
 
 ## Epic 50: SOL Settlement via Mill Routing
 
-Operators who run a Mill peer can now receive Solana-USDC settlement from EVM-paying foreign clients via Mill's cross-chain swap routing. Closes the BLOCKED-STRUCTURAL gap carried forward from Epic 49 (Test 6 in `townhouse-dvm-arweave-e2e.test.ts` documented the deferral — Epic 50 replaces that deferral with a live PASS). **Three stories, critical path 50.1 → 50.2 → 50.3.** No new connector cross-repo work required — this is entirely within the `town` mono-repo.
+Operators who run a Mill peer can now receive Solana-USDC settlement from EVM-paying foreign clients via Mill's cross-chain swap routing. Closes the BLOCKED-STRUCTURAL gap carried forward from Epic 49 (Test 6 in `townhouse-dvm-arweave-e2e.test.ts` documented the deferral — Epic 50 replaces that deferral with a live PASS). **Four stories, critical path 50.1 → 50.2 → 50.4 → 50.3.** No new connector cross-repo work required — this is entirely within the `town` mono-repo.
+
+> **2026-05-30 — Story 50.4 inserted after the first live gate run.** When Story 50.3's gate was first executed live (Docker + redeployed Akash devnets), it FAILED: Story 50.2's harness had never run against a real Mill container, and the deepest blocker is that the **Mill container boots but never advertises its kind:10032 swapPairs to the relay**, so `streamSwap` cannot discover `g.townhouse.mill`. Harness fixes P7–P10 + DN3 landed during that run (connector pin, mnemonic, kind:10032 author filter, env wiring, DSEQ-agnostic AC #3) but are insufficient. **Story 50.4** owns the remaining blocker (Mill HS-mode advertisement) and is a hard prerequisite for 50.3 reaching green. Confirmed NOT image-staleness (branch-rebuilt Mill identical). Full diagnostics: `_bmad-output/implementation-artifacts/deferred-work.md` § "Epic 50: Mill HS-mode kind:10032 advertisement".
 
 > **Root-cause of BLOCKED-STRUCTURAL (Epic 49.4 OQ-2 resolution):** `townhouse node add mill` writes `mill.config.json` with `swapPairs: []`, which causes `startMill()` to throw `MillConfig.swapPairs MUST be a non-empty array`. Even if Mill started, the foreign pod sends ILP to `g.townhouse.town` (the relay address), not `g.townhouse.mill`. Epic 50 fixes both: (1) swap-pair provisioning so Mill can boot, and (2) the E2E gate drives a payment to `g.townhouse.mill` using `streamSwap` from the SDK (already implemented, Story 12.5). Model 2 (client directly targets Mill) is the viable routing path — per 49.4 OQ-2 investigation, Model 1 (connector routing rules) and Model 3 (background inventory swap) are NOT implementable with current connector code.
 
-**Dependencies:** Epic 49 (all 5 stories done — BLOCKED-STRUCTURAL formally deferred); `packages/mill` (production-ready); `packages/sdk/src/stream-swap.ts` (production-ready); Akash Solana devnet DSEQ 26996029 (live).
+**Decision rationale:** see `_bmad-output/planning-artifacts/research/mill-routing-architecture-decision-2026-05-27.md`.
+
+**Pre-flight gate before Story 50.1:** that decision artifact's § "Verification Gate Before Story 50.1" defines a 3-step apex↔Mill peering smoke (peer-list check + Mill admin probe + synthetic streamSwap routing test) that MUST complete before 50.1 starts `swapPairs` provisioning. Added 2026-05-27 per Story 50.0 review DN2 — the Model 2 routing assumption has never been exercised end-to-end (49.4/49.5 BLOCKED-STRUCTURAL never reached the SOL leg), and 50.1 implementation budget should not begin until that assumption is verified live.
+
+**Dependencies:** Epic 49 (all 5 stories done — BLOCKED-STRUCTURAL formally deferred); `packages/mill` (production-ready); `packages/sdk/src/stream-swap.ts` (production-ready); Akash Solana devnet DSEQ 26996029 (live); Story 50.0 (carry-forward gate — A9'+A10'+A11'+A12' + Mill routing decision); pre-flight peering verification per the gate above.
 
 | # | Title | Status |
 |---|---|---|
-| 50.1 | Mill HS-Mode Swap Pair Provisioning | backlog |
-| 50.2 | Mill Container + streamSwap Driver in E2E Harness | backlog |
-| 50.3 | SOL Settlement E2E Gate — Remove BLOCKED-STRUCTURAL | backlog |
+| 50.0 | Epic 50 Prerequisite Carry-Forward Gate | review |
+| 50.1 | Mill HS-Mode Swap Pair Provisioning | done |
+| 50.2 | Mill Container + streamSwap Driver in E2E Harness | done (harness lands Mill container, but live run 2026-05-30 exposed the advertisement gap → see 50.4) |
+| 50.4 | Mill HS-Mode kind:10032 Advertisement Fix | ready-for-dev (BLOCKER — surfaced by 50.3 live gate run; prerequisite for 50.3) |
+| 50.3 | SOL Settlement E2E Gate — Remove BLOCKED-STRUCTURAL | review (⛔ BLOCKED — live gate run 2026-05-30 fails on Mill advertisement; blocked-by 50.4) |
 
 ---
 
@@ -1717,7 +1725,7 @@ So that the SOL leg is provably live on Akash Solana devnet and the BLOCKED-STRU
 
 **AC #3 — Solana devnet confirmation:**
 **Given** the SOL claim from AC #2
-**When** the claim's `chain` is `solana:devnet` AND its `chainId` matches the Akash Solana devnet DSEQ 26996029 chain
+**When** the claim's `chain` is `solana:devnet` AND `deploy/akash/leases.json` records a well-formed Akash Solana devnet `dseq` (environment-coupled — the devnet may be redeployed, so the gate asserts a present, well-formed deployment sequence rather than a fixed literal; amended Story 50.3 review DN3, was hardcoded "DSEQ 26996029")
 **Then** the claim amount matches the `totalAmount` within ±1 USDC-cent rounding.
 
 **AC #4 — `/api/earnings` type:'mill' entry:**
@@ -1735,7 +1743,7 @@ So that the SOL leg is provably live on Akash Solana devnet and the BLOCKED-STRU
 **Given** `scripts/townhouse-e2e-real-hs.sh` is invoked with `--chain=sol`
 **When** it runs
 **Then** the SOL leg executes (not a stub comment) AND exits 0 on success, non-zero on failure.
-**And** the SOL leg emits `SOL leg PASS (Mill streamSwap, txid: <claim>)` to stdout on success.
+**And** the SOL leg emits `SOL leg PASS (Mill streamSwap, claim: <claim>)` to stdout on success. (Amended Story 50.3 review 2026-05-31, was `txid:` — `streamSwap` produces an off-chain signed payment-channel claim, not a broadcast on-chain transaction, so there is no tx signature to surface; the label is `claim:`.)
 
 **AC #7 — Full gate still green:**
 **Given** `RUN_DOCKER_INTEGRATION=1 pnpm --filter @toon-protocol/townhouse test:integration`
@@ -1757,5 +1765,112 @@ So that the SOL leg is provably live on Akash Solana devnet and the BLOCKED-STRU
 **Dependencies:** Story 50.1 (swap-pair provisioning); Story 50.2 (Mill container + streamSwap driver).
 
 **FRs:** FR43, FR44, FR45 | **NFRs:** NFR20, NFR23, NFR24
+
+### Review Findings (2026-05-31 — /bmad-code-review, infra scope: connector bump + gate scripts + CI + leases + pilot-readiness; Test 6 settlement code reviewed under Story 50.4)
+
+_Three-layer adversarial review (Blind Hunter + Edge Case Hunter + Acceptance Auditor). 3 decision-needed, 0 patch, 4 defer, ~9 dismissed. Connector consistency VERIFIED clean: digest `c2785da9` byte-identical across constants.ts + docker-compose-townhouse.yml; tag `3.7.1` aligned across all 4 compose files + 6 package.json floors + lockfile + publish-workflow `CONNECTOR_VERSION_DEFAULT` + local-hs.sh pin + migration doc._
+
+- [ ] [Review][Decision] AC #9 spec says SOL leg "PASS" but pilot-readiness honestly reports ⛔ BLOCKED — `v0.1-pilot-readiness.md` (AC #7 row + § "SOL Leg") reports the 2026-05-30 live gate as BLOCKED (Mill never advertised kind:10032); AC #9 (epics:1761) literally mandates "SOL leg status: PASS". The doc is also now STALE vs Story 50.4 (done 2026-05-31, advertisement blocker resolved + live-verified). 50.3 is correctly held at `review` until the operator settlement gate (local anvil@18545 + Akash SOL devnet) proves green. Reconcile: refresh the doc post-50.4 and keep 50.3 at `review` until PASS, OR amend AC #9 wording.
+- [ ] [Review][Decision] AC #6 marker text — script emits `claim:`, spec says `txid:` — `townhouse-e2e-real-hs.sh` emits `SOL leg PASS (Mill streamSwap, claim: …)`; spec AC #6 (epics:1746) literally says `txid:`. The script is technically correct (streamSwap is an off-chain signed channel claim, not a broadcast tx — review P5). Recommend amending AC #6 wording to `claim:` in-place (mirrors how AC #3 DN3 was handled), rather than leaving a literal spec-vs-artifact contradiction.
+- [ ] [Review][Decision] Connector bump 3.6.3/3.3.3→3.7.1 is outside all 50.3 ACs — No Story 50.3 AC mentions a connector bump; story scope is "exercise a real SOL settlement loop + retire BLOCKED-STRUCTURAL". The bump (~15 files: constants digest, 6 package.json floors, 4 compose pins, publish-workflow default, local-hs.sh pin, migration doc, lockfile) is a user directive ("pull latest connector"). Accept as in-scope for 50.3, or split into its own connector-maintenance story? Either way, confirm the contract canary passes @3.7.1 before merge (see W4).
+- [x] [Review][Defer] Live-host Akash SDL still on connector:3.4.1 [deploy/akash/townhouse.sdl.yaml:90] — deferred, pre-existing (already W1); needs operator redeploy of the live apex host.
+- [x] [Review][Defer] leases.json solana+anvil `image_digest` blanked to "" [deploy/akash/leases.json] — deferred; provenance regression from the 2026-05-30 redeploy. No gate reads it today; operator to repopulate from live lease.
+- [x] [Review][Defer] SOL-leg PASS marker couples to a free-text console.log wording [scripts/townhouse-e2e-real-hs.sh] — deferred; `grep`-on-human-string is false-FAIL-fragile (not false-PASS; `set -euo pipefail` guards genuine failures). A machine-stable marker contract would harden it.
+- [x] [Review][Defer] Connector bump lacks contract-canary evidence in the diff [packages/sdk/tests/integration/connector-contract.test.ts] — deferred; CLAUDE.md mandates running the canary on every bump. Sprint notes record "13/13 PASS @3.7.1" but it is not a diff artifact (no API drift = no file change). Re-run pre-merge to substantiate the migration-doc "verified through 3.7.1" claim.
+
+---
+
+### Story 50.4: Mill HS-Mode kind:10032 Advertisement Fix
+
+As the townhouse release engineer who ran the Story 50.3 SOL gate live for the first time,
+I want the Mill container started by the E2E harness to actually publish its kind:10032 `IlpPeerInfo` (swapPairs) event to the town relay,
+So that `streamSwap` can discover `g.townhouse.mill` and the EVM→Mill→SOL settlement loop (Story 50.3 AC #2/#3/#4) can be exercised end-to-end.
+
+**Context (2026-05-30 live gate run):** The Mill container boots cleanly (`mill_ready`, `swapPairCount:1`, mnemonic-derived pubkey) and then goes silent — it never opens a WebSocket to `townhouse-hs-town:7100` and never publishes kind:10032. The test (`townhouse-dvm-arweave-e2e.test.ts`) subscribes for that event (now correctly filtered on Mill's real pubkey, P9) and times out: `kind:10032 from Mill not received within 30s`. The publish is fire-and-forget with `Promise.allSettled` + `logger.warn?.`-gated failures (`packages/mill/src/mill.ts:921-980`), so it fails **silently**. Confirmed NOT image-staleness — a Mill image rebuilt from this branch (`docker/Dockerfile.mill`, digest `4ff9bf20…`) behaves identically to published `mill:latest` (`38e8c6…`). Harness fixes P7–P10 + DN3 already landed; they are prerequisites but do not resolve this blocker.
+
+**Acceptance Criteria:**
+
+**AC #1 — Diagnose the silent-no-publish:**
+**Given** a Mill container started by the harness with `swapPairs`, a mnemonic, and `relayUrls`/`MILL_RELAYS` pointing at `townhouse-hs-town:7100`
+**When** Mill boots
+**Then** the root cause of the missing kind:10032 publish is identified and documented — one (or more) of: (a) `config.relayUrls` arriving empty at `startMill()` despite JSON + env (plumbing through `docker/src/entrypoint-mill.ts` → `applyEnvOverlay` → `startMill`); (b) cross-container unreachability of the relay (relay `NostrRelayServer` bind interface `0.0.0.0` vs `127.0.0.1`; host port-map can mask a loopback bind); (c) the swallowed-warning logger (`logger.warn?.`) hiding a real publish/connection failure.
+
+**AC #2 — Surface the failure instead of swallowing it:**
+**Given** the Mill kind:10032 publish path
+**When** a relay publish fails
+**Then** the failure is observable (non-`?.` error log, or a startup health signal) so future gate runs fail loudly rather than timing out 30s downstream. (Fix may live in `packages/mill` and/or `docker/src/entrypoint-mill.ts`; if in `packages/mill`, a new Mill image must be published or the gate must build it.)
+
+**AC #3 — Mill advertises kind:10032 in the harness:**
+**Given** the gate harness's Mill container
+**When** it boots
+**Then** within 30s the town relay has a stored kind:10032 event authored by Mill's pubkey whose `content.swapPairs` contains the EVM→SOL pair — i.e. the existing Test 6 `kind:10032` subscription resolves (no timeout).
+
+**AC #4 — Story 50.3 gate proceeds past advertisement:**
+**Given** AC #3 passes
+**When** the full `townhouse-dvm-arweave-e2e.test.ts` runs under `RUN_DOCKER_INTEGRATION=1`
+**Then** execution proceeds past the `beforeAll` kind:10032 wait into the `streamSwap` settlement (Story 50.3 AC #2/#3/#4) — unblocking Story 50.3. (Whether the settlement itself then passes is Story 50.3's gate; 50.4's bar is that advertisement no longer blocks it.)
+
+**AC #5 — Image provenance recorded:**
+**Given** the fix may require a rebuilt Mill image
+**When** 50.4 completes
+**Then** the gate's `image-manifest.json` mill digest is pinned to a published image (or the build path is documented), and the connector pin stays at 3.7.1.
+
+**Out of scope:** the SOL settlement assertions themselves (Story 50.3 AC #2/#3/#4 — owned by 50.3 once unblocked); Mina; multi-Mill.
+
+**Dependencies:** Story 50.2 (Mill container harness), Story 50.3 harness fixes P7–P10 + DN3 (already landed). **Blocks:** Story 50.3.
+
+**Diagnostics:** `_bmad-output/implementation-artifacts/deferred-work.md` § "Epic 50: Mill HS-mode kind:10032 advertisement".
+
+**Status (2026-05-31 — `done`, advertisement blocker resolved + verified live):** `/bmad-code-review` ran the AC #4 gate live (Docker + the live Akash anvil/solana devnets) and confirmed the Mill kind:10032 advertisement works end-to-end (`mill.peerInfo.published` on attempt 1; apex FULFILL; relay stores it). Reaching `beforeAll`-clear required **three harness fixes** the live run exposed, all in `townhouse-dvm-arweave-e2e.test.ts` (none in Mill runtime): (1) advertisement destination `g.townhouse` → **`g.townhouse.town`** (the bare `g.townhouse` is `localDelivery`-routed to the kind:5094-only DVM, which rejects kind:10032 with `F00`; `g.townhouse.town` is the town relay's event store); (2) **TOON-aware read** — the kind:10032 subscription used nostr-tools `SimplePool`, but a TOON relay emits every WS `EVENT` as a TOON string (`ConnectionHandler.ts:174`), silently dropped by nostr-tools — replaced with a raw `ws` reader that `decodeEventFromToon`s and polls until the ILP-stored event commits; (3) pubkey-scrape anchored to the `mill_ready` line (review patch P3). With these, `beforeAll` clears into the EVM settlement (`openChannel`) — **AC #4's bar met** ("advertisement no longer blocks"). The run then fails at `ECONNREFUSED 127.0.0.1:18545` (no local EVM RPC; the test expects `sdk-e2e-infra.sh up` anvil@18545) — that, plus the settlement assertions, are **Story 50.3's gate**, now unblocked. Verified Mill image: `ghcr.io/toon-protocol/mill@sha256:05bb5b4f…` (rebuilt from patched source; contains the fix). Code-review applied 5 patches (P1 loud `ilp_destination_ignored`; P2 entrypoint price guard; P3 pubkey anchor; P4 `TOON_CONNECTOR_URL` alias; P5/D1 digest reconcile) + 2 deferred (W1/W2). Full diagnostic + live-run evidence: `deferred-work.md` § "Epic 50: Mill HS-mode kind:10032 advertisement" → "Live verification (2026-05-31)". **— Earlier (2026-05-30, code-complete):** AC #1 diagnosis found the dominant blocker was deeper than the (a)/(b)/(c) candidate list: a TOON relay is **pay-to-write** — its WS `EVENT` handler (`packages/relay/src/websocket/ConnectionHandler.ts:134`) rejects every unpaid write with `'restricted: writes require ILP payment'`, and there is **no kind:10032 exception / no self-write bypass**, so Mill's `SimplePool` Nostr publish could never be stored regardless of relayUrls/logger. A second latent defect: the auto-created embedded `ConnectorNode` was **never `.start()`-ed**, so even an ILP send had no live session. **Fix (production / Model 2):** `startMill()` now starts the auto-created connector and, when `peerInfoIlpDestination` is set, advertises kind:10032 by routing the TOON-encoded event through the connector via an ILP PREPARE to that address (mirrors `startTown()`), with bounded retries + a loud `error` on exhaustion (AC #2). The harness points Mill at `g.townhouse` (`TOON_PEERINFO_ILP_ADDRESS`, price 0 since apex `FEE_PER_EVENT=0`). AC #2 also fixed the swallowed no-op logger (`entrypoint-mill.ts` now passes a real `MillLogger`; warn/error→stderr). **Verified:** mill build clean, 179/180 unit pass (4 new 50.4 tests), docker `entrypoint-mill` tsc clean, eslint 0 errors, dist probe shows `via:'ilp'` → `mill.peerInfo.published` to `g.townhouse`. Mill image rebuilt (`sha256:99e96cf8…`, tagged `ghcr.io/toon-protocol/mill:latest`), connector stays 3.7.1 (AC #5). **AC #4** (full live Docker+Akash gate past the kind:10032 wait) is the operator post-merge ritual — needs live Akash EVM+Solana devnets + `.anyone`, deferred to operator as with 50.0/50.2/50.3. File List in deferred-work.md.
+
+---
+
+### Story 50.5: DVM Arweave Upload — Rebuild + Diagnose Turbo internal_error + AC#6 credit-source log
+
+As the townhouse release engineer closing out the Story 50.3 DVM deferral,
+I want the `ghcr.io/toon-protocol/dvm` image rebuilt from the current `@toon-protocol/sdk` source (which already carries Story 50.3's un-swallowed server-side Turbo error log + the gate's `dvmLogs` boot-log capture), so the Story 50.3 gate (`townhouse-dvm-arweave-e2e.test.ts`) surfaces the *real* cause of the kind:5094 `internal_error` instead of a swallowed one,
+So that I can determine whether the upload failure is code-fixable or an external Turbo-egress requirement, land the fix or document the requirement, and turn Story 50.3's AC #2 + AC #6 green.
+
+**Context (2026-05-31 live gate runs):** The DVM's kind:5094 Arweave upload returns `400 {"code":"T00","message":"Arweave upload failed","rejectReason":{"code":"internal_error"}}` in every run since the 2026-05-29/30 gate reopen (2/2 then persistently). The DVM's upload path is correct — ephemeral-JWK `TurboFactory.authenticated({privateKey: ephemeralJwk})` is the right free-tier path for `@ardrive/turbo-sdk` 1.40.x (`unauthenticated()` has no `uploadFile`), and the **same path produced a real Arweave txid** (`ENO_lSHMz672WRtBru3PFHVKPCGZyYkLzuRCxPHRuus`) on the green 2026-05-26 run (5/5 PASS). So the failure is most likely **external Turbo egress/network from the DVM container** OR a regression — but the handler **swallowed the real Turbo error** (CWE-209), giving zero diagnostics (blob is 32 bytes — not a size limit). Story 50.3 already committed the diagnostic groundwork into `@toon-protocol/sdk` (which is bundled into the DVM image): server-side error logging in `packages/sdk/src/arweave/arweave-dvm-handler.ts` (un-swallows the real Turbo error), a corrected stale comment in `packages/sdk/src/arweave/turbo-adapter.ts`, and the gate test now captures the DVM boot log into `dvmLogs`. **None of this takes effect until the DVM image is rebuilt** — the gate pins `ghcr.io/toon-protocol/dvm@sha256:26a2aff…`, which predates the diagnostics. This story owns the rebuild + diagnose + fix-or-document closeout; the kind:5094/6094 Arweave DVM **protocol itself is already implemented** (Epic 8). Diagnostics: `deferred-work.md` § "Story 50.3 live gate run (2026-05-31)" (B3) + the AC#2/#6 residual notes.
+
+**Acceptance Criteria:**
+
+**AC #1 — DVM image rebuilt from current sdk source + manifest re-pinned:**
+**Given** Story 50.3's `@toon-protocol/sdk` diagnostics (`arweave-dvm-handler.ts` un-swallowed Turbo error + `turbo-adapter.ts` comment) are committed
+**When** the DVM image is rebuilt via `docker build -f docker/Dockerfile.dvm -t toon:dvm .`
+**Then** the new image bundles the current sdk (the un-swallowed `console.error` is present in the running container) AND the gate's `image-manifest.json` DVM digest is re-pinned from `sha256:26a2aff…` to the rebuilt digest (or the build path is documented), with the connector pin staying at 3.7.1.
+
+**AC #2 — Gate re-run surfaces the real Turbo error (no more swallowed `internal_error`):**
+**Given** the rebuilt DVM image (AC #1) and `RUN_DOCKER_INTEGRATION=1 pnpm --filter @toon-protocol/townhouse test:integration`
+**When** the kind:5094 upload fails
+**Then** the DVM container's runtime log (captured into the test's `dvmLogs`) contains the **real** underlying Turbo failure (endpoint, HTTP status, or network error) — not just the opaque `rejectReason:{code:'internal_error'}` — so the root cause is observable rather than swallowed.
+
+**AC #3 — Root-cause determination (external-Turbo-egress vs code-fixable) documented:**
+**Given** the surfaced Turbo error from AC #2
+**When** the failure is analyzed
+**Then** the root cause is classified as either **(a) code-fixable** (e.g. wrong Turbo endpoint, missing retry, ephemeral-JWK funding/account-creation gap) — in which case the fix is applied — or **(b) external Turbo egress** (the DVM container cannot reach Turbo's upload service in this environment) — in which case the env/network requirement is documented in `deferred-work.md`. The decision and its evidence are recorded.
+
+**AC #4 — If code-fixable, kind:5094 returns a real Arweave txid in the ILP FULFILL:**
+**Given** AC #3 classified the failure as code-fixable AND the fix is applied + the DVM image rebuilt
+**When** the gate's Test 2 runs the kind:5094 upload
+**Then** the ILP FULFILL `data` carries a valid Arweave txid (matching the 2026-05-26 green-run shape, e.g. `ENO_lSHMz672…`) AND `kind:5094: success=true` — i.e. Story 50.3's AC #2 row turns green. (If AC #3 classified the failure as external Turbo egress, this AC is satisfied by the documented env requirement instead, and AC #2's green is gated on that env being present.)
+
+**AC #5 — AC#6 credit-source log captured (green):**
+**Given** the gate's `dvmLogs` capture (committed under Story 50.3) and the rebuilt DVM image
+**When** the DVM boots
+**Then** its boot log contains `Arweave credit source: … unauthenticated` AND the test reads `dvmLogs` *after* it is populated (the earlier failure was the test reading `dvmLogs` before population) — i.e. Story 50.3's AC #6 row turns green.
+
+**AC #6 — Story 50.3 AC#2/#6 rows updated in pilot-readiness:**
+**Given** AC #4 + AC #5 outcomes
+**When** the story is marked done
+**Then** `_bmad-output/implementation-artifacts/v0.1-pilot-readiness.md`'s AC #2 (kind:5094 DVM returns Arweave txid) + AC #6 (DVM ephemeral-JWK free-tier Turbo) rows — and the SOL-leg/AC #7 narrative where it references B3 — are updated to reflect the new state (green if code-fixable + verified; or external-egress requirement documented with the gate's expected behavior), superseding the prior `internal_error` notes.
+
+**Out of scope:** AC #1 (connector parent/child inbound-claim asymmetry — filed as a connector-repo issue/release, not this repo's product code) and AC #4 (Mill SOL provisioning — Story 50.1 scope); the SOL settlement assertions themselves (Story 50.3 AC #3/#4); the kind:5094/6094 Arweave DVM **protocol** (already implemented, Epic 8 — this story is only upload-reliability + image-rebuild + diagnostics closeout); Mina; multi-Mill. Persistent/funded DVM Arweave identity (ephemeral JWK by design, W1 49.5).
+
+**Dependencies:** Story 50.3 (the `townhouse-dvm-arweave-e2e.test.ts` gate + the already-committed `@toon-protocol/sdk` server-side Turbo diagnostics + the `dvmLogs` boot-log capture). **Unblocks:** Story 50.3's AC #2 + AC #6.
+
+**Diagnostics:** `_bmad-output/implementation-artifacts/deferred-work.md` § "Story 50.3 live gate run (2026-05-31)" (B3) + "Agent-fix integration run" / "Second agent pass" AC#2/#6 residual notes.
+
+**FRs:** FR43, FR44, FR45 | **NFRs:** NFR20, NFR23, NFR24 (same gate as Story 50.3 — `townhouse-dvm-arweave-e2e.test.ts`; this story closes out 50.3's deferred AC #2/#6 rows on that gate).
 
 ---

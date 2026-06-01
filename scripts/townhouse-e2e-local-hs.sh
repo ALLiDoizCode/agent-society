@@ -137,9 +137,15 @@ ensure_image_manifest() {
 
   warn "image-manifest.json missing OR compose template has unresolved placeholders — rebuilding…"
 
-  # Pin connector to v3.7.0+ — this version ships the packetsLocallyDelivered
-  # counter (toon-protocol/connector#73). Pull lazily if missing locally.
-  local CONNECTOR_TAG=3.7.0
+  # Pin connector to v3.8.0 — must match DEFAULT_CONNECTOR_IMAGE in
+  # packages/townhouse/src/constants.ts (Story 50.4 bump) so the gate's
+  # image-manifest + rendered compose validate the SAME connector the product
+  # ships. v3.8.0 migrates local SQLite to libsql (toon-protocol/connector#79,
+  # fixes Node-24 silent settlement-disable) and makes inbound claim validation
+  # relation-aware (toon-protocol/connector#78, unblocks the apex→child kind:1
+  # F06). v3.7.0+ ships the packetsLocallyDelivered counter
+  # (toon-protocol/connector#73). Pull lazily if missing locally.
+  local CONNECTOR_TAG=3.8.0
   docker image inspect "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" >/dev/null 2>&1 \
     || docker pull "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" 2>&1 | tail -2
 

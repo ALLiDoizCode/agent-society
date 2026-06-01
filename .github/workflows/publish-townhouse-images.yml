@@ -71,10 +71,15 @@ on:
         required: true
         type: string
       connector_version:
-        description: 'Connector image tag to record in image-manifest.json. Default 3.6.2 — adds per-peer transport selection (toon-protocol/connector#70). Townhouse uses it to dial Docker-sibling peers directly even when the apex connector runs in SOCKS5 (HS) mode. Earlier 3.5.x versions force all BTP dials through the SOCKS5 proxy, which cannot resolve Docker-internal hostnames.'
+        description: 'Connector image tag to record in image-manifest.json. LEAVE EMPTY to use env.CONNECTOR_VERSION_DEFAULT below (the single source of truth, currently 3.8.0 — Story 50.4 bump; migrates local SQLite to libsql (connector#79, fixes Node-24 silent settlement-disable) + relation-aware inbound claim validation (connector#78, unblocks Story 50.3 AC#1 apex→child F06); no breaking changes within 3.x). To bump, update env.CONNECTOR_VERSION_DEFAULT below AND packages/townhouse/src/constants.ts FIRST, then trigger this workflow (leave this input empty). The Story 50.0 alignment preflight (AC #2 / F6) fails the job if constants.ts and the resolved connector tag disagree. Earlier 3.5.x versions force all BTP dials through the SOCKS5 proxy, which cannot resolve Docker-internal hostnames.'
         required: false
         type: string
-        default: '3.6.2'
+        # No literal default — fall through to env.CONNECTOR_VERSION_DEFAULT via
+        # `${{ inputs.connector_version || env.CONNECTOR_VERSION_DEFAULT }}` at
+        # every use site. Prevents the input-default ↔ env drift that Story 50.0
+        # review F6 flagged (a stale literal here would silently override env on
+        # workflow_dispatch even after env was bumped).
+        default: ''
 
 concurrency:
   group: '${{ github.workflow }}-${{ github.ref }}'
@@ -86,7 +91,160 @@ permissions:
   packages: write
   id-token: write  # required for cosign keyless OIDC token
 
+# Single source of truth for the workflow's connector default. Every site that
+# resolves the connector tag goes through
+#   ${{ inputs.connector_version || env.CONNECTOR_VERSION_DEFAULT }}
+# so an empty workflow_dispatch input (or a push-tag trigger that has no
+# inputs at all) falls through to this env value. The
+# `workflow_dispatch.inputs.connector_version.default` above is deliberately
+# left empty so it can never drift from this env literal (Story 50.0 review F6).
+env:
+  CONNECTOR_VERSION_DEFAULT: '3.8.0'
+
 jobs:
+  # ---------------------------------------------------------------------------
+  # Job 0: preflight (alignment guard — Story 50.0 AC #2, moved here per F6)
+  # ---------------------------------------------------------------------------
+  #
+  # Fail-fast BEFORE any irreversible side effects (per-platform pushes, manifest
+  # list creation, :latest moves, Rekor signatures). Originally this check sat
+  # in build-image-manifest (job 3) — by then 8 platform digests had been pushed,
+  # 4 manifest lists created with canonical tags, :latest moved on tag-push, and
+  # everything Rekor-signed. A drift failure there cannot be undone.
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Set up Docker Buildx
+        # Story 50.0 review P6 — explicit setup-buildx ensures the buildx
+        # binary used by `docker buildx imagetools inspect` below is the
+        # pinned action version, not whichever the runner image happens to
+        # ship. Defence-in-depth against future runner-image downgrades.
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: Validate workflow inputs (Story 50.0 review P7)
+        # Mirror the smoke workflow's input-shape preflight so a malformed
+        # `inputs.version` or `inputs.connector_version` from workflow_dispatch
+        # cannot reach downstream steps where they land in image-manifest.json
+        # (`--townhouse-version "$VERSION"`) or registry refs. Push-tag triggers
+        # have no inputs and skip this validation.
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_CONNECTOR_VERSION: ${{ inputs.connector_version }}
+        run: |
+          set -euo pipefail
+          # semver-ish shape for `version` (e.g. 0.1.0-rc7, 1.2.3, 1.0.0-alpha.1).
+          # Permissive on prerelease/build-metadata; strict on leading + separator
+          # forms so the value can never round-trip into shell argv as a shell
+          # fragment.
+          if ! [[ "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+.-][a-zA-Z0-9.-]+)?$ ]]; then
+            echo "FAIL: inputs.version='$INPUT_VERSION' is not a valid semver-ish tag (expected MAJOR.MINOR.PATCH with optional [+.-]prerelease/build chars)" >&2
+            exit 1
+          fi
+          # connector_version is optional (empty falls through to env default).
+          # When supplied, it must conform to the same Docker tag charset the
+          # smoke workflow enforces, with the same consecutive-separator guard.
+          if [[ -n "$INPUT_CONNECTOR_VERSION" ]]; then
+            if ! [[ "$INPUT_CONNECTOR_VERSION" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
+              echo "FAIL: inputs.connector_version='$INPUT_CONNECTOR_VERSION' is not a valid Docker tag" >&2
+              exit 1
+            fi
+            if [[ "$INPUT_CONNECTOR_VERSION" =~ \.\. ]] \
+                || [[ "$INPUT_CONNECTOR_VERSION" =~ \-\- ]] \
+                || [[ "$INPUT_CONNECTOR_VERSION" =~ ^[.-] ]] \
+                || [[ "$INPUT_CONNECTOR_VERSION" =~ [.-]$ ]]; then
+              echo "FAIL: inputs.connector_version='$INPUT_CONNECTOR_VERSION' contains consecutive or leading/trailing separators" >&2
+              exit 1
+            fi
+          fi
+          echo "✅ inputs validated"
+
+      - name: Log in to GHCR
+        # Needed so `docker buildx imagetools inspect` can resolve refs against
+        # private/rate-limited registries without anonymous-pull throttling.
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify constants.ts ↔ connector_version alignment (Story 50.0 AC #2)
+        # Fail-fast if the workflow's connector tag does not resolve to the digest
+        # pinned in packages/townhouse/src/constants.ts. Without this guard the
+        # publish would happily produce an image-manifest.json that disagrees
+        # with what production code consumes — the Epic 49.1 manifest-drift
+        # finding (v3.6.2 manifest vs v3.6.3 constants.ts pin).
+        #
+        # Inputs are routed via step-level `env:` so the resolved tag is never
+        # substituted into shell source by GHA — bash reads it from the
+        # environment, which treats values as literal strings (Story 50.0
+        # review F3: no shell-expression injection through workflow inputs).
+        env:
+          CONNECTOR_TAG: ${{ inputs.connector_version || env.CONNECTOR_VERSION_DEFAULT }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CONNECTOR_TAG" ]; then
+            echo "FAIL: CONNECTOR_TAG resolved to empty string — CONNECTOR_VERSION_DEFAULT is not set in workflow env"
+            exit 1
+          fi
+          # Round 2 review #5 — three combined guards against shadow attacks:
+          #   1. sed-range narrows to the `DEFAULT_CONNECTOR_IMAGE` export body
+          #      only, so other quoted refs elsewhere in the file are out of scope.
+          #   2. comment-strip inside the range drops `//` and `*`/`/*`-prefixed
+          #      lines, so intra-export JSDoc/inline comments can't shadow.
+          #   3. quoted-form anchor requires the digest to appear inside single
+          #      quotes, so a trailing inline-comment URL on the assignment line
+          #      won't match.
+          # Strip comment lines BEFORE applying the sed range so a semicolon
+          # inside a JSDoc comment (e.g. "gate); without") does not prematurely
+          # terminate the range and exclude the actual digest line.
+          CONSTANTS_DIGEST=$(
+            grep -v -E '^\s*(//|\*|/\*)' packages/townhouse/src/constants.ts \
+              | sed -nE "/export[[:space:]]+const[[:space:]]+DEFAULT_CONNECTOR_IMAGE[[:space:]]*=/,/;/p" \
+              | grep -oE "'ghcr\\.io/toon-protocol/connector@sha256:[a-f0-9]{64}'" \
+              | head -1 \
+              | sed -E "s|.*@||; s|'||g" \
+              || true
+          )
+          if [ -z "$CONSTANTS_DIGEST" ]; then
+            echo "FAIL: could not parse \"'ghcr.io/toon-protocol/connector@sha256:<64hex>'\" inside the DEFAULT_CONNECTOR_IMAGE export in packages/townhouse/src/constants.ts (export may be in tag form, renamed, or quoted differently)"
+            exit 1
+          fi
+          # Round 2 review #1 — separate stderr (to a tmpfile) from stdout so
+          # a buildx warning on SUCCESS (deprecation banner, BuildKit version
+          # notice) does not smear into RESOLVED_DIGEST and break the equality
+          # check. The prior `2>&1` pattern coupled both streams; we only show
+          # stderr on the failure path now.
+          IMAGETOOLS_STDERR=$(mktemp)
+          trap 'rm -f "$IMAGETOOLS_STDERR"' EXIT
+          if ! RESOLVED_DIGEST=$(docker buildx imagetools inspect \
+              "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" \
+              --format '{{.Manifest.Digest}}' 2>"$IMAGETOOLS_STDERR"); then
+            echo "FAIL: could not resolve ghcr.io/toon-protocol/connector:${CONNECTOR_TAG} — check that the tag exists and the runner can pull it. buildx stderr:"
+            cat "$IMAGETOOLS_STDERR"
+            exit 1
+          fi
+          # Story 50.0 review P4 — buildx <0.11 (or future template-format
+          # regressions) can return exit 0 with empty stdout for OCI image
+          # indexes when `--format '{{.Manifest.Digest}}'` resolves to an
+          # unpopulated field. Without this guard the equality check below
+          # would compare against "" and produce a misleading "resolves to "
+          # message. Hard-fail with a tighter diagnostic instead.
+          if [ -z "$RESOLVED_DIGEST" ]; then
+            echo "FAIL: docker buildx imagetools inspect succeeded but returned an empty digest for ghcr.io/toon-protocol/connector:${CONNECTOR_TAG} — check the buildx version (need >=0.11 for OCI image indexes) and the runner image. buildx stderr (if any):"
+            cat "$IMAGETOOLS_STDERR"
+            exit 1
+          fi
+          if [ "$CONSTANTS_DIGEST" != "$RESOLVED_DIGEST" ]; then
+            echo "FAIL: constants.ts pins $CONSTANTS_DIGEST but connector:$CONNECTOR_TAG resolves to $RESOLVED_DIGEST — bump constants.ts or pick a matching connector_version"
+            exit 1
+          fi
+          echo "✅ constants.ts ↔ connector:$CONNECTOR_TAG aligned ($CONSTANTS_DIGEST)"
+
   # ---------------------------------------------------------------------------
   # Job 1: build-per-platform (matrix across 4 images × 2 native-arch runners)
   # ---------------------------------------------------------------------------
@@ -96,6 +254,7 @@ jobs:
   # manifest list with the actual tags.
   build-per-platform:
     runs-on: ${{ matrix.runner }}
+    needs: [preflight]
     # Native arm64 builds complete in well under the 6 h GHA default. The 90-min
     # ceiling is a guardrail against runtime regressions — well above the rc5
     # baseline of 19 min on QEMU and the projected 8–10 min on native arm64.
@@ -308,16 +467,35 @@ jobs:
 
       - name: Resolve version string
         id: version
+        # Round 2 review #7 — route operator-supplied inputs (and the
+        # tag-name, which is also operator-pushed) through step-level env:
+        # so bash reads them as literal strings rather than GHA expanding
+        # them into the run-block source. Without this, a workflow_dispatch
+        # operator could inject shell via `inputs.version='); ...; #'`. The
+        # F3 mitigation was applied to preflight + build-image-manifest in
+        # Round 1 but missed this step.
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
         run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            VERSION="${{ github.ref_name }}"
-            VERSION="${VERSION#v}"
+          set -euo pipefail
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            VERSION="${REF_NAME#v}"
           else
-            VERSION="${{ inputs.version }}"
+            VERSION="$INPUT_VERSION"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build image-manifest.json
+        # Route operator-supplied inputs through step-level env: so they reach
+        # bash as literal strings — never substituted into the run-block source
+        # by GHA expression evaluation (Story 50.0 review #2 — the F3 mitigation
+        # applied to preflight was missing here). Both inputs.connector_version
+        # and steps.version.outputs.version flow through the same envelope.
+        env:
+          CONNECTOR_TAG: ${{ inputs.connector_version || env.CONNECTOR_VERSION_DEFAULT }}
+          TOWNHOUSE_VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           TOWNHOUSE_API_DIGEST=$(cat /tmp/digests/digest-townhouse-api/digest-townhouse-api.txt)
@@ -326,17 +504,35 @@ jobs:
           DVM_DIGEST=$(cat /tmp/digests/digest-dvm/digest-dvm.txt)
 
           # Resolve connector digest via buildx imagetools (handles OCI image index
-          # correctly — docker manifest inspect doesn't expose the index digest directly)
-          CONNECTOR_TAG="${{ inputs.connector_version || '3.6.2' }}"
-          CONNECTOR_DIGEST=$(docker buildx imagetools inspect \
-            "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" \
-            --format '{{.Manifest.Digest}}')
+          # correctly — docker manifest inspect doesn't expose the index digest directly).
+          # Default tracks DEFAULT_CONNECTOR_IMAGE in packages/townhouse/src/constants.ts
+          # (single source of truth at env.CONNECTOR_VERSION_DEFAULT, top of workflow).
+          # The preflight job already gated the publish on constants.ts ↔ this tag
+          # alignment (Story 50.0 AC #2 / F6), so by the time this step runs the
+          # digest below is guaranteed to match the constants.ts pin.
+          # Separate stderr (tmpfile) so buildx deprecation banners / BuildKit
+          # version notices don't smear into CONNECTOR_DIGEST (mirrors the fix
+          # applied to the preflight step's inspect call).
+          MANIFEST_IMAGETOOLS_STDERR=$(mktemp)
+          trap 'rm -f "$MANIFEST_IMAGETOOLS_STDERR"' EXIT
+          if ! CONNECTOR_DIGEST=$(docker buildx imagetools inspect \
+              "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" \
+              --format '{{.Manifest.Digest}}' 2>"$MANIFEST_IMAGETOOLS_STDERR"); then
+            echo "FAIL: could not resolve ghcr.io/toon-protocol/connector:${CONNECTOR_TAG} — buildx stderr:"
+            cat "$MANIFEST_IMAGETOOLS_STDERR"
+            exit 1
+          fi
+          if [ -z "$CONNECTOR_DIGEST" ]; then
+            echo "FAIL: buildx returned empty digest for connector:${CONNECTOR_TAG} — check buildx version (need >=0.11 for OCI indexes). buildx stderr (if any):"
+            cat "$MANIFEST_IMAGETOOLS_STDERR"
+            exit 1
+          fi
 
           # Install zod for manifest schema validation (used by the script)
           npm install --no-save zod@3
 
           node scripts/build-image-manifest.mjs \
-            --townhouse-version "${{ steps.version.outputs.version }}" \
+            --townhouse-version "${TOWNHOUSE_VERSION}" \
             --connector-tag "${CONNECTOR_TAG}" \
             --connector-digest "${CONNECTOR_DIGEST}" \
             --townhouse-api-digest "$TOWNHOUSE_API_DIGEST" \

@@ -34,4 +34,7 @@ jobs:
       # townhouse-dvm-arweave-e2e.test.ts is self-contained: manages its own hs up/down in beforeAll/afterAll.
       # Do NOT run townhouse-e2e-local-hs.sh up before this step.
       - name: Run 49.5 gate
-        run: bash scripts/townhouse-e2e-real-hs.sh
+        # --chain=sol asserts the SOL-settlement leg (Test 6) and emits the
+        # SOL-leg PASS marker (Story 50.3 AC #6); the full Tests 1–6 suite runs
+        # regardless of --chain.
+        run: bash scripts/townhouse-e2e-real-hs.sh --chain=sol
