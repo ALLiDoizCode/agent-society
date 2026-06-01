@@ -830,4 +830,18 @@ The single initial failure was a transient/local-context artifact (built while t
 
 **Net status:** connector 3.8.0 source bump committed + verified; #79 (libsql) proven working in rebuilt nodes; node images rebuildable (no build break); AC#1 #78 now blocked one layer deeper on town parent-peer registration; dvm cherry-pick needs `abitype`.
 
-_connector#78 + connector#79 both closed in toon-protocol/connector@3.8.0 (2026-06-01)._
+##### #78 PROVEN END-TO-END (2026-06-01) — town parent-peer relation fix; AC#1 F06 → FULFILL
+
+Root-caused the town-side gap from the connector 3.8.0 source: `InboundClaimValidator.validate()` skips the inbound claim requirement only when `getPeerRelation(sourcePeerId) === 'parent'` (inbound-claim-validator.js), and `peerRelations` is populated solely from `_config.peers` via `setPeerRelation(peer.id, peer.relation ?? 'peer')`. Town's embedded connector registered its parent peer in `packages/town/src/town.ts` **without a `relation` field** → defaulted to `'peer'` → the #78 skip never fired. Compounded by an id mismatch: town's `PARENT_PEER_ID` was the alias `'apex'`, but the connector keys peerRelations by the **auth-declared peerId of the inbound BTP session**, which is the parent connector's **nodeId `g.townhouse`** (btp-client `_authenticate()` sends `peerId: this._nodeId`; apex `ConnectorNode nodeId:"g.townhouse"`).
+
+**Fixes (committed):**
+- `packages/town/src/town.ts` — add `relation: 'parent'` to the parent peer entry (+ type). Documented that `parentPeerId` MUST equal the parent connector's nodeId.
+- `townhouse-dvm-arweave-e2e.test.ts` — town `PARENT_PEER_ID` `apex` → `g.townhouse` (the apex's real nodeId).
+
+**Live-verified** on the rebuilt town image (connector 3.8.0 + libsql, digest `d354d37e…`): **AC#1 GREEN.** gate.log: the paid kind:1 PREPARE (`amount:1000000`) to `g.townhouse.town` settled (`forwardedAmount:999000`) and returned **`responseType:13` (FULFILL)** with **0 F06** and **0 `InboundClaimValidator` rejections** (the relation-aware skip fired). `kind:1: success=true`. Gate score **5 pass / 5 fail** (was 4/6). **connector#78 + #79 both proven end-to-end.** Remaining failures are independent: AC#2/#6 DVM Turbo (Story 50.5), AC#4/#5 Mill swap-handler/SOL provisioning (Story 50.1).
+
+> **Real-deployment note:** the townhouse orchestrator / HS compose must set each child's `PARENT_PEER_ID` to the apex connector's **nodeId** (not a logical alias), or children will F06-reject all parent-forwarded paid traffic. A more robust town.ts default (derive the parent id from the child's ILP-address prefix) is a candidate follow-up.
+
+**dvm node-image rebuild — PARTIAL, deferred.** `abitype` gap fixed (pull `viem@2.23.2`'s full closure via npm — committed), but the rebuilt dvm then crashes on the NEXT missing transitive: `x402` (`x402-fetch → x402`), whose closure is large (`wagmi`/`@tanstack/react-query`, `@solana/*`, `@wallet-standard/*`) and is **dead code for the Arweave-only kind:5094 DVM** (pulled transitively via `@ardrive/turbo-sdk → x402-fetch`). The fix is NOT to bundle that closure but to **stub/externalize the x402 payment path** in `docker/Dockerfile.dvm` (like the memvid-node PetBrain stub) — a Dockerfile overhaul beyond the abitype patch. Deferred; the gate runs on the known-good prior `dvm:latest` (dvm is reached via localDelivery HTTP, irrelevant to the AC#1 claim hop; AC#2 Turbo is independent). Mill rebuilt clean (`3816ff7f…`); its embedded connector likely needs the same `relation:'parent'` parent-peer fix for AC#4's streamSwap claim-gating (entrypoint-mill.ts) — follow-up.
+
+_connector#78 + connector#79 both closed in toon-protocol/connector@3.8.0 (2026-06-01); proven end-to-end in TOON Story 50.3/50.4 on 2026-06-01._
