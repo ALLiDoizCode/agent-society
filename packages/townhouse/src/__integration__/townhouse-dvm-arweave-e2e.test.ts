@@ -858,7 +858,7 @@ describe.skipIf(!shouldRun)(
             -e CONNECTOR_URL=ws://connector:3000 \
             -e ILP_ADDRESS=g.townhouse.town \
             -e NODE_ID=town \
-            -e PARENT_PEER_ID=apex \
+            -e PARENT_PEER_ID=g.townhouse \
             -e FEE_PER_EVENT=0 \
             -e NODE_NOSTR_SECRET_KEY=${TOWN_NOSTR_SECRET_KEY} \
             -e TOON_SETTLEMENT_PRIVATE_KEY=${B_PRIVATE_KEY} \
