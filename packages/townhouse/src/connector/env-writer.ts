@@ -17,7 +17,14 @@
  * the connector → permanently "disconnected".
  */
 
-import { writeFileSync, chmodSync, lstatSync, statSync } from 'node:fs';
+import {
+  writeFileSync,
+  chmodSync,
+  lstatSync,
+  statSync,
+  mkdirSync,
+  existsSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { resolveNetworkProfile, type ChainProviderConfigEntry } from '@toon-protocol/core';
 import type { TownhouseConfig } from '../config/schema.js';
@@ -62,14 +69,19 @@ export function writeHsNodeEnvFile(
     }
   }
 
-  // Refuse to follow a symlinked compose dir we did not create (mirrors
-  // compose-loader's guard). materializeComposeTemplate runs first and creates
-  // compose/ at 0o700, so it normally exists here.
-  const lst = lstatSync(composeDir);
-  if (lst.isSymbolicLink() && !statSync(composeDir).isDirectory()) {
-    throw new Error(
-      `${composeDir} is a symlink to a non-directory; refusing to write .env.`
-    );
+  // materializeComposeTemplate normally creates compose/ (0o700) before this
+  // runs, but create it defensively so the writer is self-sufficient (e.g. when
+  // materialize is mocked). Refuse to follow a symlinked dir we did not create
+  // (mirrors compose-loader's guard).
+  if (existsSync(composeDir)) {
+    const lst = lstatSync(composeDir);
+    if (lst.isSymbolicLink() && !statSync(composeDir).isDirectory()) {
+      throw new Error(
+        `${composeDir} is a symlink to a non-directory; refusing to write .env.`
+      );
+    }
+  } else {
+    mkdirSync(composeDir, { recursive: true, mode: 0o700 });
   }
 
   writeFileSync(envPath, lines.join('\n') + '\n', { mode: 0o600 });
