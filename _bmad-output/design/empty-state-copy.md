@@ -62,6 +62,19 @@ Last refresh failed — retrying.
 
 ---
 
+## `starting_up` Banner (warm-up)
+
+Shown when no fetch has succeeded yet (a freshly-booted node whose `townhouse-api`
+is still coming up). Rendered in **cyan** (calm, not an error). Escalates to the
+`fetch_failed` banner after `STARTING_UP_GRACE_FETCHES` consecutive failures so a
+genuinely-down API does not read as "starting up" forever.
+
+```
+Starting up — connecting to your node…
+```
+
+---
+
 ## Apex + Per-Peer Table Copy (Story 48.2)
 
 The apex routing-fee strip and per-peer table components ship in Story 48.2.
@@ -78,7 +91,7 @@ The apex routing-fee strip and per-peer table components ship in Story 48.2.
 
 **Per-peer table empty** (shown when `peers.length === 0`):
 ```
-no peers yet — run 'townhouse node add town'
+no peers yet — in a new terminal: townhouse node add town
 ```
 
 ## You're Early Badge (Story 48.3)
@@ -182,9 +195,10 @@ The `copy-sync.test.ts` test enforces this by asserting that every leaf string i
 | `COPY.qualifierEventsWords` | `events relayed` |
 | `COPY.banners.connectorUnavailable` | `Connector not reachable — showing last known values. Retrying in 2s.` |
 | `COPY.banners.fetchFailed` | `Last refresh failed — retrying.` |
+| `COPY.banners.startingUp` | `Starting up — connecting to your node…` |
 | `COPY.apex.routingPrefix` | `↳ apex routing: ` |
 | `COPY.apex.routingEmpty` | `(enable mill to route)` |
-| `COPY.peerTable.empty` | `no peers yet — run 'townhouse node add town'` |
+| `COPY.peerTable.empty` | `no peers yet — in a new terminal: townhouse node add town` |
 | `COPY.activityTicker.prefix` | `recent: ` |
 | `COPY.activityTicker.empty` | `no settlements yet — press [a] when activity arrives` |
 | `COPY.activityTicker.keybind` | ` [a] activity` |
