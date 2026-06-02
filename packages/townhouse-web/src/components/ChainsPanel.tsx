@@ -122,7 +122,7 @@ export function ChainsPanel(): JSX.Element {
 
           <div className="flex items-center gap-3">
             <Button variant="primary" onClick={handleSave} disabled={pending}>
-              {pending ? 'Saving…' : 'Save & restart connector'}
+              {pending ? 'Applying…' : 'Apply chains & restart connector'}
             </Button>
             {success && (
               <span className="font-geist-sans text-sm text-green-700">
