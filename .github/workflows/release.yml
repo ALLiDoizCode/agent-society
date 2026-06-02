@@ -7,11 +7,17 @@ name: Release
 # (`chore(release): X.Y.Z [skip ci]`), and creates the **git tag `vX.Y.Z`** + a
 # GitHub release. It does NOT publish (`npmPublish:false` in .releaserc.json).
 #
-# The tag it creates is what triggers `publish-townhouse-images.yml` (on
-# `tags: v*`), which builds + pushes the 4 GHCR images AND npm-publishes
-# `@toon-protocol/townhouse` — both from the SAME tagged commit, so the image
-# tags and the npm version are always aligned (single source of truth = the
-# semantic-release-computed version).
+# It then explicitly dispatches `publish-townhouse-images.yml` for the new tag
+# (see the "Trigger image + npm publish" step), which builds + pushes the 4 GHCR
+# images AND npm-publishes `@toon-protocol/townhouse` — both from the SAME tagged
+# commit, so the image tags and the npm version are always aligned (single source
+# of truth = the semantic-release-computed version).
+#
+# NOTE: we dispatch explicitly rather than relying on the tag's `on: push: tags`
+# trigger because semantic-release pushes the tag with GITHUB_TOKEN, and GitHub
+# does not run push-triggered workflows from a GITHUB_TOKEN-pushed ref (it DOES
+# run workflow_dispatch, which is what we use). The `on: push: tags` trigger in
+# publish-townhouse-images.yml remains for human-pushed tags.
 #
 # First run: trigger via workflow_dispatch with dry_run=true to preview the
 # computed version before the real release (the last tag is a v0.1.0-rcN
@@ -38,6 +44,12 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  # Needed to dispatch publish-townhouse-images.yml after a release (see the
+  # "Trigger image + npm publish" step). semantic-release pushes the tag with
+  # GITHUB_TOKEN, and GitHub does NOT trigger `on: push: tags` workflows from a
+  # GITHUB_TOKEN-pushed ref — but it DOES run `workflow_dispatch` triggered by
+  # GITHUB_TOKEN, so we dispatch the publish explicitly.
+  actions: write
 
 jobs:
   release:
@@ -79,8 +91,47 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm exec semantic-release --dry-run
 
+      # Record the version BEFORE the release so the next step can tell whether
+      # semantic-release actually cut a new release (it bumps + commits the
+      # townhouse package.json) and, if so, dispatch the publish for it.
+      - name: Capture pre-release version
+        id: pre
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          echo "version=$(node -p "require('./packages/townhouse/package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Semantic Release
         if: github.event.inputs.dry_run != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm exec semantic-release
+
+      # semantic-release pushes the `vX.Y.Z` tag with GITHUB_TOKEN, which does
+      # NOT trigger `publish-townhouse-images.yml` (`on: push: tags`). Dispatch
+      # it explicitly here (workflow_dispatch IS allowed from GITHUB_TOKEN) so a
+      # release auto-builds the 4 GHCR images + npm-publishes with no manual step.
+      # Skips cleanly when no release was made (version unchanged).
+      - name: Trigger image + npm publish for the new release
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          NEW="$(node -p "require('./packages/townhouse/package.json').version")"
+          OLD="${{ steps.pre.outputs.version }}"
+          if [ "$NEW" = "$OLD" ]; then
+            echo "No version change ($NEW) — semantic-release made no release. Nothing to publish."
+            exit 0
+          fi
+          echo "Released $OLD -> $NEW. Dispatching publish-townhouse-images.yml for v$NEW."
+          # The tag is freshly pushed; retry briefly until the API can resolve it.
+          for attempt in 1 2 3 4 5; do
+            if gh workflow run publish-townhouse-images.yml --ref "v$NEW" -f version="$NEW"; then
+              echo "Dispatched publish for v$NEW."
+              exit 0
+            fi
+            echo "Dispatch attempt $attempt failed (tag may not be visible yet) — retrying in 10s..."
+            sleep 10
+          done
+          echo "::error::Failed to dispatch publish-townhouse-images.yml for v$NEW after 5 attempts." >&2
+          exit 1
