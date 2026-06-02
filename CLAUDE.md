@@ -119,11 +119,11 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 
 ### Townhouse Dev Stack (28xxx)
 
-All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Contributor docs: `packages/townhouse/README.md`.
+All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Contributor docs: `packages/townhouse/CONTRIBUTING.md`.
 
 **Two separate scripts — different missions:**
 - `scripts/townhouse-dev-infra.sh` — contributor dev loop (multi-peer, deterministic keys, 28xxx ports, SOCKS5, chain devnets). Use for dashboard development.
-- `scripts/townhouse-test-infra.sh` — real-CLI E2E gate (warms image cache only; tests run the real `townhouse init`+`townhouse up` CLI against fresh config dirs). Use for pre-publish validation. Ports: 9400 (Fastify API), 9401 (connector admin). See `packages/townhouse/README.md` § "Running E2E Tests".
+- `scripts/townhouse-test-infra.sh` — real-CLI E2E gate (warms image cache only; tests run the real `townhouse init`+`townhouse up` CLI against fresh config dirs). Use for pre-publish validation. Ports: 9400 (Fastify API), 9401 (connector admin). See `packages/townhouse/CONTRIBUTING.md` § "Running E2E Tests".
 
 | Host Port | Container Port | Service |
 |-----------|---------------|---------|
@@ -188,10 +188,10 @@ All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Con
 | Dev Signal archive | `_bmad-output/dev-signals/` |
 | Dev Signal command | `.claude/commands/dev-signal.md` (invoke via `/dev-signal`) |
 | **Townhouse dev stack** | `scripts/townhouse-dev-infra.sh` + `docker-compose-townhouse-dev.yml` |
-| Townhouse dev stack docs | `packages/townhouse/README.md` § "Local Dev Loop" |
+| Townhouse dev stack docs | `packages/townhouse/CONTRIBUTING.md` § "Local Dev Loop" |
 | Townhouse dev stack fixtures | `docker/dev-fixtures/` (Mill JSON configs + README) |
 | **Townhouse real-CLI E2E** | `scripts/townhouse-test-infra.sh` (Story 21.16) |
-| Townhouse real-CLI E2E docs | `packages/townhouse/README.md` § "Running E2E Tests" |
+| Townhouse real-CLI E2E docs | `packages/townhouse/CONTRIBUTING.md` § "Running E2E Tests" |
 | **Local-HS E2E (Akash chains)** | `scripts/townhouse-e2e-local-hs.sh` + `docker-compose-e2e-local-client.yml` |
 | Local-HS E2E smoke test | `packages/townhouse/src/__integration__/local-docker-hs-paid-earnings-smoke.test.ts` (gated by `RUN_LOCAL_HS_E2E=1`) |
 | **Townhouse npm-tarball compose templates** | `packages/townhouse/compose/` (source) → `dist/compose/` (built output) |
