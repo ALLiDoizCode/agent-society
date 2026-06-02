@@ -86,7 +86,9 @@ describe('<ChainsPanel />', () => {
       }))
     );
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it('lists configured chains and shows the add form', async () => {
     render(<ChainsPanel />);
