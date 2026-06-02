@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2](https://github.com/toon-protocol/town/compare/v0.3.1...v0.3.2) (2026-06-02)
+
+### Bug Fixes
+
+* **townhouse:** clearer message when node add hits the one-per-type limit ([#72](https://github.com/toon-protocol/town/issues/72)) ([14c791e](https://github.com/toon-protocol/town/commit/14c791ea87f284da2bc4cbf643290a6ffd5b874e))
+
 ## [0.3.1](https://github.com/toon-protocol/town/compare/v0.3.0...v0.3.1) (2026-06-02)
 
 ### Bug Fixes
