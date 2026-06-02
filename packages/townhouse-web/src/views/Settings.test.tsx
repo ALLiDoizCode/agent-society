@@ -15,17 +15,6 @@ const DIRECT_STATUS: TransportStatusPayload = {
   ts: Date.now(),
 };
 
-const ATOR_OK_STATUS: TransportStatusPayload = {
-  mode: 'ator',
-  socksProxy: 'socks5h://proxy.ator.io:9050',
-  reachable: true,
-  latencyProxyMs: 120,
-  latencyDirectMs: 5,
-  lastProbedAt: Date.now(),
-  probeError: null,
-  ts: Date.now(),
-};
-
 const ATOR_DOWN_STATUS: TransportStatusPayload = {
   mode: 'ator',
   socksProxy: 'socks5h://proxy.ator.io:9050',
