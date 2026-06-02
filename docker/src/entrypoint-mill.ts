@@ -20,7 +20,11 @@
 
 import { readFileSync } from 'node:fs';
 import { startMill } from '@toon-protocol/mill';
-import type { MillConfig, MillInstance } from '@toon-protocol/mill';
+import type {
+  MillConfig,
+  MillChainProvider,
+  MillInstance,
+} from '@toon-protocol/mill';
 import type { CreateSwapHandlerConfig } from '@toon-protocol/sdk';
 
 // --- Helper: Structured JSON logging (one object per line) ---
@@ -143,17 +147,11 @@ interface CliRawConfig {
   parentPeerId?: string;
   parentAuthToken?: string;
   // chainProviders for ClaimReceiver + PerPacketClaimService init on the
-  // embedded connector. One entry per EVM chain mill plans to settle on.
-  // Shape mirrors the apex YAML chainProviders block. keyId is optional —
-  // mill defaults it to the identity-derived secp256k1 hex.
-  chainProviders?: readonly {
-    chainType: 'evm';
-    chainId: string;
-    rpcUrl: string;
-    registryAddress: string;
-    tokenAddress: string;
-    keyId?: string;
-  }[];
+  // embedded connector. One entry per chain mill plans to settle on (EVM /
+  // Solana / Mina). Shape mirrors the apex YAML chainProviders block (the
+  // connector's ChainProviderConfigEntry discriminated union). keyId is
+  // optional — mill defaults it to the identity-derived secp256k1 hex.
+  chainProviders?: readonly MillChainProvider[];
   // Embedded-connector ClaimReceiver / chainProviders signer. When set
   // (typically via SETTLEMENT_PRIVATE_KEY env), the embedded connector
   // signs claims with this key in place of the identity hex.
