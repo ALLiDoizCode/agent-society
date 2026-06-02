@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/toon-protocol/town/compare/v0.2.0...v0.3.0) (2026-06-02)
+
+### Features
+
+* **mill,sdk:** multi-chain Mill chainProviders (EVM/Solana/Mina) + SDK Mina settlement ([#70](https://github.com/toon-protocol/town/issues/70)) ([db3cb12](https://github.com/toon-protocol/town/commit/db3cb12f9cb676f655bd1a1f3b201871f7dcbaea))
+
 ## [0.2.0](https://github.com/toon-protocol/town/compare/v0.1.3...v0.2.0) (2026-06-02)
 
 ### Features
