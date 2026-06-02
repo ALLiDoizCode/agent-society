@@ -95,8 +95,7 @@ export async function loadMinaSignerClient(): Promise<
     // type-checks and runs without it installed.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lib: any = await import('mina-signer');
-    const Ctor: MinaSignerClientCtor =
-      'default' in lib ? lib.default : lib;
+    const Ctor: MinaSignerClientCtor = 'default' in lib ? lib.default : lib;
     return new Ctor({ network: MINA_NETWORK });
   } catch {
     return undefined;

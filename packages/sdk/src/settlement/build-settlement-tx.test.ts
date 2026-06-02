@@ -703,101 +703,101 @@ function makeMinaClaim(opts?: {
 describe.skipIf(!hasMinaSigner)(
   'buildSettlementTx — Mina pipeline (Story 12.8)',
   () => {
-  it('[P0] produces a bundle for a valid Mina claim when a client is provided', () => {
-    const { claim, signerAddress } = makeMinaClaim();
-    const res = buildSettlementTx({
-      claims: [claim],
-      signers: { 'mina:mainnet': { address: signerAddress } },
-      recipients: { 'mina:mainnet': claim.recipient! },
-      minaSignerClient: minaClient,
+    it('[P0] produces a bundle for a valid Mina claim when a client is provided', () => {
+      const { claim, signerAddress } = makeMinaClaim();
+      const res = buildSettlementTx({
+        claims: [claim],
+        signers: { 'mina:mainnet': { address: signerAddress } },
+        recipients: { 'mina:mainnet': claim.recipient! },
+        minaSignerClient: minaClient,
+      });
+      expect(res.rejected.length).toBe(0);
+      expect(res.bundles.length).toBe(1);
+      expect(res.bundles[0]!.chainKind).toBe('mina');
+      expect(res.bundles[0]!.channelId).toBe(claim.channelId);
+      expect(res.bundles[0]!.nonce).toBe('1');
     });
-    expect(res.rejected.length).toBe(0);
-    expect(res.bundles.length).toBe(1);
-    expect(res.bundles[0]!.chainKind).toBe('mina');
-    expect(res.bundles[0]!.channelId).toBe(claim.channelId);
-    expect(res.bundles[0]!.nonce).toBe('1');
-  });
 
-  it('[P0] rejects a Mina claim when no minaSignerClient is provided', () => {
-    const { claim, signerAddress } = makeMinaClaim();
-    const res = buildSettlementTx({
-      claims: [claim],
-      signers: { 'mina:mainnet': { address: signerAddress } },
-      recipients: { 'mina:mainnet': claim.recipient! },
-      // minaSignerClient intentionally omitted
+    it('[P0] rejects a Mina claim when no minaSignerClient is provided', () => {
+      const { claim, signerAddress } = makeMinaClaim();
+      const res = buildSettlementTx({
+        claims: [claim],
+        signers: { 'mina:mainnet': { address: signerAddress } },
+        recipients: { 'mina:mainnet': claim.recipient! },
+        // minaSignerClient intentionally omitted
+      });
+      expect(res.bundles.length).toBe(0);
+      expect(res.rejected.length).toBe(1);
+      expect(res.rejected[0]!.reason).toBe('MINA_VERIFICATION_UNSUPPORTED');
     });
-    expect(res.bundles.length).toBe(0);
-    expect(res.rejected.length).toBe(1);
-    expect(res.rejected[0]!.reason).toBe('MINA_VERIFICATION_UNSUPPORTED');
-  });
 
-  it('[P0] rejects a Mina claim signed by a different key', () => {
-    const { claim } = makeMinaClaim();
-    const other = minaClient.genKeys();
-    const res = buildSettlementTx({
-      claims: [claim],
-      signers: { 'mina:mainnet': { address: other.publicKey } },
-      recipients: { 'mina:mainnet': claim.recipient! },
-      minaSignerClient: minaClient,
+    it('[P0] rejects a Mina claim signed by a different key', () => {
+      const { claim } = makeMinaClaim();
+      const other = minaClient.genKeys();
+      const res = buildSettlementTx({
+        claims: [claim],
+        signers: { 'mina:mainnet': { address: other.publicKey } },
+        recipients: { 'mina:mainnet': claim.recipient! },
+        minaSignerClient: minaClient,
+      });
+      expect(res.bundles.length).toBe(0);
+      expect(res.rejected.length).toBe(1);
+      expect(res.rejected[0]!.reason).toBe('SIGNER_MISMATCH');
     });
-    expect(res.bundles.length).toBe(0);
-    expect(res.rejected.length).toBe(1);
-    expect(res.rejected[0]!.reason).toBe('SIGNER_MISMATCH');
-  });
 
-  it('[P0] picks the highest-nonce winner across multiple Mina claims', () => {
-    // Sign three claims on the same channel/recipient with the same key.
-    const keys = minaClient.genKeys();
-    const channelId = 'B62qChannelMulti33333333333333333333333333333';
-    const recipient = 'B62qRecipientMulti4444444444444444444444444444';
-    const claims: AccumulatedClaim[] = [1, 2, 3].map((n) => {
-      const fields = balanceProofFieldsMina(
-        channelId,
-        BigInt(n * 100),
-        BigInt(n),
-        recipient
+    it('[P0] picks the highest-nonce winner across multiple Mina claims', () => {
+      // Sign three claims on the same channel/recipient with the same key.
+      const keys = minaClient.genKeys();
+      const channelId = 'B62qChannelMulti33333333333333333333333333333';
+      const recipient = 'B62qRecipientMulti4444444444444444444444444444';
+      const claims: AccumulatedClaim[] = [1, 2, 3].map((n) => {
+        const fields = balanceProofFieldsMina(
+          channelId,
+          BigInt(n * 100),
+          BigInt(n),
+          recipient
+        );
+        const signed = minaClient.signFields(fields, keys.privateKey);
+        const sigStr =
+          typeof signed.signature === 'string'
+            ? signed.signature
+            : JSON.stringify(signed.signature);
+        return {
+          packetIndex: n - 1,
+          sourceAmount: 1_000_000n,
+          targetAmount: BigInt(n * 100),
+          claimBytes: new TextEncoder().encode(sigStr),
+          millEphemeralPubkey: '0'.repeat(64),
+          pair: MINA_PAIR,
+          receivedAt: Date.now(),
+          channelId,
+          nonce: String(n),
+          cumulativeAmount: String(n * 100),
+          recipient,
+          millSignerAddress: keys.publicKey,
+        } satisfies AccumulatedClaim;
+      });
+      const res = buildSettlementTx({
+        claims,
+        signers: { 'mina:mainnet': { address: keys.publicKey } },
+        recipients: { 'mina:mainnet': recipient },
+        minaSignerClient: minaClient,
+      });
+      expect(res.rejected.length).toBe(0);
+      expect(res.bundles.length).toBe(1);
+      expect(res.bundles[0]!.nonce).toBe('3');
+      expect(res.bundles[0]!.cumulativeAmount).toBe('300');
+      expect(res.bundles[0]!.claimsMerged).toBe(3);
+    });
+
+    it('[P0] verifyAccumulatedClaim verifies a Mina claim when a client is passed', () => {
+      const { claim, signerAddress } = makeMinaClaim();
+      const res = verifyAccumulatedClaim(
+        claim,
+        { address: signerAddress },
+        minaClient
       );
-      const signed = minaClient.signFields(fields, keys.privateKey);
-      const sigStr =
-        typeof signed.signature === 'string'
-          ? signed.signature
-          : JSON.stringify(signed.signature);
-      return {
-        packetIndex: n - 1,
-        sourceAmount: 1_000_000n,
-        targetAmount: BigInt(n * 100),
-        claimBytes: new TextEncoder().encode(sigStr),
-        millEphemeralPubkey: '0'.repeat(64),
-        pair: MINA_PAIR,
-        receivedAt: Date.now(),
-        channelId,
-        nonce: String(n),
-        cumulativeAmount: String(n * 100),
-        recipient,
-        millSignerAddress: keys.publicKey,
-      } satisfies AccumulatedClaim;
+      expect(res.valid).toBe(true);
     });
-    const res = buildSettlementTx({
-      claims,
-      signers: { 'mina:mainnet': { address: keys.publicKey } },
-      recipients: { 'mina:mainnet': recipient },
-      minaSignerClient: minaClient,
-    });
-    expect(res.rejected.length).toBe(0);
-    expect(res.bundles.length).toBe(1);
-    expect(res.bundles[0]!.nonce).toBe('3');
-    expect(res.bundles[0]!.cumulativeAmount).toBe('300');
-    expect(res.bundles[0]!.claimsMerged).toBe(3);
-  });
-
-  it('[P0] verifyAccumulatedClaim verifies a Mina claim when a client is passed', () => {
-    const { claim, signerAddress } = makeMinaClaim();
-    const res = verifyAccumulatedClaim(
-      claim,
-      { address: signerAddress },
-      minaClient
-    );
-    expect(res.valid).toBe(true);
-  });
   }
 );

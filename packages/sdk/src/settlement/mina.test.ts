@@ -203,13 +203,7 @@ describe.skipIf(!hasMinaSigner)('buildMinaSettlementTx (Story 12.8)', () => {
   it('[P0] bundle carries chain/channelId/cumulative/nonce/recipient + proof bytes', () => {
     const { claim, signerAddress } = makeSignedClaim();
     const signer: MillSignerConfig = { address: signerAddress };
-    const bundle = buildMinaSettlementTx(
-      claim,
-      signer,
-      claim.recipient!,
-      0,
-      1
-    );
+    const bundle = buildMinaSettlementTx(claim, signer, claim.recipient!, 0, 1);
     expect(bundle.chain).toBe('mina:mainnet');
     expect(bundle.chainKind).toBe('mina');
     expect(bundle.channelId).toBe(claim.channelId);

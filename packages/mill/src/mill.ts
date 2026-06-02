@@ -615,11 +615,7 @@ function validateChainProviderEntry(p: unknown, i: number): void {
   }
   const rec = p as Record<string, unknown>;
   const chainType = rec['chainType'];
-  if (
-    chainType !== 'evm' &&
-    chainType !== 'solana' &&
-    chainType !== 'mina'
-  ) {
+  if (chainType !== 'evm' && chainType !== 'solana' && chainType !== 'mina') {
     throw new MillStartError(
       'INVALID_CONFIG',
       `MillConfig.chainProviders[${i}].chainType MUST be one of 'evm' | 'solana' | 'mina' (got ${JSON.stringify(

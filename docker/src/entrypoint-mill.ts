@@ -232,7 +232,8 @@ function parseRawConfig(raw: CliRawConfig): MillConfig {
   if (raw.connectorUrl) cfg.connectorUrl = raw.connectorUrl;
   if (raw.nodeId) cfg.nodeId = raw.nodeId;
   if (raw.parentPeerId) cfg.parentPeerId = raw.parentPeerId;
-  if (raw.parentAuthToken !== undefined) cfg.parentAuthToken = raw.parentAuthToken;
+  if (raw.parentAuthToken !== undefined)
+    cfg.parentAuthToken = raw.parentAuthToken;
   if (raw.chainProviders) cfg.chainProviders = raw.chainProviders;
   if (raw.settlementPrivateKey)
     cfg.settlementPrivateKey = raw.settlementPrivateKey;
@@ -272,7 +273,7 @@ export function loadMillConfig(): MillConfig {
       // secret material (mnemonic, secretKey, channel state) in process.env
       // memory. Placed before the null-guard so JSON.parse('null') also cleans
       // up. MILL_CONFIG_PATH is intentionally NOT cleaned — a path is not secret.
-       
+
       delete process.env['MILL_CONFIG_JSON'];
       if (!rawConfig) {
         throw new Error('MILL_CONFIG_JSON parsed to null or undefined');
@@ -372,7 +373,10 @@ export function applyEnvOverlay(cfg: MillConfig): MillConfig {
   // Accept the legacy `CONNECTOR_URL` and the `TOON_`-prefixed alias used by
   // the townhouse orchestrator / E2E harness (Story 50.4), matching the other
   // TOON_-prefixed passthroughs below. CONNECTOR_URL wins when both are set.
-  if (!out.connectorUrl && (env['CONNECTOR_URL'] || env['TOON_CONNECTOR_URL'])) {
+  if (
+    !out.connectorUrl &&
+    (env['CONNECTOR_URL'] || env['TOON_CONNECTOR_URL'])
+  ) {
     out.connectorUrl = env['CONNECTOR_URL'] ?? env['TOON_CONNECTOR_URL'];
   }
   if (!out.ilpAddress && env['TOON_ILP_ADDRESS']) {
@@ -384,7 +388,10 @@ export function applyEnvOverlay(cfg: MillConfig): MillConfig {
   if (!out.parentPeerId && env['TOON_PARENT_PEER_ID']) {
     out.parentPeerId = env['TOON_PARENT_PEER_ID'];
   }
-  if (out.parentAuthToken === undefined && env['TOON_PARENT_AUTH_TOKEN'] !== undefined) {
+  if (
+    out.parentAuthToken === undefined &&
+    env['TOON_PARENT_AUTH_TOKEN'] !== undefined
+  ) {
     out.parentAuthToken = env['TOON_PARENT_AUTH_TOKEN'];
   }
 
