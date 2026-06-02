@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3](https://github.com/toon-protocol/town/compare/v0.1.2...v0.1.3) (2026-06-02)
+
+### Bug Fixes
+
+* **release:** use [skip release] not [skip ci] so the release tag triggers publish ([#66](https://github.com/toon-protocol/town/issues/66)) ([b1eb03a](https://github.com/toon-protocol/town/commit/b1eb03a833c7d37f82f482f4ae279d8b1c562107))
+* **townhouse:** unbrick townhouse-api image + dashboard/hs-up UX polish ([#67](https://github.com/toon-protocol/town/issues/67)) ([ad282c8](https://github.com/toon-protocol/town/commit/ad282c833f181cca65eee98e90faf44d13a08ca3)), closes [#7](https://github.com/toon-protocol/town/issues/7)
+
 ## [0.1.2](https://github.com/toon-protocol/town/compare/v0.1.1...v0.1.2) (2026-06-02)
 
 ### Bug Fixes
