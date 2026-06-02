@@ -4,7 +4,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, readFileSync, statSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  readFileSync,
+  statSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeHsNodeEnvFile } from './env-writer.js';
@@ -32,7 +38,9 @@ describe('writeHsNodeEnvFile', () => {
     expect(body).toContain('EVM_CHAIN=base-mainnet');
     expect(body).toContain('EVM_RPC_URL=https://mainnet.base.org');
     expect(body).toContain('EVM_CHAIN_ID=8453');
-    expect(body).toContain('SOLANA_RPC_URL=https://api.mainnet-beta.solana.com');
+    expect(body).toContain(
+      'SOLANA_RPC_URL=https://api.mainnet-beta.solana.com'
+    );
     expect(keys).toContain('EVM_CHAIN');
     // Never a localhost RPC (the cause of the disconnected boot-loop).
     expect(body).not.toMatch(/localhost|127\.0\.0\.1/);

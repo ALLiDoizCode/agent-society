@@ -6,12 +6,7 @@
 import type { ChainProviderEntry, TownhouseConfig } from './schema.js';
 
 const VALID_CHAIN_TYPES = new Set(['evm', 'solana', 'mina']);
-const VALID_NETWORK_MODES = new Set([
-  'mainnet',
-  'testnet',
-  'devnet',
-  'custom',
-]);
+const VALID_NETWORK_MODES = new Set(['mainnet', 'testnet', 'devnet', 'custom']);
 const HEX_ADDRESS = /^0x[a-fA-F0-9]+$/;
 
 class ConfigValidationError extends Error {

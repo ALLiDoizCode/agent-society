@@ -60,7 +60,9 @@ export function registerNetworkRoutes(
   // ── GET /api/network ──────────────────────────────────────────────────────
   app.get('/api/network', async (_request, reply) => {
     const network = deps.config.network ?? 'mainnet';
-    return reply.status(200).send({ ...networkView(network, deps.config), ts: Date.now() });
+    return reply
+      .status(200)
+      .send({ ...networkView(network, deps.config), ts: Date.now() });
   });
 
   // ── PATCH /api/network ────────────────────────────────────────────────────

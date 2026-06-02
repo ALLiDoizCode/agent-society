@@ -26,7 +26,10 @@ import {
   existsSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { resolveNetworkProfile, type ChainProviderConfigEntry } from '@toon-protocol/core';
+import {
+  resolveNetworkProfile,
+  type ChainProviderConfigEntry,
+} from '@toon-protocol/core';
 import type { TownhouseConfig } from '../config/schema.js';
 
 /** Result of {@link writeHsNodeEnvFile}. */

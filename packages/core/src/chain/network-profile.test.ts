@@ -3,10 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  resolveNetworkProfile,
-  RELAY_ONLY_CHAIN,
-} from './network-profile.js';
+import { resolveNetworkProfile, RELAY_ONLY_CHAIN } from './network-profile.js';
 import type { ChainProviderConfigEntry } from './chain-config.js';
 
 describe('resolveNetworkProfile', () => {
@@ -23,7 +20,9 @@ describe('resolveNetworkProfile', () => {
     });
 
     it('uses public Solana mainnet-beta + USDC mint', () => {
-      expect(p.nodeEnv.SOLANA_RPC_URL).toBe('https://api.mainnet-beta.solana.com');
+      expect(p.nodeEnv.SOLANA_RPC_URL).toBe(
+        'https://api.mainnet-beta.solana.com'
+      );
       expect(p.nodeEnv.SOLANA_USDC_MINT).toBe(
         'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
       );

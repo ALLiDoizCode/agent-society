@@ -89,13 +89,15 @@ export interface NetworkProfile {
 export const RELAY_ONLY_CHAIN = 'none';
 
 /** Primary + secondary EVM presets per derivable tier (Base is primary). */
-const EVM_TIER: Record<DerivableTier, { primary: ChainName; also: ChainName[] }> =
-  {
-    mainnet: { primary: 'base-mainnet', also: ['arbitrum-one'] },
-    testnet: { primary: 'base-sepolia', also: ['arbitrum-sepolia'] },
-    // EVM has no public devnet → the public Sepolia testnets serve the devnet tier.
-    devnet: { primary: 'base-sepolia', also: ['arbitrum-sepolia'] },
-  };
+const EVM_TIER: Record<
+  DerivableTier,
+  { primary: ChainName; also: ChainName[] }
+> = {
+  mainnet: { primary: 'base-mainnet', also: ['arbitrum-one'] },
+  testnet: { primary: 'base-sepolia', also: ['arbitrum-sepolia'] },
+  // EVM has no public devnet → the public Sepolia testnets serve the devnet tier.
+  devnet: { primary: 'base-sepolia', also: ['arbitrum-sepolia'] },
+};
 
 interface SolanaTierCfg {
   rpcUrl: string;
@@ -244,9 +246,7 @@ export function resolveNetworkProfile(
 }
 
 /** Resolve the `custom` mode from operator-supplied providers. */
-function resolveCustom(
-  providers: ChainProviderConfigEntry[]
-): NetworkProfile {
+function resolveCustom(providers: ChainProviderConfigEntry[]): NetworkProfile {
   const status: NetworkFamilyStatus = {
     evm: 'unconfigured',
     solana: 'unconfigured',
