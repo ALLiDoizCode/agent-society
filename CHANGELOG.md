@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0](https://github.com/toon-protocol/town/compare/v0.5.4...v0.6.0) (2026-06-03)
+
+### Features
+
+* **client:** add requestBlobStorage helper for kind:5094 Arweave blob uploads ([#92](https://github.com/toon-protocol/town/issues/92)) ([f666b38](https://github.com/toon-protocol/town/commit/f666b389c67d06f42990f66ac295e7d29dea780b))
+
+### Bug Fixes
+
+* **mill:** readable swap-handler logs + clarify mnemonic-derived swap recipient pubkey ([#94](https://github.com/toon-protocol/town/issues/94)) ([977fc91](https://github.com/toon-protocol/town/commit/977fc914b2a0b65e113e56e0f002b91764cd967a)), closes [#88](https://github.com/toon-protocol/town/issues/88) [#87](https://github.com/toon-protocol/town/issues/87) [#80](https://github.com/toon-protocol/town/issues/80) [#88](https://github.com/toon-protocol/town/issues/88)
+* **townhouse:** populate NODE_NOSTR_PUBKEY in child node containers ([#81](https://github.com/toon-protocol/town/issues/81)) ([#95](https://github.com/toon-protocol/town/issues/95)) ([07a017f](https://github.com/toon-protocol/town/commit/07a017f6df167a7335eae5d6dc25558cc256ee27))
+
 ## [0.5.4](https://github.com/toon-protocol/town/compare/v0.5.3...v0.5.4) (2026-06-03)
 
 ### Bug Fixes
