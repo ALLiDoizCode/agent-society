@@ -34,16 +34,28 @@ if ! [[ "$ADDRESS" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
   exit 1
 fi
 
-# Resolve RPC URL: leases.json first, then local devnet fallback.
-RPC_URL=""
-if [ -f "$LEASES_FILE" ]; then
-  RPC_URL="$(jq -r '.anvil.url // ""' "$LEASES_FILE")"
-fi
-if [ -z "$RPC_URL" ]; then
-  RPC_URL="http://localhost:28545"
-  echo "[faucet-evm] No Akash lease — using local devnet $RPC_URL" >&2
+# Resolve RPC URL. Precedence:
+#   1. Explicit override env (EVM_RPC_URL / ANVIL_HOST_RPC) — always wins.
+#   2. deploy/akash/leases.json (a live Akash lease).
+#   3. Local devnet fallback (http://localhost:28545).
+# The explicit override exists so operators running the LOCAL dev/HS stack are
+# not silently redirected to a stale Akash lease left in leases.json. When a
+# lease is used, warn loudly so the operator notices they are funding a remote
+# chain (set FAUCET_FORCE_LEASE=1 to suppress the warning).
+RPC_URL="${EVM_RPC_URL:-${ANVIL_HOST_RPC:-}}"
+if [ -n "$RPC_URL" ]; then
+  echo "[faucet-evm] Using RPC override $RPC_URL (EVM_RPC_URL/ANVIL_HOST_RPC)" >&2
 else
-  echo "[faucet-evm] Using Akash lease $RPC_URL" >&2
+  if [ -f "$LEASES_FILE" ]; then
+    RPC_URL="$(jq -r '.anvil.url // ""' "$LEASES_FILE")"
+  fi
+  if [ -z "$RPC_URL" ]; then
+    RPC_URL="http://localhost:28545"
+    echo "[faucet-evm] No RPC override or Akash lease — using local devnet $RPC_URL" >&2
+  else
+    echo "[faucet-evm] WARNING: funding a REMOTE Akash lease $RPC_URL (from $LEASES_FILE)." >&2
+    echo "[faucet-evm] WARNING: to target the local devnet instead, set EVM_RPC_URL=http://localhost:28545 (or ANVIL_HOST_RPC)." >&2
+  fi
 fi
 
 # Anvil's deterministic deployer (account[0]) has the entire Mock USDC supply.
