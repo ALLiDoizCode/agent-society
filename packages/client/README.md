@@ -34,28 +34,40 @@ pnpm add @toon-protocol/client @toon-protocol/core @toon-protocol/relay nostr-to
 
 ## Prerequisites
 
-The client requires external services. Use the SDK E2E infrastructure for local development:
+**Reading is free** — to subscribe/query you need nothing but this package. To **write (pay)** you need:
 
-```bash
-# Start SDK E2E infrastructure
-./scripts/sdk-e2e-infra.sh up
+- **Node.js ≥ 20** — these packages are ESM.
+- **A TOON apex to pay.** You don't run any node yourself; you connect to a running
+  [`@toon-protocol/townhouse`](https://www.npmjs.com/package/@toon-protocol/townhouse) apex (or any
+  TOON connector) and pay it. From its operator you need:
+  - a **connector endpoint** — either an HTTP `connectorUrl`, or an ATOR `.anon` BTP endpoint reached
+    through a **SOCKS5h** proxy (see [Connecting over `.anon`](#connecting-to-an-apex-over-anon));
+  - a **settlement-chain RPC URL** and a **funded key** on that chain, so the client can open a
+    payment channel and sign EIP-712 claims;
+  - the **token** and **TokenNetwork** contract addresses that apex accepts on that chain (e.g. USDC).
 
-# Verify services are healthy
-curl http://localhost:19100/health  # Peer 1 BLS
-curl http://localhost:19110/health  # Peer 2 BLS
-# Nostr relays on ws://localhost:19700 and ws://localhost:19710 (WebSocket, no HTTP endpoint)
+These coordinates go straight into the [`ToonClient` config](#quick-start) below.
 
-# Stop infrastructure
-./scripts/sdk-e2e-infra.sh down
-```
-
-| Service          | Port  | Purpose                                             |
-| ---------------- | ----- | --------------------------------------------------- |
-| **Anvil**        | 18545 | Local EVM chain (chain ID 31337)                    |
-| **Peer 1 BLS**   | 19100 | Validates events, calculates pricing, stores events |
-| **Peer 1 Relay** | 19700 | WebSocket relay for peer discovery (kind:10032)     |
-| **Peer 2 BLS**   | 19110 | Validates events, calculates pricing, stores events |
-| **Peer 2 Relay** | 19710 | WebSocket relay for peer discovery (kind:10032)     |
+> **Local development (from a clone of this repo, not the npm package).** To try the client
+> end-to-end against a throwaway local network, start the monorepo's SDK E2E stack — Anvil + two peer
+> nodes + relays. This script ships with the repo, **not** the published package:
+>
+> ```bash
+> ./scripts/sdk-e2e-infra.sh up     # start (Ctrl-C-safe; `down` to stop)
+> curl http://localhost:19100/health   # peer 1 health
+> ./scripts/sdk-e2e-infra.sh down   # stop
+> ```
+>
+> | Service          | Port  | Purpose                                             |
+> | ---------------- | ----- | --------------------------------------------------- |
+> | **Anvil**        | 18545 | Local EVM chain (chain ID 31337)                    |
+> | **Peer 1 BLS**   | 19100 | Validates events, calculates pricing, stores events |
+> | **Peer 1 Relay** | 19700 | WebSocket relay for peer discovery (kind:10032)     |
+> | **Peer 2 BLS**   | 19110 | Validates events, calculates pricing, stores events |
+> | **Peer 2 Relay** | 19710 | WebSocket relay for peer discovery (kind:10032)     |
+>
+> The Quick Start below is wired for this local stack (chain `evm:anvil:31337`, TokenNetwork
+> `0xCafac3dD…052c`); swap in your apex's real coordinates for any other network.
 
 ---
 
