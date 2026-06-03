@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2](https://github.com/toon-protocol/town/compare/v0.5.1...v0.5.2) (2026-06-03)
+
+### Bug Fixes
+
+* **townhouse:** wire parent↔child free-routing + DVM/mill job intake ([#76](https://github.com/toon-protocol/town/issues/76)) ([70d1b9f](https://github.com/toon-protocol/town/commit/70d1b9f49bacead43c6d46b7f8cb26f7a696b796))
+
 ## [0.5.1](https://github.com/toon-protocol/town/compare/v0.5.0...v0.5.1) (2026-06-03)
 
 ### Bug Fixes
