@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4](https://github.com/toon-protocol/town/compare/v0.5.3...v0.5.4) (2026-06-03)
+
+### Bug Fixes
+
+* **core:** pin F01 swap-handler reject code to invalid_request (F00) ([#90](https://github.com/toon-protocol/town/issues/90)) ([101714c](https://github.com/toon-protocol/town/commit/101714cee00b7ad47df3e4f0eea652266033c9d6)), closes [#86](https://github.com/toon-protocol/town/issues/86)
+* **infra:** let faucet-evm.sh honor EVM_RPC_URL/ANVIL_HOST_RPC over stale Akash lease ([#85](https://github.com/toon-protocol/town/issues/85)) ([7ef89b9](https://github.com/toon-protocol/town/commit/7ef89b9c3ad8271a7acc895b6f0fc9f66cbc4f61)), closes [#83](https://github.com/toon-protocol/town/issues/83)
+* **infra:** point Mina dev healthcheck + host port at GraphQL 3085 ([#84](https://github.com/toon-protocol/town/issues/84)) ([dc26462](https://github.com/toon-protocol/town/commit/dc2646228f079418fb91b61d7f99aa2ebdfd40db)), closes [#79](https://github.com/toon-protocol/town/issues/79)
+* **townhouse-dev:** bootstrap Solana Mock USDC mint on dev stack ([#82](https://github.com/toon-protocol/town/issues/82)) ([#93](https://github.com/toon-protocol/town/issues/93)) ([3331e0a](https://github.com/toon-protocol/town/commit/3331e0a6ff7b364daf464767e4f2e743839fe2b9))
+
 ## [0.5.3](https://github.com/toon-protocol/town/compare/v0.5.2...v0.5.3) (2026-06-03)
 
 ### Bug Fixes
