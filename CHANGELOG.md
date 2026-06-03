@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1](https://github.com/toon-protocol/town/compare/v0.5.0...v0.5.1) (2026-06-03)
+
+### Bug Fixes
+
+* **core:** custom dev-chain EVM is anvil chain-id 31337 (not 31338) ([#75](https://github.com/toon-protocol/town/issues/75)) ([9c56d69](https://github.com/toon-protocol/town/commit/9c56d69c9380e88655190f245a7a31f8c95a4f94))
+
 ## [0.5.0](https://github.com/toon-protocol/town/compare/v0.4.0...v0.5.0) (2026-06-03)
 
 ### Features
