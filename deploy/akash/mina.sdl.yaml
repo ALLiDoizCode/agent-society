@@ -1,0 +1,84 @@
+---
+# Town MINA Devnet — Mina lightnet on Akash Network
+#
+# Deploys o1labs' single-node Mina lightnet (the same image the local dev
+# stack uses in docker-compose-townhouse-dev.yml / docker-compose-sdk-e2e.yml).
+# This is a standalone devnet: there is NO peer network to sync with, so the
+# node only needs to bring its GraphQL daemon up — it does not wait to reach a
+# global SYNCED consensus state. The deploy probe (probe_mina_graphql in
+# scripts/akash-deploy.sh) treats "GraphQL answers {syncStatus}" as healthy by
+# default; export MINA_WAIT_SYNCED=1 to block on a full SYNCED status instead.
+#
+# Image: o1labs/mina-local-network:compatible-latest-lightnet
+#   External upstream image, pulled directly — there is no custom Dockerfile
+#   and no cmd_build entry for Mina (unlike akash-anvil / akash-solana).
+#
+# State: lightnet runs an ephemeral single-node network in the container's
+# writable layer. Restart/redeploy = fresh chain. PROOF_LEVEL=none keeps
+# block production cheap so the daemon comes up fast on constrained providers.
+#
+# Resources: the official Lightnet docs require ~4.5 GB RAM to *start up* (the
+# daemon loads the genesis proof system during boot) and 1.5-2 GB to operate.
+# We allocate 6Gi so the daemon is not OOM-killed during genesis — a 4Gi cap
+# (~4.29 GB) sits below the 4.5 GB startup floor and wedges the boot: the
+# container stays "running" while the daemon dies and never opens its ports.
+# 4 CPU units shorten the (CPU-bound) genesis bootstrap. RUN_ARCHIVE_NODE=false
+# already drops the archive/PostgreSQL/Archive-Node-API trio to save resources.
+#
+# Pricing: 8000 uakt per block (~$15-20/mo) — heavier than Solana on CPU+RAM;
+# the higher bid ceiling also keeps the 6Gi/4-CPU ask from starving for bids.
+
+version: "2.0"
+
+services:
+  mina:
+    image: o1labs/mina-local-network:compatible-latest-lightnet
+    env:
+      # Copied verbatim from the dev-compose service so on-Akash behaviour
+      # matches local dev. PROOF_LEVEL=none + no archive node = fast boot.
+      - NETWORK_TYPE=single-node
+      - PROOF_LEVEL=none
+      - LOG_LEVEL=Info
+      - RUN_ARCHIVE_NODE=false
+      - SLOT_TIME=20000
+    expose:
+      # GraphQL (3101) — `as: 80` triggers Akash's L7 HTTPS ingress so HTTPS
+      # consumers can POST GraphQL queries without mixed-content blocking.
+      # This is the primary URL deploy_sdl resolves (await_lease_ready Path B).
+      - port: 3101
+        as: 80
+        proto: tcp
+        to:
+          - global: true
+      # Accounts Manager (8181) — plain global TCP (NO `as: 80`). Kept off the
+      # L7 ingress on purpose: a second `as: 80` expose would add a second
+      # ingress hostname and make `uris[0]` ordering ambiguous (which one is
+      # GraphQL?). As a forwarded TCP port it gets its own host:externalPort
+      # that cmd_mina captures separately into leases.json.
+      - port: 8181
+        proto: tcp
+        to:
+          - global: true
+
+profiles:
+  compute:
+    mina:
+      resources:
+        cpu:
+          units: 4
+        memory:
+          size: 6Gi
+        storage:
+          - size: 8Gi
+  placement:
+    dcloud:
+      pricing:
+        mina:
+          denom: uakt
+          amount: 8000
+
+deployment:
+  mina:
+    dcloud:
+      profile: mina
+      count: 1

@@ -18,15 +18,6 @@
     "image_digest": "",
     "deployed_at": "2026-05-07T03:12:54Z"
   },
-  "solana": {
-    "dseq": "27086990",
-    "provider": "akash1hgulk6aekakqzc0v6wukrd3dy9n90f5gkl4ezk",
-    "host": "h3a2fa5rqhcd3cr30c5ioniemo.ingress.h4i-dedicated.eu-sw-2.digitalfrontier.so",
-    "port": 443,
-    "url": "https://h3a2fa5rqhcd3cr30c5ioniemo.ingress.h4i-dedicated.eu-sw-2.digitalfrontier.so",
-    "image_digest": "",
-    "deployed_at": "2026-06-01T18:37:28Z"
-  },
   "foreign-toon-client": {
     "dseq": "26909769",
     "provider": "akash1erl805eenh9e2ju9c48cnkd4ee9sh46ran9t7m",
@@ -36,15 +27,6 @@
     "image_digest": "sha256:571e0e66920b206b34d63bc08eabb456bab410b2586b38824b18cec3d9044cf8",
     "deployed_at": "2026-05-20T15:57:27Z"
   },
-  "anvil": {
-    "dseq": "27086976",
-    "provider": "akash1st7fqtuqk6hj06fkkavq0fxtw0w9sm4zzt3r5g",
-    "host": "02ootvur9lejh4co4rbdnu22u0.ingress.rtgroup.com",
-    "port": 443,
-    "url": "https://02ootvur9lejh4co4rbdnu22u0.ingress.rtgroup.com",
-    "image_digest": "",
-    "deployed_at": "2026-06-01T18:36:10Z"
-  },
   "faucet": {
     "dseq": "26923231",
     "provider": "akash175llqyjvxfle9qwt740vm46772dzaznpzgm576",
@@ -53,5 +35,32 @@
     "url": "https://4s49j3n3u9cbfae8oj9va7mufc.ingress.cpu.aesservices.net",
     "image_digest": "sha256:bc115094147d239fec6c959764f5f16cb5b7f7c0bdc2ee3246d25c5f6bab7f10",
     "deployed_at": "2026-05-21T14:00:47Z"
+  },
+  "solana": {
+    "dseq": "1780496005054",
+    "provider": "akash1rja3y2ctj3tzmesvh0zfhzzx95rfjw405hwt8d",
+    "host": "qc9r8gfrn198p8fqmg09vhcn0s.ingress.pronto-ai.pp.ua",
+    "port": 443,
+    "url": "https://qc9r8gfrn198p8fqmg09vhcn0s.ingress.pronto-ai.pp.ua",
+    "image_digest": "",
+    "deployed_at": "2026-06-03T14:14:29Z"
+  },
+  "mina": {
+    "dseq": "1780497999255",
+    "provider": "akash1s3hq36mpas4nmkqasn7fgwhs9968cgl3u5esnw",
+    "host": "je3f67sv31ep79n206rlqu7eug.ingress.froggy-servers.com",
+    "port": 443,
+    "url": "https://je3f67sv31ep79n206rlqu7eug.ingress.froggy-servers.com",
+    "image_digest": "",
+    "deployed_at": "2026-06-03T14:47:46Z"
+  },
+  "anvil": {
+    "dseq": "1780498592601",
+    "provider": "akash1s3hq36mpas4nmkqasn7fgwhs9968cgl3u5esnw",
+    "host": "i7r2gcmeatbtj02gmaqufktad8.ingress.froggy-servers.com",
+    "port": 443,
+    "url": "https://i7r2gcmeatbtj02gmaqufktad8.ingress.froggy-servers.com",
+    "image_digest": "",
+    "deployed_at": "2026-06-03T14:57:36Z"
   }
 }

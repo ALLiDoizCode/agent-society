@@ -123,6 +123,17 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 2. If it fails, see `packages/sdk/CONNECTOR_MIGRATION.md` for the version-to-version contract mapping and migration steps
 3. Update both the canary and the migration doc when bumping `@toon-protocol/connector`
 
+**Akash deploys (`scripts/akash-deploy.sh`) failing with `require_env AKASH_CONSOLE_API_KEY`:**
+
+Akash uses the Console managed-wallet REST API (`x-api-key` header), not a mnemonic. The key (format `ac.sk.production.*`) is exported in `~/.bashrc`, but `.bashrc` returns early for non-interactive shells, so it is NOT present in scripted/agent shells. Load it explicitly before running the deploy script:
+
+```bash
+eval "$(grep -E '^export AKASH_CONSOLE_API_KEY=' ~/.bashrc)"
+./scripts/akash-deploy.sh <target>
+```
+
+(Create/rotate keys at https://console.akash.network → profile → API Keys. Override the endpoint with `AKASH_CONSOLE_API_URL`; default is `https://console-api.akash.network`.)
+
 **Port conflicts:** See `_bmad-output/project-context.md` section "Deployment" for full port allocation table. Key ranges:
 
 - SDK E2E: Anvil 18545, Peer1 19000/19100/19700, Peer2 19010/19110/19710
