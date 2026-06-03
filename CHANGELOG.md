@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/toon-protocol/town/compare/v0.4.0...v0.5.0) (2026-06-03)
+
+### Features
+
+* **core,townhouse:** custom network mode accepts RPC URLs (--evm-url/--sol-url) ([#74](https://github.com/toon-protocol/town/issues/74)) ([34f2aec](https://github.com/toon-protocol/town/commit/34f2aeccd2e4d1991599fccb581aa7fbda95f04f))
+
 ## [0.4.0](https://github.com/toon-protocol/town/compare/v0.3.2...v0.4.0) (2026-06-02)
 
 ### Features
