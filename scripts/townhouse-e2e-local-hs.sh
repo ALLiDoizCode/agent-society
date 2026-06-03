@@ -2,12 +2,12 @@
 # Local-Docker TOON Client ↔ Townhouse HS E2E (via public ATOR, Akash devnet chains)
 #
 # Brings up a local `townhouse hs up` apex + an isolated local Docker container
-# running the 49.3 foreign-toon-client image. The two halves live on separate
+# running the 49.3 toon-client image. The two halves live on separate
 # Docker networks (townhouse-hs-net + e2e-client-net) and can only reach each
 # other through the public ATOR network via the pod's in-process anon SOCKS5.
 #
 # Akash chains (anvil + solana + faucet) remain consumed — but the unstable
-# foreign-client pod that bit Story 49.4 is replaced with a local container we
+# toon-client pod that bit Story 49.4 is replaced with a local container we
 # control.
 #
 # Usage:
@@ -52,6 +52,10 @@ TOWNHOUSE_API_URL="http://127.0.0.1:28090"
 HS_NETWORK="townhouse-hs-net"
 CLIENT_NETWORK="e2e-client-net"
 CLIENT_CONTAINER="toon-client-e2e"
+# Image the compose file runs. `up --local` rebuilds this tag from the working
+# tree (docker/Dockerfile.toon-client) instead of pulling the published :demo.
+CLIENT_IMAGE="ghcr.io/toon-protocol/toon-client:demo"
+LOCAL_BUILD="${LOCAL_BUILD:-0}"
 HS_CONTAINERS=(
   townhouse-hs-connector
   townhouse-hs-api
@@ -218,7 +222,7 @@ probe_sol_rpc() {
 probe_faucet() {
   local label="$1" url="$2" hint="$3"
   # Faucet exposes GET /health (no 'z') — verified against the live Akash faucet
-  # 2026-05-20: returns {status:"ok",tokenReady:true,...}. The foreign-pod uses
+  # 2026-05-20: returns {status:"ok",tokenReady:true,...}. The toon-client uses
   # /healthz (with z); the faucet is a different service with a different conv.
   local body
   body=$(curl -sfk --max-time 10 "$url/health" 2>&1) \
@@ -603,10 +607,27 @@ down_townhouse_hs() {
 # Local client container lifecycle
 # ───────────────────────────────────────────────────────────────────────────────
 
+# Build the toon-client image from the working tree (real npm-consumer build,
+# docker/Dockerfile.toon-client) and tag it as $CLIENT_IMAGE so the compose file
+# runs the freshly-built image. Used by `up --local`.
+build_local_client_image() {
+  log "Building $CLIENT_IMAGE from working tree (docker/Dockerfile.toon-client)…"
+  DOCKER_BUILDKIT=1 docker build \
+    -f "$REPO_ROOT/docker/Dockerfile.toon-client" \
+    -t "$CLIENT_IMAGE" \
+    "$REPO_ROOT" \
+    || die "local toon-client image build failed"
+}
+
 up_local_client() {
-  log "Pulling foreign-toon-client image…"
-  docker pull ghcr.io/toon-protocol/akash-foreign-toon-client:demo 2>&1 | tail -3 || \
-    warn "image pull failed (will use local cache if present)"
+  if [[ "$LOCAL_BUILD" == "1" ]]; then
+    # Working-tree build — do NOT pull (it would overwrite the local image).
+    build_local_client_image
+  else
+    log "Pulling toon-client image…"
+    docker pull "$CLIENT_IMAGE" 2>&1 | tail -3 || \
+      warn "image pull failed (will use local cache if present)"
+  fi
 
   # Force a CLEAN start. Every restart cycles ephemeral keys; if we leave a
   # half-funded container running, the funding step will target stale keys.
@@ -848,6 +869,11 @@ EOF
 # ───────────────────────────────────────────────────────────────────────────────
 
 VERB="${1:-help}"
+# `up --local` rebuilds the toon-client image from the working tree (instead of
+# pulling :demo). Accept the flag in either order.
+for arg in "$@"; do
+  [[ "$arg" == "--local" ]] && LOCAL_BUILD=1
+done
 case "$VERB" in
   up)      cmd_up ;;
   down)    cmd_down ;;
@@ -859,12 +885,14 @@ case "$VERB" in
     cat >&2 <<EOF
 Local-Docker TOON Client ↔ Townhouse HS E2E (Akash devnet chains)
 
-  bash $0 up        Bring up the whole stack (~3-5min cold boot)
-  bash $0 smoke     Drive one publish + show earnings (manual)
-  bash $0 status    Show container + health
-  bash $0 fund      Re-drip faucet for apex + town
-  bash $0 down      Stop containers, leave volumes
-  bash $0 down-v    Stop containers + remove volumes + state dir
+  bash $0 up           Bring up the whole stack (~3-5min cold boot; pulls toon-client:demo)
+  bash $0 up --local   Same, but BUILD toon-client from the working tree first
+                       (docker/Dockerfile.toon-client) and skip the registry pull
+  bash $0 smoke        Drive one publish + show earnings (manual)
+  bash $0 status       Show container + health
+  bash $0 fund         Re-drip faucet for apex + town
+  bash $0 down         Stop containers, leave volumes
+  bash $0 down-v       Stop containers + remove volumes + state dir
 
 State: $TOWNHOUSE_HOME
 Compose: $COMPOSE_FILE

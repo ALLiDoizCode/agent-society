@@ -1,13 +1,13 @@
-# Local-Docker E2E foreign client (parallel to 49.4 Akash deployment)
+# Local-Docker E2E toon-client (parallel to 49.4 Akash deployment)
 #
-# Brings up the 49.3 foreign-toon-client image as a LOCAL Docker container on
+# Brings up the 49.3 toon-client image as a LOCAL Docker container on
 # an isolated network. Pair with `townhouse hs up` running on the same host to
 # exercise the full paid-publish → earnings loop without depending on Akash
 # provider stability for the client itself.
 #
 # Architecture:
 #   - Container runs the published 49.3 image VERBATIM
-#     (ghcr.io/toon-protocol/akash-foreign-toon-client:demo)
+#     (ghcr.io/toon-protocol/toon-client:demo)
 #   - Network `e2e-client-net` is a separate bridge with NO direct link to
 #     `townhouse-hs-net`. The two halves can only reach each other through the
 #     public ATOR network (via the pod's in-process anon SOCKS5 daemon).
@@ -32,7 +32,7 @@ networks:
 
 services:
   toon-client-e2e:
-    image: ghcr.io/toon-protocol/akash-foreign-toon-client:demo
+    image: ghcr.io/toon-protocol/toon-client:demo
     container_name: toon-client-e2e
     networks: [e2e-client-net]
     restart: unless-stopped
@@ -51,7 +51,7 @@ services:
       PUBLISH_RATE_LIMIT_PER_MIN: "30"
       LOG_LEVEL:                  "info"
 
-      # Route through public ATOR proxies. NOTE: the foreign-pod entrypoint only
+      # Route through public ATOR proxies. NOTE: the toon-client entrypoint only
       # uses the FIRST proxy in this list (no runtime fallback yet) — comma-
       # separated form is for forward-compat. Put a known-good proxy FIRST.
       # Three known instances (per packages/client/src/transport/socks5-public.integration.test.ts):

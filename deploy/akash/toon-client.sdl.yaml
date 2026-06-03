@@ -1,5 +1,5 @@
 ---
-# Persistent Akash Foreign-TOON-Client Pod (Story 49.3)
+# Persistent Akash TOON-Client Pod (Story 49.3)
 #
 # Long-lived Akash deployment that wraps 49.1's proven in-process publish flow
 # behind a Fastify HTTP control plane. On boot, the pod:
@@ -20,14 +20,14 @@
 #   GET  /signer-info   — same + transport details (PUBLIC keys only)
 #   POST /publish       — { event, targetHostname } → 202 { eventId, claimHash, ... }
 #
-# Image: ghcr.io/toon-protocol/akash-foreign-toon-client:demo
-#   Built from docker/Dockerfile.foreign-toon-client with the repo root as
+# Image: ghcr.io/toon-protocol/toon-client:demo
+#   Built from docker/Dockerfile.toon-client with the repo root as
 #   build context so the entrypoint bundle can be esbuild'ed from
-#   docker/src/entrypoint-foreign-pod.ts.
+#   docker/src/entrypoint-toon-client.ts.
 #
 # Lease lifecycle: PERSISTENT (NOT ephemeral per CI run). The pod amortizes
 # the ~30-90s anon transport bootstrap across all callers. See
-# _bmad-output/implementation-artifacts/49-3-persistent-akash-foreign-client-pod.md
+# _bmad-output/implementation-artifacts/49-3-persistent-akash-toon-client-pod.md
 # § "Persistent-Deployment Discipline" + "Story Close-Out Checklist" for the
 # named lease owner + monthly AKT-burn budget. Sunset reminder filed in
 # _bmad-output/implementation-artifacts/deferred-work.md § "Epic 49 sunset
@@ -42,7 +42,7 @@
 # Pricing: 1500 uakt per block (~$3-5/mo). Slightly larger than the faucet
 # lease because the local anon daemon + viem clients need ~1Gi RAM headroom.
 #
-# Template tokens substituted by scripts/akash-deploy.sh cmd_foreign_toon_client:
+# Template tokens substituted by scripts/akash-deploy.sh cmd_toon_client:
 #   __FAUCET_URL__     - default: leases.faucet.url (story 49.2)
 #   __EVM_RPC_URL__    - default: leases.anvil.url
 #   __SOLANA_RPC_URL__ - default: leases.solana.url
@@ -54,8 +54,8 @@
 version: "2.0"
 
 services:
-  foreign-toon-client:
-    image: ghcr.io/toon-protocol/akash-foreign-toon-client:demo
+  toon-client:
+    image: ghcr.io/toon-protocol/toon-client:demo
     env:
       # Faucet ingress + chain RPCs templated from leases.json at deploy time.
       - FAUCET_URL=__FAUCET_URL__
@@ -66,7 +66,7 @@ services:
       # Epic 23 D23-003). The smoke test's beforeAll SOCKS5 probe confirms
       # the proxy can reach the local apex .anon HS before POST /publish runs.
       # The pod picks the first URL from this comma-separated list.
-      # See docker/src/entrypoint-foreign-pod.ts for the ator-onion fallback.
+      # See docker/src/entrypoint-toon-client.ts for the ator-onion fallback.
       - ANYONE_PROXY_URLS=socks5h://5.78.181.0:9052
       # Rate limit per source IP (AC #9, story 49.3). Generous for a
       # persistent fixture, tight enough to deter accidental publish loops.
@@ -110,7 +110,7 @@ services:
 
 profiles:
   compute:
-    foreign-toon-client:
+    toon-client:
       resources:
         cpu:
           units: 1.0
@@ -121,17 +121,17 @@ profiles:
   placement:
     dcloud:
       pricing:
-        foreign-toon-client:
+        toon-client:
           denom: uakt
           amount: 1500
 
 deployment:
-  foreign-toon-client:
+  toon-client:
     dcloud:
       # count: 1 — single replica; persistent. If the lease ends or the
       # provider evicts, the operator must redeploy via
-      # scripts/akash-deploy.sh foreign-toon-client. The pod is stateless
+      # scripts/akash-deploy.sh toon-client. The pod is stateless
       # w.r.t. publish replay (Nostr layer dedupes by event.id) and
       # holds no on-disk wallet, so a clean replacement is safe.
-      profile: foreign-toon-client
+      profile: toon-client
       count: 1
