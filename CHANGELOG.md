@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3](https://github.com/toon-protocol/town/compare/v0.5.2...v0.5.3) (2026-06-03)
+
+### Bug Fixes
+
+* **ci:** skip @anyone-protocol/anyone-client postinstall in installs ([#77](https://github.com/toon-protocol/town/issues/77)) ([85818d7](https://github.com/toon-protocol/town/commit/85818d7cd213d389f6e8f2ac823930d8e7a5e6a5))
+
 ## [0.5.2](https://github.com/toon-protocol/town/compare/v0.5.1...v0.5.2) (2026-06-03)
 
 ### Bug Fixes
