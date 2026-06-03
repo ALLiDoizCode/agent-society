@@ -333,6 +333,13 @@ cmd_up() {
   # Per-service NODE_NOSTR_SECRET_KEY is interpolated by compose from the
   # exported TOWN_01_SECRET_KEY / TOWN_02_SECRET_KEY / MILL_01_SECRET_KEY /
   # MILL_02_SECRET_KEY / DVM_01_SECRET_KEY env vars (see top of file).
+  # NODE_NOSTR_PUBKEY is interpolated from these exported *_PUBKEY vars so the
+  # dev stack matches the production `node add` path (issue #81).
+  export TOWN_01_NOSTR_PUBKEY="$town01_pubkey"
+  export TOWN_02_NOSTR_PUBKEY="$town02_pubkey"
+  export MILL_01_NOSTR_PUBKEY="$mill01_pubkey"
+  export MILL_02_NOSTR_PUBKEY="$mill02_pubkey"
+  export DVM_01_NOSTR_PUBKEY="$dvm01_pubkey"
   docker compose -p "$PROJECT_NAME" -f "$REPO_ROOT/$COMPOSE_FILE" \
     up -d \
       townhouse-dev-town-01 \
