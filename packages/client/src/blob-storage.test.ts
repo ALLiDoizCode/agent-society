@@ -62,7 +62,11 @@ describe('requestBlobStorage', () => {
     ]);
 
     // bid + output tags
-    expect(event.tags.find((t) => t[0] === 'bid')).toEqual(['bid', '130', 'usdc']);
+    expect(event.tags.find((t) => t[0] === 'bid')).toEqual([
+      'bid',
+      '130',
+      'usdc',
+    ]);
     expect(event.tags.find((t) => t[0] === 'output')).toEqual([
       'output',
       'text/plain',
@@ -105,7 +109,11 @@ describe('requestBlobStorage', () => {
       NostrEvent,
       Record<string, unknown>,
     ];
-    expect(event.tags.find((t) => t[0] === 'bid')).toEqual(['bid', '999', 'usdc']);
+    expect(event.tags.find((t) => t[0] === 'bid')).toEqual([
+      'bid',
+      '999',
+      'usdc',
+    ]);
     expect(options.ilpAmount).toBe(999n);
   });
 
