@@ -25,6 +25,27 @@ Kind 10032 is a [replaceable event](https://github.com/nostr-protocol/nips/blob/
 }
 ```
 
+#### Mill swap recipient key discovery
+
+A `mill` node (the multi-chain swap peer) is the one case where the kind:10032
+`pubkey` is operationally load-bearing for clients beyond peering. A
+`streamSwap` caller must NIP-59 **gift-wrap** the swap request to the mill, and
+the recipient pubkey it encrypts to (passed as `millPubkey`) is exactly the
+`pubkey` advertised in the mill's kind:10032 IlpPeerInfo event.
+
+That key is derived from the mill's **`MILL_MNEMONIC`** (the operator's BIP-39
+identity), via `fromMnemonic(mnemonic)`. It is the SAME identity the mill uses
+as the swap-handler gift-wrap recipient (`recipientSecretKey`) and the SAME key
+that signs the kind:10032 event — so a client that reads `pubkey` from the
+advertised peer-info is guaranteed to target the correct key.
+
+> **Important:** the swap recipient key is the `MILL_MNEMONIC` identity, which
+> is **distinct** from the node's `NODE_NOSTR_SECRET_KEY`-derived nostr
+> identity. Encrypting a swap request to the `NODE_NOSTR_SECRET_KEY` pubkey
+> fails with `F01/F00 "Invalid gift wrap"`. Always discover the recipient from
+> the mill's kind:10032 `pubkey` (or the `swapRecipientPubkey` field of the
+> mill's `mill_ready` startup log) — never from `NODE_NOSTR_SECRET_KEY`.
+
 ### NIP-34: Git Operations (Payment-Gated)
 
 | Kind | Name | Purpose |
