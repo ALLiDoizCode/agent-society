@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0](https://github.com/toon-protocol/town/compare/v0.6.0...v0.7.0) (2026-06-03)
+
+### Features
+
+* **skills:** add townhouse-live-e2e orchestration skill ([#96](https://github.com/toon-protocol/town/issues/96)) ([ec8e6d5](https://github.com/toon-protocol/town/commit/ec8e6d50453c6c7700db336cc446cf5a6c418c9b))
+
 ## [0.6.0](https://github.com/toon-protocol/town/compare/v0.5.4...v0.6.0) (2026-06-03)
 
 ### Features
