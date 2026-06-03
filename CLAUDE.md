@@ -162,7 +162,7 @@ All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Con
 | 28545 | 8545 | Anvil JSON-RPC (chain-id 31337) |
 | 28899 | 8899 | Solana test-validator RPC |
 | 28900 | 8900 | Solana test-validator WebSocket |
-| 28085 | 3101 | Mina lightnet GraphQL |
+| 28085 | 3085 | Mina lightnet GraphQL |
 | 28181 | 8181 | Mina lightnet accounts manager |
 
 ---
