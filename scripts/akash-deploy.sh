@@ -39,6 +39,8 @@ API_BASE="${AKASH_CONSOLE_API_URL:-https://console-api.akash.network}"
 # at our SDL prices. Top up via Console UI if a lease starts running low.
 DEPOSIT_ANVIL=5
 DEPOSIT_SOLANA=10
+# Mina lightnet — heavy single-node devnet (4Gi RAM, ~$10-15/mo like Solana).
+DEPOSIT_MINA=10
 DEPOSIT_BLOCKSCOUT=15
 DEPOSIT_SOLANA_EXPLORER=5
 # ATOR probe is a short-lived derisking deploy (~hour, not month). Min deposit.
@@ -221,6 +223,24 @@ probe_solana_rpc() {
     -H 'Content-Type: application/json' \
     -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' \
     2>/dev/null | grep -q '"result":"ok"'
+}
+
+probe_mina_graphql() {
+  # Mina lightnet is a STANDALONE single-node devnet — there are no peers to
+  # sync with, so "healthy" means the GraphQL daemon answers a syncStatus
+  # query, NOT that the node reached a global SYNCED consensus state. Waiting
+  # for SYNCED would needlessly delay (or hang) the deploy on constrained
+  # Akash CPUs. Export MINA_WAIT_SYNCED=1 to opt into strict SYNCED waiting.
+  # GraphQL lives at <ingress>/graphql; -k tolerates the provider's TLS cert.
+  local body
+  body="$(curl -sf -k -m 8 -X POST "$1/graphql" \
+    -H 'Content-Type: application/json' \
+    -d '{"query":"{syncStatus}"}' 2>/dev/null)" || return 1
+  echo "$body" | grep -q '"syncStatus"' || return 1
+  if [ "${MINA_WAIT_SYNCED:-0}" = "1" ]; then
+    echo "$body" | grep -q 'SYNCED' || return 1
+  fi
+  return 0
 }
 
 probe_blockscout() {
@@ -614,7 +634,9 @@ await_lease_ready() {
   write_lease "$name" "$dseq" "$provider" "$host" "$external_port" "$url" "$image_digest"
 
   local timeout=300
-  if [ "$name" = "blockscout" ]; then
+  if [ "$name" = "blockscout" ] || [ "$name" = "mina" ]; then
+    # Blockscout indexes slowly; Mina lightnet loads the genesis proof system
+    # on first boot — both need a far longer readiness window than the chains.
     timeout=900
   fi
   if ! wait_for_url "$name" "$url" "$probe_fn" "$timeout"; then
@@ -631,7 +653,7 @@ await_lease_ready() {
 cmd_resume() {
   local name="${1:-}" override_dseq="${2:-}" override_provider="${3:-}"
   if [ -z "$name" ]; then
-    echo "Usage: $0 resume <anvil|solana|blockscout|solana-explorer> [dseq] [provider]" >&2
+    echo "Usage: $0 resume <anvil|solana|mina|blockscout|solana-explorer> [dseq] [provider]" >&2
     exit 1
   fi
 
@@ -640,6 +662,7 @@ cmd_resume() {
   case "$name" in
     anvil) service=anvil; port=8545; probe_fn=probe_evm_rpc; image_digest="$(image_digest "$ANVIL_IMAGE_DEMO" 2>/dev/null || true)" ;;
     solana) service=solana; port=8899; probe_fn=probe_solana_rpc; image_digest="$(image_digest "$SOLANA_IMAGE_DEMO" 2>/dev/null || true)" ;;
+    mina) service=mina; port=3101; probe_fn=probe_mina_graphql ;;
     blockscout) service=blockscout; port=4000; probe_fn=probe_blockscout ;;
     otterscan) service=otterscan; port=80; probe_fn=probe_otterscan ;;
     solana-explorer) service=solana-explorer; port=3000; probe_fn=probe_http_200; image_digest="$(image_digest "$SOLANA_EXPLORER_IMAGE_DEMO" 2>/dev/null || true)" ;;
@@ -1043,6 +1066,34 @@ cmd_solana() {
   fi
 }
 
+cmd_mina() {
+  # External upstream image (o1labs lightnet) — no SHA-pinned digest to verify,
+  # so pass an empty image_digest. Primary endpoint is GraphQL on port 3101.
+  deploy_sdl mina "$SDL_DIR/mina.sdl.yaml" mina 3101 probe_mina_graphql "$DEPOSIT_MINA" ""
+
+  # Capture the accounts-manager (port 8181) forwarded host:port from the lease.
+  # Exposed as plain TCP (not `as: 80`), so it appears under forwarded_ports.
+  local dseq status_resp host port
+  dseq="$(jq -r '.mina.dseq' "$LEASES_FILE")"
+  status_resp="$(api GET "/v1/deployments/$dseq")"
+  host="$(echo "$status_resp" | jq -r \
+    '(.data.leases // []) | .[].status.forwarded_ports.mina[]?
+     | select(.port == 8181) | .host' | head -1)"
+  port="$(echo "$status_resp" | jq -r \
+    '(.data.leases // []) | .[].status.forwarded_ports.mina[]?
+     | select(.port == 8181) | .externalPort' | head -1)"
+  if [ -n "$host" ] && [ "$host" != "null" ]; then
+    local tmp
+    tmp="$(mktemp)"
+    jq --arg h "$host" --arg p "$port" \
+       '.mina.accounts_host = $h | .mina.accounts_port = ($p|tonumber) | .mina.accounts_url = ("http://" + $h + ":" + $p)' \
+       "$LEASES_FILE" > "$tmp"
+    mv "$tmp" "$LEASES_FILE"
+    echo "Mina accounts manager → http://$host:$port"
+  fi
+  echo "Mina GraphQL → $(jq -r '.mina.url' "$LEASES_FILE")/graphql"
+}
+
 cmd_blockscout() {
   ensure_leases_file
   local anvil_url
@@ -1197,7 +1248,7 @@ cmd_close() {
 cmd_redeploy() {
   local name="${1:-}"
   if [ -z "$name" ]; then
-    echo "Usage: $0 redeploy <anvil|solana|otterscan|blockscout|solana-explorer>" >&2
+    echo "Usage: $0 redeploy <anvil|solana|mina|otterscan|blockscout|solana-explorer>" >&2
     exit 1
   fi
   ensure_leases_file
@@ -1218,6 +1269,7 @@ cmd_redeploy() {
   case "$name" in
     anvil) cmd_anvil ;;
     solana) cmd_solana ;;
+    mina) cmd_mina ;;
     blockscout) cmd_blockscout ;;
     otterscan) cmd_otterscan ;;
     solana-explorer) cmd_solana_explorer ;;
@@ -1314,6 +1366,7 @@ case "${1:-}" in
   build-foreign-toon-client) cmd_build_foreign_toon_client ;;
   anvil) cmd_anvil ;;
   solana) cmd_solana ;;
+  mina) cmd_mina ;;
   blockscout) cmd_blockscout ;;
   otterscan) cmd_otterscan ;;
   solana-explorer) cmd_solana_explorer ;;
@@ -1340,6 +1393,11 @@ Commands:
                       ghcr.io/toon-protocol/townhouse-faucet:demo compat tag)
   anvil              Deploy anvil.sdl.yaml — writes leases.json
   solana             Deploy solana.sdl.yaml — writes leases.json (RPC + WS)
+  mina               Deploy mina.sdl.yaml — single-node Mina lightnet devnet
+                     (GraphQL :3101 via HTTPS ingress + accounts-manager :8181
+                     as a forwarded TCP port). Marked healthy as soon as the
+                     GraphQL daemon answers — does NOT wait for full network
+                     SYNCED (export MINA_WAIT_SYNCED=1 to block on SYNCED).
   otterscan          Deploy otterscan.sdl.yaml — EVM explorer (anvil must be up)
   blockscout         Deploy blockscout.sdl.yaml — legacy EVM explorer
                      (Otterscan is the recommended replacement; this remains

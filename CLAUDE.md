@@ -2,6 +2,18 @@
 
 ILP-gated Nostr relay. Pay to write, free to read.
 
+## How It Works (30-second mental model)
+
+TOON Protocol = **pay-to-write Nostr over Interledger (ILP)**. A "write" is an ILP packet carrying a TOON-encoded Nostr event plus a **signed off-chain payment-channel claim** (an EIP-712 balance proof against an on-chain `TokenNetwork` deposit). A **connector** (`@toon-protocol/connector`) validates the claim, takes a fee, routes by ILP address, and the destination node returns FULFILL (accepted) or REJECT. Reads are free. Three service-node types earn fees:
+
+- **town** — the Nostr relay (pay-per-event publish).
+- **dvm** — NIP-90 Data Vending Machine compute jobs (e.g. kind:5094 = Arweave blob storage; the job request *is* the payment).
+- **mill** — multi-chain swap peer (pay asset A → receive asset B + a signed target-chain claim).
+
+**Townhouse** (`@toon-protocol/townhouse`, the operator product) runs an **apex** = the connector (nodeId `g.townhouse`, the *parent*) + town/mill/dvm containers (its *children*) + an ATOR `.anon` hidden service, via `npx @toon-protocol/townhouse init → hs up → node add`. Clients pay the apex over BTP (reachable at the `.anon` address through a SOCKS5h proxy); the apex validates their claim, takes its fee, and forwards to the child **for free** — *parent→child packets carry no per-packet claim* (settled in aggregate). This requires the child to be registered `relation:'child'` AND to tag the apex's nodeId `g.townhouse` as its parent (`TOON_PARENT_PEER_ID`) — get either wrong and paid traffic to the child is rejected (T00/F06).
+
+Deep dive: [README "How It Works"](README.md#how-it-works) · [docs/architecture.md](docs/architecture.md) · [docs/protocol.md](docs/protocol.md) · operator quickstart: [packages/townhouse/README.md](packages/townhouse/README.md) · canonical rules/decisions: `_bmad-output/project-context.md`.
+
 > **All coding rules, patterns, conventions, and architecture details are in `_bmad-output/project-context.md`** -- loaded automatically by BMAD workflows. This file covers only setup, deployment, and troubleshooting. Do NOT duplicate rules or patterns here.
 
 ---
@@ -110,6 +122,17 @@ docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs -f peer1  # Pe
 1. Run the contract canary: `pnpm --filter @toon-protocol/sdk test:integration -- tests/integration/connector-contract.test.ts` (expected <2s, ceiling 60s)
 2. If it fails, see `packages/sdk/CONNECTOR_MIGRATION.md` for the version-to-version contract mapping and migration steps
 3. Update both the canary and the migration doc when bumping `@toon-protocol/connector`
+
+**Akash deploys (`scripts/akash-deploy.sh`) failing with `require_env AKASH_CONSOLE_API_KEY`:**
+
+Akash uses the Console managed-wallet REST API (`x-api-key` header), not a mnemonic. The key (format `ac.sk.production.*`) is exported in `~/.bashrc`, but `.bashrc` returns early for non-interactive shells, so it is NOT present in scripted/agent shells. Load it explicitly before running the deploy script:
+
+```bash
+eval "$(grep -E '^export AKASH_CONSOLE_API_KEY=' ~/.bashrc)"
+./scripts/akash-deploy.sh <target>
+```
+
+(Create/rotate keys at https://console.akash.network → profile → API Keys. Override the endpoint with `AKASH_CONSOLE_API_URL`; default is `https://console-api.akash.network`.)
 
 **Port conflicts:** See `_bmad-output/project-context.md` section "Deployment" for full port allocation table. Key ranges:
 
