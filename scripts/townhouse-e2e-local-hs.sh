@@ -394,8 +394,10 @@ fund_apex_and_town() {
   # key derived from the mnemonic (Stage 1). Fund its native + USDC ATA so the
   # connector's claimFromChannel can transfer the claimed delta to it.
   #
-  # ⚠️ See the GATE note in setup_apex_config(): the client cannot produce a
-  # settleable Solana claim yet, so this funding is preparatory only.
+  # Stage 2c: the client now produces a settleable Solana claim (real on-chain
+  # channel + connector-format proof), so funding the apex recipient ATA is part
+  # of the live loop — the connector's claimFromChannel transfers the claimed
+  # delta here.
   if [[ "${E2E_SOLANA:-0}" == "1" ]]; then
     local cli apex_sol
     cli="$(resolve_townhouse_cli)"
@@ -526,15 +528,13 @@ EOF
     # mnemonic (Stage 1: WalletManager.getApexSettlementKeys →
     # solanaPrivateKeyBase58 → hs-config-writer fillApexKey).
     #
-    # ⚠️ GATE (Stage 2 blocker): a Solana-denominated publish does NOT settle
-    # end-to-end yet. The toon-client's OnChainChannelClient.openSolanaChannel is
-    # a lazy stub that (a) never opens an on-chain Solana payment-channel PDA and
-    # (b) signs the canonical balance proof over a locally-derived SHA-256
-    # `channelId`, while the connector requires a real base58 PDA in
-    # `claim.channelAccount`, looks it up on-chain, and verifies the signature
-    # over THAT PDA. So this provider lets the apex *advertise* + *attempt* Solana
-    # settlement, but the client claim is rejected until the client opens a real
-    # PDA and signs over it. See the Stage-2 PR description.
+    # Stage-2 client gate CLEARED: #105 made the client's
+    # OnChainChannelClient.openSolanaChannel open a REAL on-chain channel at the
+    # connector-parity PDA and sign the connector-format claim, and Stage 2c
+    # wired the toon-client entrypoint to negotiate solana:devnet + supply the
+    # Solana program/mint/recipient + channel keypair. So with E2E_SOLANA=1 the
+    # client now produces a claim the connector should accept (real base58 PDA in
+    # claim.channelAccount, signature over that PDA, signer = channel participant).
     if [[ "${E2E_SOLANA:-0}" == "1" ]]; then
       local sol_program="${SOLANA_PROGRAM_ID:-EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG}"
       local sol_mint="${SOLANA_USDC_MINT:-6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q}"
@@ -678,6 +678,25 @@ up_local_client() {
       warn "image pull failed (will use local cache if present)"
   fi
 
+  # Solana settlement env (Phase-2 Stage 2c; opt-in via E2E_SOLANA=1). When set,
+  # the client entrypoint negotiates solana:devnet, opens a real on-chain channel
+  # and pays a Solana-denominated claim to the apex's Solana settlement address.
+  local sol_program="" sol_mint="" apex_sol=""
+  if [[ "${E2E_SOLANA:-0}" == "1" ]]; then
+    sol_program="${SOLANA_PROGRAM_ID:-EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG}"
+    sol_mint="${SOLANA_USDC_MINT:-6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q}"
+    local cli
+    cli="$(resolve_townhouse_cli)"
+    apex_sol=$(TOWNHOUSE_HOME="$TOWNHOUSE_HOME" TOWNHOUSE_WALLET_PASSWORD="$TEST_PASSWORD" \
+      $cli wallet show -c "$TOWNHOUSE_HOME/config.yaml" --password "$TEST_PASSWORD" --json 2>/dev/null \
+      | jq -r '[.. | objects | select(has("sol")) | .sol.address] | map(select(. != null)) | first // empty' 2>/dev/null) || true
+    if [[ -n "$apex_sol" ]]; then
+      log "Solana payment ENABLED: program=$sol_program mint=$sol_mint apexRecipient=$apex_sol"
+    else
+      warn "E2E_SOLANA=1 but could not resolve apex Solana address — client will fall back to EVM-only"
+    fi
+  fi
+
   # Force a CLEAN start. Every restart cycles ephemeral keys; if we leave a
   # half-funded container running, the funding step will target stale keys.
   # Export env vars so both `down` AND `up` can interpolate the compose file —
@@ -686,10 +705,18 @@ up_local_client() {
   FAUCET_URL="$FAUCET_URL" \
   EVM_RPC_URL="$EVM_RPC_URL" \
   SOLANA_RPC_URL="$SOLANA_RPC_URL" \
+  SOLANA_PROGRAM_ID="$sol_program" \
+  SOLANA_USDC_MINT="$sol_mint" \
+  SOLANA_TOKEN_MINT="$sol_mint" \
+  TARGET_SETTLEMENT_ADDRESS_SOLANA="$apex_sol" \
     docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>&1 | tail -3 || true
   FAUCET_URL="$FAUCET_URL" \
   EVM_RPC_URL="$EVM_RPC_URL" \
   SOLANA_RPC_URL="$SOLANA_RPC_URL" \
+  SOLANA_PROGRAM_ID="$sol_program" \
+  SOLANA_USDC_MINT="$sol_mint" \
+  SOLANA_TOKEN_MINT="$sol_mint" \
+  TARGET_SETTLEMENT_ADDRESS_SOLANA="$apex_sol" \
     docker compose -f "$COMPOSE_FILE" up -d
 
   # Wait for Fastify bind so /signer-info returns the keys. This happens in
