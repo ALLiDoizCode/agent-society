@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1](https://github.com/toon-protocol/town/compare/v0.12.0...v0.12.1) (2026-06-04)
+
+### Bug Fixes
+
+* **client:** ESM-safe require for SOCKS5 transport deps ([#109](https://github.com/toon-protocol/town/issues/109)) ([2eca549](https://github.com/toon-protocol/town/commit/2eca549a5f75ffea75c885866dace264e5b59764))
+
 ## [0.12.0](https://github.com/toon-protocol/town/compare/v0.11.0...v0.12.0) (2026-06-04)
 
 ### Features
