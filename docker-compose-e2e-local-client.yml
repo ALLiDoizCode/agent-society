@@ -72,20 +72,31 @@ services:
       # the dev stacks). The .anyone hostname is per-request via POST /publish.
       TARGET_SETTLEMENT_ADDRESS: '0x90F79bf6EB2c4f870365E785982E1f101E93b906'
 
-      # ── Solana settlement (Phase-2 Stage 2; opt-in, forward-compat) ─────────
-      # Supplied by the orchestrator only when E2E_SOLANA=1. The published
-      # toon-client:demo image negotiates a single EVM chain today, so these are
-      # consumed once the client entrypoint is generalised to multi-chain.
+      # ── Solana settlement (Phase-2 Stage 2c; opt-in) ───────────────────────
+      # Supplied by the orchestrator only when E2E_SOLANA=1. When BOTH
+      # SOLANA_PROGRAM_ID and TARGET_SETTLEMENT_ADDRESS_SOLANA are set, the
+      # entrypoint negotiates `solana:devnet` (in addition to the EVM path): it
+      # derives EVM + Solana from a single mnemonic, opens a REAL on-chain Solana
+      # payment channel at the connector-parity PDA, and signs a connector-format
+      # Solana balance proof (client lib post-#105). When unset, the default
+      # single-chain EVM path is unchanged.
       #
-      # ⚠️ STAGE-2 GATE: even with these set, a `solana:devnet` publish does NOT
-      # settle yet — the client's OnChainChannelClient.openSolanaChannel never
-      # opens an on-chain Solana PDA and signs over a local SHA-256 channelId,
-      # while the connector requires a real base58 PDA in `claim.channelAccount`.
-      # See packages/townhouse/src/__integration__/local-docker-hs-solana-paid-earnings-smoke.test.ts.
+      # NOTE: openSolanaChannel opens (initialize_channel) at the PDA; the
+      # connector accepts the claim on `opened` status + participant membership.
+      # An on-chain deposit is optional (SOLANA_DEPOSIT_AMOUNT +
+      # SOLANA_PAYER_TOKEN_ACCOUNT) and only consumed at on-chain claim/settle.
+      SOLANA_CHAIN_KEY: ${SOLANA_CHAIN_KEY:-solana:devnet}
       SOLANA_PROGRAM_ID: ${SOLANA_PROGRAM_ID:-}
+      SOLANA_TOKEN_MINT: ${SOLANA_TOKEN_MINT:-${SOLANA_USDC_MINT:-}}
       SOLANA_USDC_MINT: ${SOLANA_USDC_MINT:-}
-      # Apex Solana recipient (base58); blank unless the orchestrator resolves it.
-      TARGET_SETTLEMENT_ADDRESS_SOLANA_DEVNET: ${TARGET_SETTLEMENT_ADDRESS_SOLANA_DEVNET:-}
+      # Apex Solana recipient (base58) — claim recipient / channel peer. Blank
+      # unless the orchestrator resolves it (apex Solana settlement pubkey).
+      TARGET_SETTLEMENT_ADDRESS_SOLANA: ${TARGET_SETTLEMENT_ADDRESS_SOLANA:-${TARGET_SETTLEMENT_ADDRESS_SOLANA_DEVNET:-}}
+      # Optional on-chain deposit (base units) + the client's funded SPL token
+      # account (ATA, base58). Both required to deposit; otherwise channel opens
+      # without a deposit.
+      SOLANA_DEPOSIT_AMOUNT: ${SOLANA_DEPOSIT_AMOUNT:-}
+      SOLANA_PAYER_TOKEN_ACCOUNT: ${SOLANA_PAYER_TOKEN_ACCOUNT:-}
 
       # Drives the paid-claim path (1 USDC at scale=6). 49.4's round-6 verified
       # this fee setting produces a real signed claim that lands on the apex.
