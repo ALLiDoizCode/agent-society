@@ -388,6 +388,28 @@ fund_apex_and_town() {
   local town_pid=$!
   wait "$apex_pid" || warn "apex EVM direct-fund failed (continuing — Anvil pre-fund covers native)"
   wait "$town_pid" || warn "town EVM direct-fund failed (continuing — Anvil pre-fund covers native)"
+
+  # ── Apex Solana recipient ATA (Phase-2 Stage 2; opt-in via E2E_SOLANA=1) ──
+  # The apex's Solana settlement address is the base58 pubkey of the apex Solana
+  # key derived from the mnemonic (Stage 1). Fund its native + USDC ATA so the
+  # connector's claimFromChannel can transfer the claimed delta to it.
+  #
+  # ⚠️ See the GATE note in setup_apex_config(): the client cannot produce a
+  # settleable Solana claim yet, so this funding is preparatory only.
+  if [[ "${E2E_SOLANA:-0}" == "1" ]]; then
+    local cli apex_sol
+    cli="$(resolve_townhouse_cli)"
+    apex_sol=$(TOWNHOUSE_HOME="$TOWNHOUSE_HOME" TOWNHOUSE_WALLET_PASSWORD="$TEST_PASSWORD" \
+      $cli wallet show -c "$TOWNHOUSE_HOME/config.yaml" --password "$TEST_PASSWORD" --json 2>/dev/null \
+      | jq -r '[.. | objects | select(has("sol")) | .sol.address] | map(select(. != null)) | first // empty' 2>/dev/null) || true
+    if [[ -n "$apex_sol" ]]; then
+      log "Funding apex Solana recipient $apex_sol (native + USDC ATA)…"
+      direct_fund_sol_native "$apex_sol" || warn "apex SOL native fund failed"
+      direct_fund_sol_usdc "$apex_sol" || warn "apex SOL USDC fund failed"
+    else
+      warn "E2E_SOLANA=1 but could not resolve apex Solana address from 'wallet show --json' — skipping apex ATA funding"
+    fi
+  fi
 }
 
 fund_client_pod() {
@@ -497,6 +519,35 @@ chainProviders:
     keyId: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"
 EOF
     log "Injected Akash-Anvil chainProviders into $config_path"
+
+    # ── Solana chainProvider (Phase-2 Stage 2) ──────────────────────────────
+    # Opt-in via E2E_SOLANA=1. The apex's Solana settlement keyId is left blank;
+    # `townhouse hs up` fills it from the apex Solana key derived from the
+    # mnemonic (Stage 1: WalletManager.getApexSettlementKeys →
+    # solanaPrivateKeyBase58 → hs-config-writer fillApexKey).
+    #
+    # ⚠️ GATE (Stage 2 blocker): a Solana-denominated publish does NOT settle
+    # end-to-end yet. The toon-client's OnChainChannelClient.openSolanaChannel is
+    # a lazy stub that (a) never opens an on-chain Solana payment-channel PDA and
+    # (b) signs the canonical balance proof over a locally-derived SHA-256
+    # `channelId`, while the connector requires a real base58 PDA in
+    # `claim.channelAccount`, looks it up on-chain, and verifies the signature
+    # over THAT PDA. So this provider lets the apex *advertise* + *attempt* Solana
+    # settlement, but the client claim is rejected until the client opens a real
+    # PDA and signs over it. See the Stage-2 PR description.
+    if [[ "${E2E_SOLANA:-0}" == "1" ]]; then
+      local sol_program="${SOLANA_PROGRAM_ID:-EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG}"
+      local sol_mint="${SOLANA_USDC_MINT:-6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q}"
+      cat >> "$config_path" <<EOF
+  - chainType: solana
+    chainId: solana:devnet
+    rpcUrl: "$SOLANA_RPC_URL"
+    programId: "$sol_program"
+    tokenMint: "$sol_mint"
+    keyId: ""
+EOF
+      log "Injected Solana chainProvider (E2E_SOLANA=1) program=$sol_program mint=$sol_mint"
+    fi
   fi
 
   log "townhouse hs up (6-min budget — anon HS bootstrap is slow)…"

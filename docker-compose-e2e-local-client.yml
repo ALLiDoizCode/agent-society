@@ -38,18 +38,18 @@ services:
     restart: unless-stopped
     ports:
       # POST /publish, GET /healthz, GET /signer-info — bind to host loopback
-      - "127.0.0.1:29200:8080"
+      - '127.0.0.1:29200:8080'
     environment:
       # Akash devnet endpoints — supplied by orchestrator from deploy/akash/leases.json
-      FAUCET_URL:        ${FAUCET_URL:?FAUCET_URL is required (read from deploy/akash/leases.json)}
-      EVM_RPC_URL:       ${EVM_RPC_URL:?EVM_RPC_URL is required (read from deploy/akash/leases.json)}
-      SOLANA_RPC_URL:    ${SOLANA_RPC_URL:?SOLANA_RPC_URL is required (read from deploy/akash/leases.json)}
+      FAUCET_URL: ${FAUCET_URL:?FAUCET_URL is required (read from deploy/akash/leases.json)}
+      EVM_RPC_URL: ${EVM_RPC_URL:?EVM_RPC_URL is required (read from deploy/akash/leases.json)}
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:?SOLANA_RPC_URL is required (read from deploy/akash/leases.json)}
 
       # Pod surface
-      POD_PORT:                   "8080"
-      ANON_SOCKS_PORT:            "9050"
-      PUBLISH_RATE_LIMIT_PER_MIN: "30"
-      LOG_LEVEL:                  "info"
+      POD_PORT: '8080'
+      ANON_SOCKS_PORT: '9050'
+      PUBLISH_RATE_LIMIT_PER_MIN: '30'
+      LOG_LEVEL: 'info'
 
       # Route through public ATOR proxies. NOTE: the toon-client entrypoint only
       # uses the FIRST proxy in this list (no runtime fallback yet) — comma-
@@ -60,29 +60,44 @@ services:
       #   - 57.128.249.250:9052 (Warsaw)   — backup
       # Skipping the pod's local anon daemon because it can't always find
       # introduction points for a freshly-published .anon HS.
-      ANYONE_PROXY_URLS:          "socks5h://157.90.113.23:9052,socks5h://57.128.249.250:9052,socks5h://5.78.181.0:9052"
+      ANYONE_PROXY_URLS: 'socks5h://157.90.113.23:9052,socks5h://57.128.249.250:9052,socks5h://5.78.181.0:9052'
 
       # Chain context (deterministic Akash-Anvil USDC + TokenNetwork)
-      TOON_CHAIN_KEY:             "evm:base:31337"
-      TOON_CHAIN_ID:              "31337"
-      TOON_TOKEN_ADDRESS:         "0x5FbDB2315678afecb367f032d93F642f64180aa3"
-      TOON_TOKEN_NETWORK_ADDRESS: "0xCafac3dD18aC6c6e92c921884f9E4176737C052c"
+      TOON_CHAIN_KEY: 'evm:base:31337'
+      TOON_CHAIN_ID: '31337'
+      TOON_TOKEN_ADDRESS: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+      TOON_TOKEN_NETWORK_ADDRESS: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c'
 
       # Target = local townhouse hs apex (Anvil acct[3], deterministic across
       # the dev stacks). The .anyone hostname is per-request via POST /publish.
-      TARGET_SETTLEMENT_ADDRESS:  "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+      TARGET_SETTLEMENT_ADDRESS: '0x90F79bf6EB2c4f870365E785982E1f101E93b906'
+
+      # ── Solana settlement (Phase-2 Stage 2; opt-in, forward-compat) ─────────
+      # Supplied by the orchestrator only when E2E_SOLANA=1. The published
+      # toon-client:demo image negotiates a single EVM chain today, so these are
+      # consumed once the client entrypoint is generalised to multi-chain.
+      #
+      # ⚠️ STAGE-2 GATE: even with these set, a `solana:devnet` publish does NOT
+      # settle yet — the client's OnChainChannelClient.openSolanaChannel never
+      # opens an on-chain Solana PDA and signs over a local SHA-256 channelId,
+      # while the connector requires a real base58 PDA in `claim.channelAccount`.
+      # See packages/townhouse/src/__integration__/local-docker-hs-solana-paid-earnings-smoke.test.ts.
+      SOLANA_PROGRAM_ID: ${SOLANA_PROGRAM_ID:-}
+      SOLANA_USDC_MINT: ${SOLANA_USDC_MINT:-}
+      # Apex Solana recipient (base58); blank unless the orchestrator resolves it.
+      TARGET_SETTLEMENT_ADDRESS_SOLANA_DEVNET: ${TARGET_SETTLEMENT_ADDRESS_SOLANA_DEVNET:-}
 
       # Drives the paid-claim path (1 USDC at scale=6). 49.4's round-6 verified
       # this fee setting produces a real signed claim that lands on the apex.
-      TOON_FEE_PER_EVENT:         "1000000"
+      TOON_FEE_PER_EVENT: '1000000'
 
       # Self-signed TLS on some Akash provider ingresses — scoped to the client
       # container only (matches 49.4 carry-forward).
-      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+      NODE_TLS_REJECT_UNAUTHORIZED: '0'
 
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/healthz"]
+      test: ['CMD', 'curl', '-sf', 'http://127.0.0.1:8080/healthz']
       interval: 5s
       timeout: 3s
-      retries: 60       # generous: ~5min budget covers anon daemon bootstrap
+      retries: 60 # generous: ~5min budget covers anon daemon bootstrap
       start_period: 10s
