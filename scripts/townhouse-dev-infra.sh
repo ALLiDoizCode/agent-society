@@ -75,6 +75,59 @@ wait_for_health() {
   return 1
 }
 
+# ── Solana Mock-USDC bootstrap (idempotent) ──────────────────────────────────
+# Creates the deterministic dev USDC mint + faucet treasury on the running
+# townhouse-dev-solana validator, using the SAME committed keypairs the Akash
+# production image bakes in (infra/solana/keys/*). Reuses infra/solana/
+# bootstrap-usdc.mjs verbatim — that module is idempotent (it short-circuits via
+# getAccountInfo when the mint already exists), so reruns are no-ops.
+#
+# Why this lives in the host script rather than the compose entrypoint:
+#   docker-compose-townhouse-dev.yml mounts infra/solana/entrypoint.sh but NOT
+#   the /bootstrap dir, and the bare beeman/solana-test-validator image ships
+#   no node_modules for @noble/curves. The Akash image (docker/Dockerfile.
+#   akash-solana) bakes /bootstrap + `npm install`, so its entrypoint bootstrap
+#   fires; the dev stack never did. Running it host-side keeps the dev validator
+#   image untouched while still seeding the mint the mill/faucet expect.
+#
+# SCOPE (issue #82): this bootstraps the MINT + treasury only. It does NOT open
+# the on-chain mill swap channel. The channel account (e.g. 32jfyjz1...) is a
+# PDA of (participantA, participantB, mint, program) derived at runtime from the
+# mill's + client's ephemeral settlement keys (see packages/sdk/tests/e2e/
+# docker-solana-settlement-e2e.test.ts openChannel/deriveChannelPDA), plus an
+# on-chain deposit — none of which are statically reproducible here. The dev
+# mill advertises LOGICAL off-chain channelIds (dev-mill-01-sol-ch1) and signs
+# valid balance-proof claims off-chain, so EVM->Solana swaps verify at the
+# CLAIM-ISSUANCE layer on this devnet but are not yet on-chain redeemable.
+bootstrap_solana_usdc() {
+  local rpc_url="${1:-http://localhost:28899}"
+  local boot_dir="$REPO_ROOT/infra/solana"
+
+  if [ ! -f "$boot_dir/bootstrap-usdc.mjs" ]; then
+    log_warning "infra/solana/bootstrap-usdc.mjs not found — skipping USDC bootstrap"
+    return 0
+  fi
+
+  # bootstrap-usdc.mjs (via spl-primitives.mjs) imports @noble/curves, which is
+  # declared in infra/solana/package.json but is NOT hoisted to the workspace
+  # root under pnpm. Install it locally into infra/solana/node_modules once;
+  # skip on reruns so this stays a no-op.
+  if [ ! -d "$boot_dir/node_modules/@noble/curves" ]; then
+    log_info "Installing Solana bootstrap deps (@noble/curves) in infra/solana..."
+    if ! (cd "$boot_dir" && npm install --omit=dev --no-audit --no-fund --no-package-lock >/dev/null 2>&1); then
+      log_warning "npm install in infra/solana failed (non-fatal — USDC mint not bootstrapped; EVM->Solana swaps verify at claim layer only)"
+      return 0
+    fi
+  fi
+
+  log_info "Bootstrapping Solana Mock USDC mint + faucet treasury (idempotent)..."
+  if (cd "$boot_dir" && SOLANA_BOOTSTRAP_RPC="$rpc_url" node bootstrap-usdc.mjs); then
+    log_success "Solana Mock USDC mint ready (6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q)"
+  else
+    log_warning "Solana USDC bootstrap failed (non-fatal — EVM->Solana swaps verify at claim layer only)"
+  fi
+}
+
 # ── Deterministic Nostr secret keys — DEV ONLY, NOT FOR PRODUCTION ───────────
 # 64-char (32-byte) hex per Mill/DVM entrypoint validation. Easy-to-scan
 # patterns so pubkey prefixes are recognizable in relay logs.
@@ -207,6 +260,12 @@ cmd_up() {
   fi
   export SOLANA_PROGRAM_ID="${solana_program_id}"
 
+  # Bootstrap the deterministic Mock USDC mint + faucet treasury on the dev
+  # validator (issue #82). Idempotent + non-fatal. Mint only — see the
+  # bootstrap_solana_usdc() header for why the on-chain swap channel is not
+  # opened here and what that means for EVM->Solana redeemability.
+  bootstrap_solana_usdc "http://localhost:28899"
+
   # Mina lightnet — wait for accounts manager (non-fatal if unavailable)
   log_info "Waiting for Mina lightnet accounts manager..."
   local mina_accounts_ready=false
@@ -274,6 +333,13 @@ cmd_up() {
   # Per-service NODE_NOSTR_SECRET_KEY is interpolated by compose from the
   # exported TOWN_01_SECRET_KEY / TOWN_02_SECRET_KEY / MILL_01_SECRET_KEY /
   # MILL_02_SECRET_KEY / DVM_01_SECRET_KEY env vars (see top of file).
+  # NODE_NOSTR_PUBKEY is interpolated from these exported *_PUBKEY vars so the
+  # dev stack matches the production `node add` path (issue #81).
+  export TOWN_01_NOSTR_PUBKEY="$town01_pubkey"
+  export TOWN_02_NOSTR_PUBKEY="$town02_pubkey"
+  export MILL_01_NOSTR_PUBKEY="$mill01_pubkey"
+  export MILL_02_NOSTR_PUBKEY="$mill02_pubkey"
+  export DVM_01_NOSTR_PUBKEY="$dvm01_pubkey"
   docker compose -p "$PROJECT_NAME" -f "$REPO_ROOT/$COMPOSE_FILE" \
     up -d \
       townhouse-dev-town-01 \

@@ -162,8 +162,10 @@ All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Con
 | 28545 | 8545 | Anvil JSON-RPC (chain-id 31337) |
 | 28899 | 8899 | Solana test-validator RPC |
 | 28900 | 8900 | Solana test-validator WebSocket |
-| 28085 | 3101 | Mina lightnet GraphQL |
+| 28085 | 3085 | Mina lightnet GraphQL |
 | 28181 | 8181 | Mina lightnet accounts manager |
+
+> **Solana swap redeemability (EVM→Solana):** `up` bootstraps the deterministic Mock USDC mint (`6Gbdr…`) + faucet treasury on the dev validator (idempotent, reusing `infra/solana/bootstrap-usdc.mjs`). The **on-chain swap channel is NOT opened** — it's a runtime PDA of `(participantA, participantB, mint, program)` + an on-chain deposit, not statically reproducible. So the mill signs valid off-chain `solana:devnet` claims and EVM→Solana swaps verify at the **claim-issuance layer only** on this devnet (not on-chain redeemable). See `packages/townhouse/CONTRIBUTING.md` § "Solana swap redeemability" and issue #82.
 
 ---
 
