@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0](https://github.com/toon-protocol/town/compare/v0.11.0...v0.12.0) (2026-06-04)
+
+### Features
+
+* **client,docker:** toon-client pays Solana through townhouse (Stage 2c) ([#106](https://github.com/toon-protocol/town/issues/106)) ([e6da845](https://github.com/toon-protocol/town/commit/e6da8450292a6dcb30eb8ace42dcb8dc4e24f066)), closes [#102](https://github.com/toon-protocol/town/issues/102) [#103](https://github.com/toon-protocol/town/issues/103) [#104](https://github.com/toon-protocol/town/issues/104) [#105](https://github.com/toon-protocol/town/issues/105)
+
 ## [0.11.0](https://github.com/toon-protocol/town/compare/v0.10.0...v0.11.0) (2026-06-04)
 
 ### Features
