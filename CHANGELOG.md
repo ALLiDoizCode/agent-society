@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.2](https://github.com/toon-protocol/town/compare/v0.12.1...v0.12.2) (2026-06-04)
+
+### Bug Fixes
+
+* **client:** chain-aware explicit-claim path (unblock Solana payment loop) ([#110](https://github.com/toon-protocol/town/issues/110)) ([2ec110c](https://github.com/toon-protocol/town/commit/2ec110c8450eb1e4b9d759a033ce10d6f2d01cf0))
+
 ## [0.12.1](https://github.com/toon-protocol/town/compare/v0.12.0...v0.12.1) (2026-06-04)
 
 ### Bug Fixes
