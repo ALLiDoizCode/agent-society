@@ -36,6 +36,12 @@ services:
     container_name: toon-client-e2e
     networks: [e2e-client-net]
     restart: unless-stopped
+    # Maps host.docker.internal → the host gateway so LOCAL_CHAINS mode can point
+    # the client's *_RPC_URL at host-published local Docker chains (the client net
+    # is isolated and cannot resolve compose service hostnames). No effect in
+    # Akash mode (public ingress URLs ignore this).
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     ports:
       # POST /publish, GET /healthz, GET /signer-info — bind to host loopback
       - '127.0.0.1:29200:8080'

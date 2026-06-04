@@ -105,7 +105,10 @@ check_prereqs() {
     die "Docker server ${server_ver} too old. Need >= 20.10.0 for named networks + compose v2."
   fi
 
-  [[ -f "$LEASES_PATH" ]] || die "leases.json not found at $LEASES_PATH. Run scripts/akash-deploy.sh to bootstrap."
+  # LOCAL_CHAINS mode does not read leases.json (chains are local Docker).
+  if [[ "${LOCAL_CHAINS:-0}" != "1" ]]; then
+    [[ -f "$LEASES_PATH" ]] || die "leases.json not found at $LEASES_PATH. Run scripts/akash-deploy.sh to bootstrap."
+  fi
   [[ -f "$COMPOSE_FILE" ]] || die "compose file missing at $COMPOSE_FILE"
 }
 
@@ -182,6 +185,34 @@ ensure_image_manifest() {
 }
 
 read_leases() {
+  # LOCAL_CHAINS=1 points the whole loop at the LOCAL Docker devnet chains
+  # (scripts/townhouse-dev-infra.sh / sdk-e2e-infra.sh) instead of the Akash
+  # leases. This is the standing fallback when the Akash anvil/solana/faucet
+  # leases are unreachable (the loop's most common blocker). It splits the chain
+  # URLs into two views:
+  #   - *_RPC_URL          : HOST-side URLs (host-published ports) for the
+  #                          funding helpers + preflight probes that run on the
+  #                          operator machine.
+  #   - *_RPC_URL_INTERNAL : DOCKER-internal URLs (compose service hostnames) the
+  #                          apex connector container uses for its chainProvider
+  #                          rpcUrl (the apex lives on townhouse-hs-net alongside
+  #                          townhouse-dev-anvil / townhouse-dev-solana).
+  # There is no Akash faucet locally; the direct_fund_* helpers talk to the chain
+  # RPCs directly, so FAUCET_URL is set to the local EVM RPC purely so the
+  # /health probe + compose interpolation have a non-empty value.
+  if [[ "${LOCAL_CHAINS:-0}" == "1" ]]; then
+    EVM_RPC_URL="${LOCAL_EVM_RPC_URL:-http://127.0.0.1:28545}"
+    SOLANA_RPC_URL="${LOCAL_SOLANA_RPC_URL:-http://127.0.0.1:28899}"
+    FAUCET_URL="${LOCAL_FAUCET_URL:-$EVM_RPC_URL}"
+    EVM_RPC_URL_INTERNAL="${LOCAL_EVM_RPC_URL_INTERNAL:-http://townhouse-dev-anvil:8545}"
+    SOLANA_RPC_URL_INTERNAL="${LOCAL_SOLANA_RPC_URL_INTERNAL:-http://townhouse-dev-solana:8899}"
+    export EVM_RPC_URL SOLANA_RPC_URL FAUCET_URL EVM_RPC_URL_INTERNAL SOLANA_RPC_URL_INTERNAL
+    log "LOCAL_CHAINS=1 — using local Docker devnet chains:"
+    log "  EVM    host=$EVM_RPC_URL    internal=$EVM_RPC_URL_INTERNAL"
+    log "  Solana host=$SOLANA_RPC_URL internal=$SOLANA_RPC_URL_INTERNAL"
+    return 0
+  fi
+
   EVM_RPC_URL=$(jq -r '.anvil.url // empty' "$LEASES_PATH")
   SOLANA_RPC_URL=$(jq -r '.solana.url // empty' "$LEASES_PATH")
   FAUCET_URL=$(jq -r '.faucet.url // empty' "$LEASES_PATH")
@@ -190,7 +221,10 @@ read_leases() {
   [[ -n "$SOLANA_RPC_URL" ]] || die "solana.url missing from leases.json. Run scripts/akash-deploy.sh solana."
   [[ -n "$FAUCET_URL"     ]] || die "faucet.url missing from leases.json. Run scripts/akash-deploy.sh faucet."
 
-  export EVM_RPC_URL SOLANA_RPC_URL FAUCET_URL
+  # In Akash mode the apex reaches the chains over the same public ingress URLs.
+  EVM_RPC_URL_INTERNAL="$EVM_RPC_URL"
+  SOLANA_RPC_URL_INTERNAL="$SOLANA_RPC_URL"
+  export EVM_RPC_URL SOLANA_RPC_URL FAUCET_URL EVM_RPC_URL_INTERNAL SOLANA_RPC_URL_INTERNAL
 }
 
 probe_evm_rpc() {
@@ -231,6 +265,15 @@ probe_faucet() {
 }
 
 preflight_probes() {
+  if [[ "${LOCAL_CHAINS:-0}" == "1" ]]; then
+    log "Pre-flight (LOCAL_CHAINS): probing local Docker devnet chains…"
+    probe_evm_rpc "local-anvil"  "$EVM_RPC_URL" \
+      "→ run scripts/townhouse-dev-infra.sh up (or sdk-e2e-infra.sh up) for local chains"
+    probe_sol_rpc "local-solana" "$SOLANA_RPC_URL" \
+      "→ run scripts/townhouse-dev-infra.sh up (or sdk-e2e-infra.sh up) for local chains"
+    # No local faucet service — the direct_fund_* helpers hit the chain RPCs.
+    return 0
+  fi
   log "Pre-flight: probing Akash leases (10s timeout each)…"
   probe_evm_rpc "anvil"  "$EVM_RPC_URL"    "→ run scripts/akash-deploy.sh anvil to redeploy"
   probe_sol_rpc "solana" "$SOLANA_RPC_URL" "→ run scripts/akash-deploy.sh solana to redeploy"
@@ -399,17 +442,14 @@ fund_apex_and_town() {
   # of the live loop — the connector's claimFromChannel transfers the claimed
   # delta here.
   if [[ "${E2E_SOLANA:-0}" == "1" ]]; then
-    local cli apex_sol
-    cli="$(resolve_townhouse_cli)"
-    apex_sol=$(TOWNHOUSE_HOME="$TOWNHOUSE_HOME" TOWNHOUSE_WALLET_PASSWORD="$TEST_PASSWORD" \
-      $cli wallet show -c "$TOWNHOUSE_HOME/config.yaml" --password "$TEST_PASSWORD" --json 2>/dev/null \
-      | jq -r '[.. | objects | select(has("sol")) | .sol.address] | map(select(. != null)) | first // empty' 2>/dev/null) || true
+    local apex_sol
+    apex_sol="$(resolve_apex_solana_signer)" || true
     if [[ -n "$apex_sol" ]]; then
       log "Funding apex Solana recipient $apex_sol (native + USDC ATA)…"
       direct_fund_sol_native "$apex_sol" || warn "apex SOL native fund failed"
       direct_fund_sol_usdc "$apex_sol" || warn "apex SOL USDC fund failed"
     else
-      warn "E2E_SOLANA=1 but could not resolve apex Solana address from 'wallet show --json' — skipping apex ATA funding"
+      warn "E2E_SOLANA=1 but could not resolve apex Solana settlement signer — skipping apex ATA funding"
     fi
   fi
 }
@@ -486,6 +526,19 @@ resolve_townhouse_cli() {
   die "townhouse CLI not found. Run: pnpm --filter @toon-protocol/townhouse build"
 }
 
+# Resolve the apex's REAL Solana settlement signer (participant B for client
+# channels). This is the pubkey the connector logs as "Solana settlement signer
+# resolved" — derived from the connector's Solana chainProvider keyId, NOT a
+# `townhouse wallet show` node-type address (m/44'/501'/N'/0'/0'). Targeting a
+# wallet-show address opens a channel PDA the apex's signer is not a participant
+# in, so the apex can neither verify nor settle the client's Solana claim.
+resolve_apex_solana_signer() {
+  docker logs townhouse-hs-connector 2>&1 \
+    | grep -F 'Solana settlement signer resolved' \
+    | tail -1 \
+    | jq -r '.address // empty' 2>/dev/null
+}
+
 up_townhouse_hs() {
   local cli
   cli=$(resolve_townhouse_cli)
@@ -515,12 +568,12 @@ up_townhouse_hs() {
 chainProviders:
   - chainType: evm
     chainId: evm:base:31337
-    rpcUrl: "$EVM_RPC_URL"
+    rpcUrl: "$EVM_RPC_URL_INTERNAL"
     registryAddress: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
     tokenAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
     keyId: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"
 EOF
-    log "Injected Akash-Anvil chainProviders into $config_path"
+    log "Injected EVM chainProvider into $config_path (rpcUrl=$EVM_RPC_URL_INTERNAL)"
 
     # ── Solana chainProvider (Phase-2 Stage 2) ──────────────────────────────
     # Opt-in via E2E_SOLANA=1. The apex's Solana settlement keyId is left blank;
@@ -541,12 +594,12 @@ EOF
       cat >> "$config_path" <<EOF
   - chainType: solana
     chainId: solana:devnet
-    rpcUrl: "$SOLANA_RPC_URL"
+    rpcUrl: "$SOLANA_RPC_URL_INTERNAL"
     programId: "$sol_program"
     tokenMint: "$sol_mint"
     keyId: ""
 EOF
-      log "Injected Solana chainProvider (E2E_SOLANA=1) program=$sol_program mint=$sol_mint"
+      log "Injected Solana chainProvider (E2E_SOLANA=1) rpcUrl=$SOLANA_RPC_URL_INTERNAL program=$sol_program mint=$sol_mint"
     fi
   fi
 
@@ -685,16 +738,24 @@ up_local_client() {
   if [[ "${E2E_SOLANA:-0}" == "1" ]]; then
     sol_program="${SOLANA_PROGRAM_ID:-EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG}"
     sol_mint="${SOLANA_USDC_MINT:-6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q}"
-    local cli
-    cli="$(resolve_townhouse_cli)"
-    apex_sol=$(TOWNHOUSE_HOME="$TOWNHOUSE_HOME" TOWNHOUSE_WALLET_PASSWORD="$TEST_PASSWORD" \
-      $cli wallet show -c "$TOWNHOUSE_HOME/config.yaml" --password "$TEST_PASSWORD" --json 2>/dev/null \
-      | jq -r '[.. | objects | select(has("sol")) | .sol.address] | map(select(. != null)) | first // empty' 2>/dev/null) || true
+    apex_sol="$(resolve_apex_solana_signer)" || true
     if [[ -n "$apex_sol" ]]; then
       log "Solana payment ENABLED: program=$sol_program mint=$sol_mint apexRecipient=$apex_sol"
     else
-      warn "E2E_SOLANA=1 but could not resolve apex Solana address — client will fall back to EVM-only"
+      warn "E2E_SOLANA=1 but could not resolve apex Solana settlement signer — client will fall back to EVM-only"
     fi
+  fi
+
+  # Chain URLs the CLIENT container uses. In LOCAL_CHAINS mode the client lives on
+  # the isolated e2e-client-net and cannot resolve compose service hostnames or
+  # the host's 127.0.0.1, so it reaches the host-published local chains via
+  # host.docker.internal (mapped to host-gateway in the compose extra_hosts).
+  local client_evm_rpc="$EVM_RPC_URL" client_sol_rpc="$SOLANA_RPC_URL" client_faucet="$FAUCET_URL"
+  if [[ "${LOCAL_CHAINS:-0}" == "1" ]]; then
+    client_evm_rpc="${EVM_RPC_URL//127.0.0.1/host.docker.internal}"
+    client_sol_rpc="${SOLANA_RPC_URL//127.0.0.1/host.docker.internal}"
+    client_faucet="${FAUCET_URL//127.0.0.1/host.docker.internal}"
+    log "LOCAL_CHAINS client chain URLs: evm=$client_evm_rpc solana=$client_sol_rpc"
   fi
 
   # Force a CLEAN start. Every restart cycles ephemeral keys; if we leave a
@@ -702,17 +763,17 @@ up_local_client() {
   # Export env vars so both `down` AND `up` can interpolate the compose file —
   # docker compose down evaluates the same env-var refs as up.
   log "docker compose down + up -d (fresh client container)…"
-  FAUCET_URL="$FAUCET_URL" \
-  EVM_RPC_URL="$EVM_RPC_URL" \
-  SOLANA_RPC_URL="$SOLANA_RPC_URL" \
+  FAUCET_URL="$client_faucet" \
+  EVM_RPC_URL="$client_evm_rpc" \
+  SOLANA_RPC_URL="$client_sol_rpc" \
   SOLANA_PROGRAM_ID="$sol_program" \
   SOLANA_USDC_MINT="$sol_mint" \
   SOLANA_TOKEN_MINT="$sol_mint" \
   TARGET_SETTLEMENT_ADDRESS_SOLANA="$apex_sol" \
     docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>&1 | tail -3 || true
-  FAUCET_URL="$FAUCET_URL" \
-  EVM_RPC_URL="$EVM_RPC_URL" \
-  SOLANA_RPC_URL="$SOLANA_RPC_URL" \
+  FAUCET_URL="$client_faucet" \
+  EVM_RPC_URL="$client_evm_rpc" \
+  SOLANA_RPC_URL="$client_sol_rpc" \
   SOLANA_PROGRAM_ID="$sol_program" \
   SOLANA_USDC_MINT="$sol_mint" \
   SOLANA_TOKEN_MINT="$sol_mint" \
