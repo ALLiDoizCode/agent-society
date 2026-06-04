@@ -575,11 +575,10 @@ describe.skipIf(!shouldRun)(
             `wait for scripts/akash-deploy.sh to complete, then retry`
         );
       }
-      podUrl = (
-        POD_URL_FROM_ENV ||
-        leases['toon-client']?.url ||
+      podUrl = (POD_URL_FROM_ENV || leases['toon-client']?.url || '').replace(
+        /\/+$/,
         ''
-      ).replace(/\/+$/, '');
+      );
       if (!podUrl) {
         throw new Error(
           'No toon-client URL: set AKASH_TOON_CLIENT_URL or run scripts/akash-deploy.sh toon-client'
