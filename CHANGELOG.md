@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0](https://github.com/toon-protocol/town/compare/v0.9.0...v0.10.0) (2026-06-04)
+
+### Features
+
+* **town,e2e:** advertise Solana settlement + document Stage-2 client gate ([#104](https://github.com/toon-protocol/town/issues/104)) ([61ea651](https://github.com/toon-protocol/town/commit/61ea65132c5434737f076a1f8d820380e1a2f6f5))
+
 ## [0.9.0](https://github.com/toon-protocol/town/compare/v0.8.0...v0.9.0) (2026-06-04)
 
 ### Features
