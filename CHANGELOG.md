@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0](https://github.com/toon-protocol/town/compare/v0.7.0...v0.8.0) (2026-06-04)
+
+### Features
+
+* **client:** multi-chain mnemonic identity + real npm-consumer e2e ([#100](https://github.com/toon-protocol/town/issues/100)) ([66291f5](https://github.com/toon-protocol/town/commit/66291f5bb647c4abed2896fb8e1596862423a153))
+* **townhouse:** derive apex settlement keyId from the operator mnemonic ([#101](https://github.com/toon-protocol/town/issues/101)) ([17f3ed8](https://github.com/toon-protocol/town/commit/17f3ed800a86879341fc7511542776558d1dff84))
+
 ## [0.7.0](https://github.com/toon-protocol/town/compare/v0.6.0...v0.7.0) (2026-06-03)
 
 ### Features
