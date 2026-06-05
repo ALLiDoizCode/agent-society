@@ -72,7 +72,7 @@ async function main() {
   // node_modules graph resolves o1js (to the CJS build the zkApp itself uses).
   const require = createRequire(path.join(zkAppDir, 'package.json'));
   const o1js = require('o1js') as typeof O1js;
-  const { Mina, PrivateKey, AccountUpdate, fetchAccount } = o1js;
+  const { Mina, PrivateKey, AccountUpdate, fetchAccount, Field } = o1js;
   // The package can't resolve itself by name (no self-referential symlink in a
   // pnpm workspace), so load the built entry by path. Its own
   // `require('o1js')` resolves to the same CJS build via mina-zkapp's
@@ -105,18 +105,37 @@ async function main() {
   const zkAppAddress = zkAppKey.toPublicKey();
   console.error(`zkApp address: ${zkAppAddress.toBase58()}`);
 
-  // Idempotency (deterministic mode): if the zkApp account already exists
-  // on-chain, skip the (slow, proof-generating) deploy and just print it.
+  // Idempotency (deterministic mode): skip the (slow, proof-generating) deploy
+  // ONLY when the zkApp account already exists on-chain AND its channel is already
+  // OPEN. A prior *bare* deploy (pre deploy-shape fix) leaves the account present
+  // but UNINITIALIZED (channelState=0) — that account is unusable by the connector
+  // (provedState/state-read fails), so do NOT treat it as a no-op. We cannot
+  // re-deploy over an existing account, so surface the stale-account case clearly:
+  // the operator must reset the lightnet (`townhouse-dev-infra.sh` recreates
+  // `townhouse-dev-mina`) so this deterministic key deploys fresh.
   if (ZKAPP_PRIVATE_KEY) {
     const existing = await fetchAccount({ publicKey: zkAppAddress }).catch(
       () => ({ account: undefined })
     );
     if (existing.account) {
-      console.error(
-        'zkApp account already exists on-chain — skipping deploy (idempotent).'
+      // PaymentChannel appState order: [channelHash, balanceCommitment,
+      // nonceField, channelState, …] → channelState is index 3.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const appState = (existing.account as any).zkapp?.appState;
+      const channelState = BigInt(appState?.[3]?.toString() ?? '0');
+      if (channelState === 1n) {
+        console.error(
+          'zkApp account already exists on-chain and channel is OPEN — skipping deploy (idempotent).'
+        );
+        console.log(zkAppAddress.toBase58());
+        return;
+      }
+      throw new Error(
+        `Deterministic Mina zkApp ${zkAppAddress.toBase58()} already exists on-chain but is NOT OPEN ` +
+          `(channelState=${channelState}; likely a stale bare-deploy from before the deploy-shape fix). ` +
+          `Cannot re-deploy over an existing account. Reset the lightnet (recreate townhouse-dev-mina via ` +
+          `scripts/townhouse-dev-infra.sh) so this deterministic key deploys + initializes fresh.`
       );
-      console.log(zkAppAddress.toBase58());
-      return;
     }
   }
 
@@ -148,12 +167,38 @@ async function main() {
   // Fetch deployer account from chain
   await fetchAccount({ publicKey: deployerPub });
 
-  // Deploy. Specify an explicit fee — the lightnet rejects the implicit/zero
-  // default with "Insufficient fee". 0.1 MINA (100_000_000 nanomina) clears the
-  // node's minimum for a zkApp command on `compatible-latest-lightnet`.
-  console.error('Deploying…');
+  // Deploy, then initialize the channel in a SECOND transaction.
+  //
+  // Why not one atomic tx: `initializeChannel` reads
+  // `this.channelState.getAndRequireEquals()` (a witness against the on-chain
+  // account). In the SAME tx as `deploy()` the account does not yet exist in the
+  // ledger, so o1js throws `channelState.get() failed … Could not find account`.
+  // The init method must run AFTER the deploy account is on-chain and fetched
+  // into o1js's active-instance cache.
+  //
+  // Why initialize at all: a bare `deploy()` leaves the zkApp UNINITIALIZED
+  // (channelState=0) with `provedState=false` on a real lightnet (unlike the
+  // LocalBlockchain test env). With `provedState=false` the connector's
+  // `MinaPaymentChannelSDK.getChannelState` (`channelState.get()`) cannot resolve
+  // the account state → `mina_claim_verification_failed`. Running the proven
+  // `initializeChannel` method here yields `provedState=true` + an OPEN channel,
+  // so `getChannelState` returns a real OPEN state and the client opener
+  // (`openMinaChannelOnChain`) idempotently finds it OPEN (currentState===OPEN →
+  // skips re-init).
+  //
+  // Participants: the on-chain contract stores only
+  // `channelHash = Poseidon(participantA.x, participantB.x, nonce)` (not A/B
+  // themselves). For this deterministic dev channel we use the deployer pubkey for
+  // BOTH participants (single-party dev channel — the same default the client
+  // opener applies when `peerPublicKey` is omitted). The connector's participant
+  // MEMBERSHIP check reads from its own `_participantCache` (populated only on
+  // connector-initiated opens), not from on-chain — so the on-chain participants
+  // here do not gate the connector. nonce/timeout/tokenId mirror the opener
+  // defaults (Field(0) / 86400 / '1') so a later opener call is a true no-op.
   const DEPLOY_FEE = 100_000_000; // 0.1 MINA, in nanomina
   const zkApp = new PaymentChannel(zkAppAddress);
+
+  console.error('Deploying…');
   const deployTx = await Mina.transaction(
     { sender: deployerPub, fee: DEPLOY_FEE },
     async () => {
@@ -163,12 +208,51 @@ async function main() {
   );
   await deployTx.prove();
   deployTx.sign([deployerKey, zkAppKey]);
-  const pendingTx = await deployTx.send();
-  console.error(`Transaction sent: ${pendingTx.hash}`);
+  const pendingDeploy = await deployTx.send();
+  console.error(`Deploy tx sent: ${pendingDeploy.hash}`);
+  const includedDeploy = await pendingDeploy.wait();
+  console.error(`Deploy included in block. Status: ${includedDeploy.status}`);
 
-  // Wait for inclusion
-  const includedTx = await pendingTx.wait();
-  console.error(`Transaction included in block. Status: ${includedTx.status}`);
+  // Initialize the channel (separate tx). Re-fetch BOTH the zkApp and the
+  // fee-payer into o1js's active-instance cache so the `getAndRequireEquals()`
+  // precondition read resolves against the now-on-chain account.
+  console.error('Initializing channel (open)…');
+  await fetchAccount({ publicKey: zkAppAddress });
+  await fetchAccount({ publicKey: deployerPub });
+  const INIT_NONCE = Field(0);
+  const INIT_TIMEOUT = Field(86_400);
+  const INIT_TOKEN_ID = Field(1);
+  const initTx = await Mina.transaction(
+    { sender: deployerPub, fee: DEPLOY_FEE },
+    async () => {
+      // participantA = participantB = deployerPub (single-party dev channel).
+      await zkApp.initializeChannel(
+        deployerPub,
+        deployerPub,
+        INIT_NONCE,
+        INIT_TIMEOUT,
+        INIT_TOKEN_ID
+      );
+    }
+  );
+  await initTx.prove();
+  initTx.sign([deployerKey]);
+  const pendingInit = await initTx.send();
+  console.error(`Init tx sent: ${pendingInit.hash}`);
+  const includedInit = await pendingInit.wait();
+  console.error(`Init included in block. Status: ${includedInit.status}`);
+
+  // Verify the channel is OPEN on-chain before reporting success.
+  await fetchAccount({ publicKey: zkAppAddress });
+  const verify = await fetchAccount({ publicKey: zkAppAddress });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finalState = (verify.account as any)?.zkapp?.appState?.[3]?.toString();
+  console.error(`Post-init channelState (appState[3]) = ${finalState}`);
+  if (finalState !== '1') {
+    throw new Error(
+      `Channel did not reach OPEN (channelState=${finalState}) after initializeChannel`
+    );
+  }
 
   // Print the zkApp address to stdout (for capture by infra script)
   console.log(zkAppAddress.toBase58());
