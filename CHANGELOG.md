@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0](https://github.com/toon-protocol/town/compare/v0.12.3...v0.13.0) (2026-06-05)
+
+### Features
+
+* **client,docker,e2e:** wire Mina settlement path through townhouse apex (Stage 3) ([#112](https://github.com/toon-protocol/town/issues/112)) ([5f689fe](https://github.com/toon-protocol/town/commit/5f689fe1219ab328a9077abebd7b5baa04d0f2a9)), closes [106/#108](https://github.com/106/town/issues/108) [#88](https://github.com/toon-protocol/town/issues/88) [#84](https://github.com/toon-protocol/town/issues/84)
+
 ## [0.12.3](https://github.com/toon-protocol/town/compare/v0.12.2...v0.12.3) (2026-06-05)
 
 ### Bug Fixes
