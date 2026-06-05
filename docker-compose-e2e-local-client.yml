@@ -57,6 +57,13 @@ services:
       PUBLISH_RATE_LIMIT_PER_MIN: '30'
       LOG_LEVEL: 'info'
 
+      # Per-chain native-balance poll window for boot funding. In ator-public
+      # proxy mode there is no anon-bootstrap buffer ahead of the poll, so funding
+      # starts at boot and Solana airdrop confirmation on a local validator can
+      # exceed the historical 30s default → false "never crossed 1 lamport"
+      # boot failure. Widen to 120s for the E2E loop; override as needed.
+      FUND_POLL_DEADLINE_MS: ${FUND_POLL_DEADLINE_MS:-120000}
+
       # Route through public ATOR proxies. NOTE: the toon-client entrypoint only
       # uses the FIRST proxy in this list (no runtime fallback yet) — comma-
       # separated form is for forward-compat. Put a known-good proxy FIRST.
