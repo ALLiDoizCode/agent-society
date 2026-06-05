@@ -104,6 +104,26 @@ services:
       SOLANA_DEPOSIT_AMOUNT: ${SOLANA_DEPOSIT_AMOUNT:-}
       SOLANA_PAYER_TOKEN_ACCOUNT: ${SOLANA_PAYER_TOKEN_ACCOUNT:-}
 
+      # ── Mina settlement (Phase-2 Stage 3; opt-in via E2E_MINA=1) ────────────
+      # Supplied by the orchestrator only when E2E_MINA=1. When BOTH
+      # MINA_ZKAPP_ADDRESS and TARGET_SETTLEMENT_ADDRESS_MINA are set, the
+      # entrypoint negotiates `mina:devnet` (in addition to the EVM path),
+      # derives EVM + Mina from a single mnemonic, and signs a Mina balance proof.
+      # When unset, the default single-chain EVM path is unchanged.
+      #
+      # GATE (claim-validation, NOT the connector #88 settle gate): the client's
+      # Mina claim does NOT satisfy connector 3.9.0's MinaClaimMessage contract
+      # (missing tokenId/balanceCommitment/proof/salt; Schnorr-over-
+      # balanceProofFieldsMina vs Poseidon commitment; no real on-chain zkApp
+      # channel), so a mina:* publish is REJECTED at validateClaimMessage. The
+      # wiring is shipped so the negotiation path is exercised by the gated smoke.
+      MINA_CHAIN_KEY: ${MINA_CHAIN_KEY:-mina:devnet}
+      MINA_ZKAPP_ADDRESS: ${MINA_ZKAPP_ADDRESS:-}
+      MINA_GRAPHQL_URL: ${MINA_GRAPHQL_URL:-http://host.docker.internal:28085/graphql}
+      # Apex Mina recipient (B62 base58) — claim recipient / channel peer. Blank
+      # unless the orchestrator resolves it (apex Mina settlement pubkey).
+      TARGET_SETTLEMENT_ADDRESS_MINA: ${TARGET_SETTLEMENT_ADDRESS_MINA:-}
+
       # Drives the paid-claim path (1 USDC at scale=6). 49.4's round-6 verified
       # this fee setting produces a real signed claim that lands on the apex.
       TOON_FEE_PER_EVENT: '1000000'

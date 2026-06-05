@@ -207,9 +207,19 @@ read_leases() {
     EVM_RPC_URL_INTERNAL="${LOCAL_EVM_RPC_URL_INTERNAL:-http://townhouse-dev-anvil:8545}"
     SOLANA_RPC_URL_INTERNAL="${LOCAL_SOLANA_RPC_URL_INTERNAL:-http://townhouse-dev-solana:8899}"
     export EVM_RPC_URL SOLANA_RPC_URL FAUCET_URL EVM_RPC_URL_INTERNAL SOLANA_RPC_URL_INTERNAL
+    # Mina lightnet (Phase-2 Stage 3; only consulted when E2E_MINA=1). GraphQL on
+    # the dev table port 28085, accounts-manager on 28181 (docker-compose-
+    # townhouse-dev.yml mina service). The apex connector reaches the lightnet
+    # over the compose-internal service hostname (townhouse-dev-mina).
+    MINA_GRAPHQL_URL="${LOCAL_MINA_GRAPHQL_URL:-http://127.0.0.1:28085/graphql}"
+    MINA_ACCOUNTS_URL="${LOCAL_MINA_ACCOUNTS_URL:-http://127.0.0.1:28181}"
+    MINA_GRAPHQL_URL_INTERNAL="${LOCAL_MINA_GRAPHQL_URL_INTERNAL:-http://townhouse-dev-mina:3085/graphql}"
+    export MINA_GRAPHQL_URL MINA_ACCOUNTS_URL MINA_GRAPHQL_URL_INTERNAL
     log "LOCAL_CHAINS=1 — using local Docker devnet chains:"
     log "  EVM    host=$EVM_RPC_URL    internal=$EVM_RPC_URL_INTERNAL"
     log "  Solana host=$SOLANA_RPC_URL internal=$SOLANA_RPC_URL_INTERNAL"
+    [[ "${E2E_MINA:-0}" == "1" ]] && \
+      log "  Mina   host=$MINA_GRAPHQL_URL internal=$MINA_GRAPHQL_URL_INTERNAL accounts=$MINA_ACCOUNTS_URL"
     return 0
   fi
 
@@ -225,6 +235,14 @@ read_leases() {
   EVM_RPC_URL_INTERNAL="$EVM_RPC_URL"
   SOLANA_RPC_URL_INTERNAL="$SOLANA_RPC_URL"
   export EVM_RPC_URL SOLANA_RPC_URL FAUCET_URL EVM_RPC_URL_INTERNAL SOLANA_RPC_URL_INTERNAL
+
+  # Mina (Phase-2 Stage 3; only consulted when E2E_MINA=1). On Akash the Mina
+  # lightnet GraphQL + accounts-manager come from leases.json (mina.url /
+  # mina.accountsUrl); fall back to empty so callers can detect "not provisioned".
+  MINA_GRAPHQL_URL=$(jq -r '.mina.url // empty' "$LEASES_PATH" 2>/dev/null || echo '')
+  MINA_ACCOUNTS_URL=$(jq -r '.mina.accountsUrl // empty' "$LEASES_PATH" 2>/dev/null || echo '')
+  MINA_GRAPHQL_URL_INTERNAL="$MINA_GRAPHQL_URL"
+  export MINA_GRAPHQL_URL MINA_ACCOUNTS_URL MINA_GRAPHQL_URL_INTERNAL
 }
 
 probe_evm_rpc() {
@@ -452,6 +470,44 @@ fund_apex_and_town() {
       warn "E2E_SOLANA=1 but could not resolve apex Solana settlement signer — skipping apex ATA funding"
     fi
   fi
+
+  # ── Apex Mina settlement account (Phase-2 Stage 3; opt-in via E2E_MINA=1) ──
+  # The Mina lightnet accounts-manager pre-funds accounts. The apex Mina
+  # settlement account is the derived apex Mina pubkey (the address the connector
+  # logs as "Mina settlement signer resolved"); it needs MINA to pay account-
+  # creation + (eventually) on-chain settle fees. Best-effort: the funding step
+  # uses the accounts-manager `acquire`/`fund` API where available.
+  if [[ "${E2E_MINA:-0}" == "1" ]]; then
+    local apex_mina
+    apex_mina="$(resolve_apex_mina_signer)" || true
+    if [[ -n "$apex_mina" ]]; then
+      log "Funding apex Mina recipient $apex_mina (lightnet accounts-manager)…"
+      direct_fund_mina "$apex_mina" || warn "apex Mina fund failed (best-effort)"
+    else
+      warn "E2E_MINA=1 but could not resolve apex Mina settlement signer — skipping apex Mina funding"
+    fi
+  fi
+}
+
+# Best-effort Mina funding via the lightnet accounts-manager. Lightnet pre-funds
+# accounts it issues; for an arbitrary externally-derived address (the apex Mina
+# pubkey), we request a faucet drip from the accounts-manager when it supports
+# one. Failures are non-fatal — the Mina loop is claim-validation gated, so the
+# apex never actually settles on-chain in this stack (no funds consumed).
+direct_fund_mina() {
+  local addr="$1"
+  # The o1labs lightnet accounts-manager exposes faucet endpoints across
+  # versions; try the documented ones in turn (each non-fatal).
+  for path in "fund-account" "faucet"; do
+    if curl -sfk --max-time 10 -X POST "$MINA_ACCOUNTS_URL/$path" \
+         -H 'content-type: application/json' \
+         -d "{\"pk\":\"$addr\",\"amount\":\"100000000000\"}" >/dev/null 2>&1; then
+      log "Mina fund request accepted via $MINA_ACCOUNTS_URL/$path for $addr"
+      return 0
+    fi
+  done
+  warn "Mina accounts-manager faucet not available at $MINA_ACCOUNTS_URL (tried fund-account, faucet)"
+  return 1
 }
 
 fund_client_pod() {
@@ -539,6 +595,61 @@ resolve_apex_solana_signer() {
     | jq -r '.address // empty' 2>/dev/null
 }
 
+# Resolve the apex's REAL Mina settlement signer (participant B for client Mina
+# channels). The connector logs this when it registers the Mina chainProvider
+# from the keyId `townhouse hs up` filled in from the apex Mina key. Mirrors
+# resolve_apex_solana_signer — used as the client's Mina claim recipient so the
+# apex is a participant in the negotiated channel (Stage 3).
+resolve_apex_mina_signer() {
+  docker logs townhouse-hs-connector 2>&1 \
+    | grep -F 'Mina settlement signer resolved' \
+    | tail -1 \
+    | jq -r '.address // empty' 2>/dev/null
+}
+
+# Deterministic-keypair Mina zkApp deploy (Phase-2 Stage 3). Captures the stable
+# zkApp address into MINA_ZKAPP_ADDRESS (exported for chainProvider injection +
+# client env). The deploy runs o1js (proof generation, ~30-120s, ~2GB RAM) ONE at
+# a time. Deterministic key → idempotent: a second run on an existing account is a
+# no-op. The deterministic zkApp key is a documented dev-only key (never real).
+#
+# NOTE: this requires o1js + the mina-zkapp package + a reachable Mina lightnet
+# (GraphQL + accounts-manager). If any prerequisite is missing the deploy fails
+# soft (warns); the Mina chainProvider injection then skips and the Mina loop is
+# not exercised (which is fine — the loop is claim-validation gated regardless).
+MINA_ZKAPP_DETERMINISTIC_KEY="${MINA_ZKAPP_PRIVATE_KEY:-EKEdScHCp4iyHU8Dikj5gzD9Jpu6yEv9XfPrEFE6kEAXanaVQYNu}"
+deploy_mina_zkapp_deterministic() {
+  if [[ -n "${MINA_ZKAPP_ADDRESS:-}" ]]; then
+    log "MINA_ZKAPP_ADDRESS already set ($MINA_ZKAPP_ADDRESS) — skipping deploy"
+    return 0
+  fi
+  # Probe lightnet GraphQL before attempting the (expensive) o1js deploy.
+  if ! curl -sfk --max-time 8 -X POST "$MINA_GRAPHQL_URL" \
+      -H 'content-type: application/json' \
+      -d '{"query":"{ syncStatus }"}' >/dev/null 2>&1; then
+    warn "Mina lightnet GraphQL ($MINA_GRAPHQL_URL) unreachable — cannot deploy zkApp."
+    warn "  Bring up the Mina lightnet (scripts/townhouse-dev-infra.sh up brings up townhouse-dev-mina)."
+    return 1
+  fi
+  log "Deploying deterministic Mina zkApp (o1js — slow, ~30-120s, ~2GB RAM)…"
+  local out
+  if ! out=$(MINA_GRAPHQL_URL="$MINA_GRAPHQL_URL" \
+       MINA_ACCOUNTS_URL="$MINA_ACCOUNTS_URL" \
+       MINA_ZKAPP_PRIVATE_KEY="$MINA_ZKAPP_DETERMINISTIC_KEY" \
+       timeout 300 npx tsx "${REPO_ROOT}/scripts/deploy-mina-zkapp.ts" 2>>/tmp/mina-zkapp-deploy.log); then
+    warn "Mina zkApp deploy failed (see /tmp/mina-zkapp-deploy.log):"
+    tail -8 /tmp/mina-zkapp-deploy.log >&2 || true
+    return 1
+  fi
+  MINA_ZKAPP_ADDRESS="$(echo "$out" | tail -1 | tr -d '[:space:]')"
+  export MINA_ZKAPP_ADDRESS
+  if [[ -z "$MINA_ZKAPP_ADDRESS" ]]; then
+    warn "Mina zkApp deploy produced no address"
+    return 1
+  fi
+  log "Mina zkApp deployed (deterministic) ✓ zkAppAddress=$MINA_ZKAPP_ADDRESS"
+}
+
 up_townhouse_hs() {
   local cli
   cli=$(resolve_townhouse_cli)
@@ -600,6 +711,38 @@ EOF
     keyId: ""
 EOF
       log "Injected Solana chainProvider (E2E_SOLANA=1) rpcUrl=$SOLANA_RPC_URL_INTERNAL program=$sol_program mint=$sol_mint"
+    fi
+
+    # ── Mina chainProvider (Phase-2 Stage 3) ────────────────────────────────
+    # Opt-in via E2E_MINA=1. Deploys the deterministic-keypair payment-channel
+    # zkApp first (capturing zkAppAddress), then injects a `mina:*` chainProvider
+    # whose keyId is left blank — `townhouse hs up` fills it from the apex Mina
+    # key derived from the mnemonic (Stage 1: WalletManager.getApexSettlementKeys
+    # → minaPrivateKeyBase58 → hs-config-writer fillApexKey).
+    #
+    # GATE (Stage-3, claim-validation — NOT the #88 settle gate): with E2E_MINA=1
+    # the negotiation path is exercised end-to-end, but the client's Mina claim
+    # does NOT satisfy connector 3.9.0's MinaClaimMessage contract (missing
+    # tokenId/balanceCommitment/proof/salt; Schnorr-over-balanceProofFieldsMina
+    # vs the connector's Poseidon commitment; no real on-chain zkApp channel). So
+    # a mina:* publish is REJECTED at validateClaimMessage. The chainProvider +
+    # apex key wiring is shipped so the apex can ADVERTISE + later settle once the
+    # client claim path is brought to contract (tracked follow-up).
+    if [[ "${E2E_MINA:-0}" == "1" ]]; then
+      deploy_mina_zkapp_deterministic || warn "Mina zkApp deploy failed — chainProvider zkAppAddress may be stale"
+      local mina_zkapp="${MINA_ZKAPP_ADDRESS:-}"
+      if [[ -n "$mina_zkapp" ]]; then
+        cat >> "$config_path" <<EOF
+  - chainType: mina
+    chainId: mina:devnet
+    graphqlUrl: "$MINA_GRAPHQL_URL_INTERNAL"
+    zkAppAddress: "$mina_zkapp"
+    keyId: ""
+EOF
+        log "Injected Mina chainProvider (E2E_MINA=1) graphqlUrl=$MINA_GRAPHQL_URL_INTERNAL zkApp=$mina_zkapp"
+      else
+        warn "E2E_MINA=1 but no zkAppAddress captured — skipping Mina chainProvider injection"
+      fi
     fi
   fi
 
@@ -792,6 +935,27 @@ up_local_client() {
     fi
   fi
 
+  # Mina settlement env (Phase-2 Stage 3; opt-in via E2E_MINA=1). When set, the
+  # client entrypoint negotiates mina:devnet and signs a Mina-denominated claim
+  # to the apex's Mina settlement address. GATE: the resulting claim diverges
+  # from connector 3.9.0's MinaClaimMessage contract → REJECTED at
+  # validateClaimMessage (the wiring is exercised; the loop does NOT FULFILL).
+  local mina_zkapp="" apex_mina="" mina_graphql=""
+  if [[ "${E2E_MINA:-0}" == "1" ]]; then
+    mina_zkapp="${MINA_ZKAPP_ADDRESS:-}"
+    apex_mina="$(resolve_apex_mina_signer)" || true
+    # Client reaches the lightnet GraphQL via host.docker.internal in LOCAL_CHAINS.
+    mina_graphql="$MINA_GRAPHQL_URL"
+    if [[ "${LOCAL_CHAINS:-0}" == "1" ]]; then
+      mina_graphql="${MINA_GRAPHQL_URL//127.0.0.1/host.docker.internal}"
+    fi
+    if [[ -n "$mina_zkapp" && -n "$apex_mina" ]]; then
+      log "Mina payment ENABLED: zkApp=$mina_zkapp graphql=$mina_graphql apexRecipient=$apex_mina"
+    else
+      warn "E2E_MINA=1 but zkApp ($mina_zkapp) or apex Mina signer ($apex_mina) missing — client will fall back to EVM-only"
+    fi
+  fi
+
   # Chain URLs the CLIENT container uses. In LOCAL_CHAINS mode the client lives on
   # the isolated e2e-client-net and cannot resolve compose service hostnames or
   # the host's 127.0.0.1, so it reaches the host-published local chains via
@@ -816,6 +980,9 @@ up_local_client() {
   SOLANA_USDC_MINT="$sol_mint" \
   SOLANA_TOKEN_MINT="$sol_mint" \
   TARGET_SETTLEMENT_ADDRESS_SOLANA="$apex_sol" \
+  MINA_ZKAPP_ADDRESS="$mina_zkapp" \
+  MINA_GRAPHQL_URL="$mina_graphql" \
+  TARGET_SETTLEMENT_ADDRESS_MINA="$apex_mina" \
     docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>&1 | tail -3 || true
   FAUCET_URL="$client_faucet" \
   EVM_RPC_URL="$client_evm_rpc" \
@@ -824,6 +991,9 @@ up_local_client() {
   SOLANA_USDC_MINT="$sol_mint" \
   SOLANA_TOKEN_MINT="$sol_mint" \
   TARGET_SETTLEMENT_ADDRESS_SOLANA="$apex_sol" \
+  MINA_ZKAPP_ADDRESS="$mina_zkapp" \
+  MINA_GRAPHQL_URL="$mina_graphql" \
+  TARGET_SETTLEMENT_ADDRESS_MINA="$apex_mina" \
     docker compose -f "$COMPOSE_FILE" up -d
 
   # Wait for Fastify bind so /signer-info returns the keys. This happens in
