@@ -144,13 +144,15 @@ ensure_image_manifest() {
 
   warn "image-manifest.json missing OR compose template has unresolved placeholders — rebuilding…"
 
-  # Pin connector to v3.9.0 — must match DEFAULT_CONNECTOR_IMAGE in
+  # Pin connector to v3.9.1 — must match DEFAULT_CONNECTOR_IMAGE in
   # packages/townhouse/src/constants.ts so the gate's image-manifest + rendered
-  # compose validate the SAME connector the product ships. v3.9.0 wires Solana +
-  # Mina settlement end-to-end (toon-protocol/connector#86) on top of 3.8.1's
-  # dual-party Mina claim path (#84), 3.8.0's libsql migration (#79) +
-  # relation-aware inbound claim validation (#78). Pull lazily if missing locally.
-  local CONNECTOR_TAG=3.9.0
+  # compose validate the SAME connector the product ships. v3.9.1 fixes inbound
+  # claim validation to dispatch by blockchain type (validateSolanaClaim /
+  # validateMinaClaim / validateEVMClaim) — 3.9.0 validated every claim as EVM,
+  # so a Solana claim's base58 channelAccount was rejected with F06
+  # "Invalid channelId format (expected 0x-prefixed 64-char hex)". Builds on
+  # 3.9.0's Solana + Mina settlement wiring (#86). Pull lazily if missing locally.
+  local CONNECTOR_TAG=3.9.1
   docker image inspect "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" >/dev/null 2>&1 \
     || docker pull "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" 2>&1 | tail -2
 
