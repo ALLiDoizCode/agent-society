@@ -656,6 +656,24 @@ start_town_relay() {
 
   log "Starting town relay (--profile town)…"
   # Anvil acct[4] — must match TOWN_EVM_ADDRESS
+  #
+  # ── BUG-1 FIX (chain env) ──────────────────────────────────────────────────
+  # The compose template wires `TOON_CHAIN: ${EVM_CHAIN:-}` / `TOON_RPC_URL:
+  # ${EVM_RPC_URL:-}`. Docker Compose auto-loads `compose/.env` (written by the
+  # townhouse `hs up` env-writer), and for a `custom`-network config that has
+  # explicit EVM chainProviders that file pins `EVM_CHAIN=none` (the relay-only
+  # sentinel — see packages/core/src/chain/network-profile.ts resolveCustom()).
+  # The PUBLISHED `town:latest` image predates the `chain=none` relay-only
+  # sentinel (packages/town/src/town.ts), so it rejects `TOON_CHAIN=none` with
+  # `INVALID_CHAIN` and crash-loops, never reaching /health → its BTP peer never
+  # connects → the connector route for g.townhouse.town falls back to the DVM
+  # localDelivery handler (T00 "fetch failed"; no DVM runs in this stack).
+  #
+  # Shell env vars OVERRIDE compose/.env, so explicitly pass EVM_CHAIN=anvil +
+  # EVM_CHAIN_ID=31337 (the local Anvil preset, chain-id 31337) here to override
+  # the `.env`'s `none`. The town then boots healthy (relay path; the apex —
+  # not the town — settles the client's on-chain claim, so the town does not
+  # need a live settlement chain to FULFILL forwarded parent traffic).
   TOWNHOUSE_HOME="$TOWNHOUSE_HOME" \
   TOWNHOUSE_WALLET_DIR="$TOWNHOUSE_HOME" \
   TOWNHOUSE_WALLET_PASSWORD="$TEST_PASSWORD" \
@@ -663,30 +681,58 @@ start_town_relay() {
   TOWN_SETTLEMENT_PRIVATE_KEY='0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a' \
   APEX_EVM_ADDRESS="$APEX_EVM_ADDRESS" \
   FEE_PER_EVENT='0' \
+  EVM_CHAIN='anvil' \
+  EVM_CHAIN_ID='31337' \
   EVM_RPC_URL="$EVM_RPC_URL" \
     docker compose -f "$town_compose" --profile town up -d town \
     || warn "town profile up failed (continuing — smoke test will degrade)"
 
   log "Waiting for town BLS /health…"
   local deadline=$(( $(date +%s) + 60 ))
+  local town_healthy=0
   while (( $(date +%s) < deadline )); do
-    curl -sfk --max-time 5 "http://127.0.0.1:3100/health" >/dev/null 2>&1 && break
+    curl -sfk --max-time 5 "http://127.0.0.1:3100/health" >/dev/null 2>&1 && { town_healthy=1; break; }
     sleep 2
   done
+  if (( town_healthy == 0 )); then
+    warn "town BLS /health never came up within 60s — inspect: docker logs townhouse-hs-town | tail -40"
+  fi
 
-  log "Registering town peer via /admin/peers…"
-  curl -sfk --max-time 10 -X POST "$CONNECTOR_ADMIN_URL/admin/peers" \
-    -H 'content-type: application/json' \
-    -d '{"id":"town","url":"ws://townhouse-hs-town:3000/btp","authToken":"","routes":[],"transport":"direct"}' \
-    > /dev/null || warn "town peer registration failed"
-
-  log "Adding self-delivery route g.townhouse.town → g.townhouse…"
+  # ── BUG-2 FIX (BTP route direction) ────────────────────────────────────────
+  # The town's embedded connector DIALS its parent (CONNECTOR_URL=ws://connector
+  # :3000) and tags that OUTBOUND session's peer (g.townhouse, == TOON_PARENT_
+  # PEER_ID) as `relation:'parent'`, so it skips the inbound per-packet-claim
+  # requirement for PREPAREs the apex forwards over that session (connector#78).
+  #
+  # The apex connector must therefore deliver g.townhouse.town packets BACK over
+  # the SAME town→connector session (where the connector authenticates the peer
+  # as `town`, from NODE_ID=town). A bare route `g.townhouse.town -> town` does
+  # exactly that: nextHop `town` resolves to the town's live inbound BTP session.
+  #
+  # The PRIOR wiring did two wrong things, both yielding NO town FULFILL:
+  #   1. Registered an OUTBOUND `transport:'direct'` peer (url ws://townhouse-hs-
+  #      town:3000/btp). That makes the apex DIAL the town and forward over a
+  #      SEPARATE connector→town session, where the town's BTP *server* sees the
+  #      apex as an ordinary inbound peer (NOT its parent) → InboundClaimValidator
+  #      demands a per-packet claim → F06 "No payment channel claim attached".
+  #      (The `/btp` path suffix also broke the dial — the connector's BTP client
+  #      handshakes at the ws root, not /btp.)
+  #   2. Added a self-delivery route `g.townhouse.town -> g.townhouse`, which (via
+  #      the apex's own `g.townhouse -> local` DVM-intake route) forced the packet
+  #      into localDelivery → the DVM handler (no DVM here) → T00.
+  #
+  # The minimal correct fix is a single route to the town's inbound session and
+  # NO outbound peer / NO self-route. The DVM-intake `g.townhouse -> local`
+  # route + localDelivery handler (written by hs-config-writer) is left intact,
+  # so stacks that DO run a DVM are unaffected (longest-prefix: g.townhouse.town
+  # matches the more-specific town route; bare g.townhouse still self-delivers).
+  log "Adding route g.townhouse.town → town (apex delivers over the town's inbound BTP session)…"
   curl -sfk --max-time 10 -X POST "$CONNECTOR_ADMIN_URL/admin/routes" \
     -H 'content-type: application/json' \
-    -d '{"prefix":"g.townhouse.town","nextHop":"g.townhouse","priority":100}' \
-    > /dev/null || warn "self-delivery route registration failed"
+    -d '{"prefix":"g.townhouse.town","nextHop":"town","priority":0}' \
+    > /dev/null || warn "town route registration failed"
 
-  log "Sleeping 8s for BTP handshake to settle…"
+  log "Sleeping 8s for the town→connector BTP session to settle…"
   sleep 8
 }
 
