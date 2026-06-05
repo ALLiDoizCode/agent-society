@@ -748,6 +748,15 @@ chainProviders:
     registryAddress: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
     tokenAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
     keyId: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"
+    # Lower the connector's GLOBAL settlement threshold below the per-publish
+    # fee (1_000_000 = 1 USDC @ scale 6) so a SINGLE paid publish crosses the
+    # monitor's \`cumulativeAmount > threshold\` trigger and settles on-chain.
+    # The connector sources its one defaultThreshold from the first EVM
+    # chainProvider with settlementOptions and applies it to ALL chains
+    # (EVM/Solana/Mina), so this also enables the non-EVM (Solana/Mina) SETTLE
+    # path for the dynamically-registered anonymous HS peer.
+    settlementOptions:
+      threshold: "1"
 EOF
     log "Injected EVM chainProvider into $config_path (rpcUrl=$EVM_RPC_URL_INTERNAL)"
 
