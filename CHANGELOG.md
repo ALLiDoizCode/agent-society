@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1](https://github.com/toon-protocol/town/compare/v0.14.0...v0.14.1) (2026-06-05)
+
+### Bug Fixes
+
+* **e2e:** deploy Mina payment-channel zkApp on lightnet under o1js 2.14 ([#115](https://github.com/toon-protocol/town/issues/115)) ([2937b81](https://github.com/toon-protocol/town/commit/2937b81321c6cb8182c0dd6dcd33bd57d97d4da8)), closes [#112](https://github.com/toon-protocol/town/issues/112)
+
 ## [0.14.0](https://github.com/toon-protocol/town/compare/v0.13.0...v0.14.0) (2026-06-05)
 
 ### Features
