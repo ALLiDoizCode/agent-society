@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.4](https://github.com/toon-protocol/town/compare/v0.14.3...v0.14.4) (2026-06-05)
+
+### Bug Fixes
+
+* **townhouse)+feat(client:** trigger dynamic-peer settlement (low threshold) + open a real on-chain Mina zkApp channel ([#119](https://github.com/toon-protocol/town/issues/119)) ([3dffbb4](https://github.com/toon-protocol/town/commit/3dffbb44e49e68b58862139f0945ea49cdca7cd5)), closes [#88](https://github.com/toon-protocol/town/issues/88) [#105](https://github.com/toon-protocol/town/issues/105) [connector#105](https://github.com/toon-protocol/connector/issues/105) [toon-protocol/connector#92](https://github.com/toon-protocol/connector/issues/92)
+
 ## [0.14.3](https://github.com/toon-protocol/town/compare/v0.14.2...v0.14.3) (2026-06-05)
 
 ### Bug Fixes
