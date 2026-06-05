@@ -56,6 +56,30 @@ CLIENT_CONTAINER="toon-client-e2e"
 # tree (docker/Dockerfile.toon-client) instead of pulling the published :demo.
 CLIENT_IMAGE="ghcr.io/toon-protocol/toon-client:demo"
 LOCAL_BUILD="${LOCAL_BUILD:-0}"
+
+# ── BTP-bypass (local-e2e ONLY) ────────────────────────────────────────────────
+# `up --local` (in LOCAL_CHAINS mode) replaces the unreliable public-ATOR `.anon`
+# egress with a committed fixed-upstream SOCKS5 proxy (infra/btp-bypass/proxy.mjs)
+# dual-homed on `townhouse-hs-net`. The client is pointed at it via
+# ANYONE_PROXY_URLS=socks5h://btp-bypass:1080. This is gated STRICTLY behind
+# `--local` + LOCAL_CHAINS so the real-ATOR `.anon` production path is untouched.
+# Default `up` / Akash deploys keep the public-ATOR transport unchanged.
+# `--local` (in LOCAL_CHAINS mode) flips this on unless the operator pinned it
+# explicitly in the environment. Capture whether it was pre-set so the flag
+# parser can distinguish "operator opted out" from "unset".
+LOCAL_BYPASS_PRESET="${LOCAL_BYPASS+set}"
+LOCAL_BYPASS="${LOCAL_BYPASS:-0}"
+BYPASS_CONTAINER="btp-bypass"
+BYPASS_IMAGE="node:20-alpine"
+BYPASS_SRC_DIR="${REPO_ROOT}/infra/btp-bypass"
+# Dev devnet chain containers (scripts/townhouse-dev-infra.sh) that the apex +
+# client reach by compose service name once attached to townhouse-hs-net.
+DEV_CHAIN_CONTAINERS=(
+  townhouse-dev-anvil
+  townhouse-dev-solana
+  townhouse-dev-mina
+)
+
 HS_CONTAINERS=(
   townhouse-hs-connector
   townhouse-hs-api
@@ -598,15 +622,49 @@ resolve_apex_solana_signer() {
 }
 
 # Resolve the apex's REAL Mina settlement signer (participant B for client Mina
-# channels). The connector logs this when it registers the Mina chainProvider
-# from the keyId `townhouse hs up` filled in from the apex Mina key. Mirrors
-# resolve_apex_solana_signer — used as the client's Mina claim recipient so the
-# apex is a participant in the negotiated channel (Stage 3).
+# channels) — the B62 address the client signs its Mina claim TO, so the apex is
+# a participant in the negotiated channel (Stage 3).
+#
+# Two-tier resolution:
+#   1. Legacy log line: older connectors logged "Mina settlement signer
+#      resolved" with the address. Prefer it when present (back-compat).
+#   2. Derive from the keyId: connector 3.9.x does NOT emit that line. Instead
+#      read the apex Mina private key (`keyId`) from the Mina chainProvider block
+#      that `townhouse hs up` filled into connector.yaml, and derive the B62
+#      pubkey (scripts/derive-mina-pubkey.mjs, mina-signer network 'devnet' to
+#      match the client's MINA_CLAIM_NETWORK). The connector verifies the claim
+#      against this same key, so the derived pubkey IS the correct recipient.
 resolve_apex_mina_signer() {
-  docker logs townhouse-hs-connector 2>&1 \
+  local addr
+  addr=$(docker logs townhouse-hs-connector 2>&1 \
     | grep -F 'Mina settlement signer resolved' \
     | tail -1 \
-    | jq -r '.address // empty' 2>/dev/null
+    | jq -r '.address // empty' 2>/dev/null)
+  if [[ -n "$addr" ]]; then
+    echo "$addr"
+    return 0
+  fi
+
+  # Fallback: derive from the apex Mina keyId in connector.yaml.
+  local connector_yaml="$TOWNHOUSE_HOME/connector.yaml"
+  [[ -f "$connector_yaml" ]] || return 0
+  # Pull the keyId from the `chainType: mina` block (the line after it that
+  # starts with `keyId:`). The block also has graphqlUrl/zkAppAddress, so anchor
+  # on the mina chainType and take the first keyId that follows.
+  local mina_key
+  mina_key=$(awk '
+    /chainType:[[:space:]]*mina/ { inblk=1 }
+    inblk && /keyId:/ {
+      line=$0
+      sub(/.*keyId:[[:space:]]*/, "", line)
+      gsub(/["'"'"']/, "", line)
+      gsub(/[[:space:]]/, "", line)
+      print line
+      exit
+    }
+  ' "$connector_yaml")
+  [[ -n "$mina_key" ]] || return 0
+  node "${REPO_ROOT}/scripts/derive-mina-pubkey.mjs" "$mina_key" 2>/dev/null || true
 }
 
 # Deterministic-keypair Mina zkApp deploy (Phase-2 Stage 3). Captures the stable
@@ -778,6 +836,15 @@ EOF
   fi
   log "townhouse-hs-connector healthy ✓"
 
+  # In the local-e2e bypass path, the apex's townhouse-hs-net now exists. Attach
+  # the local devnet chains so the connector + town reach them by service name
+  # (the town env uses $EVM_RPC_URL_INTERNAL = townhouse-dev-anvil:8545; the
+  # connector chainProviders use the internal RPC/GraphQL URLs). Must run BEFORE
+  # start_town_relay (the town's ethers provider dials anvil at boot).
+  if [[ "$LOCAL_BYPASS" == "1" ]]; then
+    ensure_dev_chains_on_hs_net
+  fi
+
   # host.json appears after the connector publishes the HS
   local host_json="$TOWNHOUSE_HOME/host.json"
   [[ -f "$host_json" ]] || die "host.json missing at $host_json — HS publish likely failed"
@@ -823,6 +890,21 @@ start_town_relay() {
   # the `.env`'s `none`. The town then boots healthy (relay path; the apex —
   # not the town — settles the client's on-chain claim, so the town does not
   # need a live settlement chain to FULFILL forwarded parent traffic).
+  #
+  # ── BUG-2 FIX (in-container RPC reachability) ──────────────────────────────
+  # The town container lives on `townhouse-hs-net`. It must reach the EVM RPC by
+  # the on-network address, NOT the host-loopback URL ($EVM_RPC_URL, e.g.
+  # http://127.0.0.1:28545) — host loopback is dead inside the container, so the
+  # town's ethers provider construction against `chain=anvil` hangs/fails at boot
+  # and it never reaches /health → its BTP peer never connects → the apex's
+  # g.townhouse.town route has no inbound session to deliver over (T00 → F06).
+  # Pass $EVM_RPC_URL_INTERNAL (the compose service name, e.g.
+  # http://townhouse-dev-anvil:8545) instead. In Akash mode the two are equal
+  # (both the public ingress URL), so this is a no-op there. The host-side
+  # funding/probe helpers keep using $EVM_RPC_URL (host loopback) — only the
+  # in-container town env switches to the internal address. This requires the
+  # dev anvil to share `townhouse-hs-net` (ensure_dev_chains_on_hs_net in the
+  # `--local` path attaches it).
   TOWNHOUSE_HOME="$TOWNHOUSE_HOME" \
   TOWNHOUSE_WALLET_DIR="$TOWNHOUSE_HOME" \
   TOWNHOUSE_WALLET_PASSWORD="$TEST_PASSWORD" \
@@ -832,7 +914,7 @@ start_town_relay() {
   FEE_PER_EVENT='0' \
   EVM_CHAIN='anvil' \
   EVM_CHAIN_ID='31337' \
-  EVM_RPC_URL="$EVM_RPC_URL" \
+  EVM_RPC_URL="$EVM_RPC_URL_INTERNAL" \
     docker compose -f "$town_compose" --profile town up -d town \
     || warn "town profile up failed (continuing — smoke test will degrade)"
 
@@ -881,6 +963,48 @@ start_town_relay() {
     -d '{"prefix":"g.townhouse.town","nextHop":"town","priority":0}' \
     > /dev/null || warn "town route registration failed"
 
+  # ── BUG-3 FIX (mark the town a CHILD so the apex forwards for FREE) ──────────
+  # The route alone delivers PREPAREs over the town's inbound session and the
+  # town FULFILLs — but the apex's PacketHandler still tries to SETTLE the
+  # forward (apex→town) leg. Because the inbound-dialed `town` peer defaults to
+  # relation:'peer' (NOT 'child'), the connector's requiresSettlementClaim()
+  # returns true → it attempts on-demand EVM channel creation toward `town`,
+  # which fails with `Peer address not found for peerId: town` → T00 "No payment
+  # channel available for peer" → the whole publish REJECTs (even though the town
+  # itself would FULFILL). Parent→child packets must carry NO per-packet claim
+  # and settle in aggregate (see CLAUDE.md "How It Works"); that requires the
+  # child to be registered relation:'child'.
+  #
+  # POST /admin/peers with id `town` applies relation:'child' (setPeerRelation)
+  # to the peerId the town authenticates as on its inbound session. The apex's
+  # route nextHop `town` delivers PREPAREs over that SAME inbound town→connector
+  # session (where the town tags g.townhouse as its parent and therefore skips
+  # the inbound per-packet-claim requirement), and with the child relation in
+  # place requiresSettlementClaim('town') is false on the apex side too → the
+  # apex forwards for free and the town FULFILLs (HTTP 202; verified live:
+  # btp_forward_success responseType:13 → FULFILL).
+  #
+  # CRITICAL: do NOT set transport:'direct' here. The apex runs in
+  # transport.type:socks5 mode (the .anon HS), so its DEFAULT outbound transport
+  # is the anon SOCKS5 proxy, which CANNOT resolve the internal `townhouse-hs-
+  # town` Docker hostname — the outbound dial therefore FAILS (a harmless
+  # `Socks5 proxy rejected - HostUnreachable` retry loop in the connector log).
+  # That failure is the POINT: it leaves NO competing connector→town outbound
+  # session, so the forward rides the town's INBOUND session where g.townhouse is
+  # the parent. With transport:'direct' the dial SUCCEEDS over the Docker network
+  # and opens a SEPARATE connector→town session on which the town's BTP *server*
+  # sees the apex as an ordinary inbound peer (NOT its parent) →
+  # InboundClaimValidator demands a per-packet claim → F06 "No payment channel
+  # claim attached" → the publish REJECTs. (This is the exact BUG-2 hazard
+  # documented above; proven live 2026-06-05: transport:'direct' → town F06;
+  # default transport → town FULFILL.) The dial-retry log noise is the accepted
+  # tradeoff for keeping the parent-session delivery path.
+  log "Registering town as relation:'child' (free parent→child forward; avoids T00 on-demand settlement)…"
+  curl -sfk --max-time 10 -X POST "$CONNECTOR_ADMIN_URL/admin/peers" \
+    -H 'content-type: application/json' \
+    -d '{"id":"town","url":"ws://townhouse-hs-town:3000","authToken":"","relation":"child","routes":[{"prefix":"g.townhouse.town","priority":0}]}' \
+    > /dev/null || warn "town child-peer registration failed (publishes may T00 at the apex→town settle step)"
+
   log "Sleeping 8s for the town→connector BTP session to settle…"
   sleep 8
 }
@@ -898,6 +1022,76 @@ down_townhouse_hs() {
   for c in "${HS_CONTAINERS[@]}"; do
     docker rm -f "$c" >/dev/null 2>&1 || true
   done
+  # Detach any dev chains the bypass attached, so the network can be removed
+  # cleanly (a network with live endpoints refuses removal). Non-fatal.
+  for c in "${DEV_CHAIN_CONTAINERS[@]}" "$CLIENT_CONTAINER"; do
+    docker network disconnect -f "$HS_NETWORK" "$c" >/dev/null 2>&1 || true
+  done
+}
+
+# ───────────────────────────────────────────────────────────────────────────────
+# BTP-bypass (local-e2e ONLY — gated behind LOCAL_BYPASS=1, set by `--local`)
+# ───────────────────────────────────────────────────────────────────────────────
+
+# Attach the local devnet chain containers (anvil/solana/mina) to townhouse-hs-net
+# so the apex connector + town + client reach them by compose service name
+# (townhouse-dev-anvil:8545, townhouse-dev-solana:8899, townhouse-dev-mina:3085).
+# Idempotent: `network connect` of an already-attached container is a no-op we
+# swallow. Only the chains that exist are attached (mina only when E2E_MINA=1).
+ensure_dev_chains_on_hs_net() {
+  log "Attaching local devnet chains to $HS_NETWORK (in-container service-name reachability)…"
+  for c in "${DEV_CHAIN_CONTAINERS[@]}"; do
+    # Skip mina unless the Mina loop is requested (it may not be running).
+    [[ "$c" == "townhouse-dev-mina" && "${E2E_MINA:-0}" != "1" ]] && continue
+    if ! docker ps --format '{{.Names}}' | grep -qx "$c"; then
+      warn "  dev chain '$c' not running — skipping (run scripts/townhouse-dev-infra.sh up)"
+      continue
+    fi
+    if docker network inspect "$HS_NETWORK" --format '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null \
+         | tr ' ' '\n' | grep -qx "$c"; then
+      log "  $c already on $HS_NETWORK"
+    else
+      docker network connect "$HS_NETWORK" "$c" >/dev/null 2>&1 \
+        && log "  attached $c → $HS_NETWORK" \
+        || warn "  could not attach $c to $HS_NETWORK"
+    fi
+  done
+}
+
+# Start the committed fixed-upstream SOCKS5 proxy (infra/btp-bypass/proxy.mjs) as
+# the `btp-bypass` container on townhouse-hs-net. The client dials it instead of
+# real ATOR (see ANYONE_PROXY_URLS wiring in up_local_client). Idempotent: any
+# pre-existing container is removed first.
+start_btp_bypass() {
+  [[ -f "$BYPASS_SRC_DIR/proxy.mjs" ]] || die "btp-bypass proxy missing at $BYPASS_SRC_DIR/proxy.mjs"
+  log "Starting btp-bypass SOCKS5 proxy (local-e2e ATOR substitute) on $HS_NETWORK…"
+  docker rm -f "$BYPASS_CONTAINER" >/dev/null 2>&1 || true
+  docker run -d \
+    --name "$BYPASS_CONTAINER" \
+    --network "$HS_NETWORK" \
+    --restart unless-stopped \
+    -v "$BYPASS_SRC_DIR:/app:ro" \
+    -e UPSTREAM_HOST=connector \
+    -e UPSTREAM_PORT=3000 \
+    -e LISTEN_PORT=1080 \
+    "$BYPASS_IMAGE" \
+    node /app/proxy.mjs >/dev/null \
+    || die "btp-bypass container failed to start"
+
+  # Confirm it listens (the proxy logs a 'SOCKS5 fixed-upstream proxy on :1080' line).
+  local deadline=$(( $(date +%s) + 15 ))
+  while (( $(date +%s) < deadline )); do
+    if docker logs "$BYPASS_CONTAINER" 2>&1 | grep -q 'SOCKS5 fixed-upstream proxy on'; then
+      log "btp-bypass ready ✓ (socks5h://$BYPASS_CONTAINER:1080 → connector:3000)"
+      return 0
+    fi
+    sleep 1
+  done
+  warn "btp-bypass did not log readiness within 15s — inspect: docker logs $BYPASS_CONTAINER"
+}
+
+stop_btp_bypass() {
+  docker rm -f "$BYPASS_CONTAINER" >/dev/null 2>&1 || true
 }
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -950,9 +1144,13 @@ up_local_client() {
   if [[ "${E2E_MINA:-0}" == "1" ]]; then
     mina_zkapp="${MINA_ZKAPP_ADDRESS:-}"
     apex_mina="$(resolve_apex_mina_signer)" || true
-    # Client reaches the lightnet GraphQL via host.docker.internal in LOCAL_CHAINS.
+    # Client reaches the lightnet GraphQL via host.docker.internal in LOCAL_CHAINS
+    # (isolated client net). In bypass mode the client joins townhouse-hs-net and
+    # reaches the lightnet by its internal compose service name instead.
     mina_graphql="$MINA_GRAPHQL_URL"
-    if [[ "${LOCAL_CHAINS:-0}" == "1" ]]; then
+    if [[ "$LOCAL_BYPASS" == "1" ]]; then
+      mina_graphql="$MINA_GRAPHQL_URL_INTERNAL"
+    elif [[ "${LOCAL_CHAINS:-0}" == "1" ]]; then
       mina_graphql="${MINA_GRAPHQL_URL//127.0.0.1/host.docker.internal}"
     fi
     if [[ -n "$mina_zkapp" && -n "$apex_mina" ]]; then
@@ -967,7 +1165,18 @@ up_local_client() {
   # the host's 127.0.0.1, so it reaches the host-published local chains via
   # host.docker.internal (mapped to host-gateway in the compose extra_hosts).
   local client_evm_rpc="$EVM_RPC_URL" client_sol_rpc="$SOLANA_RPC_URL" client_faucet="$FAUCET_URL"
-  if [[ "${LOCAL_CHAINS:-0}" == "1" ]]; then
+  local client_proxy_urls=""
+  if [[ "$LOCAL_BYPASS" == "1" ]]; then
+    # Bypass path: the client joins townhouse-hs-net and reaches both the chains
+    # and the apex connector by internal compose service name. Chain URLs use the
+    # *_INTERNAL views; BTP egress goes through the committed btp-bypass proxy
+    # (ANYONE_PROXY_URLS override) instead of public ATOR.
+    client_evm_rpc="$EVM_RPC_URL_INTERNAL"
+    client_sol_rpc="$SOLANA_RPC_URL_INTERNAL"
+    client_faucet="$EVM_RPC_URL_INTERNAL"
+    client_proxy_urls="socks5h://${BYPASS_CONTAINER}:1080"
+    log "LOCAL_BYPASS client chain URLs (internal): evm=$client_evm_rpc solana=$client_sol_rpc proxy=$client_proxy_urls"
+  elif [[ "${LOCAL_CHAINS:-0}" == "1" ]]; then
     client_evm_rpc="${EVM_RPC_URL//127.0.0.1/host.docker.internal}"
     client_sol_rpc="${SOLANA_RPC_URL//127.0.0.1/host.docker.internal}"
     client_faucet="${FAUCET_URL//127.0.0.1/host.docker.internal}"
@@ -978,6 +1187,14 @@ up_local_client() {
   # half-funded container running, the funding step will target stale keys.
   # Export env vars so both `down` AND `up` can interpolate the compose file —
   # docker compose down evaluates the same env-var refs as up.
+  # In bypass mode, start the committed btp-bypass proxy first so the client can
+  # dial it (socks5h://btp-bypass:1080) the moment its transport boots. An empty
+  # $client_proxy_urls leaves the compose default (public ATOR) in place, so
+  # ANYONE_PROXY_URLS="" → the compose `${ANYONE_PROXY_URLS:-<public>}` default.
+  if [[ "$LOCAL_BYPASS" == "1" ]]; then
+    start_btp_bypass
+  fi
+
   log "docker compose down + up -d (fresh client container)…"
   FAUCET_URL="$client_faucet" \
   EVM_RPC_URL="$client_evm_rpc" \
@@ -989,6 +1206,7 @@ up_local_client() {
   MINA_ZKAPP_ADDRESS="$mina_zkapp" \
   MINA_GRAPHQL_URL="$mina_graphql" \
   TARGET_SETTLEMENT_ADDRESS_MINA="$apex_mina" \
+  ANYONE_PROXY_URLS="$client_proxy_urls" \
     docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>&1 | tail -3 || true
   FAUCET_URL="$client_faucet" \
   EVM_RPC_URL="$client_evm_rpc" \
@@ -1000,7 +1218,21 @@ up_local_client() {
   MINA_ZKAPP_ADDRESS="$mina_zkapp" \
   MINA_GRAPHQL_URL="$mina_graphql" \
   TARGET_SETTLEMENT_ADDRESS_MINA="$apex_mina" \
+  ANYONE_PROXY_URLS="$client_proxy_urls" \
     docker compose -f "$COMPOSE_FILE" up -d
+
+  # Bypass mode: join the client to townhouse-hs-net so it can resolve the
+  # btp-bypass proxy + the internal chain service names. It STAYS on
+  # e2e-client-net too (dual-homed); the bypass proxy — not a shared bridge — is
+  # what carries BTP, so the production isolation posture is intentionally
+  # relaxed ONLY for this local-e2e path. verify_network_isolation is skipped in
+  # bypass mode (see cmd_up).
+  if [[ "$LOCAL_BYPASS" == "1" ]]; then
+    log "Attaching $CLIENT_CONTAINER → $HS_NETWORK (bypass: reach btp-bypass + internal chains)…"
+    docker network connect "$HS_NETWORK" "$CLIENT_CONTAINER" >/dev/null 2>&1 \
+      && log "  attached $CLIENT_CONTAINER → $HS_NETWORK" \
+      || warn "  could not attach $CLIENT_CONTAINER to $HS_NETWORK (may already be attached)"
+  fi
 
   # Wait for Fastify bind so /signer-info returns the keys. This happens in
   # ~1-3s after container start — well before the pod's ~30s balance-poll
@@ -1157,7 +1389,15 @@ cmd_up() {
   up_local_client         # fresh container; Fastify up within ~3s, keys generated
   fund_client_pod         # fund the FRESH ephemeral keys before pod's poll deadline
   wait_for_client_ready   # poll /healthz until anyoneReady=true (no restart needed)
-  verify_network_isolation
+  # Network isolation is the production posture (client reaches apex ONLY via
+  # public ATOR). The local-e2e bypass DELIBERATELY relaxes it (client joins
+  # townhouse-hs-net to reach btp-bypass + internal chains), so the isolation
+  # assertion only applies when the bypass is OFF.
+  if [[ "$LOCAL_BYPASS" == "1" ]]; then
+    log "LOCAL_BYPASS=1 — skipping network-isolation assertion (client is intentionally dual-homed for the bypass)"
+  else
+    verify_network_isolation
+  fi
   print_banner
 }
 
@@ -1174,6 +1414,7 @@ cmd_fund() {
 
 cmd_down() {
   down_local_client
+  stop_btp_bypass          # remove the local-e2e bypass proxy (no-op if absent)
   down_townhouse_hs
   log "Down complete. Volumes + state preserved. Use 'down-v' to remove them."
 }
@@ -1230,8 +1471,21 @@ EOF
 VERB="${1:-help}"
 # `up --local` rebuilds the toon-client image from the working tree (instead of
 # pulling :demo). Accept the flag in either order.
+#
+# In LOCAL_CHAINS mode, `--local` ALSO enables the committed BTP-bypass
+# (infra/btp-bypass) so the loop does not depend on flaky public-ATOR egress.
+# The bypass is gated STRICTLY to this path: default `up` / Akash deploys keep
+# the real-ATOR `.anon` production transport. Set LOCAL_BYPASS=0 to opt back out
+# of the bypass even under `--local` (e.g. to exercise the real-ATOR path).
 for arg in "$@"; do
-  [[ "$arg" == "--local" ]] && LOCAL_BUILD=1
+  if [[ "$arg" == "--local" ]]; then
+    LOCAL_BUILD=1
+    # Enable the bypass under LOCAL_CHAINS unless the operator pinned LOCAL_BYPASS
+    # explicitly (e.g. LOCAL_BYPASS=0 to exercise the real-ATOR path).
+    if [[ "${LOCAL_CHAINS:-0}" == "1" && -z "$LOCAL_BYPASS_PRESET" ]]; then
+      LOCAL_BYPASS=1
+    fi
+  fi
 done
 case "$VERB" in
   up)      cmd_up ;;

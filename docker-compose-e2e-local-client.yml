@@ -73,7 +73,12 @@ services:
       #   - 57.128.249.250:9052 (Warsaw)   — backup
       # Skipping the pod's local anon daemon because it can't always find
       # introduction points for a freshly-published .anon HS.
-      ANYONE_PROXY_URLS: 'socks5h://157.90.113.23:9052,socks5h://57.128.249.250:9052,socks5h://5.78.181.0:9052'
+      #
+      # DEFAULT = public ATOR (the production transport — unchanged). The
+      # orchestrator OVERRIDES this with socks5h://btp-bypass:1080 ONLY in the
+      # local-e2e `--local` bypass path (scripts/townhouse-e2e-local-hs.sh,
+      # gated by LOCAL_BYPASS=1). Override via ANYONE_PROXY_URLS in the env.
+      ANYONE_PROXY_URLS: ${ANYONE_PROXY_URLS:-socks5h://157.90.113.23:9052,socks5h://57.128.249.250:9052,socks5h://5.78.181.0:9052}
 
       # Chain context (deterministic Akash-Anvil USDC + TokenNetwork)
       TOON_CHAIN_KEY: 'evm:base:31337'
