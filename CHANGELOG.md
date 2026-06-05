@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0](https://github.com/toon-protocol/town/compare/v0.13.0...v0.14.0) (2026-06-05)
+
+### Features
+
+* **client:** match connector 3.9.0 Mina payment-channel claim contract ([#113](https://github.com/toon-protocol/town/issues/113)) ([51830f4](https://github.com/toon-protocol/town/commit/51830f486aa62cf01f89713e3f88142ecad49ac2)), closes [#105](https://github.com/toon-protocol/town/issues/105) [#105](https://github.com/toon-protocol/town/issues/105) [#88-gated](https://github.com/toon-protocol/town/issues/88-gated) [#112](https://github.com/toon-protocol/town/issues/112)
+
 ## [0.13.0](https://github.com/toon-protocol/town/compare/v0.12.3...v0.13.0) (2026-06-05)
 
 ### Features
