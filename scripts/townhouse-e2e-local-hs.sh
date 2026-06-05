@@ -619,7 +619,11 @@ resolve_apex_mina_signer() {
 # (GraphQL + accounts-manager). If any prerequisite is missing the deploy fails
 # soft (warns); the Mina chainProvider injection then skips and the Mina loop is
 # not exercised (which is fine — the loop is claim-validation gated regardless).
-MINA_ZKAPP_DETERMINISTIC_KEY="${MINA_ZKAPP_PRIVATE_KEY:-EKEdScHCp4iyHU8Dikj5gzD9Jpu6yEv9XfPrEFE6kEAXanaVQYNu}"
+# Dev-only deterministic zkApp key. MUST be a real o1js base58 private key (it is
+# checksum-validated by PrivateKey.fromBase58 under o1js 2.14). Derived once via
+# PrivateKey.fromBigInt(12345…)→toBase58 → pub B62qpGeEf6ZpwL8VmEFdSAaPtSg3nYkeLP…
+# Never used on a real network.
+MINA_ZKAPP_DETERMINISTIC_KEY="${MINA_ZKAPP_PRIVATE_KEY:-EKFHhtjKszZjwx1ytowTgPNe1XC7x59DrDTrSZyJEX4oFCcaXHtd}"
 deploy_mina_zkapp_deterministic() {
   if [[ -n "${MINA_ZKAPP_ADDRESS:-}" ]]; then
     log "MINA_ZKAPP_ADDRESS already set ($MINA_ZKAPP_ADDRESS) — skipping deploy"
