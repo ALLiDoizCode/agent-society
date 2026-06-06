@@ -71,7 +71,7 @@ on:
         required: true
         type: string
       connector_version:
-        description: 'Connector image tag to record in image-manifest.json. LEAVE EMPTY to use env.CONNECTOR_VERSION_DEFAULT below (the single source of truth, currently 3.9.3 — fixes the Solana settle-executor channel-lookup (connector#92: the executor looked up the external channel by an EVM-derived tokenId, never matched the programId-keyed Solana external channel, opened a NEW channel → Solana #5508010); builds on 3.9.2 Mina settlement-side proof encoding (connector#90: JSON.parse(proof) failed on base64), 3.9.1 dynamic-peer settlement-chain resolution (connector#88) + blockchain-typed inbound claim validation, and 3.9.0 Solana + Mina settlement wiring (connector#86); no breaking changes within 3.x). To bump, update env.CONNECTOR_VERSION_DEFAULT below AND packages/townhouse/src/constants.ts FIRST, then trigger this workflow (leave this input empty). The Story 50.0 alignment preflight (AC #2 / F6) fails the job if constants.ts and the resolved connector tag disagree. Earlier 3.5.x versions force all BTP dials through the SOCKS5 proxy, which cannot resolve Docker-internal hostnames.'
+        description: 'Connector image tag to record in image-manifest.json. LEAVE EMPTY to use env.CONNECTOR_VERSION_DEFAULT below (the single source of truth, currently 3.9.6 — completes the full non-EVM on-chain settle (CLAIM_FROM_CHANNEL + SETTLE_CHANNEL) for BOTH Solana and Mina: connector#94 (Solana Ed25519 precompile / on-chain message reconstruction), connector#95 (Mina getChannelState missing setActiveInstance), connector#98 (Mina balance-proof commitment compared against on-chain balanceCommitment, not the zkApp address), connector#99 (Solana CLAIM_FROM_CHANNEL fee-payer decoupled from the claiming participant); builds on 3.9.3 Solana settle-executor channel-lookup (connector#92), 3.9.2 Mina settlement-side proof encoding (connector#90), 3.9.1 dynamic-peer settlement-chain resolution (connector#88) + blockchain-typed inbound claim validation, and 3.9.0 Solana + Mina settlement wiring (connector#86); 3.9.6 itself is a connector-CI fix only; no breaking changes within 3.x). To bump, update env.CONNECTOR_VERSION_DEFAULT below AND packages/townhouse/src/constants.ts FIRST, then trigger this workflow (leave this input empty). The Story 50.0 alignment preflight (AC #2 / F6) fails the job if constants.ts and the resolved connector tag disagree. Earlier 3.5.x versions force all BTP dials through the SOCKS5 proxy, which cannot resolve Docker-internal hostnames.'
         required: false
         type: string
         # No literal default — fall through to env.CONNECTOR_VERSION_DEFAULT via
@@ -99,7 +99,7 @@ permissions:
 # `workflow_dispatch.inputs.connector_version.default` above is deliberately
 # left empty so it can never drift from this env literal (Story 50.0 review F6).
 env:
-  CONNECTOR_VERSION_DEFAULT: '3.9.3'
+  CONNECTOR_VERSION_DEFAULT: '3.9.6'
 
 jobs:
   # ---------------------------------------------------------------------------
