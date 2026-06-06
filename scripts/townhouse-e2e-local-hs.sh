@@ -701,11 +701,19 @@ deploy_mina_zkapp_deterministic() {
     return 1
   fi
   log "Deploying deterministic Mina zkApp (o1js — slow, ~30-120s, ~2GB RAM)…"
+  # MINA_ADVANCE_COMMITMENT=1 (default ON for E2E_MINA) advances the on-chain
+  # balanceCommitment to the epoch the client's first claim commits to, so the
+  # connector's #98 verifyBalanceProof accepts the claim (Poseidon(0,0,0) init
+  # state otherwise mismatches the client's Poseidon(transferredAmount,0,salt)).
+  # The advance adds 2 extra o1js proofs (deposit + claimFromChannel); bump the
+  # budget to 360s. Opt out with MINA_ADVANCE_COMMITMENT=0.
   local out
   if ! out=$(MINA_GRAPHQL_URL="$MINA_GRAPHQL_URL" \
        MINA_ACCOUNTS_URL="$MINA_ACCOUNTS_URL" \
        MINA_ZKAPP_PRIVATE_KEY="$MINA_ZKAPP_DETERMINISTIC_KEY" \
-       timeout 300 npx tsx "${REPO_ROOT}/scripts/deploy-mina-zkapp.ts" 2>>/tmp/mina-zkapp-deploy.log); then
+       MINA_ADVANCE_COMMITMENT="${MINA_ADVANCE_COMMITMENT:-1}" \
+       MINA_ADVANCE_AMOUNT="${MINA_ADVANCE_AMOUNT:-1000000}" \
+       timeout 360 npx tsx "${REPO_ROOT}/scripts/deploy-mina-zkapp.ts" 2>>/tmp/mina-zkapp-deploy.log); then
     warn "Mina zkApp deploy failed (see /tmp/mina-zkapp-deploy.log):"
     tail -8 /tmp/mina-zkapp-deploy.log >&2 || true
     return 1
