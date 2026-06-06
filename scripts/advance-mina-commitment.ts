@@ -84,7 +84,6 @@ async function main() {
   const {
     Mina,
     PrivateKey,
-    PublicKey,
     AccountUpdate,
     fetchAccount,
     Field,
@@ -145,7 +144,14 @@ async function main() {
   const CHANNEL_NONCE = Field(0); // initializeChannel uses nonce Field(0)
 
   // Determine current on-chain state (idempotent across reruns).
-  const readState = async () => {
+  interface ChannelState {
+    channelHash: string;
+    balanceCommitment: string;
+    nonce: bigint;
+    state: bigint;
+    depositTotal: bigint;
+  }
+  const readState = async (): Promise<ChannelState | null> => {
     const res = await fetchAccount({ publicKey: zkAppPub }).catch(() => ({
       account: undefined as unknown,
     }));
@@ -154,19 +160,25 @@ async function main() {
       | { toString(): string }[]
       | undefined;
     if (!app) return null;
+    const at = (i: number): string => String(app[i] ?? '0');
     return {
-      channelHash: app[0]!.toString(),
-      balanceCommitment: app[1]!.toString(),
-      nonce: BigInt(app[2]!.toString()),
-      state: BigInt(app[3]!.toString()),
-      depositTotal: BigInt(app[4]!.toString()),
+      channelHash: at(0),
+      balanceCommitment: at(1),
+      nonce: BigInt(at(2)),
+      state: BigInt(at(3)),
+      depositTotal: BigInt(at(4)),
     };
   };
+  const requireState = async (): Promise<ChannelState> => {
+    const s = await readState();
+    if (!s) throw new Error(`zkApp ${zkAppAddress} state unreadable on-chain`);
+    return s;
+  };
 
-  let st = await readState();
+  const initialState = await readState();
 
   // 1) Deploy + initialize if the account does not exist yet.
-  if (!st) {
+  if (!initialState) {
     await fetchAccount({ publicKey: partyPub });
     console.error('Deploying zkApp…');
     const deployTx = await Mina.transaction(
@@ -202,24 +214,24 @@ async function main() {
       .sign([partyKey])
       .send()
       .then((t) => t.wait());
-    st = await readState();
   }
+  let cur = await requireState();
   console.error(
-    `current on-chain: commitment=${st!.balanceCommitment} nonce=${st!.nonce} state=${st!.state} depositTotal=${st!.depositTotal}`
+    `current on-chain: commitment=${cur.balanceCommitment} nonce=${cur.nonce} state=${cur.state} depositTotal=${cur.depositTotal}`
   );
 
-  if (st!.balanceCommitment === targetCommitment.toString()) {
+  if (cur.balanceCommitment === targetCommitment.toString()) {
     console.error('on-chain commitment ALREADY at target — no advance needed.');
     console.log(zkAppAddress);
     return;
   }
 
   // 2) Deposit so depositTotal == AMOUNT (conservation: balanceA+balanceB==deposit).
-  if (st!.depositTotal !== AMOUNT) {
-    const delta = AMOUNT - st!.depositTotal;
+  if (cur.depositTotal !== AMOUNT) {
+    const delta = AMOUNT - cur.depositTotal;
     if (delta <= 0n) {
       throw new Error(
-        `depositTotal ${st!.depositTotal} already exceeds target AMOUNT ${AMOUNT}; cannot reduce. Use a fresh zkApp key.`
+        `depositTotal ${cur.depositTotal} already exceeds target AMOUNT ${AMOUNT}; cannot reduce. Use a fresh zkApp key.`
       );
     }
     console.error(`deposit ${delta} (to reach depositTotal=${AMOUNT})…`);
@@ -236,15 +248,15 @@ async function main() {
       .sign([partyKey])
       .send()
       .then((t) => t.wait());
-    st = await readState();
-    console.error(`after deposit: depositTotal=${st!.depositTotal}`);
+    cur = await requireState();
+    console.error(`after deposit: depositTotal=${cur.depositTotal}`);
   }
 
   // 3) claimFromChannel — advances on-chain balanceCommitment to the target.
   //    Sign over the ON-CHAIN message [newBalanceCommitment, newNonce,
   //    channelHash] where channelHash = Poseidon(pA.x, pB.x, channelNonce).
   const channelHash = Poseidon.hash([partyPub.x, partyPub.x, CHANNEL_NONCE]);
-  const newNonce = st!.nonce + (NONCE > st!.nonce ? NONCE - st!.nonce : 1n);
+  const newNonce = cur.nonce + (NONCE > cur.nonce ? NONCE - cur.nonce : 1n);
   const message = [targetCommitment, Field(newNonce), channelHash];
   const sig = Signature.create(partyKey, message);
 
@@ -275,13 +287,13 @@ async function main() {
   console.error(`claimFromChannel tx: ${sent.hash}`);
   await sent.wait();
 
-  st = await readState();
+  cur = await requireState();
   console.error(
-    `AFTER advance: on-chain commitment=${st!.balanceCommitment} nonce=${st!.nonce}`
+    `AFTER advance: on-chain commitment=${cur.balanceCommitment} nonce=${cur.nonce}`
   );
-  if (st!.balanceCommitment !== targetCommitment.toString()) {
+  if (cur.balanceCommitment !== targetCommitment.toString()) {
     throw new Error(
-      `advance FAILED: on-chain commitment ${st!.balanceCommitment} != target ${targetCommitment.toString()}`
+      `advance FAILED: on-chain commitment ${cur.balanceCommitment} != target ${targetCommitment.toString()}`
     );
   }
   console.error(
