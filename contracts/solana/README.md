@@ -15,9 +15,10 @@ program instructions with a specific account layout; an older program build
 rejects the newer instruction shape with `ProgramError::InvalidArgument`
 ("invalid program argument").
 
-- **Current build:** connector `v3.9.9` (Solana program unchanged since `v3.9.5`;
-  `v3.9.8`/`v3.9.9` are Mina-side fixes — connector#117 settlement trigger +
-  connector#118 advancing-claims; `v3.9.7` connector#114) — `@toon-protocol/connector`
+- **Current build:** connector `v3.9.10` (Solana program unchanged since `v3.9.5`;
+  `v3.9.8`/`v3.9.9`/`v3.9.10` are Mina-side fixes — connector#117 settlement
+  trigger + connector#118 advancing-claims + connector#121 claimFromChannel
+  signatureA wrapper; `v3.9.7` connector#114) — `@toon-protocol/connector`
   `packages/solana-program` at/after commit `6a8c954`
   ("fix(settlement): decouple Solana claim fee-payer from claiming participant (#99)").
   `#99` changed `process_claim_from_channel` to the fee-payer-decoupled 4-account
@@ -29,7 +30,7 @@ rejects the newer instruction shape with `ProgramError::InvalidArgument`
   Solana settle leg.
 
 To rebuild from the connector repo (sibling checkout at `../connector`, tag
-`v3.9.9` or later):
+`v3.9.10` or later):
 
 ```
 cd ../connector/packages/solana-program

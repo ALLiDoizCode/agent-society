@@ -48,6 +48,17 @@ const ADVANCE_COMMITMENT = process.env.MINA_ADVANCE_COMMITMENT === '1';
 const ADVANCE_AMOUNT = BigInt(process.env.MINA_ADVANCE_AMOUNT || '1000000');
 const ADVANCE_NONCE = BigInt(process.env.MINA_ADVANCE_NONCE || '1');
 
+// MINA_SKIP_INIT=1 deploys the bare zkApp account but does NOT initialize the
+// channel (leaves channelState=UNINIT/0). Use this when the CLIENT opens the
+// channel on-chain with the real (client, apex) participant keys via
+// `openMinaChannel` — the single-party deployer-init below sets a channelHash =
+// Poseidon(deployer.x, deployer.x, 0) that the connector's claimFromChannel
+// (which uses Poseidon(apex.x, client.x, 0)) cannot reproduce, so the on-chain
+// claimFromChannel fails with "Supplied participant keys do not match the
+// on-chain channelHash". Skipping init lets the client's openMinaChannel write
+// the correct channelHash so the connector can settle on-chain.
+const SKIP_INIT = process.env.MINA_SKIP_INIT === '1';
+
 /**
  * Client salt derivation — MUST match `MinaSigner.deriveMinaSalt`
  * (packages/client/src/signing/mina-signer.ts): first 240 bits of
@@ -170,6 +181,17 @@ async function main() {
         console.log(zkAppAddress.toBase58());
         return;
       }
+      if (SKIP_INIT && channelState === 0n) {
+        // MINA_SKIP_INIT path: a bare (uninitialized) deploy already exists. The
+        // CLIENT opens the channel on-chain with the correct (client, apex)
+        // participants, so an UNINIT account is the expected baseline — no-op.
+        console.error(
+          'zkApp account exists, channelState=0 (UNINIT) and MINA_SKIP_INIT=1 — ' +
+            'leaving it for the client to open on-chain (idempotent).'
+        );
+        console.log(zkAppAddress.toBase58());
+        return;
+      }
       throw new Error(
         `Deterministic Mina zkApp ${zkAppAddress.toBase58()} already exists on-chain but is NOT OPEN ` +
           `(channelState=${channelState}; likely a stale bare-deploy from before the deploy-shape fix). ` +
@@ -252,6 +274,17 @@ async function main() {
   console.error(`Deploy tx sent: ${pendingDeploy.hash}`);
   const includedDeploy = await pendingDeploy.wait();
   console.error(`Deploy included in block. Status: ${includedDeploy.status}`);
+
+  if (SKIP_INIT) {
+    // Bare deploy only — the CLIENT opens the channel on-chain with the correct
+    // (client, apex) participants via openMinaChannel. Report the address and
+    // return; channelState stays 0 (UNINIT) until the client initializes it.
+    console.error(
+      'MINA_SKIP_INIT=1 — deployed bare zkApp (channelState=0); client will open the channel on-chain.'
+    );
+    console.log(zkAppAddress.toBase58());
+    return;
+  }
 
   // Initialize the channel (separate tx). Re-fetch BOTH the zkApp and the
   // fee-payer into o1js's active-instance cache so the `getAndRequireEquals()`
