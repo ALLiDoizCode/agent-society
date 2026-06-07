@@ -1141,7 +1141,16 @@ build_local_client_image() {
 }
 
 up_local_client() {
-  if [[ "$LOCAL_BUILD" == "1" ]]; then
+  if [[ "$LOCAL_BUILD" == "1" && "${SKIP_CLIENT_BUILD:-0}" == "1" ]]; then
+    # Reuse an already-built local $CLIENT_IMAGE instead of rebuilding from the
+    # working tree. Opt-in via SKIP_CLIENT_BUILD=1 — useful when a valid image is
+    # already present and the in-container DTS rebuild is flaky (e.g. tsup's tsc
+    # worker failing to resolve a dep's type-exports under the container's
+    # frozen-lockfile node_modules layout). The image must already exist locally.
+    docker image inspect "$CLIENT_IMAGE" >/dev/null 2>&1 \
+      || die "SKIP_CLIENT_BUILD=1 but $CLIENT_IMAGE is not present locally — build it once or unset SKIP_CLIENT_BUILD"
+    log "SKIP_CLIENT_BUILD=1 — reusing existing $CLIENT_IMAGE (no working-tree rebuild)"
+  elif [[ "$LOCAL_BUILD" == "1" ]]; then
     # Working-tree build — do NOT pull (it would overwrite the local image).
     build_local_client_image
   else
