@@ -168,9 +168,12 @@ ensure_image_manifest() {
 
   warn "image-manifest.json missing OR compose template has unresolved placeholders — rebuilding…"
 
-  # Pin connector to v3.9.9 — must match DEFAULT_CONNECTOR_IMAGE in
+  # Pin connector to v3.9.10 — must match DEFAULT_CONNECTOR_IMAGE in
   # packages/townhouse/src/constants.ts so the gate's image-manifest + rendered
-  # compose validate the SAME connector the product ships. v3.9.9 fixes #118
+  # compose validate the SAME connector the product ships. v3.9.10 fixes #121
+  # (claimFromChannel now accepts the signBalanceProof wrapper as signatureA —
+  # the LAST Mina settle blocker; the connector now submits the on-chain Mina
+  # claimFromChannel tx). v3.9.9 fixes #118
   # (verifyBalanceProof accepts ADVANCING claims — resolves the nonce tension that
   # blocked claimFromChannel) and v3.9.8 fixes #117 (Mina CLAIM_RECEIVED emits the
   # real transferredAmount so the settlement-threshold check fires), together
@@ -189,7 +192,7 @@ ensure_image_manifest() {
   # 3.9.1's #88 dynamic-peer settlement-chain resolution + blockchain-typed inbound
   # claim validation (validateSolanaClaim / validateMinaClaim / validateEVMClaim).
   # Pull lazily if missing locally.
-  local CONNECTOR_TAG=3.9.9
+  local CONNECTOR_TAG=3.9.10
   docker image inspect "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" >/dev/null 2>&1 \
     || docker pull "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" 2>&1 | tail -2
 
@@ -709,17 +712,29 @@ deploy_mina_zkapp_deterministic() {
     return 1
   fi
   log "Deploying deterministic Mina zkApp (o1js — slow, ~30-120s, ~2GB RAM)…"
-  # MINA_ADVANCE_COMMITMENT=1 (default ON for E2E_MINA) advances the on-chain
-  # balanceCommitment to the epoch the client's first claim commits to, so the
-  # connector's #98 verifyBalanceProof accepts the claim (Poseidon(0,0,0) init
-  # state otherwise mismatches the client's Poseidon(transferredAmount,0,salt)).
-  # The advance adds 2 extra o1js proofs (deposit + claimFromChannel); bump the
-  # budget to 360s. Opt out with MINA_ADVANCE_COMMITMENT=0.
+  # MINA_ADVANCE_COMMITMENT defaults to 0 (OFF) for the connector >=3.9.10 path.
+  #
+  # History: with the OLD #98 *equal-nonce* design, the connector's
+  # verifyBalanceProof required the claim nonce to EQUAL the on-chain nonce, so we
+  # pre-advanced the on-chain channel to align the commitment epoch
+  # (MINA_ADVANCE_COMMITMENT=1). connector#118 (3.9.9) changed verifyBalanceProof
+  # to accept *advancing* claims (proofNonce > onChainNonce). With the channel
+  # pre-advanced to nonce 1, the client's FIRST publish (nonce 1) is no longer
+  # strictly-advancing and is rejected `verify_balance_proof_stale_nonce`. Leaving
+  # the channel at its initialized baseline (nonce 0) makes the client's first
+  # publish (nonce 1) the strictly-advancing claim the connector settles via the
+  # on-chain claimFromChannel (unblocked by connector#121 in 3.9.10).
+  #
+  # scripts/advance-mina-commitment.ts remains available for the legacy equal-nonce
+  # path; set MINA_ADVANCE_COMMITMENT=1 to re-enable pre-advance (then drive TWO
+  # publishes so the 2nd, nonce-2, claim is the strictly-advancing one).
+  # The advance adds 2 extra o1js proofs (deposit + claimFromChannel); when ON,
+  # the 360s budget below covers it.
   local out
   if ! out=$(MINA_GRAPHQL_URL="$MINA_GRAPHQL_URL" \
        MINA_ACCOUNTS_URL="$MINA_ACCOUNTS_URL" \
        MINA_ZKAPP_PRIVATE_KEY="$MINA_ZKAPP_DETERMINISTIC_KEY" \
-       MINA_ADVANCE_COMMITMENT="${MINA_ADVANCE_COMMITMENT:-1}" \
+       MINA_ADVANCE_COMMITMENT="${MINA_ADVANCE_COMMITMENT:-0}" \
        MINA_ADVANCE_AMOUNT="${MINA_ADVANCE_AMOUNT:-1000000}" \
        timeout 360 npx tsx "${REPO_ROOT}/scripts/deploy-mina-zkapp.ts" 2>>/tmp/mina-zkapp-deploy.log); then
     warn "Mina zkApp deploy failed (see /tmp/mina-zkapp-deploy.log):"
