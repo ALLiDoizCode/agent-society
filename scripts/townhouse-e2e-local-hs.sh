@@ -582,6 +582,73 @@ fund_client_pod() {
   wait "$sol_pid" || warn "client SOL funding chain failed (continuing)"
 }
 
+# Fund the toon-client's derived Mina address (Phase-2 Stage 3; E2E_MINA=1 only).
+#
+# The client must pay its OWN on-chain initializeChannel + deposit tx fees plus
+# the channel deposit, but its Mina identity is mnemonic-derived and boots with
+# 0 MINA (only EVM + Solana get faucet drips). Without MINA the client's
+# openMinaChannelOnChain (invoked at first mina:* publish) fails at the fee-payer
+# step → no on-chain channel → the connector's claimFromChannel hits
+# "participant keys do not match channelHash" (bare/uninitialized zkApp).
+#
+# MUST run AFTER the client is up with its FINAL identity (do NOT restart the
+# client after this, or it regenerates an unfunded Mina key). Reads the client's
+# Mina B62 address from /signer-info (.mina), then transfers MINA via a funded
+# lightnet account (scripts/fund-mina-address.ts). Polls the client's on-chain
+# Mina balance until funded. Best-effort: failures warn (the Mina loop is opt-in)
+# but a missing balance means the on-chain open + claim will not land.
+fund_client_mina() {
+  [[ "${E2E_MINA:-0}" == "1" ]] || return 0
+
+  log "Fetching client Mina address from /signer-info…"
+  local info client_mina
+  info=$(curl -sfk --max-time 5 "$CLIENT_URL/signer-info" 2>/dev/null) || {
+    warn "client /signer-info unreachable — skipping Mina funding"
+    return 1
+  }
+  client_mina=$(echo "$info" | jq -r '.mina // empty')
+  if [[ -z "$client_mina" || "$client_mina" == "null" ]]; then
+    warn "client /signer-info has no Mina address (.mina empty) — is mina-signer in the client image? Skipping Mina funding"
+    return 1
+  fi
+  log "Client Mina address: $client_mina"
+
+  # The host harness runs fund-mina-address.ts against the HOST-published Mina
+  # GraphQL + accounts-manager (28085 / 28181), regardless of the client's own
+  # internal GraphQL URL.
+  local fund_amount="${MINA_FUND_AMOUNT:-5000000000}" # 5 MINA nanomina
+  log "Submitting Mina payment ($fund_amount nanomina) to $client_mina via lightnet accounts-manager…"
+  local fund_hash
+  if fund_hash=$(MINA_GRAPHQL_URL="$MINA_GRAPHQL_URL" \
+       MINA_ACCOUNTS_URL="$MINA_ACCOUNTS_URL" \
+       MINA_FUND_AMOUNT="$fund_amount" \
+       timeout 360 npx tsx "${REPO_ROOT}/scripts/fund-mina-address.ts" "$client_mina" 2>>/tmp/mina-fund-client.log); then
+    log "Client Mina funding tx: $fund_hash"
+  else
+    warn "Mina client funding failed (see /tmp/mina-fund-client.log):"
+    tail -8 /tmp/mina-fund-client.log >&2 || true
+    return 1
+  fi
+
+  # Poll the client's on-chain Mina balance until it reflects the transfer.
+  log "Polling client Mina balance until funded (120s budget)…"
+  local deadline=$(( $(date +%s) + 120 ))
+  while (( $(date +%s) < deadline )); do
+    local bal
+    bal=$(curl -s --max-time 8 -X POST "$MINA_GRAPHQL_URL" \
+      -H 'content-type: application/json' \
+      -d "{\"query\":\"{ account(publicKey: \\\"$client_mina\\\") { balance { total } } }\"}" 2>/dev/null \
+      | jq -r '.data.account.balance.total // empty' 2>/dev/null)
+    if [[ -n "$bal" && "$bal" != "0" && "$bal" != "null" ]]; then
+      log "Client Mina funded ✓ (balance.total=$bal)"
+      return 0
+    fi
+    sleep 4
+  done
+  warn "client Mina balance never became non-zero within 120s — on-chain channel open may fail"
+  return 1
+}
+
 wait_for_client_ready() {
   # The pod's boot sequence has a ~30s balance-poll deadline that starts AFTER
   # the anon daemon bootstrap completes (which can take 10-30s). If we fund
@@ -1443,6 +1510,11 @@ cmd_up() {
   up_local_client         # fresh container; Fastify up within ~3s, keys generated
   fund_client_pod         # fund the FRESH ephemeral keys before pod's poll deadline
   wait_for_client_ready   # poll /healthz until anyoneReady=true (no restart needed)
+  # Fund the client's Mina address LAST (E2E_MINA=1 only) — it must NOT be
+  # restarted after this (a restart regenerates an unfunded Mina key). The client
+  # pays its own on-chain initializeChannel + deposit when it opens the Mina
+  # channel at first mina:* publish.
+  fund_client_mina
   # Network isolation is the production posture (client reaches apex ONLY via
   # public ATOR). The local-e2e bypass DELIBERATELY relaxes it (client joins
   # townhouse-hs-net to reach btp-bypass + internal chains), so the isolation
@@ -1461,6 +1533,7 @@ cmd_fund() {
   if docker ps --filter "name=$CLIENT_CONTAINER" --format '{{.Names}}' | grep -q "$CLIENT_CONTAINER"; then
     fund_client_pod
     wait_for_client_ready
+    fund_client_mina
   else
     log "Client container not running — skipping client funding"
   fi
