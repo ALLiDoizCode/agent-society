@@ -168,20 +168,24 @@ ensure_image_manifest() {
 
   warn "image-manifest.json missing OR compose template has unresolved placeholders — rebuilding…"
 
-  # Pin connector to v3.9.6 — must match DEFAULT_CONNECTOR_IMAGE in
+  # Pin connector to v3.9.7 — must match DEFAULT_CONNECTOR_IMAGE in
   # packages/townhouse/src/constants.ts so the gate's image-manifest + rendered
-  # compose validate the SAME connector the product ships. v3.9.6 completes the
-  # full non-EVM on-chain settle (CLAIM_FROM_CHANNEL + SETTLE_CHANNEL) for BOTH
-  # Solana and Mina: #94 (Solana Ed25519 precompile / on-chain message
-  # reconstruction), #95 (Mina getChannelState missing setActiveInstance), #98
-  # (Mina balance-proof commitment now compared against on-chain balanceCommitment,
-  # not the zkApp address), #99 (Solana CLAIM_FROM_CHANNEL fee-payer decoupled from
-  # the claiming participant). Builds on 3.9.3's Solana settle-executor channel-
+  # compose validate the SAME connector the product ships. v3.9.7 fixes #114
+  # (on-chain claimFromChannel enabled for externally-opened / inbound channels:
+  # was failing with `_participantCache` miss → ACCOUNT_NOT_FOUND + off-chain/
+  # on-chain proof-message mismatch) + #84 (dual-party), completing the Mina
+  # settle leg. Builds on the 3.9.6 chain which completed the full non-EVM
+  # on-chain settle (CLAIM_FROM_CHANNEL + SETTLE_CHANNEL) for Solana and Mina:
+  # #94 (Solana Ed25519 precompile / on-chain message reconstruction), #95 (Mina
+  # getChannelState missing setActiveInstance), #98 (Mina balance-proof
+  # commitment now compared against on-chain balanceCommitment, not the zkApp
+  # address), #99 (Solana CLAIM_FROM_CHANNEL fee-payer decoupled from the
+  # claiming participant). Builds on 3.9.3's Solana settle-executor channel-
   # lookup fix (#92), 3.9.2's Mina settlement-side proof encoding fix (#90), and
   # 3.9.1's #88 dynamic-peer settlement-chain resolution + blockchain-typed inbound
   # claim validation (validateSolanaClaim / validateMinaClaim / validateEVMClaim).
   # Pull lazily if missing locally.
-  local CONNECTOR_TAG=3.9.6
+  local CONNECTOR_TAG=3.9.7
   docker image inspect "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" >/dev/null 2>&1 \
     || docker pull "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" 2>&1 | tail -2
 
