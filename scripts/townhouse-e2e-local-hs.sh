@@ -922,6 +922,34 @@ EOF
     fi
   fi
 
+  # Re-up resilience: when chainProviders already exist (injection skipped above),
+  # MINA_ZKAPP_ADDRESS is unset — but the client env + apex Mina funding still need
+  # it. Recover it from the already-injected Mina chainProvider's `zkAppAddress` in
+  # config.yaml (the deterministic deploy is idempotent, so the on-chain bare zkApp
+  # at that address is still valid). Without this, a re-up disables the client Mina
+  # path (mina.enabled=false → no mnemonic identity → empty client .mina).
+  if [[ "${E2E_MINA:-0}" == "1" && -z "${MINA_ZKAPP_ADDRESS:-}" ]]; then
+    local recovered_zkapp
+    recovered_zkapp=$(awk '
+      /chainType:[[:space:]]*mina/ { inblk=1 }
+      inblk && /zkAppAddress:/ {
+        line=$0
+        sub(/.*zkAppAddress:[[:space:]]*/, "", line)
+        gsub(/["'"'"']/, "", line)
+        gsub(/[[:space:]]/, "", line)
+        print line
+        exit
+      }
+    ' "$config_path" 2>/dev/null)
+    if [[ -n "$recovered_zkapp" ]]; then
+      MINA_ZKAPP_ADDRESS="$recovered_zkapp"
+      export MINA_ZKAPP_ADDRESS
+      log "Recovered MINA_ZKAPP_ADDRESS from existing config.yaml: $MINA_ZKAPP_ADDRESS"
+    else
+      warn "E2E_MINA=1 re-up but could not recover zkAppAddress from config.yaml — client Mina path will be disabled"
+    fi
+  fi
+
   log "townhouse hs up (6-min budget — anon HS bootstrap is slow)…"
   # CLI exit code is ADVISORY — its ink-based TUI can crash post-success
   # (e.g., missing optional peer dep). Trust container health, not the exit.

@@ -116,22 +116,28 @@ async function loadMinaRuntime(): Promise<{
     return injected;
   }
   const { createRequire } = await import('node:module');
+  const nodePath = await import('node:path');
   // Anchor resolution at this module so the consumer's node_modules graph (where
   // both o1js and @toon-protocol/mina-zkapp are installed) resolves them, then
   // re-anchor at the mina-zkapp package so its CJS `require('o1js')` and ours are
-  // the SAME physical module.
+  // the SAME physical module instance (shared active-instance closure).
   const requireHere = createRequire(import.meta.url);
-  let mzkPkgPath: string;
-  try {
-    mzkPkgPath = requireHere.resolve('@toon-protocol/mina-zkapp/package.json');
-  } catch {
-    // Some layouts don't expose package.json via exports; fall back to the
-    // package entry and walk to its directory.
-    mzkPkgPath = requireHere.resolve('@toon-protocol/mina-zkapp');
-  }
+  const mzkPkgPath = requireHere.resolve(
+    '@toon-protocol/mina-zkapp/package.json'
+  );
   const requireFromMzk = createRequire(mzkPkgPath);
+  // o1js resolved from the mina-zkapp anchor → the SAME (CJS) instance the
+  // contract's `require('o1js')` uses.
   const o1js = requireFromMzk('o1js') as O1jsLike;
-  const mzk: any = requireFromMzk('@toon-protocol/mina-zkapp');
+  // ⚠️ A pnpm workspace package has NO self-referential symlink, so
+  // `requireFromMzk('@toon-protocol/mina-zkapp')` fails with MODULE_NOT_FOUND.
+  // Load the contract by PATH from the package's own `main` entry instead (the
+  // same approach scripts/deploy-mina-zkapp.ts uses). This works in both the
+  // workspace (no self-symlink) and the flat consumer node_modules layouts.
+  const mzkPkgJson: { main?: string } = requireFromMzk(mzkPkgPath);
+  const mzkDir = nodePath.dirname(mzkPkgPath);
+  const mzkEntry = nodePath.join(mzkDir, mzkPkgJson.main ?? 'dist/index.js');
+  const mzk: any = requireFromMzk(mzkEntry);
   const PaymentChannel = mzk.PaymentChannel ?? mzk.default?.PaymentChannel;
   if (!PaymentChannel) {
     throw new Error(
@@ -198,6 +204,13 @@ export interface OpenMinaChannelParams {
   deposit?: { amount: bigint };
   /** Per-call network id for the Schnorr/account prefix. Default 'devnet'. */
   networkId?: 'devnet' | 'mainnet';
+  /**
+   * Transaction fee in nanomina for the `initializeChannel` + `deposit` zkApp
+   * method calls. Lightnet/devnet REJECTS fee-less zkApp commands with
+   * "Insufficient fee", so a non-zero fee is REQUIRED. Default 100_000_000
+   * (0.1 MINA), matching scripts/deploy-mina-zkapp.ts.
+   */
+  feeNanomina?: bigint;
 }
 
 export interface OpenMinaChannelResult {
@@ -236,6 +249,10 @@ export async function openMinaChannelOnChain(
   // on-chain endpoint binding.
   const network = Mina.Network(params.graphqlUrl);
   Mina.setActiveInstance(network);
+
+  // zkApp method txs MUST carry a fee on lightnet/devnet ("Insufficient fee"
+  // otherwise). 0.1 MINA matches scripts/deploy-mina-zkapp.ts.
+  const txFee = params.feeNanomina ?? 100_000_000n;
 
   // The client's mnemonic-derived Mina key is a big-endian hex scalar (the form
   // `deriveFullIdentity()` emits); o1js `PrivateKey.fromBase58` needs the Mina
@@ -300,19 +317,33 @@ export async function openMinaChannelOnChain(
     await fetchAccount({ publicKey: zkAppPublicKey });
     await fetchAccount({ publicKey: payerPublicKey });
 
-    const initTx = await Mina.transaction(payerPublicKey, async () => {
-      await channel.initializeChannel(
-        participantA,
-        participantB,
-        nonce,
-        timeoutField,
-        tokenIdField
-      );
-    });
+    const initTx = await Mina.transaction(
+      { sender: payerPublicKey, fee: Number(txFee) },
+      async () => {
+        await channel.initializeChannel(
+          participantA,
+          participantB,
+          nonce,
+          timeoutField,
+          tokenIdField
+        );
+      }
+    );
     await initTx.prove();
     const sentInit = await initTx.sign([payerPrivateKey]).send();
     initTxHash = sentInit.hash ?? undefined;
     opened = true;
+    // A following `deposit` reads `channelState.getAndRequireEquals()` as a
+    // precondition — it must see the channel OPEN on-chain. So when a deposit is
+    // requested we MUST wait for the init tx to be INCLUDED in a block (and
+    // re-fetch the account) before building the deposit tx; otherwise the deposit
+    // precondition fails `channelState must be OPEN: 0 != 1`. `.wait()` blocks
+    // until inclusion (lightnet block time can be a few minutes).
+    if (params.deposit && params.deposit.amount > 0n) {
+      await sentInit.wait();
+      await fetchAccount({ publicKey: zkAppPublicKey });
+      await fetchAccount({ publicKey: payerPublicKey });
+    }
   } else if (currentState !== MINA_CHANNEL_STATE_OPEN) {
     // CLOSING (2) or SETTLED (3): cannot (re)open. Surface clearly.
     throw new Error(
@@ -327,9 +358,12 @@ export async function openMinaChannelOnChain(
     // Re-fetch so the deposit tx sees the post-init state.
     await fetchAccount({ publicKey: zkAppPublicKey });
     const amountField = Field(params.deposit.amount.toString());
-    const depositTx = await Mina.transaction(payerPublicKey, async () => {
-      await channel.deposit(amountField, payerPublicKey);
-    });
+    const depositTx = await Mina.transaction(
+      { sender: payerPublicKey, fee: Number(txFee) },
+      async () => {
+        await channel.deposit(amountField, payerPublicKey);
+      }
+    );
     await depositTx.prove();
     const sentDeposit = await depositTx.sign([payerPrivateKey]).send();
     depositTxHash = sentDeposit.hash ?? undefined;

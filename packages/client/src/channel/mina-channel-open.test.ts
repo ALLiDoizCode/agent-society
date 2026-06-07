@@ -24,7 +24,12 @@ const txState = {
 const initializeChannel = vi.fn(async () => {});
 const deposit = vi.fn(async () => {});
 const prove = vi.fn(async () => {});
-const send = vi.fn(async () => ({ hash: 'tx-hash-xyz' }));
+const send = vi.fn(async () => ({
+  hash: 'tx-hash-xyz',
+  // `.wait()` is awaited before a deposit so the init tx is included on-chain
+  // (the deposit precondition reads channelState). The fake resolves instantly.
+  wait: vi.fn(async () => ({ status: 'included' })),
+}));
 const sign = vi.fn(() => ({ send }));
 // fetchAccount returns an account whose zkapp.appState[3] is the current
 // channelState (the opener reads state from here, not zkApp.channelState.get()).
