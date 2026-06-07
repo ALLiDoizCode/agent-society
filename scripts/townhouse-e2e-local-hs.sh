@@ -538,17 +538,22 @@ fund_apex_and_town() {
 # apex never actually settles on-chain in this stack (no funds consumed).
 direct_fund_mina() {
   local addr="$1"
-  # The o1labs lightnet accounts-manager exposes faucet endpoints across
-  # versions; try the documented ones in turn (each non-fatal).
-  for path in "fund-account" "faucet"; do
-    if curl -sfk --max-time 10 -X POST "$MINA_ACCOUNTS_URL/$path" \
-         -H 'content-type: application/json' \
-         -d "{\"pk\":\"$addr\",\"amount\":\"100000000000\"}" >/dev/null 2>&1; then
-      log "Mina fund request accepted via $MINA_ACCOUNTS_URL/$path for $addr"
-      return 0
-    fi
-  done
-  warn "Mina accounts-manager faucet not available at $MINA_ACCOUNTS_URL (tried fund-account, faucet)"
+  # The o1labs lightnet accounts-manager has no faucet endpoint for an arbitrary
+  # external address — but it hands out PRE-FUNDED accounts. fund-mina-address.ts
+  # acquires one and submits a real native-MINA payment to `addr` (o1js + GraphQL,
+  # mirroring the client funding step). The apex Mina settlement signer needs MINA
+  # to pay its on-chain claimFromChannel tx fee, so this is now a real transfer.
+  local amount="${MINA_FUND_AMOUNT:-5000000000}" # 5 MINA nanomina
+  local hash
+  if hash=$(MINA_GRAPHQL_URL="$MINA_GRAPHQL_URL" \
+       MINA_ACCOUNTS_URL="$MINA_ACCOUNTS_URL" \
+       MINA_FUND_AMOUNT="$amount" \
+       timeout 360 npx tsx "${REPO_ROOT}/scripts/fund-mina-address.ts" "$addr" 2>>/tmp/mina-fund-apex.log); then
+    log "Mina fund tx for $addr: $hash"
+    return 0
+  fi
+  warn "Mina fund of $addr failed (see /tmp/mina-fund-apex.log):"
+  tail -6 /tmp/mina-fund-apex.log >&2 || true
   return 1
 }
 
@@ -929,24 +934,34 @@ EOF
   # at that address is still valid). Without this, a re-up disables the client Mina
   # path (mina.enabled=false → no mnemonic identity → empty client .mina).
   if [[ "${E2E_MINA:-0}" == "1" && -z "${MINA_ZKAPP_ADDRESS:-}" ]]; then
-    local recovered_zkapp
-    recovered_zkapp=$(awk '
-      /chainType:[[:space:]]*mina/ { inblk=1 }
-      inblk && /zkAppAddress:/ {
-        line=$0
-        sub(/.*zkAppAddress:[[:space:]]*/, "", line)
-        gsub(/["'"'"']/, "", line)
-        gsub(/[[:space:]]/, "", line)
-        print line
-        exit
-      }
-    ' "$config_path" 2>/dev/null)
-    if [[ -n "$recovered_zkapp" ]]; then
-      MINA_ZKAPP_ADDRESS="$recovered_zkapp"
-      export MINA_ZKAPP_ADDRESS
-      log "Recovered MINA_ZKAPP_ADDRESS from existing config.yaml: $MINA_ZKAPP_ADDRESS"
-    else
-      warn "E2E_MINA=1 re-up but could not recover zkAppAddress from config.yaml — client Mina path will be disabled"
+    # The deterministic deploy is idempotent: if the bare zkApp already exists on
+    # this lightnet it's a no-op; if the lightnet was reset (fresh ledger) it
+    # re-deploys the bare account. Either way MINA_ZKAPP_ADDRESS is (re)captured.
+    # This keeps a re-up working after a Mina lightnet reset (the on-chain account
+    # would otherwise be gone while config.yaml still references its address).
+    deploy_mina_zkapp_deterministic || warn "Mina zkApp (re)deploy failed on re-up"
+    if [[ -z "${MINA_ZKAPP_ADDRESS:-}" ]]; then
+      # Deploy short-circuited or failed; fall back to the address recorded in
+      # config.yaml (valid when the on-chain account is still present).
+      local recovered_zkapp
+      recovered_zkapp=$(awk '
+        /chainType:[[:space:]]*mina/ { inblk=1 }
+        inblk && /zkAppAddress:/ {
+          line=$0
+          sub(/.*zkAppAddress:[[:space:]]*/, "", line)
+          gsub(/["'"'"']/, "", line)
+          gsub(/[[:space:]]/, "", line)
+          print line
+          exit
+        }
+      ' "$config_path" 2>/dev/null)
+      if [[ -n "$recovered_zkapp" ]]; then
+        MINA_ZKAPP_ADDRESS="$recovered_zkapp"
+        export MINA_ZKAPP_ADDRESS
+        log "Recovered MINA_ZKAPP_ADDRESS from existing config.yaml: $MINA_ZKAPP_ADDRESS"
+      else
+        warn "E2E_MINA=1 re-up but no zkAppAddress (deploy + config recovery both failed) — client Mina path will be disabled"
+      fi
     fi
   fi
 
