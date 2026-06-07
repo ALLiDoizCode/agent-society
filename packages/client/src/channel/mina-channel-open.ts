@@ -60,17 +60,92 @@ interface O1jsLike {
 }
 
 let cachedO1js: O1jsLike | null = null;
+let cachedPaymentChannel: any | null = null;
 let compiledContract: any | null = null;
 
 /**
- * Lazily resolve `o1js`. Kept dynamic (and `external` in tsup) so the multi-
- * hundred-MB WASM runtime is only loaded when a Mina channel is actually opened.
+ * Test-only override for the o1js + contract loader. When set, `loadMinaRuntime`
+ * returns this instead of doing the `createRequire` resolution — so unit tests
+ * can inject fakes WITHOUT pulling the real o1js WASM runtime (vitest's
+ * `vi.mock` cannot intercept the CJS `require` path the production loader uses).
  */
+let runtimeOverride:
+  | (() => Promise<{ o1js: O1jsLike; PaymentChannel: any }>)
+  | null = null;
+
+/** Test hook: inject a fake o1js + PaymentChannel runtime. */
+export function _setMinaRuntimeForTests(
+  loader: (() => Promise<{ o1js: O1jsLike; PaymentChannel: any }>) | null
+): void {
+  runtimeOverride = loader;
+}
+
+/**
+ * Resolve `o1js` AND the `PaymentChannel` contract through ONE shared module
+ * instance.
+ *
+ * ⚠️ o1js keeps its "active Mina instance" in a module-level closure
+ * (`mina-instance.js`). `@toon-protocol/mina-zkapp` ships as CommonJS, so its
+ * internal `import {Mina}` is emitted as `require('o1js')` → o1js's CJS build
+ * (`dist/node/index.cjs`). A bare ESM `import('o1js')` from this module resolves
+ * o1js's DIFFERENT ESM build (`dist/node/index.js`) — a SEPARATE module instance
+ * with a SEPARATE `activeInstance` closure. Calling `setActiveInstance` on the
+ * ESM instance while `PaymentChannel.initializeChannel` reads the CJS instance
+ * throws `channelState.get() failed … Must call Mina.setActiveInstance first`
+ * (observed in the local-HS Mina e2e on the FIRST publish). The connector's own
+ * settlement path and `scripts/deploy-mina-zkapp.ts` both work around this by
+ * requiring o1js through the same anchor the zkApp uses.
+ *
+ * Fix: anchor a `createRequire` at the `@toon-protocol/mina-zkapp` package and
+ * `require('o1js')` + the contract from there, so both share the CJS o1js
+ * instance and `setActiveInstance` is visible inside the contract method. Kept
+ * lazy (and `external` in tsup) so the multi-hundred-MB WASM runtime is only
+ * loaded when a Mina channel is actually opened.
+ */
+async function loadMinaRuntime(): Promise<{
+  o1js: O1jsLike;
+  PaymentChannel: any;
+}> {
+  if (cachedO1js && cachedPaymentChannel) {
+    return { o1js: cachedO1js, PaymentChannel: cachedPaymentChannel };
+  }
+  if (runtimeOverride) {
+    const injected = await runtimeOverride();
+    cachedO1js = injected.o1js;
+    cachedPaymentChannel = injected.PaymentChannel;
+    return injected;
+  }
+  const { createRequire } = await import('node:module');
+  // Anchor resolution at this module so the consumer's node_modules graph (where
+  // both o1js and @toon-protocol/mina-zkapp are installed) resolves them, then
+  // re-anchor at the mina-zkapp package so its CJS `require('o1js')` and ours are
+  // the SAME physical module.
+  const requireHere = createRequire(import.meta.url);
+  let mzkPkgPath: string;
+  try {
+    mzkPkgPath = requireHere.resolve('@toon-protocol/mina-zkapp/package.json');
+  } catch {
+    // Some layouts don't expose package.json via exports; fall back to the
+    // package entry and walk to its directory.
+    mzkPkgPath = requireHere.resolve('@toon-protocol/mina-zkapp');
+  }
+  const requireFromMzk = createRequire(mzkPkgPath);
+  const o1js = requireFromMzk('o1js') as O1jsLike;
+  const mzk: any = requireFromMzk('@toon-protocol/mina-zkapp');
+  const PaymentChannel = mzk.PaymentChannel ?? mzk.default?.PaymentChannel;
+  if (!PaymentChannel) {
+    throw new Error(
+      '@toon-protocol/mina-zkapp does not export PaymentChannel — cannot open a Mina channel'
+    );
+  }
+  cachedO1js = o1js;
+  cachedPaymentChannel = PaymentChannel;
+  return { o1js, PaymentChannel };
+}
+
+/** Lazily resolve `o1js` (shared CJS instance with the contract). */
 async function getO1js(): Promise<O1jsLike> {
-  if (cachedO1js) return cachedO1js;
-  const lib: any = await import(/* @vite-ignore */ 'o1js');
-  cachedO1js = lib as O1jsLike;
-  return cachedO1js;
+  return (await loadMinaRuntime()).o1js;
 }
 
 /**
@@ -79,13 +154,7 @@ async function getO1js(): Promise<O1jsLike> {
  * same process don't recompile.
  */
 async function getCompiledPaymentChannel(): Promise<any> {
-  const mod: any = await import(/* @vite-ignore */ '@toon-protocol/mina-zkapp');
-  const PaymentChannel = mod.PaymentChannel ?? mod.default?.PaymentChannel;
-  if (!PaymentChannel) {
-    throw new Error(
-      '@toon-protocol/mina-zkapp does not export PaymentChannel — cannot open a Mina channel'
-    );
-  }
+  const { PaymentChannel } = await loadMinaRuntime();
   if (!compiledContract) {
     await PaymentChannel.compile();
     compiledContract = PaymentChannel;
@@ -96,6 +165,7 @@ async function getCompiledPaymentChannel(): Promise<any> {
 /** Test hook: reset the cached o1js + compiled-contract state. */
 export function _resetMinaChannelOpenCache(): void {
   cachedO1js = null;
+  cachedPaymentChannel = null;
   compiledContract = null;
 }
 
