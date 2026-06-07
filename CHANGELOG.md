@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0](https://github.com/toon-protocol/town/compare/v0.14.4...v0.15.0) (2026-06-07)
+
+### Features
+
+* **harness:** finish non-EVM settle — Solana recipient credited via close/settle + Mina [#98](https://github.com/toon-protocol/town/issues/98) commitment alignment ([#122](https://github.com/toon-protocol/town/issues/122)) ([44982be](https://github.com/toon-protocol/town/commit/44982be0819d283007c2640fb2a9638667c8ac0f))
+
 ## [0.14.4](https://github.com/toon-protocol/town/compare/v0.14.3...v0.14.4) (2026-06-05)
 
 ### Bug Fixes
