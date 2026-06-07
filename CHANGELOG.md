@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0](https://github.com/toon-protocol/town/compare/v0.15.0...v0.16.0) (2026-06-07)
+
+### Features
+
+* **e2e:** fund client Mina + open settleable on-chain channel (Mina pay-to-write infra) ([#128](https://github.com/toon-protocol/town/issues/128)) ([66796e6](https://github.com/toon-protocol/town/commit/66796e6b05764cdbc340e34e2b1162f154daf389))
+
 ## [0.15.0](https://github.com/toon-protocol/town/compare/v0.14.4...v0.15.0) (2026-06-07)
 
 ### Features
