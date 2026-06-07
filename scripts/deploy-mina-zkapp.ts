@@ -34,6 +34,38 @@ const GRAPHQL_URL =
 const ACCOUNTS_URL = process.env.MINA_ACCOUNTS_URL || 'http://localhost:19181';
 const ZKAPP_PRIVATE_KEY = process.env.MINA_ZKAPP_PRIVATE_KEY?.trim() || '';
 
+// ── #98 commitment alignment (opt-in via MINA_ADVANCE_COMMITMENT=1) ───────────
+// The connector's MinaPaymentChannelSDK.verifyBalanceProof (#98) compares the
+// inbound claim's commitment against the CURRENT on-chain balanceCommitment. A
+// freshly initializeChannel-d zkApp pins Poseidon(0,0,0), but a client (and the
+// connector's own per-packet-claim producer) signs Poseidon(transferredAmount,
+// 0, salt). So the FIRST non-zero claim never matches the un-advanced init state.
+// When MINA_ADVANCE_COMMITMENT=1, after init we deposit + claimFromChannel to
+// advance the on-chain commitment to the epoch the client's first claim commits
+// to — using the in-scope deploy account as the channel participant (we hold its
+// key here, which the on-chain claimFromChannel signature binding requires).
+const ADVANCE_COMMITMENT = process.env.MINA_ADVANCE_COMMITMENT === '1';
+const ADVANCE_AMOUNT = BigInt(process.env.MINA_ADVANCE_AMOUNT || '1000000');
+const ADVANCE_NONCE = BigInt(process.env.MINA_ADVANCE_NONCE || '1');
+
+/**
+ * Client salt derivation — MUST match `MinaSigner.deriveMinaSalt`
+ * (packages/client/src/signing/mina-signer.ts): first 240 bits of
+ * sha256(`mina-pc-salt:${zkAppAddress}:${nonce}`), non-zero. Uses node:crypto
+ * (identical bytes to the client's @noble/hashes sha256 over the UTF-8 string).
+ */
+async function deriveMinaSalt(
+  zkAppAddress: string,
+  nonce: number
+): Promise<bigint> {
+  const { createHash } = await import('node:crypto');
+  const digestHex = createHash('sha256')
+    .update(`mina-pc-salt:${zkAppAddress}:${nonce}`)
+    .digest('hex');
+  const salt = BigInt('0x' + digestHex.slice(0, 60));
+  return salt === 0n ? 1n : salt;
+}
+
 async function main() {
   // o1js + the zkApp MUST be loaded through the SAME o1js module instance, and
   // both must be resolvable from this script (which lives in scripts/, NOT a
@@ -72,7 +104,15 @@ async function main() {
   // node_modules graph resolves o1js (to the CJS build the zkApp itself uses).
   const require = createRequire(path.join(zkAppDir, 'package.json'));
   const o1js = require('o1js') as typeof O1js;
-  const { Mina, PrivateKey, AccountUpdate, fetchAccount, Field } = o1js;
+  const {
+    Mina,
+    PrivateKey,
+    AccountUpdate,
+    fetchAccount,
+    Field,
+    Poseidon,
+    Signature,
+  } = o1js;
   // The package can't resolve itself by name (no self-referential symlink in a
   // pnpm workspace), so load the built entry by path. Its own
   // `require('o1js')` resolves to the same CJS build via mina-zkapp's
@@ -251,6 +291,90 @@ async function main() {
   if (finalState !== '1') {
     throw new Error(
       `Channel did not reach OPEN (channelState=${finalState}) after initializeChannel`
+    );
+  }
+
+  // ── #98 commitment advance (opt-in) ───────────────────────────────────────
+  // Advance the on-chain balanceCommitment to the epoch the client's first claim
+  // commits to, so the connector's verifyBalanceProof (#98) accepts the claim.
+  // The channel was initialized with participantA=participantB=deployerPub and
+  // channelNonce=Field(0); we hold deployerKey here, which the on-chain
+  // claimFromChannel signature binding (sigs over [commitment, nonce,
+  // Poseidon(pA.x,pB.x,channelNonce)]) requires.
+  if (ADVANCE_COMMITMENT) {
+    const zkAppB58 = zkAppAddress.toBase58();
+    const salt = await deriveMinaSalt(zkAppB58, Number(ADVANCE_NONCE));
+    const targetCommitment = Poseidon.hash([
+      Field(ADVANCE_AMOUNT),
+      Field(0),
+      Field(salt),
+    ]);
+    console.error(
+      `[advance] target: amount=${ADVANCE_AMOUNT} salt=${salt} nonce=${ADVANCE_NONCE} commitment=${targetCommitment.toString()}`
+    );
+
+    // 1) Deposit so depositTotal == ADVANCE_AMOUNT (conservation: A+B==deposit).
+    await fetchAccount({ publicKey: zkAppAddress });
+    await fetchAccount({ publicKey: deployerPub });
+    console.error(`[advance] deposit ${ADVANCE_AMOUNT}…`);
+    const advDepositTx = await Mina.transaction(
+      { sender: deployerPub, fee: DEPLOY_FEE },
+      async () => {
+        await zkApp.deposit(Field(ADVANCE_AMOUNT), deployerPub);
+      }
+    );
+    await advDepositTx.prove();
+    await advDepositTx
+      .sign([deployerKey])
+      .send()
+      .then((t) => t.wait());
+
+    // 2) claimFromChannel — advances on-chain balanceCommitment to the target.
+    const channelHash = Poseidon.hash([
+      deployerPub.x,
+      deployerPub.x,
+      INIT_NONCE,
+    ]);
+    const message = [targetCommitment, Field(ADVANCE_NONCE), channelHash];
+    const sig = Signature.create(deployerKey, message);
+    await fetchAccount({ publicKey: zkAppAddress });
+    await fetchAccount({ publicKey: deployerPub });
+    console.error(`[advance] claimFromChannel (advance commitment)…`);
+    const advClaimTx = await Mina.transaction(
+      { sender: deployerPub, fee: DEPLOY_FEE },
+      async () => {
+        await zkApp.claimFromChannel(
+          Field(ADVANCE_AMOUNT),
+          Field(0),
+          Field(salt),
+          sig,
+          sig,
+          deployerPub,
+          deployerPub,
+          INIT_NONCE,
+          targetCommitment,
+          Field(ADVANCE_NONCE)
+        );
+      }
+    );
+    await advClaimTx.prove();
+    const advSent = await advClaimTx.sign([deployerKey]).send();
+    console.error(`[advance] claimFromChannel tx: ${advSent.hash}`);
+    await advSent.wait();
+
+    await fetchAccount({ publicKey: zkAppAddress });
+    const advVerify = await fetchAccount({ publicKey: zkAppAddress });
+    const advCommit =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (advVerify.account as any)?.zkapp?.appState?.[1]?.toString();
+    console.error(`[advance] post-advance on-chain commitment = ${advCommit}`);
+    if (advCommit !== targetCommitment.toString()) {
+      throw new Error(
+        `[advance] FAILED: on-chain commitment ${advCommit} != target ${targetCommitment.toString()}`
+      );
+    }
+    console.error(
+      '[advance] PASS — on-chain balanceCommitment now matches the client claim commitment (#98 should accept).'
     );
   }
 
