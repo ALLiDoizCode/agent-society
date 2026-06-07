@@ -8,7 +8,7 @@
  *
  * ## Why this is needed (the #98 alignment, Option 1)
  *
- * The connector's `MinaPaymentChannelSDK.verifyBalanceProof` (v3.9.6 dist)
+ * The connector's `MinaPaymentChannelSDK.verifyBalanceProof` (v3.9.7 dist)
  * compares the inbound claim's `commitment` against the CURRENT on-chain
  * `balanceCommitment`. A freshly `initializeChannel`-d zkApp pins
  * `balanceCommitment = Poseidon(0,0,0)` (PaymentChannel.ts L85), while a client
