@@ -168,9 +168,13 @@ ensure_image_manifest() {
 
   warn "image-manifest.json missing OR compose template has unresolved placeholders — rebuilding…"
 
-  # Pin connector to v3.9.7 — must match DEFAULT_CONNECTOR_IMAGE in
+  # Pin connector to v3.9.9 — must match DEFAULT_CONNECTOR_IMAGE in
   # packages/townhouse/src/constants.ts so the gate's image-manifest + rendered
-  # compose validate the SAME connector the product ships. v3.9.7 fixes #114
+  # compose validate the SAME connector the product ships. v3.9.9 fixes #118
+  # (verifyBalanceProof accepts ADVANCING claims — resolves the nonce tension that
+  # blocked claimFromChannel) and v3.9.8 fixes #117 (Mina CLAIM_RECEIVED emits the
+  # real transferredAmount so the settlement-threshold check fires), together
+  # completing the connector-driven on-chain Mina settle. v3.9.7 fixes #114
   # (on-chain claimFromChannel enabled for externally-opened / inbound channels:
   # was failing with `_participantCache` miss → ACCOUNT_NOT_FOUND + off-chain/
   # on-chain proof-message mismatch) + #84 (dual-party), completing the Mina
@@ -185,7 +189,7 @@ ensure_image_manifest() {
   # 3.9.1's #88 dynamic-peer settlement-chain resolution + blockchain-typed inbound
   # claim validation (validateSolanaClaim / validateMinaClaim / validateEVMClaim).
   # Pull lazily if missing locally.
-  local CONNECTOR_TAG=3.9.7
+  local CONNECTOR_TAG=3.9.9
   docker image inspect "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" >/dev/null 2>&1 \
     || docker pull "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" 2>&1 | tail -2
 
