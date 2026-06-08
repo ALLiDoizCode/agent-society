@@ -216,9 +216,19 @@ ensure_image_manifest() {
   local connector_d townhouse_api_d town_d mill_d dvm_d
   connector_d=$(resolve_digest "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}") \
     || die "connector:${CONNECTOR_TAG} not present locally. Run: docker pull ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}"
+  # The townhouse-api image is built LOCALLY (no registry pull step). The
+  # `epic-47-local` tag must be built from a commit that includes the Epic 47
+  # earnings data plane (GET /api/earnings, Story 47.2). If it's absent we fall
+  # back to `:latest`, which on a stale checkout can PREDATE the earnings route
+  # and 404 on /api/earnings — the failure mode tracked in #139. Warn loudly on
+  # the fallback so a stale image is obvious here, not 600 lines later in smoke.
   townhouse_api_d=$(resolve_digest "ghcr.io/toon-protocol/townhouse-api:epic-47-local")
-  [[ -n "$townhouse_api_d" ]] || townhouse_api_d=$(resolve_digest "ghcr.io/toon-protocol/townhouse-api:latest")
-  [[ -n "$townhouse_api_d" ]] || die "townhouse-api image not found locally. Build or pull a tag."
+  if [[ -z "$townhouse_api_d" ]]; then
+    townhouse_api_d=$(resolve_digest "ghcr.io/toon-protocol/townhouse-api:latest")
+    [[ -n "$townhouse_api_d" ]] && warn \
+      "townhouse-api:epic-47-local not found — falling back to :latest. If smoke later reports /api/earnings 404, this image predates the Epic 47 earnings route (#139). Rebuild: docker build -f docker/Dockerfile.townhouse-api -t ghcr.io/toon-protocol/townhouse-api:epic-47-local ."
+  fi
+  [[ -n "$townhouse_api_d" ]] || die "townhouse-api image not found locally. Build it: docker build -f docker/Dockerfile.townhouse-api -t ghcr.io/toon-protocol/townhouse-api:epic-47-local ."
   town_d=$(resolve_digest "ghcr.io/toon-protocol/town:latest") \
     || die "town:latest not present locally. Run: docker pull ghcr.io/toon-protocol/town:latest"
   mill_d=$(resolve_digest "ghcr.io/toon-protocol/mill:latest") \
@@ -1066,6 +1076,17 @@ EOF
     curl -sfk --max-time 5 "$TOWNHOUSE_API_URL/api/transport" >/dev/null 2>&1 && break
     sleep 2
   done
+
+  # Probe /api/earnings up-front. cmd_smoke needs this route to capture a
+  # baseline before publishing; if the pinned townhouse-api image predates the
+  # Epic 47 earnings route it 404s here, NOT in cmd_smoke 500 lines later (#139).
+  # A 404 is a permanent stale-image failure — fail fast with a rebuild hint
+  # rather than letting smoke abort with an opaque "not reachable".
+  local earnings_code
+  earnings_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 "$TOWNHOUSE_API_URL/api/earnings" 2>/dev/null || echo 000)
+  if [[ "$earnings_code" == "404" ]]; then
+    die "townhouse-api $TOWNHOUSE_API_URL/api/earnings returned 404 — the pinned townhouse-api image predates the Epic 47 earnings route (#139). Rebuild from HEAD: docker build -f docker/Dockerfile.townhouse-api -t ghcr.io/toon-protocol/townhouse-api:epic-47-local . && bash scripts/townhouse-e2e-local-hs.sh down && bash scripts/townhouse-e2e-local-hs.sh up"
+  fi
 
   # Start town relay + register peer + add self-delivery route
   start_town_relay
