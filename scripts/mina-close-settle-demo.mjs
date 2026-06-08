@@ -7,7 +7,7 @@
  * channel that accumulated an on-chain `claimFromChannel` is closed and settled.
  *
  * Lifecycle (mirrors the connector's `MinaPaymentChannelSDK`, extracted from the
- * 3.9.13 dist — `mina-payment-channel-sdk.js`, whose methods are thin
+ * 3.10.0 dist — `mina-payment-channel-sdk.js`, whose methods are thin
  * pass-throughs to the zkApp's `@method`s):
  *
  *   1. deploy + initializeChannel      — open channel (participantA=A, B=apex)
@@ -36,14 +36,14 @@
  * Lightnet slotDuration is ~20s, so a 2-slot window settles in ~40-80s. Every tx
  * hash + balance is real and on-chain.
  *
- * ── VK / CONNECTOR caveat (honesty note) ─────────────────────────────────────
- * This demo deploys + drives THIS repo's (Story-34.4 modified) PaymentChannel
- * zkApp, which has a DIFFERENT verification key than the one connector 3.9.13
- * bundles. The per-publish connector path (its claimFromChannel) targets the
- * connector-bundled VK, so the recipient-credit at settle proven here cannot yet
- * be driven THROUGH the connector — it requires shipping this zkApp into a
- * connector release. This script demonstrates the recipient credit at the zkApp
- * layer end-to-end on a real lightnet.
+ * ── VK / CONNECTOR note ──────────────────────────────────────────────────────
+ * This demo deploys + drives THIS repo's (Story-34.4) PaymentChannel zkApp. As
+ * of connector 3.10.0 the connector BUNDLES this exact zkApp: its compiled
+ * verification key is byte-identical to the one deployed here (VK hash
+ * 21482326729342759163995140331524541410906862862696135294081643945442581537217),
+ * so the connector's per-publish claimFromChannel path and this settle() target
+ * the SAME on-chain VK. The recipient credit at settle proven here is therefore
+ * VK-compatible with the connector-driven flow end-to-end on a real lightnet.
  *
  * Usage:
  *   node scripts/mina-close-settle-demo.mjs
