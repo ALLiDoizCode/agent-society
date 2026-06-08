@@ -72,6 +72,10 @@ Client              Connector               BLS                    EventStore
 
 Validation order matters — TOON format is checked **before** payment. Malformed events are rejected immediately, even if payment is correct. This prevents paying to store garbage data.
 
+#### Multi-Chain Settlement
+
+The payment a write carries is a signed payment-channel balance proof, and that proof can be denominated on **EVM, Solana, or Mina**. A client built from a single BIP-39 mnemonic derives an identity on each chain (Nostr/EVM share secp256k1; Solana is Ed25519; Mina is Pallas) and signs the claim format that chain's connector verifier expects — EIP-712 for EVM, a raw Ed25519 message for Solana, a Pallas-Schnorr claim over a Poseidon commitment for Mina. When the destination is a Townhouse apex, the apex validates the claim, fulfills, and auto-drives the on-chain redemption on the matching chain once the per-channel settlement threshold is exceeded. The EVM and Solana paths credit the recipient on-chain (Solana at channel close via `SETTLE_CHANNEL`); on Mina the per-publish claim redeems on-chain (`claimFromChannel`, apex co-signs the counterparty signature) but recipient credit-at-close is a deferred follow-up (Story 34.4). Full detail: [Settlement →](settlement.md).
+
 ### Reading (Free)
 
 ```

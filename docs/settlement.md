@@ -1,6 +1,6 @@
 # Settlement
 
-TOON uses EVM payment channels for off-chain micropayments, settled on-chain when needed.
+TOON uses payment channels for off-chain micropayments, settled on-chain when needed. Settlement is **multi-chain**: a client can settle on EVM, Solana, or Mina, signing the claim format each chain's connector verifier expects. See [Multi-Chain Claims](#multi-chain-claims) below.
 
 ## Chain Negotiation
 
@@ -46,6 +46,28 @@ The receiving connector verifies the channel on-chain the first time it sees a n
 ### EIP-712 Signatures
 
 Claims use EIP-712 typed data signatures with `chainId` and `verifyingContract` in the domain separator. This makes claims tamper-proof and chain-specific — a claim from one chain cannot be replayed on another.
+
+## Multi-Chain Claims
+
+A client built from a single BIP-39 mnemonic derives an identity on every supported chain (Nostr/EVM share secp256k1; Solana is Ed25519; Mina is Pallas). When it pays a destination, it builds the **chain-appropriate** balance-proof claim for the channel it negotiated, and the connector validates each by `blockchain` type:
+
+| Chain      | Signature scheme                                                                                                                | Claim shape (per-publish balance proof)                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **EVM**    | EIP-712 over `keccak256(channelId ‖ cumulativeAmount ‖ nonce ‖ recipient)`                                                      | `{ blockchain:'evm', channelId (0x hex), nonce, transferredAmount, signature }`                                                           |
+| **Solana** | Ed25519 over the raw on-chain message `channel_pda(32) ‖ nonce(8 LE) ‖ transferredAmount(8 LE)`                                 | `{ blockchain:'solana', channelAccount (base58 PDA), programId, nonce, transferredAmount, signature (base64), signerPublicKey (base58) }` |
+| **Mina**   | Pallas-Schnorr over `[balanceCommitment, nonce, channelHash]`, where `balanceCommitment = Poseidon([balanceA, balanceB, salt])` | `{ blockchain:'mina', zkAppAddress (B62), tokenId, balanceCommitment, salt, nonce, proof (base64), signerPublicKey (B62) }`               |
+
+The canonical hash/field layouts live in `@toon-protocol/core` (`packages/core/src/settlement/`) so client signers and connector verifiers cannot drift.
+
+### On-Chain Settlement Through a Townhouse Apex
+
+When a client pays a Townhouse apex, the apex validates the claim, returns FULFILL, and — once the per-channel settlement threshold is exceeded — auto-drives the on-chain redemption (the client never submits a settlement transaction itself):
+
+- **EVM** — net balance settled on the `TokenNetwork` contract.
+- **Solana** — the connector calls `CLAIM_FROM_CHANNEL` per advancing claim; the recipient's tokens are credited **at channel close** via `SETTLE_CHANNEL` (vault → recipient ATA).
+- **Mina** — the connector calls `claimFromChannel` per advancing claim, **co-signing the counterparty signature** with the apex Mina key, so the on-chain zkApp nonce and balance commitment advance and the tx lands. Crediting the recipient's tokens at channel close is a **deferred follow-up (Story 34.4)** — the per-publish claim redeems on-chain today, but recipient funds do not yet move at close.
+
+(Verified against `@toon-protocol/connector` 3.9.13; see `packages/sdk/CONNECTOR_MIGRATION.md` for the version-by-version settlement history.)
 
 ## Settlement Info in kind:10032
 
