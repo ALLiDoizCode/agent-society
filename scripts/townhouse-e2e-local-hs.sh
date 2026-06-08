@@ -1210,8 +1210,44 @@ start_town_relay() {
     -d '{"id":"town","url":"ws://townhouse-hs-town:3000","authToken":"","relation":"child","routes":[{"prefix":"g.townhouse.town","priority":0}]}' \
     > /dev/null || warn "town child-peer registration failed (publishes may T00 at the apex→town settle step)"
 
-  log "Sleeping 8s for the town→connector BTP session to settle…"
-  sleep 8
+  # ── #135 FIX (race: wait for the town's INBOUND BTP session, don't blind-sleep) ──
+  # The apex forwards g.townhouse.town PREPAREs over the town's INBOUND BTP
+  # session (the one the town DIALS to ws://connector:3000) — see the BUG-2/BUG-3
+  # comments above; the apex's own outbound socks5 dial to the town is EXPECTED to
+  # fail (HostUnreachable) and is never the delivery path. The connector's
+  # forwardToNextHop() prefers the (dead) outbound client only when isConnected()
+  # is true and otherwise falls back to the inbound server session; if NEITHER is
+  # live it throws "No active BTP connection" and the publish 503s.
+  #
+  # That inbound session only authenticates ~15-25s AFTER the town container
+  # reports BLS /health ready (the embedded connector boots its settlement stack,
+  # then dials the parent). The old blind `sleep 8` could therefore declare the
+  # stack ready BEFORE the inbound session existed → the first publish raced the
+  # link and 503'd intermittently (issue #135: the town's boot-banner "Peers: 0"
+  # and the HostUnreachable retry loop are both red herrings — the real signal is
+  # the apex-side inbound auth). Poll the connector log for the town's inbound
+  # `btp_auth ... success:true` instead, then a short settle. The connector is
+  # freshly (re)started in this `up`, so its log only holds the current
+  # incarnation's auth line (no stale-match risk).
+  wait_for_town_inbound_session
+}
+
+# Block until the apex connector logs a successful INBOUND BTP auth for peerId
+# `town` (the town's parent-dialed session — the apex's only delivery path to the
+# town). Returns after a short settle once seen; warns (non-fatal) on timeout.
+wait_for_town_inbound_session() {
+  log "Waiting for the town→connector INBOUND BTP session (apex's delivery path; issue #135)…"
+  local deadline=$(( $(date +%s) + 90 ))
+  while (( $(date +%s) < deadline )); do
+    if docker logs townhouse-hs-connector 2>&1 \
+         | grep -qE '"component":"BTPServer".*"event":"btp_auth".*"peerId":"town".*"success":true'; then
+      log "Town inbound BTP session authenticated at the apex — settling 3s…"
+      sleep 3
+      return 0
+    fi
+    sleep 2
+  done
+  warn "town inbound BTP session never authenticated within 90s — publishes will 503 (No active BTP connection to peer town). Inspect: docker logs townhouse-hs-connector 2>&1 | grep btp_auth"
 }
 
 down_townhouse_hs() {
