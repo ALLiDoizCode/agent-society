@@ -80,6 +80,11 @@ DEV_CHAIN_CONTAINERS=(
   townhouse-dev-mina
 )
 
+# Dev-stack compose file + project (must match scripts/townhouse-dev-infra.sh) —
+# used to (re)create the Mina lightnet container with a fresh ledger for E2E_MINA.
+DEV_COMPOSE_FILE="${REPO_ROOT}/docker-compose-townhouse-dev.yml"
+DEV_COMPOSE_PROJECT="toon-townhouse-dev"
+
 HS_CONTAINERS=(
   townhouse-hs-connector
   townhouse-hs-api
@@ -773,6 +778,42 @@ resolve_apex_mina_signer() {
 # (GraphQL + accounts-manager). If any prerequisite is missing the deploy fails
 # soft (warns); the Mina chainProvider injection then skips and the Mina loop is
 # not exercised (which is fine — the loop is claim-validation gated regardless).
+# Build @toon-protocol/mina-zkapp if its dist is missing or stale. deploy-mina-
+# zkapp.ts `require`s packages/mina-zkapp/dist/index.js at runtime; on a clean
+# checkout that file does not exist. This is a fast `tsc` build (no o1js proving),
+# so it is cheap to run from the harness. Idempotent: skips when dist/index.js
+# exists AND is newer than every tracked source file under src/. Folds the
+# previously-manual `pnpm --filter @toon-protocol/mina-zkapp build` prereq into
+# the harness for a no-manual-steps clean `up --local E2E_MINA=1`.
+ensure_mina_zkapp_built() {
+  local pkg_dir="${REPO_ROOT}/packages/mina-zkapp"
+  local dist_entry="${pkg_dir}/dist/index.js"
+  local src_dir="${pkg_dir}/src"
+
+  if [[ -f "$dist_entry" ]]; then
+    # Stale check: is any src file newer than the built entry? (newest src mtime)
+    local newest_src
+    newest_src=$(find "$src_dir" -type f -newer "$dist_entry" -print -quit 2>/dev/null)
+    if [[ -z "$newest_src" ]]; then
+      log "mina-zkapp dist present + up-to-date — skipping build"
+      return 0
+    fi
+    log "mina-zkapp dist is stale ($newest_src newer than dist) — rebuilding…"
+  else
+    log "mina-zkapp dist missing ($dist_entry) — building…"
+  fi
+
+  # Fast tsc build (low RAM, no o1js proof generation). Build ONLY this package.
+  if ! ( cd "$REPO_ROOT" && timeout 180 pnpm --filter @toon-protocol/mina-zkapp build ) \
+       >>/tmp/mina-zkapp-build.log 2>&1; then
+    warn "pnpm --filter @toon-protocol/mina-zkapp build failed (see /tmp/mina-zkapp-build.log):"
+    tail -8 /tmp/mina-zkapp-build.log >&2 || true
+    return 1
+  fi
+  [[ -f "$dist_entry" ]] || { warn "mina-zkapp build ran but $dist_entry still missing"; return 1; }
+  log "mina-zkapp built ✓ ($dist_entry)"
+}
+
 # Dev-only deterministic zkApp key. MUST be a real o1js base58 private key (it is
 # checksum-validated by PrivateKey.fromBase58 under o1js 2.14). Derived once via
 # PrivateKey.fromBigInt(12345…)→toBase58 → pub B62qpGeEf6ZpwL8VmEFdSAaPtSg3nYkeLP…
@@ -791,31 +832,29 @@ deploy_mina_zkapp_deterministic() {
     warn "  Bring up the Mina lightnet (scripts/townhouse-dev-infra.sh up brings up townhouse-dev-mina)."
     return 1
   fi
+  # Ensure the @toon-protocol/mina-zkapp dist exists — deploy-mina-zkapp.ts
+  # `require`s the built `packages/mina-zkapp/dist/index.js` (the PaymentChannel
+  # contract). On a clean checkout that dist is absent, so build it here (fast
+  # tsc, low RAM — no o1js proving). Guarded: only build when dist is missing or
+  # stale (older than the package's src). This folds the previously-manual
+  # `pnpm --filter @toon-protocol/mina-zkapp build` prereq into the harness so a
+  # clean `up --local E2E_MINA=1` needs no manual intervention.
+  ensure_mina_zkapp_built || warn "mina-zkapp build failed — zkApp deploy will likely fail to require the dist"
+
   log "Deploying deterministic Mina zkApp (o1js — slow, ~30-120s, ~2GB RAM)…"
-  # MINA_ADVANCE_COMMITMENT defaults to 0 (OFF) for the connector >=3.9.10 path.
-  #
-  # History: with the OLD #98 *equal-nonce* design, the connector's
-  # verifyBalanceProof required the claim nonce to EQUAL the on-chain nonce, so we
-  # pre-advanced the on-chain channel to align the commitment epoch
-  # (MINA_ADVANCE_COMMITMENT=1). connector#118 (3.9.9) changed verifyBalanceProof
-  # to accept *advancing* claims (proofNonce > onChainNonce). With the channel
-  # pre-advanced to nonce 1, the client's FIRST publish (nonce 1) is no longer
-  # strictly-advancing and is rejected `verify_balance_proof_stale_nonce`. Leaving
-  # the channel at its initialized baseline (nonce 0) makes the client's first
-  # publish (nonce 1) the strictly-advancing claim the connector settles via the
-  # on-chain claimFromChannel (unblocked by connector#121 in 3.9.10).
-  #
-  # scripts/advance-mina-commitment.ts remains available for the legacy equal-nonce
-  # path; set MINA_ADVANCE_COMMITMENT=1 to re-enable pre-advance (then drive TWO
-  # publishes so the 2nd, nonce-2, claim is the strictly-advancing one).
-  # The advance adds 2 extra o1js proofs (deposit + claimFromChannel); when ON,
-  # the 360s budget below covers it.
+  # The client opens the channel at baseline nonce 0 and its first publish
+  # (nonce 1) is the strictly-advancing claim the connector settles on-chain via
+  # claimFromChannel (connector#118 accept-advancing + connector#121, 3.9.10+).
+  # MINA_SKIP_INIT=1 (the documented E2E_MINA path) deploys a BARE zkApp account
+  # (channelState=0) and lets the CLIENT initialize the channel on-chain with the
+  # correct (client, apex) participants — so the on-chain channelHash matches what
+  # the connector's claimFromChannel reconstructs. Pass MINA_SKIP_INIT through so
+  # the operator's command-line value reaches deploy-mina-zkapp.ts.
   local out
   if ! out=$(MINA_GRAPHQL_URL="$MINA_GRAPHQL_URL" \
        MINA_ACCOUNTS_URL="$MINA_ACCOUNTS_URL" \
        MINA_ZKAPP_PRIVATE_KEY="$MINA_ZKAPP_DETERMINISTIC_KEY" \
-       MINA_ADVANCE_COMMITMENT="${MINA_ADVANCE_COMMITMENT:-0}" \
-       MINA_ADVANCE_AMOUNT="${MINA_ADVANCE_AMOUNT:-1000000}" \
+       MINA_SKIP_INIT="${MINA_SKIP_INIT:-0}" \
        timeout 360 npx tsx "${REPO_ROOT}/scripts/deploy-mina-zkapp.ts" 2>>/tmp/mina-zkapp-deploy.log); then
     warn "Mina zkApp deploy failed (see /tmp/mina-zkapp-deploy.log):"
     tail -8 /tmp/mina-zkapp-deploy.log >&2 || true
@@ -1201,6 +1240,60 @@ down_townhouse_hs() {
 # (townhouse-dev-anvil:8545, townhouse-dev-solana:8899, townhouse-dev-mina:3085).
 # Idempotent: `network connect` of an already-attached container is a no-op we
 # swallow. Only the chains that exist are attached (mina only when E2E_MINA=1).
+#
+# REPRODUCIBILITY (E2E_MINA): start the Mina lightnet from a CLEAN ledger.
+# ─────────────────────────────────────────────────────────────────────────────
+# The deterministic-key zkApp is deployed at a FIXED address. If a prior E2E_MINA
+# run left that zkApp on-chain with its channel already OPEN/advanced (a stale
+# client opened + advanced it), a fresh client channel against the same address
+# desyncs the on-chain nonce/commitment and the connector rejects the new claim
+# with "Invalid balance proof signature" / stale-nonce. The o1labs lightnet keeps
+# its ledger in the container's writable layer + an anonymous volume (no named
+# volume in docker-compose-townhouse-dev.yml), so the robust minimal reset is to
+# RECREATE the `townhouse-dev-mina` container with fresh anon volumes
+# (--force-recreate --renew-anon-volumes) — a brand-new genesis ledger where the
+# deterministic zkApp address is unoccupied, so deploy-mina-zkapp.ts deploys a
+# fresh BARE account (MINA_SKIP_INIT=1) for the client to open cleanly.
+# Anvil/Solana are reused warm (their state does not gate the Mina claim path).
+ensure_fresh_mina_ledger() {
+  [[ "${E2E_MINA:-0}" == "1" ]] || return 0
+  [[ -f "$DEV_COMPOSE_FILE" ]] || { warn "dev compose missing at $DEV_COMPOSE_FILE — cannot reset Mina ledger; reusing existing townhouse-dev-mina (may be stale)"; return 0; }
+
+  log "E2E_MINA: recreating townhouse-dev-mina with a FRESH ledger (stale-zkApp guard)…"
+  # --renew-anon-volumes wipes the lightnet's anonymous data volume; --force-
+  # recreate replaces the container even if its config is unchanged. `up -d`
+  # creates the dev network if absent. Bounded to 120s for the image pull/start.
+  if ! timeout 120 docker compose -p "$DEV_COMPOSE_PROJECT" -f "$DEV_COMPOSE_FILE" \
+       up -d --force-recreate --renew-anon-volumes townhouse-dev-mina >/dev/null 2>&1; then
+    warn "failed to (re)create townhouse-dev-mina — continuing with whatever is running (may be stale)"
+    return 0
+  fi
+
+  # Wait for the lightnet to SYNC (genesis bootstrap ~120-300s). Poll GraphQL
+  # syncStatus over the host-published port. Bounded foreground loop (cap 12min).
+  log "Waiting for townhouse-dev-mina syncStatus=SYNCED (genesis bootstrap is slow, ~2-5min; 12min cap)…"
+  local deadline=$(( $(date +%s) + 720 ))
+  local synced=0
+  while (( $(date +%s) < deadline )); do
+    local status
+    status=$(curl -sf --max-time 8 -X POST "$MINA_GRAPHQL_URL" \
+      -H 'content-type: application/json' \
+      -d '{"query":"{ syncStatus }"}' 2>/dev/null \
+      | jq -r '.data.syncStatus // empty' 2>/dev/null) || status=''
+    if [[ "$status" == "SYNCED" ]]; then
+      synced=1
+      break
+    fi
+    sleep 6
+  done
+  if (( synced == 0 )); then
+    warn "townhouse-dev-mina never reported SYNCED within 12min — the zkApp deploy will probe GraphQL and fail soft if still down."
+    warn "  Inspect: docker logs townhouse-dev-mina | tail -40"
+    return 0
+  fi
+  log "townhouse-dev-mina SYNCED ✓ (fresh ledger)"
+}
+
 ensure_dev_chains_on_hs_net() {
   log "Attaching local devnet chains to $HS_NETWORK (in-container service-name reachability)…"
   for c in "${DEV_CHAIN_CONTAINERS[@]}"; do
@@ -1555,6 +1648,12 @@ cmd_up() {
   export TOWNHOUSE_WALLET_DIR="$TOWNHOUSE_HOME"
   export TOWNHOUSE_UID="$(id -u)"
   export TOWNHOUSE_DOCKER_GID="$(getent group docker | cut -d: -f3 || echo 0)"
+
+  # E2E_MINA: start the Mina lightnet from a clean ledger BEFORE the apex boots
+  # (up_townhouse_hs → deploy_mina_zkapp_deterministic deploys at a fixed address;
+  # a stale OPEN zkApp from a prior run desyncs the fresh client channel). No-op
+  # unless E2E_MINA=1. Anvil/Solana are reused warm.
+  ensure_fresh_mina_ledger
 
   up_townhouse_hs        # uses ~/.townhouse-e2e
   fund_apex_and_town
