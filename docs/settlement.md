@@ -65,9 +65,9 @@ When a client pays a Townhouse apex, the apex validates the claim, returns FULFI
 
 - **EVM** — net balance settled on the `TokenNetwork` contract.
 - **Solana** — the connector calls `CLAIM_FROM_CHANNEL` per advancing claim; the recipient's tokens are credited **at channel close** via `SETTLE_CHANNEL` (vault → recipient ATA).
-- **Mina** — the connector calls `claimFromChannel` per advancing claim, **co-signing the counterparty signature** with the apex Mina key, so the on-chain zkApp nonce and balance commitment advance and the tx lands. Crediting the recipient's tokens at channel close is a **deferred follow-up (Story 34.4)** — the per-publish claim redeems on-chain today, but recipient funds do not yet move at close.
+- **Mina** — the connector calls `claimFromChannel` per advancing claim, **co-signing the counterparty signature** with the apex Mina key, so the on-chain zkApp nonce and balance commitment advance and the tx lands. The recipient's tokens are credited **at channel close** via the Story 34.4 fund-custody zkApp (`@toon-protocol/connector` ≥3.10.0): `deposit()` escrows the deposit on the zkApp account and `settle()` drains the custodied balance to the participants (`balanceB`→recipient / apex, `balanceA`→depositor refund) — the Mina analog of Solana's `SETTLE_CHANNEL` vault→recipient transfer.
 
-(Verified against `@toon-protocol/connector` 3.9.13; see `packages/sdk/CONNECTOR_MIGRATION.md` for the version-by-version settlement history.)
+(Verified against `@toon-protocol/connector` 3.10.0; see `packages/sdk/CONNECTOR_MIGRATION.md` for the version-by-version settlement history.)
 
 ## Settlement Info in kind:10032
 
