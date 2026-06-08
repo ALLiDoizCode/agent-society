@@ -213,7 +213,9 @@ Each destination node sets its own base price per byte for storing events. The d
 
 ### Payment Flow
 
-Writers embed TOON-encoded events in ILP PREPARE packets. The relay validates payment and returns an ILP FULFILL as proof of storage.
+Writers embed TOON-encoded events in ILP PREPARE packets, each carrying a signed payment-channel balance-proof claim. The relay validates payment and returns an ILP FULFILL as proof of storage.
+
+The claim is **chain-specific**: a client settling on EVM signs an EIP-712 balance proof, on Solana a raw Ed25519 message, and on Mina a Pallas-Schnorr claim over a Poseidon commitment. The connector dispatches validation by the claim's `blockchain` field. See [Settlement → Multi-Chain Claims](settlement.md#multi-chain-claims) for the per-chain claim shapes and the on-chain redemption flow through a Townhouse apex.
 
 ```
 Writer                    ILP Network                 Relay

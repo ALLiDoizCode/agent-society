@@ -73,7 +73,7 @@ Nodes can also sell human-readable address prefixes (like `g.toon.useast`) to do
 
 ### Settlement Happens Later
 
-All messages are tracked off-chain. Nodes accumulate balances with each other. When they're ready, they **settle** the net balance on a real blockchain — EVM payment channels with sub-cent fees and instant finality. Thousands of messages. One on-chain transaction.
+All messages are tracked off-chain. Nodes accumulate balances with each other. When they're ready, they **settle** the net balance on a real blockchain — payment channels with sub-cent fees and instant finality. Thousands of messages. One on-chain transaction. Settlement is multi-chain: a single client mnemonic derives an identity on **EVM** (EIP-712 balance proofs), **Solana** (Ed25519 payment-channel claims), and **Mina** (Pallas-Schnorr claims over a Poseidon commitment), and a Townhouse apex redeems each claim on the matching chain. See [Settlement →](docs/settlement.md).
 
 ### Pricing and Token Denomination
 
@@ -174,7 +174,7 @@ Transparency about what this architecture does not do:
 - **Recipient pubkey is visible.** The gift wrap `p` tag must contain the recipient's pubkey for relay routing. One side of the channel is identifiable during transport.
 - **Mina proving time is non-trivial.** zk-SNARK proof generation takes 30-120 seconds (acceptable for asynchronous claims, noticeable for settlement).
 - **No formal composition proof.** The individual cryptographic primitives (ECDH, XChaCha20-Poly1305, Poseidon, Kimchi/Pickles) are well-studied. The three-layer NIP-59 composition and its interaction with zk-SNARK settlement have not been formally analyzed as a unified system.
-- **Mina settlement is planned, not shipped.** The EVM path with EIP-712 balance proofs is the current production implementation. The Mina zkApp for channel settlement is architecturally designed but not yet built.
+- **Mina recipient credit-at-close is not yet shipped.** The Mina zkApp payment channel is built: a client opens a real on-chain channel, signs Pallas-Schnorr claims over a Poseidon commitment, and the apex redeems each paid publish on-chain via `claimFromChannel` (the zkApp nonce and balance commitment advance, with the apex co-signing the counterparty signature). What remains is crediting the recipient's tokens at channel close — that final leg is a deferred follow-up (Story 34.4). On Solana the equivalent leg is done: the recipient is credited at close (`SETTLE_CHANNEL`, vault → ATA).
 
 ## Use Cases
 
