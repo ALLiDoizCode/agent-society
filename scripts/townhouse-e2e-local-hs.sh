@@ -168,9 +168,14 @@ ensure_image_manifest() {
 
   warn "image-manifest.json missing OR compose template has unresolved placeholders — rebuilding…"
 
-  # Pin connector to v3.9.11 — must match DEFAULT_CONNECTOR_IMAGE in
+  # Pin connector to v3.9.13 — must match DEFAULT_CONNECTOR_IMAGE in
   # packages/townhouse/src/constants.ts so the gate's image-manifest + rendered
-  # compose validate the SAME connector the product ships. v3.9.11 fixes #123
+  # compose validate the SAME connector the product ships. v3.9.13 fixes #128
+  # (openChannel deploy/initialize split) and v3.9.12 fixes #126 (zkApp tx fee +
+  # balance conservation — the apex claimFromChannel settlement tx was broadcast
+  # with NO fee, failing at "Insufficient fee"; 3.9.12 sets the fee and guards
+  # balance conservation so the on-chain Mina claimFromChannel tx now LANDS).
+  # v3.9.11 fixes #123
   # (apex co-signs signatureB — claimFromChannel previously reused the client's
   # signatureA as signatureB, reverting at "participant B signature verification
   # failed"; the LAST Mina blocker, so the on-chain claimFromChannel tx now lands).
@@ -195,7 +200,7 @@ ensure_image_manifest() {
   # 3.9.1's #88 dynamic-peer settlement-chain resolution + blockchain-typed inbound
   # claim validation (validateSolanaClaim / validateMinaClaim / validateEVMClaim).
   # Pull lazily if missing locally.
-  local CONNECTOR_TAG=3.9.11
+  local CONNECTOR_TAG=3.9.13
   docker image inspect "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" >/dev/null 2>&1 \
     || docker pull "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" 2>&1 | tail -2
 
