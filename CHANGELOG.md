@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0](https://github.com/toon-protocol/town/compare/v0.16.4...v0.17.0) (2026-06-09)
+
+### Features
+
+* direct BTP as default transport (HS optional) + multi-chain settlement harness ([#150](https://github.com/toon-protocol/town/issues/150)) ([82710be](https://github.com/toon-protocol/town/commit/82710be751af1a37f2ee82643c9feba32e728baf))
+
 ## [0.16.4](https://github.com/toon-protocol/town/compare/v0.16.3...v0.16.4) (2026-06-09)
 
 ### Bug Fixes
