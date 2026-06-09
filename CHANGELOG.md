@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.2](https://github.com/toon-protocol/town/compare/v0.17.1...v0.17.2) (2026-06-09)
+
+### Bug Fixes
+
+* **mina:** open on-chain Mina channel two-party so settle verifies ([#155](https://github.com/toon-protocol/town/issues/155)) ([06747de](https://github.com/toon-protocol/town/commit/06747de31aa922abb35fe3f8de2208258a68c43d))
+* **sdk+mill:** accept mill FULFILL envelope (streamSwap completes) + rebuildable mill image ([#156](https://github.com/toon-protocol/town/issues/156)) ([5129494](https://github.com/toon-protocol/town/commit/5129494b1df01d7ab0c3f5b8637ec156b30d4daa)), closes [#153](https://github.com/toon-protocol/town/issues/153) [#82-bounded](https://github.com/toon-protocol/town/issues/82-bounded) [#152](https://github.com/toon-protocol/town/issues/152) [#87](https://github.com/toon-protocol/town/issues/87) [#94](https://github.com/toon-protocol/town/issues/94) [#152](https://github.com/toon-protocol/town/issues/152) [#87](https://github.com/toon-protocol/town/issues/87) [#143-class](https://github.com/toon-protocol/town/issues/143-class) [141/#149](https://github.com/141/town/issues/149) [#153](https://github.com/toon-protocol/town/issues/153) [#152](https://github.com/toon-protocol/town/issues/152)
+
 ## [0.17.1](https://github.com/toon-protocol/town/compare/v0.17.0...v0.17.1) (2026-06-09)
 
 ### Bug Fixes
