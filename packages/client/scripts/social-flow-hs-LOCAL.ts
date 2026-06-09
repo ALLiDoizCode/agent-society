@@ -51,8 +51,12 @@ import {
 const SOCKS_PROXY =
   process.env['SOCKS_PROXY'] ?? 'socks5h://157.90.113.23:9052';
 
-// Connector BTP HS endpoint (the apex connector reachable as a hidden service)
+// Connector BTP HS endpoint (the apex connector reachable as a hidden service).
+// Configurable so the ATOR/SOCKS path can target the CURRENT apex `.anon`
+// (host.json hostname), mirroring the direct path's APEX_BTP_URL. Falls back to
+// the historical fixed `.anon` for back-compat.
 const CONNECTOR_BTP_HS =
+  process.env['SOCKS_BTP_URL'] ??
   'ws://27kdlelaw7asdyqeg63sqz6l3po44y4dwa36mrj2jneejikoahypu3yd.anon:3000/btp';
 
 // Relay HS endpoint — the town's Nostr relay reachable as a separate hidden
