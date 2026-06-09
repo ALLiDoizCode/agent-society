@@ -1295,13 +1295,21 @@ start_town_relay() {
   # g.townhouse.town over the town's INBOUND (parent-tagged) session, exactly as
   # the HS path does. The relation:'child' (free forward) wiring is identical.
   # The child `url` is the ONLY field that varies by transport: HS keeps the
-  # (deliberately-unreachable-over-socks5) town hostname; direct uses an EMPTY
-  # url so the apex never opens a competing outbound session (see above). Build
-  # the JSON with the static `"id":"town"` / `"relation":"child"` shape intact
-  # (the reproducible-FULFILL guard greps for it) and inject only the url.
+  # (deliberately-unreachable-over-socks5) town hostname. The connector REQUIRES
+  # a non-empty, syntactically-valid url (POST /admin/peers rejects "" with HTTP
+  # 400 "Missing or invalid peer url"), and the registration is what sets
+  # relation:'child' (free parent→child forward; avoids T00). But in direct mode
+  # the apex CAN reach a real town url over the docker net — opening a COMPETING
+  # outbound session that town F06's the forward on. So direct mode uses a
+  # deliberately-UNREACHABLE sentinel host: relation:'child' is recorded, the
+  # outbound dial fails harmlessly, and the forward rides the town's INBOUND
+  # session (the direct-mode analog of the HS socks-dial-fails pattern; verified
+  # live to FULFILL responseType:13). Build the JSON with the static
+  # `"id":"town"` / `"relation":"child"` shape intact (the reproducible-FULFILL
+  # guard greps for it) and inject only the url.
   local town_child_url="ws://townhouse-hs-town:3000"
   if [[ "$TRANSPORT_MODE" == "direct" ]]; then
-    town_child_url=""
+    town_child_url="ws://town-inbound-only.invalid:3000"
   fi
   log "Registering town as relation:'child' (free parent→child forward; avoids T00 on-demand settlement)…"
   curl -sfk --max-time 10 -X POST "$CONNECTOR_ADMIN_URL/admin/peers" \
