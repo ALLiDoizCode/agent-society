@@ -33,8 +33,10 @@ import WebSocket from 'ws';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 
 import { BtpRuntimeClient } from '../src/index.js';
-import { EvmSigner } from '../src/signing/evm-signer.js';
-import { OnChainChannelClient } from '../src/channel/OnChainChannelClient.js';
+import {
+  resolveSettlement,
+  resolveBtpTransport,
+} from './lib/settlement-chain.js';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -75,7 +77,6 @@ const _TEST_CLIENT_EVM_ADDRESS =
 // contracts/evm/script/DeployLocal.s.sol (same as scripts/socialverse-e2e.ts:43).
 const TOKEN_NETWORK_ADDRESS =
   '0xCafac3dD18aC6c6e92c921884f9E4176737C052c' as const;
-const ANVIL_CHAIN_ID = 31337;
 
 // Apex's settlement EVM address — Anvil acct[3], matches the apex's connector
 // config (docker/configs/townhouse-hs-connector.yaml). The client→apex channel
@@ -457,28 +458,27 @@ async function main() {
   // 100 USDC deposit (18-decimal MockERC20 → 100e18 base units) is large
   // enough to cover a 2_000_001 base-unit cumulative claim with margin.
   banner('Phase 1b — Open client→apex channel on-chain');
-  const evmSigner = new EvmSigner(TEST_CLIENT_PRIVKEY);
-  const channelClient = new OnChainChannelClient({
-    evmSigner,
-    chainRpcUrls: { 'evm:base:31337': ANVIL_RPC },
+  // Settlement chain: SETTLEMENT_CHAIN ∈ {evm (default), solana, mina}. The
+  // resolver supplies the channel opener + the chain-dispatched claim builder.
+  // solana/mina need a mnemonic (MNEMONIC) + their chain config env.
+  const settlement = await resolveSettlement({
+    env: process.env,
+    nostrPubkey: pubkey,
+    nostrSecretKey: secretKey,
+    evmPrivKey: TEST_CLIENT_PRIVKEY,
+    mnemonic: process.env['MNEMONIC'],
+    anvilRpc: ANVIL_RPC,
+    mockUsdc: MOCK_USDC,
+    tokenNetwork: TOKEN_NETWORK_ADDRESS,
+    apexEvm: APEX_EVM,
+    deposit: '100000000000000000000', // 100 USDC at 18 decimals
   });
+  log('CHANNEL', `settlement chain=${settlement.chain} key=${settlement.chainKey}`);
   let clientChannelId: string;
   try {
     log('CHANNEL', 'opening client→apex channel via OnChainChannelClient…');
-    const openResult = await channelClient.openChannel({
-      peerId: 'apex',
-      chain: 'evm:base:31337',
-      tokenNetwork: TOKEN_NETWORK_ADDRESS,
-      token: MOCK_USDC,
-      peerAddress: APEX_EVM,
-      initialDeposit: '100000000000000000000', // 100 USDC at 18 decimals
-      settlementTimeout: 86400,
-    });
-    clientChannelId = openResult.channelId;
-    log(
-      'CHANNEL',
-      `opened channelId=${clientChannelId} status=${openResult.status}`
-    );
+    clientChannelId = await settlement.openChannel();
+    log('CHANNEL', `opened channelId=${clientChannelId} chain=${settlement.chain}`);
   } catch (err) {
     console.error(
       `\n[FATAL] Failed to open client→apex channel: ${(err as Error).message}\n` +
@@ -524,23 +524,29 @@ async function main() {
         );
   log('EVENT', `signed kind:${event.kind} id=${event.id.slice(0, 16)}… size=${JSON.stringify(event).length}b`);
 
-  // BTP via SOCKS5 — mirror what the SDK's resolveTransport() would build,
-  // but stand-alone (we deliberately bypass the full ToonClient bootstrap
-  // because BootstrapService.queryPeerInfo() uses raw `ws` and would try to
-  // dial the relay HS without the SOCKS agent — that is a separate gap from
-  // this test's scope and is captured in the final report).
-  const wsAgent = new SocksProxyAgent(SOCKS_PROXY);
-  const createWebSocket = (url: string): WebSocket =>
-    new WebSocket(url, { agent: wsAgent, handshakeTimeout: HS_TIMEOUT_MS }) as unknown as WebSocket;
+  // BTP transport: SOCKS5 (default) or DIRECT plain ws:// (DIRECT_BTP=1 /
+  // APEX_BTP_URL). The SOCKS path mirrors what the SDK's resolveTransport()
+  // would build, but stand-alone (we deliberately bypass the full ToonClient
+  // bootstrap because BootstrapService.queryPeerInfo() uses raw `ws` and would
+  // try to dial the relay HS without the SOCKS agent — a separate gap from this
+  // test's scope, captured in the final report).
+  const transport = resolveBtpTransport({
+    env: process.env,
+    socksProxy: SOCKS_PROXY,
+    socksBtpUrl: CONNECTOR_BTP_HS,
+    handshakeTimeoutMs: HS_TIMEOUT_MS,
+  });
 
   const btpClient = new BtpRuntimeClient({
-    btpUrl: CONNECTOR_BTP_HS,
+    btpUrl: transport.btpUrl,
     // Must match the static peerId in docker/configs/townhouse-hs-connector.yaml.
     // The apex's BTP_ALLOW_NOAUTH path routes inbound BTP sessions by peerId,
     // and the channel was opened against this same peerId.
     peerId: 'client',
     authToken: '',
-    createWebSocket,
+    ...(transport.createWebSocket
+      ? { createWebSocket: transport.createWebSocket }
+      : {}),
     maxRetries: 1, // don't retry-storm on a slow circuit
     retryDelay: 2_000,
   });
@@ -552,7 +558,7 @@ async function main() {
   let publishData: string | undefined;
 
   try {
-    log('BTP', 'connecting to connector HS via SOCKS (Anyone circuit warm-up may take 30–60s)…');
+    log('BTP', `connecting to connector via ${transport.describe}…`);
     const btpStart = Date.now();
     await btpClient.connect();
     btpConnected = true;
@@ -577,25 +583,15 @@ async function main() {
     const amount = amountBigInt.toString();
     log('BTP', `event encoded toonBytes=${toonBytes.length} amount=${amount}`);
 
-    // Build + sign the cumulative balance proof. nonce monotonically
-    // increases across packets per channel; transferredAmount is cumulative.
-    // For this single-packet test, transferredAmount == amountBigInt.
+    // Build + sign the cumulative balance proof via the selected chain's signer.
+    // nonce monotonically increases across packets per channel; transferredAmount
+    // is cumulative. For this single-packet test, transferredAmount == amountBigInt.
     const nonce = 1;
     const cumulative = amountBigInt;
-    const proof = await evmSigner.signBalanceProof({
-      channelId: clientChannelId,
-      nonce,
-      transferredAmount: cumulative,
-      lockedAmount: 0n,
-      locksRoot: `0x${'00'.repeat(32)}`,
-      chainId: ANVIL_CHAIN_ID,
-      tokenNetworkAddress: TOKEN_NETWORK_ADDRESS,
-      tokenAddress: MOCK_USDC,
-    });
-    const claim = EvmSigner.buildClaimMessage(proof, pubkey);
+    const claim = await settlement.buildClaim(cumulative, nonce);
     log(
       'BTP',
-      `signed claim channelId=${clientChannelId.slice(0, 14)}… nonce=${nonce} amt=${cumulative} signer=${proof.signerAddress}`
+      `signed claim channelId=${clientChannelId.slice(0, 14)}… nonce=${nonce} amt=${cumulative} chain=${settlement.chain}`
     );
 
     const destination = process.env['DEST'] ?? 'g.townhouse.town'; // apex→child route to the relay-bearing town
