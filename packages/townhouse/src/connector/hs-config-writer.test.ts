@@ -505,6 +505,150 @@ describe('writeDirectConnectorConfig (Phase 2 direct-apex)', () => {
     expect(Array.isArray(cps)).toBe(true);
     expect(cps!.length).toBeGreaterThan(0);
   });
+
+  // ── Multi-chain parity with the HS writer (Phase 5, step 1) ────────────────
+  // The DIRECT writer shares buildApexGenerator with the HS writer, so given the
+  // SAME EVM + Solana + Mina chainProviders it MUST emit byte-identical
+  // chainProvider blocks (with apexSettlementKeys filling blank keyIds). The only
+  // intended differences are transport (direct vs socks5) and the absence of the
+  // `anon` stanza. This is the on-chain-settlement lever for the live Sol/Mina
+  // direct-apex exercise: the apex advertises + settles both chains.
+  const APEX_EVM_KEY = `0x${'ab'.repeat(32)}`;
+  const APEX_SOLANA_KEY = '4'.repeat(44);
+  const APEX_MINA_KEY = `EK${'a'.repeat(50)}`;
+
+  function multiChainConfig(): ReturnType<typeof getDefaultConfig> {
+    const config = getDefaultConfig();
+    config.chainProviders = [
+      {
+        chainType: 'evm',
+        chainId: 'evm:base:31337',
+        rpcUrl: 'http://townhouse-dev-anvil:8545',
+        registryAddress: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
+        tokenAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+        // keyId omitted — filled from apexSettlementKeys.evmPrivateKeyHex
+        settlementOptions: { threshold: '1' },
+      },
+      {
+        chainType: 'solana',
+        chainId: 'solana:devnet',
+        rpcUrl: 'http://townhouse-dev-solana:8899',
+        programId: 'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG',
+        tokenMint: '6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q',
+        // keyId omitted — filled from apexSettlementKeys.solanaPrivateKeyBase58
+      },
+      {
+        chainType: 'mina',
+        chainId: 'mina:devnet',
+        graphqlUrl: 'http://townhouse-dev-mina:3085/graphql',
+        zkAppAddress: 'B62qtestzkappaddressplaceholderxxxxxxxxxxxxxxxxxxxxx',
+        // keyId omitted — filled from apexSettlementKeys.minaPrivateKeyBase58
+      },
+    ];
+    return config;
+  }
+
+  const APEX_KEYS = {
+    evmPrivateKeyHex: APEX_EVM_KEY,
+    solanaPrivateKeyBase58: APEX_SOLANA_KEY,
+    minaPrivateKeyBase58: APEX_MINA_KEY,
+  };
+
+  it('emits the Solana + Mina chainProvider blocks (with apex keyIds) — the on-chain settlement lever', () => {
+    const { yamlPath } = writeDirectConnectorConfig(
+      tmpDir,
+      multiChainConfig(),
+      {
+        force: true,
+        apexSettlementKeys: APEX_KEYS,
+      }
+    );
+    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    const cps = parsed['chainProviders'] as Record<string, unknown>[];
+
+    const evm = cps.find((c) => c['chainType'] === 'evm');
+    const sol = cps.find((c) => c['chainType'] === 'solana');
+    const mina = cps.find((c) => c['chainType'] === 'mina');
+
+    expect(evm, 'direct config must carry the EVM chainProvider').toBeTruthy();
+    expect(
+      sol,
+      'direct config must carry the Solana chainProvider'
+    ).toBeTruthy();
+    expect(
+      mina,
+      'direct config must carry the Mina chainProvider'
+    ).toBeTruthy();
+
+    // apex settlement keyIds filled per chain.
+    expect(evm?.['keyId']).toBe(APEX_EVM_KEY);
+    expect(sol?.['keyId']).toBe(APEX_SOLANA_KEY);
+    expect(mina?.['keyId']).toBe(APEX_MINA_KEY);
+
+    // Solana/Mina-specific fields preserved.
+    expect(sol?.['programId']).toBe(
+      'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG'
+    );
+    expect(sol?.['tokenMint']).toBe(
+      '6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q'
+    );
+    expect(mina?.['graphqlUrl']).toBe('http://townhouse-dev-mina:3085/graphql');
+    expect(mina?.['zkAppAddress']).toBe(
+      'B62qtestzkappaddressplaceholderxxxxxxxxxxxxxxxxxxxxx'
+    );
+  });
+
+  it('direct transport is {type:direct} and there is NO anon stanza (alongside multi-chain providers)', () => {
+    const { yamlPath } = writeDirectConnectorConfig(
+      tmpDir,
+      multiChainConfig(),
+      {
+        force: true,
+        apexSettlementKeys: APEX_KEYS,
+      }
+    );
+    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    expect((parsed['transport'] as Record<string, unknown>)['type']).toBe(
+      'direct'
+    );
+    expect(parsed['anon']).toBeUndefined();
+  });
+
+  it('emits the SAME chainProvider blocks the HS writer does (given identical inputs)', () => {
+    // Two fresh dirs so the writers do not race on the same connector.yaml.
+    const directDir = mkdtempSync(join(tmpdir(), 'direct-parity-direct-'));
+    const hsDir = mkdtempSync(join(tmpdir(), 'direct-parity-hs-'));
+    try {
+      const { yamlPath: directPath } = writeDirectConnectorConfig(
+        directDir,
+        multiChainConfig(),
+        { force: true, apexSettlementKeys: APEX_KEYS }
+      );
+      const { yamlPath: hsPath } = writeHsConnectorConfig(
+        hsDir,
+        multiChainConfig(),
+        { force: true, apexSettlementKeys: APEX_KEYS }
+      );
+      const directCps = (
+        parse(readFileSync(directPath, 'utf-8')) as Record<string, unknown>
+      )['chainProviders'];
+      const hsCps = (
+        parse(readFileSync(hsPath, 'utf-8')) as Record<string, unknown>
+      )['chainProviders'];
+      // The chainProvider arrays are produced by the shared buildApexGenerator
+      // path, so they are structurally identical across transports.
+      expect(directCps).toEqual(hsCps);
+    } finally {
+      rmSync(directDir, { recursive: true, force: true });
+      rmSync(hsDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('detectExistingHsConfig (Phase 3 back-compat guard)', () => {

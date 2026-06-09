@@ -80,6 +80,17 @@ services:
       # gated by LOCAL_BYPASS=1). Override via ANYONE_PROXY_URLS in the env.
       ANYONE_PROXY_URLS: ${ANYONE_PROXY_URLS:-socks5h://157.90.113.23:9052,socks5h://57.128.249.250:9052,socks5h://5.78.181.0:9052}
 
+      # ── Direct-BTP transport (Phase 5; opt-in) ─────────────────────────────
+      # Supplied by the orchestrator only in TRANSPORT_MODE=direct. When DIRECT_BTP
+      # is truthy, the entrypoint dials APEX_BTP_URL (plain ws://, no SOCKS/anon)
+      # instead of building ws://<targetHostname>:3000/btp over ANYONE_PROXY_URLS.
+      # The request's targetHostname is then ignored for routing (env-driven). The
+      # direct apex exposes its BTP server on host 127.0.0.1:3000; the isolated
+      # client reaches it via host.docker.internal:3000. Empty in HS mode → the
+      # SOCKS/anon path above is unchanged.
+      DIRECT_BTP: ${DIRECT_BTP:-}
+      APEX_BTP_URL: ${APEX_BTP_URL:-}
+
       # Chain context (deterministic Akash-Anvil USDC + TokenNetwork)
       TOON_CHAIN_KEY: 'evm:base:31337'
       TOON_CHAIN_ID: '31337'
