@@ -120,7 +120,11 @@ import { createConnection } from 'node:net';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
-import Fastify from 'fastify';
+// `fastify` is imported dynamically at its use site inside main() (below) so
+// that unit tests importing this module's pure helpers (parseEnv /
+// isValidDirectBtpUrl / resolveBtpWiring) don't pull fastify into their module
+// graph — the root vitest can't resolve the docker-package dep, and main() is
+// VITEST-gated anyway. The type-only import is erased at runtime.
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
@@ -955,6 +959,7 @@ async function main(): Promise<void> {
 
   // Step 4: start Fastify IMMEDIATELY so /healthz is reachable within ~100ms
   // of pod startup (before the proxy probe + faucet calls complete).
+  const { default: Fastify } = await import('fastify');
   const fastify = Fastify({
     logger: { level: env.logLevel },
     bodyLimit: 64 * 1024,
