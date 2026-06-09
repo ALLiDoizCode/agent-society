@@ -898,16 +898,31 @@ deploy_mina_zkapp_deterministic() {
   # The client opens the channel at baseline nonce 0 and its first publish
   # (nonce 1) is the strictly-advancing claim the connector settles on-chain via
   # claimFromChannel (connector#118 accept-advancing + connector#121, 3.9.10+).
-  # MINA_SKIP_INIT=1 (the documented E2E_MINA path) deploys a BARE zkApp account
-  # (channelState=0) and lets the CLIENT initialize the channel on-chain with the
-  # correct (client, apex) participants — so the on-chain channelHash matches what
-  # the connector's claimFromChannel reconstructs. Pass MINA_SKIP_INIT through so
-  # the operator's command-line value reaches deploy-mina-zkapp.ts.
+  # MINA_SKIP_INIT=1 deploys a BARE zkApp account (channelState=0) and lets the
+  # CLIENT initialize the channel on-chain with the correct (client, apex)
+  # participants — so the on-chain channelHash = Poseidon([client.x, apex.x, 0])
+  # matches the participant-form channelHash the client signs its claim over AND
+  # the one the connector's claimFromChannel reconstructs. This is REQUIRED for
+  # on-chain Mina settle.
+  #
+  # ⚠️ This default MUST be 1 (NOT 0). MINA_SKIP_INIT=0 makes deploy-mina-zkapp.ts
+  # SINGLE-PARTY initialize the channel itself with `initializeChannel(deployer,
+  # deployer, …)`, writing channelHash = Poseidon([deployer.x, deployer.x, 0]).
+  # Because the deterministic zkApp key is shared+idempotent, the client's
+  # `openMinaChannelOnChain` then finds the channel already OPEN and skips re-init,
+  # so the on-chain channelHash NEVER becomes the (client, apex) form. The client's
+  # claim then signs over Poseidon([client.x, apex.x, 0]) while the connector
+  # verifies against the on-chain Poseidon([deployer.x, deployer.x, 0]) → the
+  # signature mismatches and settle fails with "Invalid balance proof signature"
+  # (the empty-participants ["",""] the connector logs is a benign symptom — the
+  # zkApp stores only the channelHash, not the participant keys). Defaulting to 1
+  # keeps the channel two-party + on-chain-settleable. An operator can still force
+  # the single-party deploy-init smoke with MINA_SKIP_INIT=0.
   local out
   if ! out=$(MINA_GRAPHQL_URL="$MINA_GRAPHQL_URL" \
        MINA_ACCOUNTS_URL="$MINA_ACCOUNTS_URL" \
        MINA_ZKAPP_PRIVATE_KEY="$MINA_ZKAPP_DETERMINISTIC_KEY" \
-       MINA_SKIP_INIT="${MINA_SKIP_INIT:-0}" \
+       MINA_SKIP_INIT="${MINA_SKIP_INIT:-1}" \
        timeout 360 npx tsx "${REPO_ROOT}/scripts/deploy-mina-zkapp.ts" 2>>/tmp/mina-zkapp-deploy.log); then
     warn "Mina zkApp deploy failed (see /tmp/mina-zkapp-deploy.log):"
     tail -8 /tmp/mina-zkapp-deploy.log >&2 || true
