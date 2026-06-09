@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Render packages/townhouse/compose/townhouse-hs.yml against the digest
- * values in packages/townhouse/dist/image-manifest.json and write the
- * result to packages/townhouse/dist/compose/townhouse-hs.yml.
+ * Render packages/townhouse/compose/townhouse-{hs,direct}.yml against the
+ * digest values in packages/townhouse/dist/image-manifest.json and write the
+ * results to packages/townhouse/dist/compose/townhouse-{hs,direct}.yml.
  *
  * Also copies packages/townhouse/compose/townhouse-dev.yml verbatim to
  * packages/townhouse/dist/compose/townhouse-dev.yml.
@@ -34,6 +34,7 @@ const DIST_DIR = join(PKG_DIR, 'dist');
 const COMPOSE_DIST_DIR = join(DIST_DIR, 'compose');
 const MANIFEST_PATH = join(DIST_DIR, 'image-manifest.json');
 const HS_TEMPLATE_PATH = join(COMPOSE_SRC_DIR, 'townhouse-hs.yml');
+const DIRECT_TEMPLATE_PATH = join(COMPOSE_SRC_DIR, 'townhouse-direct.yml');
 const DEV_TEMPLATE_PATH = join(COMPOSE_SRC_DIR, 'townhouse-dev.yml');
 
 async function run() {
@@ -43,7 +44,9 @@ async function run() {
   await cp(DEV_TEMPLATE_PATH, join(COMPOSE_DIST_DIR, 'townhouse-dev.yml'));
 
   const hsTemplateRaw = await readFile(HS_TEMPLATE_PATH, 'utf-8');
+  const directTemplateRaw = await readFile(DIRECT_TEMPLATE_PATH, 'utf-8');
   let hsRendered = hsTemplateRaw;
+  let directRendered = directTemplateRaw;
 
   // Only ENOENT on the manifest is tolerated (warn + ship unsubstituted).
   // JSON-parse errors, missing image keys, and malformed digests all fail
@@ -57,7 +60,7 @@ async function run() {
     if (err && err.code !== 'ENOENT') throw err;
     console.warn(
       '[render-compose-template] WARNING: dist/image-manifest.json not found — ' +
-      'shipping unsubstituted townhouse-hs.yml. ' +
+      'shipping unsubstituted townhouse-{hs,direct}.yml. ' +
       'This is fine for local dev but invalid for npm publish.'
     );
   }
@@ -76,20 +79,26 @@ async function run() {
 
     for (const [placeholder, digest] of subs) {
       hsRendered = hsRendered.replaceAll(placeholder, `@${digest}`);
+      directRendered = directRendered.replaceAll(placeholder, `@${digest}`);
     }
 
-    console.log('[render-compose-template] HS template rendered with 5 digest substitutions.');
+    console.log('[render-compose-template] HS + direct templates rendered with 5 digest substitutions each.');
   }
 
+  // NFR8 — operator-secret file mode (the rendered YAML embeds env-var
+  // references that may include private keys at deploy time). The mode applies
+  // to the build artifact in dist/ as well as the materialized copy at
+  // ~/.townhouse/compose/, so an untrusted local user on the CI runner cannot
+  // read between render and pack.
   const hsOutPath = join(COMPOSE_DIST_DIR, 'townhouse-hs.yml');
   await writeFile(hsOutPath, hsRendered, 'utf-8');
-  // NFR8 — operator-secret file mode (the rendered HS YAML embeds env-var
-  // references that may include private keys at deploy time). The mode
-  // applies to the build artifact in dist/ as well as the materialized copy
-  // at ~/.townhouse/compose/, so an untrusted local user on the CI runner
-  // cannot read between render and pack.
   await chmod(hsOutPath, 0o600);
-  console.log('[render-compose-template] Done — dist/compose/{townhouse-hs,townhouse-dev}.yml written.');
+
+  const directOutPath = join(COMPOSE_DIST_DIR, 'townhouse-direct.yml');
+  await writeFile(directOutPath, directRendered, 'utf-8');
+  await chmod(directOutPath, 0o600);
+
+  console.log('[render-compose-template] Done — dist/compose/{townhouse-hs,townhouse-direct,townhouse-dev}.yml written.');
 }
 
 run().catch((err) => {

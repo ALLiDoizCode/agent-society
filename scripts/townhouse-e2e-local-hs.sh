@@ -48,7 +48,22 @@ CLIENT_URL="http://127.0.0.1:29200"
 CONNECTOR_ADMIN_URL="http://127.0.0.1:9401"
 TOWNHOUSE_API_URL="http://127.0.0.1:28090"
 
-# Docker network names (must match the compose files)
+# ── Transport mode (Phase 5) ────────────────────────────────────────────────
+# Default `hs` = the hidden-service apex (`townhouse hs up`, .anon address, this
+# script's original mission — UNCHANGED). `direct` = a direct-BTP apex
+# (`townhouse up --transport direct`) that exposes BTP on host :3000 so the
+# client dials plain `ws://127.0.0.1:3000/btp` (DIRECT_BTP=1) instead of SOCKS5h
+# over ATOR. The direct stack uses the `townhouse-direct-*` compose namespace.
+TRANSPORT_MODE="${TRANSPORT_MODE:-hs}"
+
+# Direct-apex dial URL the client uses for DIRECT_BTP. The direct compose binds
+# the connector BTP server to 127.0.0.1:3000 on the host; the client container
+# reaches it via host.docker.internal (mapped in the client compose extra_hosts).
+DIRECT_BTP_HOST_URL="ws://127.0.0.1:3000/btp"
+
+# Docker network names (must match the compose files). Mode-derived: HS uses
+# townhouse-hs-net + townhouse-hs-* containers; direct uses townhouse-direct-*.
+# Default to the HS values; the direct override is applied just below.
 HS_NETWORK="townhouse-hs-net"
 CLIENT_NETWORK="e2e-client-net"
 CLIENT_CONTAINER="toon-client-e2e"
@@ -90,6 +105,27 @@ HS_CONTAINERS=(
   townhouse-hs-api
   townhouse-hs-town
 )
+
+# ── Mode-derived apex identifiers (Phase 5) ─────────────────────────────────
+# Default = HS namespace. When TRANSPORT_MODE=direct, point at the direct
+# compose's townhouse-direct-* containers/network + the direct town compose
+# template. Everything below this block references these variables (not the
+# townhouse-hs-* literals) so the HS path stays byte-identical while the direct
+# path reuses the exact same orchestration.
+APEX_CONNECTOR_CONTAINER="townhouse-hs-connector"
+APEX_TOWN_CONTAINER="townhouse-hs-town"
+APEX_TOWN_COMPOSE_NAME="townhouse-hs.yml"
+if [[ "$TRANSPORT_MODE" == "direct" ]]; then
+  HS_NETWORK="townhouse-direct-net"
+  HS_CONTAINERS=(
+    townhouse-direct-connector
+    townhouse-direct-api
+    townhouse-direct-town
+  )
+  APEX_CONNECTOR_CONTAINER="townhouse-direct-connector"
+  APEX_TOWN_CONTAINER="townhouse-direct-town"
+  APEX_TOWN_COMPOSE_NAME="townhouse-direct.yml"
+fi
 
 # Required for Akash provider self-signed certs (scoped to this script only).
 export NODE_TLS_REJECT_UNAUTHORIZED=0
@@ -729,7 +765,7 @@ resolve_townhouse_cli() {
 # wallet-show address opens a channel PDA the apex's signer is not a participant
 # in, so the apex can neither verify nor settle the client's Solana claim.
 resolve_apex_solana_signer() {
-  docker logs townhouse-hs-connector 2>&1 \
+  docker logs "$APEX_CONNECTOR_CONTAINER" 2>&1 \
     | grep -F 'Solana settlement signer resolved' \
     | tail -1 \
     | jq -r '.address // empty' 2>/dev/null
@@ -750,7 +786,7 @@ resolve_apex_solana_signer() {
 #      against this same key, so the derived pubkey IS the correct recipient.
 resolve_apex_mina_signer() {
   local addr
-  addr=$(docker logs townhouse-hs-connector 2>&1 \
+  addr=$(docker logs "$APEX_CONNECTOR_CONTAINER" 2>&1 \
     | grep -F 'Mina settlement signer resolved' \
     | tail -1 \
     | jq -r '.address // empty' 2>/dev/null)
@@ -1025,19 +1061,33 @@ EOF
     fi
   fi
 
-  log "townhouse hs up (6-min budget — anon HS bootstrap is slow)…"
-  # CLI exit code is ADVISORY — its ink-based TUI can crash post-success
-  # (e.g., missing optional peer dep). Trust container health, not the exit.
-  TOWNHOUSE_HOME="$TOWNHOUSE_HOME" TOWNHOUSE_WALLET_PASSWORD="$TEST_PASSWORD" \
-    timeout 360 $cli hs -c "$TOWNHOUSE_HOME/config.yaml" --password "$TEST_PASSWORD" up \
-    || warn "townhouse hs up CLI exited non-zero (probably TUI render glitch). Verifying containers directly…"
+  if [[ "$TRANSPORT_MODE" == "direct" ]]; then
+    # Phase 5 — DIRECT apex: `townhouse up --transport direct`. Boots
+    # connector + api (always-on) on the townhouse-direct-* namespace, exposing
+    # BTP on host :3000. NO anon, NO hidden service, NO host.json. The shared
+    # writeDirectConnectorConfig already emitted the same Solana/Mina
+    # chainProviders the HS path does (apexSettlementKeys filled), so on-chain
+    # settlement works identically. `-c` is the config FILE (configDir =
+    # dirname), matching handleDirectUp.
+    log "townhouse up --transport direct (direct-BTP apex; BTP host :3000)…"
+    TOWNHOUSE_HOME="$TOWNHOUSE_HOME" TOWNHOUSE_WALLET_PASSWORD="$TEST_PASSWORD" \
+      timeout 360 $cli up --transport direct -c "$TOWNHOUSE_HOME/config.yaml" --password "$TEST_PASSWORD" \
+      || warn "townhouse up --transport direct CLI exited non-zero (probably TUI render glitch). Verifying containers directly…"
+  else
+    log "townhouse hs up (6-min budget — anon HS bootstrap is slow)…"
+    # CLI exit code is ADVISORY — its ink-based TUI can crash post-success
+    # (e.g., missing optional peer dep). Trust container health, not the exit.
+    TOWNHOUSE_HOME="$TOWNHOUSE_HOME" TOWNHOUSE_WALLET_PASSWORD="$TEST_PASSWORD" \
+      timeout 360 $cli hs -c "$TOWNHOUSE_HOME/config.yaml" --password "$TEST_PASSWORD" up \
+      || warn "townhouse hs up CLI exited non-zero (probably TUI render glitch). Verifying containers directly…"
+  fi
 
   # Probe actual liveness instead of trusting the CLI exit code
   local deadline=$(( $(date +%s) + 60 ))
   local connector_up=0
   while (( $(date +%s) < deadline )); do
-    if docker ps --filter "name=townhouse-hs-connector" --filter "status=running" --format '{{.Names}}' \
-         | grep -q '^townhouse-hs-connector$' \
+    if docker ps --filter "name=$APEX_CONNECTOR_CONTAINER" --filter "status=running" --format '{{.Names}}' \
+         | grep -q "^${APEX_CONNECTOR_CONTAINER}$" \
        && curl -sfk --max-time 3 "$CONNECTOR_ADMIN_URL/health" >/dev/null 2>&1; then
       connector_up=1
       break
@@ -1045,29 +1095,38 @@ EOF
     sleep 2
   done
   if (( connector_up == 0 )); then
-    err "townhouse-hs-connector did not reach healthy state within 60s after CLI exit"
-    err "  Inspect: docker logs townhouse-hs-connector | tail -50"
+    err "$APEX_CONNECTOR_CONTAINER did not reach healthy state within 60s after CLI exit"
+    err "  Inspect: docker logs $APEX_CONNECTOR_CONTAINER | tail -50"
     die "apex boot failed"
   fi
-  log "townhouse-hs-connector healthy ✓"
+  log "$APEX_CONNECTOR_CONTAINER healthy ✓"
 
-  # In the local-e2e bypass path, the apex's townhouse-hs-net now exists. Attach
+  # In the local-e2e bypass path, the apex's $HS_NETWORK now exists. Attach
   # the local devnet chains so the connector + town reach them by service name
   # (the town env uses $EVM_RPC_URL_INTERNAL = townhouse-dev-anvil:8545; the
   # connector chainProviders use the internal RPC/GraphQL URLs). Must run BEFORE
-  # start_town_relay (the town's ethers provider dials anvil at boot).
-  if [[ "$LOCAL_BYPASS" == "1" ]]; then
+  # start_town_relay (the town's ethers provider dials anvil at boot). The direct
+  # path needs the same chain attach (its connector/town live on
+  # townhouse-direct-net), so do it whenever the dev chains are local.
+  if [[ "$LOCAL_BYPASS" == "1" || "$TRANSPORT_MODE" == "direct" ]]; then
     ensure_dev_chains_on_hs_net
   fi
 
-  # host.json appears after the connector publishes the HS
-  local host_json="$TOWNHOUSE_HOME/host.json"
-  [[ -f "$host_json" ]] || die "host.json missing at $host_json — HS publish likely failed"
-  APEX_HOSTNAME=$(jq -r .hostname "$host_json")
-  [[ "$APEX_HOSTNAME" =~ ^[a-z2-7]{55,57}\.(anyone|anon)$ ]] \
-    || die "host.json hostname malformed: $APEX_HOSTNAME"
-  export APEX_HOSTNAME
-  log "Apex .anyone hostname: $APEX_HOSTNAME"
+  if [[ "$TRANSPORT_MODE" != "direct" ]]; then
+    # host.json appears after the connector publishes the HS (HS mode only —
+    # the direct apex has no hidden service to publish).
+    local host_json="$TOWNHOUSE_HOME/host.json"
+    [[ -f "$host_json" ]] || die "host.json missing at $host_json — HS publish likely failed"
+    APEX_HOSTNAME=$(jq -r .hostname "$host_json")
+    [[ "$APEX_HOSTNAME" =~ ^[a-z2-7]{55,57}\.(anyone|anon)$ ]] \
+      || die "host.json hostname malformed: $APEX_HOSTNAME"
+    export APEX_HOSTNAME
+    log "Apex .anyone hostname: $APEX_HOSTNAME"
+  else
+    APEX_HOSTNAME="direct"
+    export APEX_HOSTNAME
+    log "Direct-BTP apex (no .anon): clients dial $DIRECT_BTP_HOST_URL"
+  fi
 
   # Wait for townhouse-api transport readiness
   log "Waiting for townhouse-api /api/transport…"
@@ -1093,7 +1152,7 @@ EOF
 }
 
 start_town_relay() {
-  local town_compose="$TOWNHOUSE_HOME/compose/townhouse-hs.yml"
+  local town_compose="$TOWNHOUSE_HOME/compose/$APEX_TOWN_COMPOSE_NAME"
   [[ -f "$town_compose" ]] || { warn "town compose missing at $town_compose — skipping town"; return 0; }
 
   log "Starting town relay (--profile town)…"
@@ -1152,7 +1211,7 @@ start_town_relay() {
     sleep 2
   done
   if (( town_healthy == 0 )); then
-    warn "town BLS /health never came up within 60s — inspect: docker logs townhouse-hs-town | tail -40"
+    warn "town BLS /health never came up within 60s — inspect: docker logs $APEX_TOWN_CONTAINER | tail -40"
   fi
 
   # ── BUG-2 FIX (BTP route direction) ────────────────────────────────────────
@@ -1225,10 +1284,37 @@ start_town_relay() {
   # documented above; proven live 2026-06-05: transport:'direct' → town F06;
   # default transport → town FULFILL.) The dial-retry log noise is the accepted
   # tradeoff for keeping the parent-session delivery path.
+  #
+  # ── DIRECT-MODE NUANCE (Phase 5) ───────────────────────────────────────────
+  # In TRANSPORT_MODE=direct the apex connector runs transport:{type:'direct'},
+  # so a dialable child `url` (ws://townhouse-direct-town:3000) WOULD succeed over
+  # the Docker network and open the SAME competing connector→town outbound session
+  # the HS socks5-dial-failure incidentally avoids → F06. To preserve the
+  # inbound-session delivery path we register the child with an EMPTY url in
+  # direct mode: the apex then has no outbound peer to dial and forwards
+  # g.townhouse.town over the town's INBOUND (parent-tagged) session, exactly as
+  # the HS path does. The relation:'child' (free forward) wiring is identical.
+  # The child `url` is the ONLY field that varies by transport: HS keeps the
+  # (deliberately-unreachable-over-socks5) town hostname. The connector REQUIRES
+  # a non-empty, syntactically-valid url (POST /admin/peers rejects "" with HTTP
+  # 400 "Missing or invalid peer url"), and the registration is what sets
+  # relation:'child' (free parent→child forward; avoids T00). But in direct mode
+  # the apex CAN reach a real town url over the docker net — opening a COMPETING
+  # outbound session that town F06's the forward on. So direct mode uses a
+  # deliberately-UNREACHABLE sentinel host: relation:'child' is recorded, the
+  # outbound dial fails harmlessly, and the forward rides the town's INBOUND
+  # session (the direct-mode analog of the HS socks-dial-fails pattern; verified
+  # live to FULFILL responseType:13). Build the JSON with the static
+  # `"id":"town"` / `"relation":"child"` shape intact (the reproducible-FULFILL
+  # guard greps for it) and inject only the url.
+  local town_child_url="ws://townhouse-hs-town:3000"
+  if [[ "$TRANSPORT_MODE" == "direct" ]]; then
+    town_child_url="ws://town-inbound-only.invalid:3000"
+  fi
   log "Registering town as relation:'child' (free parent→child forward; avoids T00 on-demand settlement)…"
   curl -sfk --max-time 10 -X POST "$CONNECTOR_ADMIN_URL/admin/peers" \
     -H 'content-type: application/json' \
-    -d '{"id":"town","url":"ws://townhouse-hs-town:3000","authToken":"","relation":"child","routes":[{"prefix":"g.townhouse.town","priority":0}]}' \
+    -d '{"id":"town","url":"'"$town_child_url"'","authToken":"","relation":"child","routes":[{"prefix":"g.townhouse.town","priority":0}]}' \
     > /dev/null || warn "town child-peer registration failed (publishes may T00 at the apex→town settle step)"
 
   # ── #135 FIX (race: wait for the town's INBOUND BTP session, don't blind-sleep) ──
@@ -1260,7 +1346,7 @@ wait_for_town_inbound_session() {
   log "Waiting for the town→connector INBOUND BTP session (apex's delivery path; issue #135)…"
   local deadline=$(( $(date +%s) + 90 ))
   while (( $(date +%s) < deadline )); do
-    if docker logs townhouse-hs-connector 2>&1 \
+    if docker logs "$APEX_CONNECTOR_CONTAINER" 2>&1 \
          | grep -qE '"component":"BTPServer".*"event":"btp_auth".*"peerId":"town".*"success":true'; then
       log "Town inbound BTP session authenticated at the apex — settling 3s…"
       sleep 3
@@ -1268,19 +1354,37 @@ wait_for_town_inbound_session() {
     fi
     sleep 2
   done
-  warn "town inbound BTP session never authenticated within 90s — publishes will 503 (No active BTP connection to peer town). Inspect: docker logs townhouse-hs-connector 2>&1 | grep btp_auth"
+  warn "town inbound BTP session never authenticated within 90s — publishes will 503 (No active BTP connection to peer town). Inspect: docker logs $APEX_CONNECTOR_CONTAINER 2>&1 | grep btp_auth"
 }
 
 down_townhouse_hs() {
   local cli
   cli=$(resolve_townhouse_cli 2>/dev/null) || return 0
-  if [[ -d "$TOWNHOUSE_HOME" && -f "$TOWNHOUSE_HOME/config.yaml" ]]; then
+  if [[ "$TRANSPORT_MODE" == "direct" ]]; then
+    # Direct mode has no `townhouse ... down` subcommand (only `hs down`). Tear
+    # down the materialized direct compose project directly. TOWNHOUSE_HOME +
+    # WALLET_DIR are exported so the same compose-interpolation refs the `up`
+    # used resolve for `down`. Non-fatal — the by-name removal below is the
+    # belt-and-suspenders.
+    local direct_compose="$TOWNHOUSE_HOME/compose/$APEX_TOWN_COMPOSE_NAME"
+    if [[ -f "$direct_compose" ]]; then
+      log "docker compose down (direct apex: $direct_compose)…"
+      TOWNHOUSE_HOME="$TOWNHOUSE_HOME" \
+      TOWNHOUSE_WALLET_DIR="$TOWNHOUSE_HOME" \
+      TOWNHOUSE_WALLET_PASSWORD="$TEST_PASSWORD" \
+      TOWNHOUSE_UID="$(id -u)" \
+      TOWNHOUSE_DOCKER_GID="$(getent group docker | cut -d: -f3 || echo 0)" \
+        docker compose -f "$direct_compose" --profile town --profile mill --profile dvm down \
+        2>&1 | head -50 || true
+    fi
+  elif [[ -d "$TOWNHOUSE_HOME" && -f "$TOWNHOUSE_HOME/config.yaml" ]]; then
     log "townhouse hs down…"
     TOWNHOUSE_HOME="$TOWNHOUSE_HOME" \
       $cli hs -c "$TOWNHOUSE_HOME/config.yaml" --password "$TEST_PASSWORD" down \
       2>&1 | head -50 || true
   fi
-  # Belt-and-suspenders: also kill containers by name in case hs down missed any
+  # Belt-and-suspenders: also kill containers by name in case down missed any
+  # ($HS_CONTAINERS is mode-derived: townhouse-hs-* or townhouse-direct-*).
   for c in "${HS_CONTAINERS[@]}"; do
     docker rm -f "$c" >/dev/null 2>&1 || true
   done
@@ -1508,6 +1612,22 @@ up_local_client() {
     log "LOCAL_CHAINS client chain URLs: evm=$client_evm_rpc solana=$client_sol_rpc"
   fi
 
+  # ── Direct-BTP transport (Phase 5; TRANSPORT_MODE=direct) ──────────────────
+  # In direct mode the client dials the apex's host-exposed BTP server directly
+  # (plain ws://, no SOCKS/anon). The client lives on the isolated e2e-client-net,
+  # so it reaches the host-published 127.0.0.1:3000 via host.docker.internal
+  # (mapped to host-gateway in the client compose extra_hosts). DIRECT_BTP=1 +
+  # APEX_BTP_URL flip the entrypoint onto the direct path; ANYONE_PROXY_URLS is
+  # then unused. Empty in HS mode → the SOCKS/anon path is unchanged.
+  local client_direct_btp="" client_apex_btp_url=""
+  if [[ "$TRANSPORT_MODE" == "direct" ]]; then
+    client_direct_btp="1"
+    # host.docker.internal → host gateway; the direct connector binds :3000 on
+    # 127.0.0.1 of the host (TOWNHOUSE_BTP_BIND default).
+    client_apex_btp_url="ws://host.docker.internal:3000/btp"
+    log "DIRECT mode: client → $client_apex_btp_url (DIRECT_BTP=1; no SOCKS/anon)"
+  fi
+
   # Force a CLEAN start. Every restart cycles ephemeral keys; if we leave a
   # half-funded container running, the funding step will target stale keys.
   # Export env vars so both `down` AND `up` can interpolate the compose file —
@@ -1532,6 +1652,8 @@ up_local_client() {
   MINA_GRAPHQL_URL="$mina_graphql" \
   TARGET_SETTLEMENT_ADDRESS_MINA="$apex_mina" \
   ANYONE_PROXY_URLS="$client_proxy_urls" \
+  DIRECT_BTP="$client_direct_btp" \
+  APEX_BTP_URL="$client_apex_btp_url" \
     docker compose -f "$COMPOSE_FILE" down --remove-orphans 2>&1 | tail -3 || true
   FAUCET_URL="$client_faucet" \
   EVM_RPC_URL="$client_evm_rpc" \
@@ -1544,6 +1666,8 @@ up_local_client() {
   MINA_GRAPHQL_URL="$mina_graphql" \
   TARGET_SETTLEMENT_ADDRESS_MINA="$apex_mina" \
   ANYONE_PROXY_URLS="$client_proxy_urls" \
+  DIRECT_BTP="$client_direct_btp" \
+  APEX_BTP_URL="$client_apex_btp_url" \
     docker compose -f "$COMPOSE_FILE" up -d
 
   # Bypass mode: join the client to townhouse-hs-net so it can resolve the
@@ -1614,9 +1738,15 @@ verify_network_isolation() {
 
 cmd_smoke() {
   read_leases
-  [[ -f "$TOWNHOUSE_HOME/host.json" ]] || die "Apex host.json missing — run: bash $0 up"
   local apex_hostname
-  apex_hostname=$(jq -r .hostname "$TOWNHOUSE_HOME/host.json")
+  if [[ "$TRANSPORT_MODE" == "direct" ]]; then
+    # Direct mode: no host.json / .anon. Routing is env-driven (the client's
+    # APEX_BTP_URL), so targetHostname is a placeholder the entrypoint ignores.
+    apex_hostname="direct.local"
+  else
+    [[ -f "$TOWNHOUSE_HOME/host.json" ]] || die "Apex host.json missing — run: bash $0 up"
+    apex_hostname=$(jq -r .hostname "$TOWNHOUSE_HOME/host.json")
+  fi
 
   log "Fetching pre-publish /api/earnings…"
   local pre
@@ -1672,7 +1802,9 @@ cmd_smoke() {
 cmd_status() {
   banner "Status"
   log "Docker containers:"
-  docker ps --filter "name=townhouse-hs-" --filter "name=$CLIENT_CONTAINER" \
+  local apex_name_filter="townhouse-hs-"
+  [[ "$TRANSPORT_MODE" == "direct" ]] && apex_name_filter="townhouse-direct-"
+  docker ps --filter "name=$apex_name_filter" --filter "name=$CLIENT_CONTAINER" \
     --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
   echo
   log "Health probes:"
@@ -1684,7 +1816,9 @@ cmd_status() {
     fi
   done
   echo
-  if [[ -f "$TOWNHOUSE_HOME/host.json" ]]; then
+  if [[ "$TRANSPORT_MODE" == "direct" ]]; then
+    log "Apex direct-BTP URL: $DIRECT_BTP_HOST_URL (no .anon in direct mode)"
+  elif [[ -f "$TOWNHOUSE_HOME/host.json" ]]; then
     log "Apex .anyone hostname: $(jq -r .hostname "$TOWNHOUSE_HOME/host.json")"
   else
     warn "host.json not found — apex not booted"
@@ -1760,15 +1894,31 @@ cmd_down_v() {
   cmd_down
   log "Removing volumes + state dir…"
   docker compose -f "$COMPOSE_FILE" down -v 2>&1 | head -5 || true
-  docker volume rm -f townhouse-hs-anon townhouse-hs-town-data >/dev/null 2>&1 || true
+  # Mode-specific apex volumes. HS keeps the anon keypair volume; direct has no
+  # anon volume but its own town-data volume name.
+  if [[ "$TRANSPORT_MODE" == "direct" ]]; then
+    docker volume rm -f townhouse-direct-town-data townhouse-direct-mill-data \
+      townhouse-direct-dvm-data >/dev/null 2>&1 || true
+  else
+    docker volume rm -f townhouse-hs-anon townhouse-hs-town-data >/dev/null 2>&1 || true
+  fi
   rm -rf "$TOWNHOUSE_HOME"
   log "Clean."
 }
 
 print_banner() {
-  local apex_hostname="(unknown)"
-  if [[ -f "$TOWNHOUSE_HOME/host.json" ]]; then
-    apex_hostname=$(jq -r .hostname "$TOWNHOUSE_HOME/host.json")
+  local apex_addr_label apex_addr_value transport_label
+  if [[ "$TRANSPORT_MODE" == "direct" ]]; then
+    apex_addr_label="Apex direct-BTP URL    "
+    apex_addr_value="$DIRECT_BTP_HOST_URL"
+    transport_label="client DIRECT_BTP ws:// (host.docker.internal:3000) → apex (no SOCKS/anon)"
+  else
+    apex_addr_label="Apex .anyone hostname  "
+    apex_addr_value="(unknown)"
+    if [[ -f "$TOWNHOUSE_HOME/host.json" ]]; then
+      apex_addr_value=$(jq -r .hostname "$TOWNHOUSE_HOME/host.json")
+    fi
+    transport_label="client SOCKS5 → public ATOR → apex .anyone HS"
   fi
   local client_evm="(unknown)" client_sol="(unknown)"
   local client_info
@@ -1777,9 +1927,9 @@ print_banner() {
     client_sol=$(echo "$client_info" | jq -r '.sol // .solAddr // "?"')
   fi
 
-  banner "Local-HS E2E Stack — READY"
+  banner "Local E2E Stack ($TRANSPORT_MODE) — READY"
   cat >&2 <<EOF
-  Apex .anyone hostname    : $apex_hostname
+  $apex_addr_label  : $apex_addr_value
   townhouse-api /earnings  : $TOWNHOUSE_API_URL/api/earnings
   connector admin /health  : $CONNECTOR_ADMIN_URL/health
   toon-client-e2e /healthz : $CLIENT_URL/healthz
@@ -1790,7 +1940,7 @@ print_banner() {
   town   EVM addr          : $TOWN_EVM_ADDRESS
 
   network isolation        : $HS_NETWORK  <-/X/->  $CLIENT_NETWORK
-  ATOR transport           : client SOCKS5 → public ATOR → apex .anyone HS
+  transport                : $transport_label
 
   Drive a publish manually : bash $0 smoke
   Run gated vitest         : RUN_LOCAL_HS_E2E=1 \\
