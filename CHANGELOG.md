@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.4](https://github.com/toon-protocol/town/compare/v0.16.3...v0.16.4) (2026-06-09)
+
+### Bug Fixes
+
+* **docker:** copy all workspace manifests in townhouse-api + dvm builders; dvm free-tier Arweave fallback ([#149](https://github.com/toon-protocol/town/issues/149)) ([ec5a376](https://github.com/toon-protocol/town/commit/ec5a376b5eb3992626ed236a93234719587a26d8)), closes [#141](https://github.com/toon-protocol/town/issues/141) [#146](https://github.com/toon-protocol/town/issues/146) [#3](https://github.com/toon-protocol/town/issues/3) [#143](https://github.com/toon-protocol/town/issues/143) [#143](https://github.com/toon-protocol/town/issues/143) [#146](https://github.com/toon-protocol/town/issues/146)
+* **townhouse:** make local-HS smoke test resolve peers without requiring node-add nodes.yaml ([#148](https://github.com/toon-protocol/town/issues/148)) ([ee0cd01](https://github.com/toon-protocol/town/commit/ee0cd012ed3c19a7308cdde81ef170cc740b39bf)), closes [#144](https://github.com/toon-protocol/town/issues/144) [#144](https://github.com/toon-protocol/town/issues/144)
+* **townhouse:** mill provisioning EACCES — make config dir traversable by uid 1001 ([#147](https://github.com/toon-protocol/town/issues/147)) ([35c9224](https://github.com/toon-protocol/town/commit/35c9224cf190dc0da80ce1d7a65c6ba1b0d3b25e))
+
 ## [0.16.3](https://github.com/toon-protocol/town/compare/v0.16.2...v0.16.3) (2026-06-09)
 
 ### Code Refactoring
