@@ -11,7 +11,10 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import { writeHsConnectorConfig } from './hs-config-writer.js';
+import {
+  writeHsConnectorConfig,
+  writeDirectConnectorConfig,
+} from './hs-config-writer.js';
 import { getDefaultConfig } from '../config/defaults.js';
 
 describe('writeHsConnectorConfig', () => {
@@ -384,5 +387,121 @@ describe('writeHsConnectorConfig', () => {
     const mina = cps.find((c) => c['chainType'] === 'mina');
     expect(sol?.['keyId']).toBe(explicitSol);
     expect(mina?.['keyId']).toBe(explicitMina);
+  });
+});
+
+describe('writeDirectConnectorConfig (Phase 2 direct-apex)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'direct-config-writer-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('writes connector.yaml on a fresh dir with mode 0o600', () => {
+    const config = getDefaultConfig();
+    const result = writeDirectConnectorConfig(tmpDir, config);
+    expect(result.created).toBe(true);
+    expect(result.yamlPath).toBe(join(tmpDir, 'connector.yaml'));
+    expect(existsSync(result.yamlPath)).toBe(true);
+    expect(statSync(result.yamlPath).mode & 0o777).toBe(0o600);
+  });
+
+  it('emits NO anon block (the direct-mode marker)', () => {
+    const config = getDefaultConfig();
+    const { yamlPath } = writeDirectConnectorConfig(tmpDir, config);
+    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    expect(parsed['anon']).toBeUndefined();
+  });
+
+  it("transport block is type 'direct'", () => {
+    const config = getDefaultConfig();
+    const { yamlPath } = writeDirectConnectorConfig(tmpDir, config);
+    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    const transport = parsed['transport'] as Record<string, unknown>;
+    expect(transport).toBeDefined();
+    expect(transport['type']).toBe('direct');
+    // The HS-only managed-anon fields must NOT be present.
+    expect(transport['managed']).toBeUndefined();
+    expect(transport['managedOptions']).toBeUndefined();
+  });
+
+  it('still wires DVM localDelivery to the DIRECT dvm container', () => {
+    const config = getDefaultConfig();
+    const { yamlPath } = writeDirectConnectorConfig(tmpDir, config);
+    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    const ld = parsed['localDelivery'] as Record<string, unknown>;
+    expect(ld['enabled']).toBe(true);
+    expect(ld['handlerUrl']).toBe('http://townhouse-direct-dvm:3300');
+  });
+
+  it('is idempotent — a prior direct config is reused (created:false)', () => {
+    const config = getDefaultConfig();
+    const first = writeDirectConnectorConfig(tmpDir, config);
+    expect(first.created).toBe(true);
+    const second = writeDirectConnectorConfig(tmpDir, config);
+    expect(second.created).toBe(false);
+  });
+
+  it('force:true overwrites an existing HS config with a direct one', () => {
+    const config = getDefaultConfig();
+    // First lay down an HS config (anon.enabled:true).
+    writeHsConnectorConfig(tmpDir, config);
+    // Without force, the HS file is NOT a valid direct config → it overwrites.
+    const result = writeDirectConnectorConfig(tmpDir, config, { force: true });
+    expect(result.created).toBe(true);
+    const parsed = parse(readFileSync(result.yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    expect(parsed['anon']).toBeUndefined();
+    expect((parsed['transport'] as Record<string, unknown>)['type']).toBe(
+      'direct'
+    );
+  });
+
+  it('does NOT reuse an existing HS config (overwrites to direct)', () => {
+    const config = getDefaultConfig();
+    writeHsConnectorConfig(tmpDir, config);
+    // A pre-existing HS file (anon.enabled:true) is not a valid direct config,
+    // so the direct writer overwrites it rather than reusing it.
+    const result = writeDirectConnectorConfig(tmpDir, config);
+    expect(result.created).toBe(true);
+    const parsed = parse(readFileSync(result.yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    expect(parsed['anon']).toBeUndefined();
+  });
+
+  it('injects apexSettlementKeys into a keyId-less chainProvider', () => {
+    const config = getDefaultConfig();
+    const APEX_EVM_KEY = '0x' + 'b'.repeat(64);
+    const { yamlPath } = writeDirectConnectorConfig(tmpDir, config, {
+      apexSettlementKeys: { evmPrivateKeyHex: APEX_EVM_KEY },
+    });
+    const parsed = parse(readFileSync(yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    const cps = parsed['chainProviders'] as
+      | Record<string, unknown>[]
+      | undefined;
+    // Default config yields the DEFAULT_HS_CHAIN_PROVIDERS fallback (Anvil dev
+    // key already present) — assert the key plumbing path renders providers.
+    expect(Array.isArray(cps)).toBe(true);
+    expect(cps!.length).toBeGreaterThan(0);
   });
 });

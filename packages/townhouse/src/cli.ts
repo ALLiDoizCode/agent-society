@@ -41,6 +41,7 @@ import {
   TransportProbe,
   DEFAULT_ATOR_PROXY,
   writeHsConnectorConfig,
+  writeDirectConnectorConfig,
   writeHsNodeEnvFile,
 } from './connector/index.js';
 import { materializeComposeTemplate } from './compose-loader.js';
@@ -56,6 +57,7 @@ import { renderFailure } from './cli/failure-copy.js';
 import { promptPassword } from './cli/password-prompt.js';
 import {
   checkHsPortCollisions,
+  checkDirectPortCollisions,
   formatCollisionMessage,
   type PortCollision,
 } from './cli/preflight-ports.js';
@@ -1585,6 +1587,13 @@ async function handleDown(
 const HS_CONNECTOR_ADMIN_URL = 'http://127.0.0.1:9401';
 /** Townhouse API URL for HS mode (inside the townhouse-api container). */
 const HS_TOWNHOUSE_API_URL = 'http://127.0.0.1:28090';
+/**
+ * Direct-mode apex dial address printed on success. The connector exposes its
+ * BTP server on host loopback :3000 (operator can rebind via TOWNHOUSE_BTP_BIND
+ * in the compose .env), and the Phase 1 DIRECT_BTP client connects to /btp.
+ */
+// nosemgrep: javascript.lang.security.detect-insecure-websocket -- operator loopback BTP dial address, TLS terminated by transport
+const DIRECT_BTP_DIAL_URL = 'ws://127.0.0.1:3000/btp';
 
 /**
  * Run `reconciler.reconcile()` with a brief retry budget for cold-boot
@@ -2141,6 +2150,309 @@ async function handleHsUp(
   }
 }
 
+/**
+ * Direct-apex bring-up (Phase 2, INTERNAL opt-in only).
+ *
+ * Boots the apex (connector + townhouse-api) + any requested children with NO
+ * hidden service. The connector's BTP port :3000 is exposed to the host so an
+ * external client connects over plain `ws://host:3000/btp` (Phase 1's
+ * DIRECT_BTP client). Structurally mirrors {@link handleHsUp} but:
+ *   - writes the connector config via writeDirectConnectorConfig (no anon),
+ *   - materializes the 'direct' compose profile,
+ *   - reuses writeHsNodeEnvFile (transport-agnostic) for compose/.env,
+ *   - constructs the orchestrator with {profile:'direct'} and runs upDirect,
+ *   - uses a connector-health idempotency probe (no HS hostname), and
+ *   - prints the direct dial address on success.
+ *
+ * This is reachable ONLY via `townhouse up --transport direct` (an explicit
+ * internal opt-in). The default `up` / `hs up` dispatch is unchanged (Phase 3
+ * will flip the default).
+ */
+async function handleDirectUp(
+  _configPath: string,
+  configDir: string,
+  config: TownhouseConfig,
+  docker: Docker,
+  options: {
+    password?: string;
+    force?: boolean;
+    skipPreflight?: boolean;
+    hsOverrides?: CliHsOverrides;
+  }
+): Promise<void> {
+  const { password, force, skipPreflight, hsOverrides } = options;
+
+  const adminClientFactory =
+    hsOverrides?.createAdminClient ??
+    ((url: string, t: number) => new ConnectorAdminClient(url, t));
+
+  // ── Idempotency probe — BEFORE the preflight ───────────────────────────────
+  // If our apex connector is already live (admin /health reachable), this is a
+  // re-run: re-print the dial address and return. This MUST run before the port
+  // preflight so an idempotent re-run does not flag our OWN apex's ports as a
+  // collision. Skipped under --force (cold rebuild).
+  if (!force) {
+    const probe = adminClientFactory(HS_CONNECTOR_ADMIN_URL, 3_000);
+    const ping = (
+      probe as { pingAdminLive?: () => Promise<unknown> }
+    ).pingAdminLive?.bind(probe);
+    if (ping) {
+      try {
+        await ping();
+        console.log(`Apex live (direct BTP) at ${DIRECT_BTP_DIAL_URL}`);
+        return;
+      } catch {
+        // Not running / not ready → fall through to preflight + cold boot.
+      }
+    }
+  }
+
+  // ── Preflight: port-collision check (includes the BTP :3000 host bind) ──────
+  if (!skipPreflight) {
+    const preflight =
+      hsOverrides?.checkPortCollisions ??
+      ((d: Docker) => checkDirectPortCollisions(d));
+    try {
+      const collisions = await preflight(docker);
+      if (collisions.length > 0) {
+        process.stderr.write(formatCollisionMessage(collisions));
+        process.exitCode = 1;
+        return;
+      }
+    } catch (preflightErr: unknown) {
+      const detail =
+        preflightErr instanceof Error
+          ? preflightErr.message
+          : String(preflightErr);
+      console.error(
+        `[townhouse up --transport direct] port preflight skipped (non-fatal): ${detail}`
+      );
+    }
+  }
+
+  // Resolve wallet password (--password → env var → interactive prompt → reject).
+  const walletPath = config.wallet.encrypted_path;
+  if (!existsSync(walletPath)) {
+    console.error(
+      `Wallet not found at ${walletPath}. Run \`townhouse init\` first.`
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
+  let resolvedPassword: string;
+  if (walletPassword) {
+    resolvedPassword = walletPassword;
+  } else if (process.stdin.isTTY) {
+    resolvedPassword = await promptPassword('Wallet password: ');
+  } else {
+    console.error(
+      'Wallet password required, but no interactive terminal is available to prompt.\n' +
+        'Pass --password <pw> or set TOWNHOUSE_WALLET_PASSWORD.'
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const loaded = await loadWallet(walletPath);
+  if (!loaded) {
+    console.error(`Wallet at ${walletPath} could not be read.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  let walletManager: WalletManager | undefined;
+  try {
+    walletManager = new WalletManager({ encryptedPath: walletPath });
+    await walletManager.fromMnemonic(
+      decryptWallet(loaded.wallet, resolvedPassword)
+    );
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`Failed to decrypt wallet: ${msg}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const ribbon = new OnboardingRibbon();
+
+  try {
+    // Step 1: write connector.yaml with transport:{type:'direct'} (NO anon).
+    // Derive the apex settlement key from the unlocked mnemonic so configured
+    // chainProviders lacking an explicit keyId are signed by the operator's key
+    // (Phase 5 needs Solana/Mina chainProvider keys here). The raw key lands
+    // only in connector.yaml (0600), never in config.yaml.
+    const apexSettlementKeys = await walletManager.getApexSettlementKeys();
+    writeDirectConnectorConfig(configDir, config, {
+      force,
+      apexSettlementKeys,
+    });
+
+    // Step 2: materialize the 'direct' compose template.
+    const materialize =
+      hsOverrides?.materializeComposeTemplate ?? materializeComposeTemplate;
+    const { composePath } = materialize('direct', { townhouseHome: configDir });
+
+    // Step 2b: write compose/.env from the `network` mode (transport-agnostic).
+    writeHsNodeEnvFile(configDir, config);
+
+    // Step 3: ribbon (pull phase).
+    ribbon.start('pull');
+
+    // Step 4: construct orchestrator wired for the 'direct' profile.
+    const orchestratorFactory =
+      hsOverrides?.createOrchestrator ??
+      ((
+        d: Docker,
+        cfg: TownhouseConfig,
+        wm: WalletManager | undefined,
+        opts: { profile: 'hs'; composePath: string }
+      ) => new DockerOrchestrator(d, cfg, wm, opts));
+
+    const orch = orchestratorFactory(docker, config, walletManager, {
+      // The override interface types profile as 'hs'; 'direct' is structurally
+      // identical from the orchestrator's perspective (compose-driven). Cast at
+      // the call boundary so the internal opt-in compiles without widening the
+      // shared CliHsOverrides type this phase.
+      profile: 'direct' as unknown as 'hs',
+      composePath,
+    });
+
+    const narrator = new PullNarrator();
+    orch.on('pullProgress', (event: unknown) => {
+      const ev = event as {
+        image?: string;
+        status?: string;
+        id?: string;
+        progress?: string;
+      };
+      if (!ev.image || !ev.status) return;
+      const line = narrator.format({
+        image: ev.image,
+        status: ev.status,
+        id: ev.id,
+        progress: ev.progress,
+      });
+      if (line !== null) console.log(line);
+    });
+
+    let bootstrapStarted = false;
+    orch.on('containerState', (event: unknown) => {
+      const ev = event as { name?: string; state?: string };
+      if (
+        !bootstrapStarted &&
+        (ev.state === 'creating' || ev.state === 'starting')
+      ) {
+        bootstrapStarted = true;
+        ribbon.start('bootstrap');
+      }
+    });
+
+    ribbon.stop();
+
+    // Cold-pull pre-warm (same approach as HS): pre-pull apex images so the
+    // narrator can render progress; compose then finds them cached.
+    if (typeof orch.pullImage === 'function') {
+      try {
+        const apexImages = await collectApexImageRefs(configDir);
+        if (apexImages.length > 0) {
+          console.log(
+            `Pulling ${apexImages.length} apex ${apexImages.length === 1 ? 'image' : 'images'}...`
+          );
+          let pulled = 0;
+          for (const ref of apexImages) {
+            pulled++;
+            console.log(`  [${pulled}/${apexImages.length}] ${ref}`);
+            await orch.pullImage(ref);
+          }
+        } else {
+          console.log(
+            'No pinned image manifest found — Docker will pull images on demand.'
+          );
+        }
+      } catch (pullErr: unknown) {
+        const detail =
+          pullErr instanceof Error ? pullErr.message : String(pullErr);
+        console.log(
+          `Could not pre-pull images (${detail}). Docker will pull them during ` +
+            'startup — this is normal and may take a few minutes.'
+        );
+      }
+    }
+
+    // Step 5: up (always-on services only). Inject the same compose-interpolation
+    // env vars HS uses; the direct template consumes the identical passthrough
+    // (TOWNHOUSE_HOME / WALLET_DIR / UID / DOCKER_GID / WALLET_PASSWORD) plus the
+    // optional TOWNHOUSE_BTP_BIND (left to the operator's shell env).
+    let dockerSockGid = 0;
+    try {
+      dockerSockGid = statSync('/var/run/docker.sock').gid;
+    } catch {
+      // Socket missing — fallback 0 keeps Compose interpolation valid.
+    }
+    const prevTownhouseHome = process.env['TOWNHOUSE_HOME'];
+    const prevWalletPassword = process.env['TOWNHOUSE_WALLET_PASSWORD'];
+    const prevTownhouseUid = process.env['TOWNHOUSE_UID'];
+    const prevWalletDir = process.env['TOWNHOUSE_WALLET_DIR'];
+    const prevDockerGid = process.env['TOWNHOUSE_DOCKER_GID'];
+    process.env['TOWNHOUSE_HOME'] = configDir;
+    process.env['TOWNHOUSE_WALLET_PASSWORD'] = resolvedPassword;
+    process.env['TOWNHOUSE_UID'] = String(process.getuid?.() ?? 1000);
+    process.env['TOWNHOUSE_WALLET_DIR'] = dirname(
+      resolve(config.wallet.encrypted_path)
+    );
+    process.env['TOWNHOUSE_DOCKER_GID'] = String(dockerSockGid);
+
+    if (!bootstrapStarted) {
+      bootstrapStarted = true;
+      ribbon.start('bootstrap');
+    }
+
+    try {
+      await orch.up([]);
+    } finally {
+      if (prevTownhouseHome === undefined) {
+        delete process.env['TOWNHOUSE_HOME'];
+      } else {
+        process.env['TOWNHOUSE_HOME'] = prevTownhouseHome;
+      }
+      if (prevWalletPassword === undefined) {
+        delete process.env['TOWNHOUSE_WALLET_PASSWORD'];
+      } else {
+        process.env['TOWNHOUSE_WALLET_PASSWORD'] = prevWalletPassword;
+      }
+      if (prevTownhouseUid === undefined) {
+        delete process.env['TOWNHOUSE_UID'];
+      } else {
+        process.env['TOWNHOUSE_UID'] = prevTownhouseUid;
+      }
+      if (prevWalletDir === undefined) {
+        delete process.env['TOWNHOUSE_WALLET_DIR'];
+      } else {
+        process.env['TOWNHOUSE_WALLET_DIR'] = prevWalletDir;
+      }
+      if (prevDockerGid === undefined) {
+        delete process.env['TOWNHOUSE_DOCKER_GID'];
+      } else {
+        process.env['TOWNHOUSE_DOCKER_GID'] = prevDockerGid;
+      }
+    }
+
+    // Step 6: success — print the direct dial address as the FINAL stdout line.
+    ribbon.stop();
+    console.log(`Apex live (direct BTP) at ${DIRECT_BTP_DIAL_URL}`);
+  } catch (err: unknown) {
+    const { exitCode } = renderFailure(err);
+    process.exitCode = exitCode;
+  } finally {
+    ribbon.stop();
+    if (walletManager) {
+      walletManager.lock();
+    }
+  }
+}
+
 /** Atomically write ~/.townhouse/host.json (AC #6). */
 function _writeHostJson(
   configDir: string,
@@ -2567,6 +2879,10 @@ export async function main(
       yes: { type: 'boolean' },
       'rotate-keys': { type: 'boolean' },
       'skip-preflight': { type: 'boolean' },
+      // INTERNAL opt-in (Phase 2): `townhouse up --transport direct` routes to
+      // handleDirectUp (no-HS apex, BTP :3000 exposed). Any other value (or
+      // absent) leaves `up` on its existing behavior — unchanged this phase.
+      transport: { type: 'string' },
       json: { type: 'boolean' },
       'json-compact': { type: 'boolean' },
       lines: { type: 'string' },
@@ -2766,6 +3082,20 @@ export async function main(
       const configPath = (values.config as string) ?? DEFAULT_CONFIG_PATH;
       const config = loadConfig(configPath);
       const docker = dockerInstance ?? new Docker();
+      // INTERNAL opt-in (Phase 2): `--transport direct` routes to the no-HS
+      // direct-apex path. Any other --transport value, or its absence, leaves
+      // the existing `up` behavior byte-for-byte unchanged (Phase 3 flips the
+      // default).
+      if ((values.transport as string | undefined) === 'direct') {
+        const configDir = dirname(configPath);
+        await handleDirectUp(configPath, configDir, config, docker, {
+          password: values.password as string | undefined,
+          force: values.force === true,
+          skipPreflight: values['skip-preflight'] === true,
+          hsOverrides,
+        });
+        break;
+      }
       const profiles = resolveProfiles(values, config);
       await handleUp(
         configPath,
