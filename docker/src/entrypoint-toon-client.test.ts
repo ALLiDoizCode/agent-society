@@ -19,7 +19,7 @@ import {
   parseEnv,
   isValidDirectBtpUrl,
   resolveBtpWiring,
-} from './entrypoint-toon-client.js';
+} from './entrypoint-toon-client-helpers.js';
 
 // Required base envs parseEnv() needs regardless of transport mode.
 const BASE_ENV: Record<string, string> = {
