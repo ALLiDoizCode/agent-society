@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.3](https://github.com/toon-protocol/town/compare/v0.16.2...v0.16.3) (2026-06-09)
+
+### Code Refactoring
+
+* **townhouse:** rename transport mode 'ator' → 'hs' (operator-facing; connector wire unchanged) ([#142](https://github.com/toon-protocol/town/issues/142)) ([42b5a8e](https://github.com/toon-protocol/town/commit/42b5a8ecb011b1f802c6f405ec188920fd01c293))
+
 ## [0.16.2](https://github.com/toon-protocol/town/compare/v0.16.1...v0.16.2) (2026-06-08)
 
 ### Bug Fixes
