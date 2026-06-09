@@ -45,7 +45,18 @@
  *   AC #7   No app-layer idempotency (trust Nostr event-id dedup)
  *   AC #9   Rate limit (in-memory windowed counter per source IP, default 30/min)
  *
- * Transport mode (mutually exclusive — ANYONE_PROXY_URLS takes precedence):
+ * Transport mode (mutually exclusive — DIRECT_BTP takes precedence, then ANYONE_PROXY_URLS):
+ *   DIRECT_BTP            (optional)  — truthy (1/true/yes/on) enables direct-BTP
+ *                                        mode: connect straight to the apex over a
+ *                                        plain ws://|wss:// endpoint with
+ *                                        transport:{type:'direct'} and NO SOCKS
+ *                                        proxy (no public ATOR proxy, no local anon
+ *                                        daemon). Requires APEX_BTP_URL. When unset
+ *                                        the legacy HS/SOCKS path is byte-identical.
+ *   APEX_BTP_URL          (required in direct mode) — plain BTP endpoint
+ *                                        (ws://|wss:// host[:port] /btp). Validated
+ *                                        by isValidDirectBtpUrl (NOT the strict
+ *                                        .anon/.anyone HOSTNAME_REGEX).
  *   ANYONE_PROXY_URLS     (optional)  — comma-separated public ATOR proxy URL(s) in
  *                                        socks5h://host:port form.  When set, the pod
  *                                        skips the local anon daemon and routes outbound
@@ -123,6 +134,7 @@ import {
   generateMnemonic,
   deriveFullIdentity,
 } from '@toon-protocol/client';
+import type { ClientTransportConfig } from '@toon-protocol/client';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 
@@ -148,6 +160,20 @@ interface PodEnv {
   logLevel: string;
   anyoneProxyUrl: string | null; // ator-public mode; null → ator-onion (local anon)
   anonSocksPort: number;
+  /**
+   * Direct-BTP mode (Phase 1). When true the pod connects straight to the apex
+   * over a plain `ws://`/`wss://` BTP endpoint with `transport:{type:'direct'}`
+   * and NO SOCKS proxy — no public ATOR proxy, no local anon daemon. Toggled by
+   * the truthy `DIRECT_BTP` env. When enabled, `apexBtpUrl` (APEX_BTP_URL) is
+   * REQUIRED and the SOCKS/anon envs (ANYONE_PROXY_URLS, ANON_SOCKS_PORT) are
+   * OPTIONAL/unused. Default (unset) keeps the exact legacy HS/SOCKS behaviour.
+   */
+  directBtp: boolean;
+  /**
+   * Plain BTP endpoint for the apex (ws:// or wss://, host[:port], path /btp).
+   * Present (and required) ONLY in direct-BTP mode; undefined otherwise.
+   */
+  apexBtpUrl?: string;
   fundPollDeadlineMs: number;
   chainKey: string;
   chainId: number;
@@ -210,7 +236,45 @@ interface PodEnv {
   };
 }
 
-function parseEnv(): PodEnv {
+// Truthy env parse — accepts 1/true/yes/on (case-insensitive). Anything else
+// (including unset / "0" / "false") is false, so legacy deployments that never
+// set DIRECT_BTP keep the exact HS/SOCKS behaviour.
+function isTruthy(v: string | undefined): boolean {
+  if (!v) return false;
+  return ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase());
+}
+
+/**
+ * Direct-BTP URL validator (Phase 1). Accepts a plain BTP endpoint:
+ *   ws://  | wss://   scheme,
+ *   a host with an OPTIONAL :port,
+ *   path === '/btp' (no query/fragment),
+ *   sane length cap.
+ *
+ * This is SEPARATE from HOSTNAME_REGEX on purpose — the .anon/.anyone HS path
+ * stays strict (a plain host like `apex` or `localhost` must NOT pass the HS
+ * validator). Conversely the HS targetHostname (e.g. `abc.anon`) is NOT a URL
+ * and must NOT pass this one.
+ */
+export function isValidDirectBtpUrl(url: unknown): url is string {
+  if (typeof url !== 'string' || url.length === 0 || url.length > 512) {
+    return false;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') return false;
+  if (!parsed.hostname) return false;
+  if (parsed.pathname !== '/btp') return false;
+  if (parsed.search !== '' || parsed.hash !== '') return false;
+  if (parsed.username !== '' || parsed.password !== '') return false;
+  return true;
+}
+
+export function parseEnv(): PodEnv {
   const env = process.env;
   const need = (k: string): string => {
     const v = env[k];
@@ -252,7 +316,26 @@ function parseEnv(): PodEnv {
       `[toon-client] FUND_POLL_DEADLINE_MS must be an integer >= 1000, got: ${env['FUND_POLL_DEADLINE_MS']}`
     );
   }
-  // ator-public mode: take the first URL from the comma-separated list.
+  // Direct-BTP mode (Phase 1): plain ws:// apex, no SOCKS proxy. When enabled,
+  // APEX_BTP_URL is REQUIRED and the SOCKS/anon envs become optional/unused.
+  const directBtp = isTruthy(env['DIRECT_BTP']);
+  const apexBtpUrl = env['APEX_BTP_URL']?.trim() || undefined;
+  if (directBtp) {
+    if (!apexBtpUrl) {
+      throw new Error(
+        '[toon-client] DIRECT_BTP is enabled but APEX_BTP_URL is unset ' +
+          '(direct-BTP mode requires a plain ws://host:port/btp apex endpoint)'
+      );
+    }
+    if (!isValidDirectBtpUrl(apexBtpUrl)) {
+      throw new Error(
+        `[toon-client] APEX_BTP_URL must be a ws://|wss:// host[:port] /btp URL, got: ${apexBtpUrl}`
+      );
+    }
+  }
+
+  // ator-public mode: take the first URL from the comma-separated list. Optional
+  // in direct-BTP mode (no proxy is resolved/spawned), so only validated when set.
   const rawProxy = env['ANYONE_PROXY_URLS']?.split(',')[0]?.trim() || null;
   if (rawProxy && !rawProxy.startsWith('socks5h://')) {
     throw new Error(
@@ -312,6 +395,8 @@ function parseEnv(): PodEnv {
     logLevel: env['LOG_LEVEL'] || 'info',
     anyoneProxyUrl: rawProxy,
     anonSocksPort,
+    directBtp,
+    apexBtpUrl,
     fundPollDeadlineMs,
     chainKey: env['TOON_CHAIN_KEY'] || 'evm:base:31337',
     chainId: parseInt(env['TOON_CHAIN_ID'] || '31337', 10),
@@ -761,6 +846,46 @@ interface PublishRequestBody {
   targetHostname: string;
 }
 
+/**
+ * Resolve the BTP endpoint + transport for a ToonClient based on transport mode.
+ *
+ * Direct-BTP: plain ws:// apex from APEX_BTP_URL + transport:{type:'direct'}
+ *             (no SOCKS proxy). `cacheKey` is the apex URL.
+ * HS/SOCKS:   ws://<targetHostname>:3000/btp + transport:{type:'socks5'} over
+ *             the resolved proxy. `cacheKey` is the .anon targetHostname.
+ *
+ * Exported for unit coverage (deterministic; no network).
+ */
+export function resolveBtpWiring(args: {
+  directBtp: boolean;
+  apexBtpUrl?: string;
+  targetHostname: string;
+  resolvedProxy: string | null;
+}): { btpUrl: string; transport: ClientTransportConfig; cacheKey: string } {
+  if (args.directBtp) {
+    if (!args.apexBtpUrl) {
+      throw new Error(
+        '[toon-client] resolveBtpWiring: direct-BTP mode requires apexBtpUrl'
+      );
+    }
+    return {
+      btpUrl: args.apexBtpUrl,
+      transport: { type: 'direct' },
+      cacheKey: args.apexBtpUrl,
+    };
+  }
+  if (!args.resolvedProxy) {
+    throw new Error(
+      '[toon-client] resolveBtpWiring: HS/SOCKS mode requires a resolved proxy'
+    );
+  }
+  return {
+    btpUrl: `ws://${args.targetHostname}:3000/btp`,
+    transport: { type: 'socks5', socksProxy: args.resolvedProxy },
+    cacheKey: args.targetHostname,
+  };
+}
+
 // ---------- Main ----------
 
 async function main(): Promise<void> {
@@ -858,9 +983,11 @@ async function main(): Promise<void> {
     nostrPubkey: keys.nostrPubkey,
     balances: { evm: String(evmBalance), sol: solBalance },
     bootedAt: startedAt,
-    transport: socks5ProxyUrl
-      ? { type: 'socks5', socksProxy: socks5ProxyUrl }
-      : { type: 'none', socksProxy: '' },
+    transport: env.directBtp
+      ? { type: 'direct', socksProxy: '' }
+      : socks5ProxyUrl
+        ? { type: 'socks5', socksProxy: socks5ProxyUrl }
+        : { type: 'none', socksProxy: '' },
   }));
 
   fastify.post('/publish', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -905,7 +1032,10 @@ async function main(): Promise<void> {
         })),
       });
     }
-    if (!isValidHostname(body.targetHostname)) {
+    // In direct-BTP mode routing is env-driven (APEX_BTP_URL); the request's
+    // targetHostname is NOT a .anon hostname and is not used to build the URL,
+    // so skip the strict HS hostname check. The HS path stays strict.
+    if (!env.directBtp && !isValidHostname(body.targetHostname)) {
       return reply.status(400).send({
         error: 'targetHostname must match /^[a-z2-7]+\\.(anyone|anon)$/',
         field: 'targetHostname',
@@ -916,16 +1046,25 @@ async function main(): Promise<void> {
     if (!bootComplete) {
       return reply.status(503).send({ error: 'booting', retryable: true });
     }
-    if (!anyoneReady || !socks5ProxyUrl) {
+    // Direct-BTP mode has no SOCKS proxy to wait for — readiness is faucet-only
+    // (bootComplete). The HS/SOCKS path still requires a resolved proxy.
+    if (!env.directBtp && (!anyoneReady || !socks5ProxyUrl)) {
       return reply.status(503).send({
         error: 'anon_not_ready',
         detail: 'local anon daemon SOCKS5 port not bound',
         retryable: true,
       });
     }
-    const resolvedProxy = socks5ProxyUrl;
-
-    const targetHostname = body.targetHostname;
+    // Resolve BTP endpoint + transport + cache key once for this mode. Direct:
+    // plain ws:// apex (cache keyed by URL). HS/SOCKS: ws://<host>:3000/btp over
+    // the resolved proxy (cache keyed by the .anon targetHostname).
+    const wiring = resolveBtpWiring({
+      directBtp: env.directBtp,
+      apexBtpUrl: env.apexBtpUrl,
+      targetHostname: body.targetHostname,
+      resolvedProxy: socks5ProxyUrl,
+    });
+    const targetHostname = wiring.cacheKey;
     const event = body.event;
     const startMs = Date.now();
 
@@ -981,6 +1120,10 @@ async function main(): Promise<void> {
               tokenNetworks[env.mina.chainKey] = env.mina.zkAppAddress;
             }
 
+            // BTP endpoint + transport resolved above (resolveBtpWiring): direct
+            // ws:// apex + {type:'direct'} OR ws://<host>:3000/btp + socks5.
+            const { btpUrl, transport } = wiring;
+
             const client = new ToonClient({
               connectorUrl: 'http://127.0.0.1:1', // required by validateConfig, unused at runtime
               // Solana/Mina mode: drive from a mnemonic so the client derives +
@@ -993,16 +1136,16 @@ async function main(): Promise<void> {
               ilpInfo: {
                 pubkey: '00'.repeat(32),
                 ilpAddress: `g.toon.client.${keys.evmAddress.slice(2, 18).toLowerCase()}`,
-                btpEndpoint: `ws://${targetHostname}:3000/btp`,
+                btpEndpoint: btpUrl,
                 assetCode: 'USD',
                 assetScale: 6,
               },
               toonEncoder: encodeEventToToon,
               toonDecoder: decodeEventFromToon,
-              btpUrl: `ws://${targetHostname}:3000/btp`,
+              btpUrl,
               btpPeerId: keys.evmAddress,
               btpAuthToken: '',
-              transport: { type: 'socks5', socksProxy: resolvedProxy },
+              transport,
               destinationAddress: 'g.townhouse.town',
               knownPeers: [],
               relayUrl: '',
@@ -1206,7 +1349,13 @@ async function main(): Promise<void> {
   // /healthz returns anyoneReady:false until transport is ready AND boot completes.
   void (async () => {
     try {
-      if (env.anyoneProxyUrl) {
+      if (env.directBtp) {
+        // direct-BTP mode (Phase 1): plain ws:// apex, no SOCKS proxy. No public
+        // ATOR proxy is resolved and no local anon daemon is spawned. The pod
+        // dials the apex BTP endpoint directly; readiness gates on faucet funding
+        // only (socks5ProxyUrl stays null and is unused on the direct path).
+        log(`[transport] direct-BTP mode — apex ${env.apexBtpUrl}`);
+      } else if (env.anyoneProxyUrl) {
         // ator-public mode: the smoke test's beforeAll SOCKS5 probe confirms the
         // public proxy can reach the local apex .anon HS BEFORE /publish runs.
         // No local anon daemon needed — faster boot, simpler operation.
@@ -1348,9 +1497,13 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
-main().catch((err: unknown) => {
-  console.error(
-    `[toon-client] fatal: ${err instanceof Error ? err.stack || err.message : String(err)}`
-  );
-  process.exit(1);
-});
+// Gated so importing this module from a test (Vitest sets VITEST=true) does NOT
+// trigger main() — tests drive parseEnv/isValidDirectBtpUrl directly.
+if (!process.env['VITEST']) {
+  main().catch((err: unknown) => {
+    console.error(
+      `[toon-client] fatal: ${err instanceof Error ? err.stack || err.message : String(err)}`
+    );
+    process.exit(1);
+  });
+}
