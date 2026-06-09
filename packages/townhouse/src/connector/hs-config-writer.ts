@@ -319,3 +319,31 @@ export function writeDirectConnectorConfig(
 
   return { yamlPath, created: true };
 }
+
+/**
+ * Detect whether `~/.townhouse/connector.yaml` already describes a HIDDEN-SERVICE
+ * apex (`anon.enabled: true`) — the same marker the HS writer's idempotency
+ * check keys on. Used by the back-compat guard so the direct-default `townhouse
+ * up` never silently downgrades an operator who is already running an HS apex.
+ *
+ * Returns false when the file is absent, unparseable, or lacks `anon.enabled:
+ * true` (i.e. a fresh install, a legacy non-HS file, or an existing direct
+ * config) — all of which are safe to (re)bring-up as a direct apex.
+ *
+ * @param configDir - The townhouse home directory (e.g. `~/.townhouse/`).
+ */
+export function detectExistingHsConfig(configDir: string): boolean {
+  const yamlPath = join(configDir, 'connector.yaml');
+  if (!existsSync(yamlPath)) return false;
+  try {
+    const existing = parse(readFileSync(yamlPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    const anon = existing['anon'] as Record<string, unknown> | undefined;
+    return anon?.['enabled'] === true;
+  } catch {
+    // Unparseable — not a recognizable HS config; safe to proceed as direct.
+    return false;
+  }
+}

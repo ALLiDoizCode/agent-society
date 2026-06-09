@@ -11,6 +11,7 @@ export { TransportProbe } from './transport-probe.js';
 export {
   writeHsConnectorConfig,
   writeDirectConnectorConfig,
+  detectExistingHsConfig,
 } from './hs-config-writer.js';
 export type {
   WriteHsConnectorConfigResult,

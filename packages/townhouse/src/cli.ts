@@ -42,6 +42,7 @@ import {
   DEFAULT_ATOR_PROXY,
   writeHsConnectorConfig,
   writeDirectConnectorConfig,
+  detectExistingHsConfig,
   writeHsNodeEnvFile,
 } from './connector/index.js';
 import { materializeComposeTemplate } from './compose-loader.js';
@@ -118,7 +119,8 @@ const HELP_TEXT = `townhouse — TOON node orchestrator
 Usage:
   townhouse setup [--no-browser] [--port <n>] [--config-dir <dir>]  Run the first-run setup wizard
   townhouse init [--force] [--config-dir <dir>] [--password <pw>] [--preset <name>] [--network <mode>] [--yes]   Initialize config + wallet
-  townhouse up [--town] [--mill] [--dvm] [-c <path>] [--password <pw>]  Start nodes
+  townhouse up [--transport direct|hs] [--dev] [--town] [--mill] [--dvm] [-c <path>] [--password <pw>]
+                                                 Boot a direct-BTP apex + children (default; clients dial ws://host:3000/btp). --transport hs = HS path; --dev = contributor children-only dev stack
   townhouse down [-c <path>]                     Stop all nodes
   townhouse status [-c <path>]                   Show node status
   townhouse metrics [-c <path>]                  Show connector metrics
@@ -127,7 +129,8 @@ Usage:
   townhouse credits buy --token <id> --amount <decimal> [--fee-multiplier <n>] [--quote-only] [--yes] [-c <path>] [--password <pw>]
                                                  Buy Arweave upload credits (token: eth|sol|pol|base-eth|base-usdc|usdc-eth|usdc-pol)
   townhouse credits balance --token <id> [-c <path>] [--password <pw>]  Show Turbo credit balance for the funding address
-  townhouse hs up [--password <pw>] [--skip-preflight] [-c <path>]  Boot apex (connector + .anyone HS) (launches dashboard TUI in TTY mode)
+  townhouse hs up [--password <pw>] [--skip-preflight] [-c <path>]  Boot/enable hidden-service mode (opt-in, anonymous .anon apex) (launches dashboard TUI in TTY mode)
+  townhouse hs enable [--password <pw>] [-c <path>]          Switch a running direct apex to hidden-service mode (down direct → up HS)
   townhouse hs down [--rotate-keys] [-c <path>]               Stop apex (--rotate-keys deletes .anyone keypair)
   townhouse node add [<type>] [--json] [-c <path>]    Provision a child node (default: town)
   townhouse node remove <id> [--yes] [--json] [-c <path>]   Deprovision a child node
@@ -142,6 +145,8 @@ Usage:
   townhouse --help                               Show this help
 
 Flags:
+  --transport    up transport: direct (default; plain ws://host:3000/btp apex) | hs (hidden-service apex, == \`hs up\`)
+  --dev          up: boot the contributor children-only dev stack (profile:'dev') instead of the direct apex
   --town         Start Town (Nostr relay) node
   --mill         Start Mill (swap) node
   --dvm          Start DVM (compute) node
@@ -157,7 +162,7 @@ Flags:
   --json         Machine-readable JSON output (node commands; NDJSON for \`logs\`)
   --lines        Number of historical log lines to fetch on attach (logs command, default 50)
   -f|--follow    Accepted for \`tail -f\` muscle memory on \`logs\` (no-op — follow is default)
-  If no flags given, starts all enabled nodes from config.`;
+  With no flags, \`up\` boots a direct-BTP apex + the enabled children from config.`;
 
 /**
  * Dependency-injection overrides for the `hs up` / `hs down` CLI path.
@@ -174,7 +179,7 @@ export interface CliHsOverrides {
     docker: Docker,
     config: TownhouseConfig,
     walletManager: WalletManager | undefined,
-    options: { profile: 'hs'; composePath: string }
+    options: { profile: 'hs' | 'direct'; composePath: string }
   ) => {
     up: (profiles: NodeType[]) => Promise<void>;
     down: () => Promise<void>;
@@ -1887,7 +1892,7 @@ async function handleHsUp(
         d: Docker,
         cfg: TownhouseConfig,
         wm: WalletManager | undefined,
-        opts: { profile: 'hs'; composePath: string }
+        opts: { profile: 'hs' | 'direct'; composePath: string }
       ) => new DockerOrchestrator(d, cfg, wm, opts));
 
     const orch = orchestratorFactory(docker, config, walletManager, {
@@ -2186,6 +2191,37 @@ async function handleDirectUp(
     hsOverrides?.createAdminClient ??
     ((url: string, t: number) => new ConnectorAdminClient(url, t));
 
+  // ── Back-compat guard — never silently downgrade an HS apex ─────────────────
+  // The direct-default `townhouse up` MUST NOT clobber an operator who is
+  // already running a hidden-service apex. If the persisted connector.yaml
+  // carries `anon.enabled: true`, refuse and point them at the HS commands.
+  // The direct default applies to FRESH installs / non-HS (legacy or direct)
+  // configs only; we never rewrite an existing config.yaml `mode`.
+  if (detectExistingHsConfig(configDir)) {
+    console.error(
+      'Existing hidden-service apex detected (connector.yaml has anon.enabled: true).\n' +
+        '`townhouse up` boots a direct-BTP apex and would downgrade your HS deployment.\n' +
+        '  • To keep hidden-service mode:  townhouse hs up\n' +
+        '  • To switch to direct BTP:      townhouse hs down --rotate-keys && townhouse up'
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  // ── Wallet-existence fail-fast — BEFORE the idempotency probe ───────────────
+  // A missing wallet means a broken/incomplete install; nothing can be brought
+  // up (and the post-up API needs the unlocked wallet). Checking here makes the
+  // failure deterministic regardless of whether some unrelated connector admin
+  // happens to answer the idempotency probe on the canonical port.
+  const walletPath = config.wallet.encrypted_path;
+  if (!existsSync(walletPath)) {
+    console.error(
+      `Wallet not found at ${walletPath}. Run \`townhouse init\` first.`
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   // ── Idempotency probe — BEFORE the preflight ───────────────────────────────
   // If our apex connector is already live (admin /health reachable), this is a
   // re-run: re-print the dial address and return. This MUST run before the port
@@ -2231,15 +2267,7 @@ async function handleDirectUp(
   }
 
   // Resolve wallet password (--password → env var → interactive prompt → reject).
-  const walletPath = config.wallet.encrypted_path;
-  if (!existsSync(walletPath)) {
-    console.error(
-      `Wallet not found at ${walletPath}. Run \`townhouse init\` first.`
-    );
-    process.exitCode = 1;
-    return;
-  }
-
+  // (walletPath existence was already validated above, before the probe.)
   const walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
   let resolvedPassword: string;
   if (walletPassword) {
@@ -2307,15 +2335,11 @@ async function handleDirectUp(
         d: Docker,
         cfg: TownhouseConfig,
         wm: WalletManager | undefined,
-        opts: { profile: 'hs'; composePath: string }
+        opts: { profile: 'hs' | 'direct'; composePath: string }
       ) => new DockerOrchestrator(d, cfg, wm, opts));
 
     const orch = orchestratorFactory(docker, config, walletManager, {
-      // The override interface types profile as 'hs'; 'direct' is structurally
-      // identical from the orchestrator's perspective (compose-driven). Cast at
-      // the call boundary so the internal opt-in compiles without widening the
-      // shared CliHsOverrides type this phase.
-      profile: 'direct' as unknown as 'hs',
+      profile: 'direct',
       composePath,
     });
 
@@ -2451,6 +2475,82 @@ async function handleDirectUp(
       walletManager.lock();
     }
   }
+}
+
+/**
+ * `townhouse hs enable` — switch an already-running DIRECT deployment to HS.
+ *
+ * Thin wrapper: direct and HS stacks are namespace/port-mutually-exclusive
+ * (distinct container names, networks, volumes, and the direct profile binds
+ * the BTP :3000 host port the HS profile must NOT), so an in-place connector
+ * restart can't flip transports — the direct compose project must come DOWN
+ * before the HS one comes UP. This:
+ *   1. refuses if an HS apex is already the live config (nothing to enable),
+ *   2. tears down the 'direct' compose project (best-effort; preserves data
+ *      volumes — only the direct namespace is removed),
+ *   3. delegates to handleHsUp with force:true, which rewrites connector.yaml
+ *      to anon.enabled:true, materializes the HS compose, and brings it up.
+ */
+async function handleHsEnable(
+  configPath: string,
+  configDir: string,
+  config: TownhouseConfig,
+  docker: Docker,
+  options: {
+    password?: string;
+    force?: boolean;
+    skipPreflight?: boolean;
+    hsOverrides?: CliHsOverrides;
+  }
+): Promise<void> {
+  const { hsOverrides } = options;
+
+  // Already HS? Nothing to do — point at the HS up path for a re-attach.
+  if (detectExistingHsConfig(configDir)) {
+    console.log(
+      'Hidden-service apex already configured. Use `townhouse hs up` to (re)attach.'
+    );
+    return;
+  }
+
+  // Tear the direct stack down so its BTP :3000 host bind + container/network
+  // namespace are free before the HS stack comes up. Best-effort: a missing
+  // direct stack (fresh install) is fine — handleHsUp does a clean cold boot.
+  console.log('Switching direct apex → hidden-service mode...');
+  try {
+    const materialize =
+      hsOverrides?.materializeComposeTemplate ?? materializeComposeTemplate;
+    const { composePath } = materialize('direct', {
+      townhouseHome: configDir,
+    });
+    const orchestratorFactory =
+      hsOverrides?.createOrchestrator ??
+      ((
+        d: Docker,
+        cfg: TownhouseConfig,
+        wm: WalletManager | undefined,
+        opts: { profile: 'hs' | 'direct'; composePath: string }
+      ) => new DockerOrchestrator(d, cfg, wm, opts));
+    const orch = orchestratorFactory(docker, config, undefined, {
+      profile: 'direct',
+      composePath,
+    });
+    await orch.down();
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[townhouse hs enable] direct stack teardown skipped (non-fatal): ${detail}`
+    );
+  }
+
+  // Bring up HS. force:true ensures the direct connector.yaml is overwritten
+  // with the HS config (anon.enabled:true) rather than reused by idempotency.
+  await handleHsUp(configPath, configDir, config, docker, {
+    password: options.password,
+    force: true,
+    skipPreflight: options.skipPreflight,
+    hsOverrides,
+  });
 }
 
 /** Atomically write ~/.townhouse/host.json (AC #6). */
@@ -2621,7 +2721,7 @@ async function handleHsDown(
       d: Docker,
       cfg: TownhouseConfig,
       wm: WalletManager | undefined,
-      opts: { profile: 'hs'; composePath: string }
+      opts: { profile: 'hs' | 'direct'; composePath: string }
     ) => new DockerOrchestrator(d, cfg, wm, opts));
 
   const orch = orchestratorFactory(docker, config, undefined, {
@@ -2879,10 +2979,11 @@ export async function main(
       yes: { type: 'boolean' },
       'rotate-keys': { type: 'boolean' },
       'skip-preflight': { type: 'boolean' },
-      // INTERNAL opt-in (Phase 2): `townhouse up --transport direct` routes to
-      // handleDirectUp (no-HS apex, BTP :3000 exposed). Any other value (or
-      // absent) leaves `up` on its existing behavior — unchanged this phase.
+      // Phase 3: `townhouse up` defaults to a direct-BTP apex + children.
+      //   --transport direct (default) | --transport hs (synonym for `hs up`).
+      //   --dev selects the contributor children-only dev stack (profile:'dev').
       transport: { type: 'string' },
+      dev: { type: 'boolean' },
       json: { type: 'boolean' },
       'json-compact': { type: 'boolean' },
       lines: { type: 'string' },
@@ -3082,13 +3183,44 @@ export async function main(
       const configPath = (values.config as string) ?? DEFAULT_CONFIG_PATH;
       const config = loadConfig(configPath);
       const docker = dockerInstance ?? new Docker();
-      // INTERNAL opt-in (Phase 2): `--transport direct` routes to the no-HS
-      // direct-apex path. Any other --transport value, or its absence, leaves
-      // the existing `up` behavior byte-for-byte unchanged (Phase 3 flips the
-      // default).
-      if ((values.transport as string | undefined) === 'direct') {
-        const configDir = dirname(configPath);
-        await handleDirectUp(configPath, configDir, config, docker, {
+      const configDir = dirname(configPath);
+      const transport = values.transport as string | undefined;
+
+      // Phase 3 — `townhouse up` defaults to a DIRECT-BTP apex + children.
+      //   (no flags)            → direct apex + children   (default)
+      //   --transport direct    → direct apex + children   (explicit synonym)
+      //   --transport hs        → hidden-service apex       (synonym for `hs up`)
+      //   --dev                 → contributor children-only dev stack (profile:'dev')
+      // dev / direct / HS stacks are port-mutually-exclusive — keep them so.
+      if (
+        transport !== undefined &&
+        transport !== 'direct' &&
+        transport !== 'hs'
+      ) {
+        console.error(
+          `Unknown --transport value: ${transport}. Supported: direct (default), hs`
+        );
+        process.exitCode = 1;
+        break;
+      }
+
+      // Explicit contributor/dev-stack escape hatch (the pre-Phase-3 `up`).
+      if (values.dev === true) {
+        const profiles = resolveProfiles(values, config);
+        await handleUp(
+          configPath,
+          config,
+          profiles,
+          docker,
+          values.password as string | undefined,
+          values['dry-run'] === true
+        );
+        break;
+      }
+
+      // `--transport hs` is a synonym for `townhouse hs up`.
+      if (transport === 'hs') {
+        await handleHsUp(configPath, configDir, config, docker, {
           password: values.password as string | undefined,
           force: values.force === true,
           skipPreflight: values['skip-preflight'] === true,
@@ -3096,15 +3228,14 @@ export async function main(
         });
         break;
       }
-      const profiles = resolveProfiles(values, config);
-      await handleUp(
-        configPath,
-        config,
-        profiles,
-        docker,
-        values.password as string | undefined,
-        values['dry-run'] === true
-      );
+
+      // Default (and `--transport direct`): direct-BTP apex + children.
+      await handleDirectUp(configPath, configDir, config, docker, {
+        password: values.password as string | undefined,
+        force: values.force === true,
+        skipPreflight: values['skip-preflight'] === true,
+        hsOverrides,
+      });
       break;
     }
     case 'down': {
@@ -3141,6 +3272,13 @@ export async function main(
           skipPreflight: values['skip-preflight'] === true,
           hsOverrides,
         });
+      } else if (action === 'enable') {
+        await handleHsEnable(configPath, configDir, config, docker, {
+          password: values.password as string | undefined,
+          force: values.force === true,
+          skipPreflight: values['skip-preflight'] === true,
+          hsOverrides,
+        });
       } else if (action === 'down') {
         await handleHsDown(configDir, config, docker, {
           rotateKeys: values['rotate-keys'] === true,
@@ -3148,7 +3286,7 @@ export async function main(
         });
       } else {
         console.error(
-          'Usage: townhouse hs <up|down> [--rotate-keys] [--password <pw>] [-c <path>]'
+          'Usage: townhouse hs <up|enable|down> [--rotate-keys] [--password <pw>] [-c <path>]'
         );
         process.exitCode = 1;
       }

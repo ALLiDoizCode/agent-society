@@ -14,6 +14,7 @@ import { parse } from 'yaml';
 import {
   writeHsConnectorConfig,
   writeDirectConnectorConfig,
+  detectExistingHsConfig,
 } from './hs-config-writer.js';
 import { getDefaultConfig } from '../config/defaults.js';
 
@@ -503,5 +504,49 @@ describe('writeDirectConnectorConfig (Phase 2 direct-apex)', () => {
     // key already present) — assert the key plumbing path renders providers.
     expect(Array.isArray(cps)).toBe(true);
     expect(cps!.length).toBeGreaterThan(0);
+  });
+});
+
+describe('detectExistingHsConfig (Phase 3 back-compat guard)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'detect-hs-config-test-'));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns false when connector.yaml is absent (fresh install)', () => {
+    expect(detectExistingHsConfig(tmpDir)).toBe(false);
+  });
+
+  it('returns true when an HS config (anon.enabled: true) is present', () => {
+    writeHsConnectorConfig(tmpDir, getDefaultConfig());
+    expect(detectExistingHsConfig(tmpDir)).toBe(true);
+  });
+
+  it('returns false for a direct config (no anon block)', () => {
+    writeDirectConnectorConfig(tmpDir, getDefaultConfig());
+    expect(detectExistingHsConfig(tmpDir)).toBe(false);
+  });
+
+  it('returns false for a legacy non-HS config lacking anon.enabled', () => {
+    writeFileSync(
+      join(tmpDir, 'connector.yaml'),
+      'transport:\n  type: direct\n',
+      'utf-8'
+    );
+    expect(detectExistingHsConfig(tmpDir)).toBe(false);
+  });
+
+  it('returns false for an unparseable connector.yaml', () => {
+    writeFileSync(
+      join(tmpDir, 'connector.yaml'),
+      '::: not yaml :::\n',
+      'utf-8'
+    );
+    expect(detectExistingHsConfig(tmpDir)).toBe(false);
   });
 });
