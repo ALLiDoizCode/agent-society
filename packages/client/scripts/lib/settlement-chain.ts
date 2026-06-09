@@ -21,6 +21,14 @@
  *      SOCKS5 path (default) OR a DIRECT plain-`ws://` apex when `DIRECT_BTP=1`
  *      / `APEX_BTP_URL` is set. The SOCKS path is preserved unchanged.
  *
+ *   3. `resolveRelayTransport(env)` — picks the Nostr-relay READ/SUBSCRIBE
+ *      transport. Reads are FREE (no payment), so the default is DIRECT: a plain
+ *      `ws://<relay-host>:7100` dialed with the native `ws` socket (no SOCKS
+ *      agent). ATOR/SOCKS is OPT-IN: set `RELAY_SOCKS_PROXY` (or `SOCKS_PROXY`
+ *      together with a `.anyone`/`.anon` relay URL) to route to the relay's
+ *      hidden service through a SOCKS5 agent (the legacy behaviour). Mirrors the
+ *      direct-by-default / SOCKS-optional shape of `resolveBtpTransport`.
+ *
  * Config is read from env (the harnesses also overlay a handoff JSON; they pass
  * the merged values in via the `env`-shaped object).
  */
@@ -523,6 +531,89 @@ export function resolveBtpTransport(
     createWebSocket,
     mode: 'socks',
     describe: `SOCKS ${input.socksProxy} → ${input.socksBtpUrl}`,
+  };
+}
+
+// ─────────────────────────── Relay transport ────────────────────────────────
+
+export interface ResolvedRelayTransport {
+  /** The Nostr-relay WS URL to dial (plain ws://host:7100 for direct, .anyone HS for SOCKS). */
+  relayUrl: string;
+  /**
+   * Factory that opens a `ws` socket to the relay. DIRECT → a plain native
+   * socket (no agent). SOCKS → a socket bound to a `SocksProxyAgent` reaching
+   * the relay hidden service. Harnesses call this for BOTH the publish-WS (3a)
+   * and the subscribe (3b) so the two share one direct-or-SOCKS decision.
+   */
+  createWebSocket: (url: string, timeoutMs: number) => WsWebSocket;
+  /** 'direct' (plain ws://) or 'socks' (SocksProxyAgent → relay HS). */
+  mode: 'direct' | 'socks';
+  /** Human-readable description for logging. */
+  describe: string;
+}
+
+export interface ResolveRelayTransportInput {
+  env: SettlementEnv;
+  /**
+   * The relay `.anyone`/`.anon` hidden-service ws URL used by the SOCKS path
+   * (legacy default endpoint). Only dialed when SOCKS is selected.
+   */
+  socksRelayUrl: string;
+  /**
+   * SOCKS proxy URL for the relay HS path. Falls back to the env `SOCKS_PROXY`
+   * when `RELAY_SOCKS_PROXY` is unset.
+   */
+  socksProxy: string;
+}
+
+/**
+ * Pick the relay READ/SUBSCRIBE transport. Reads are free, so DIRECT is the
+ * DEFAULT: dial a plain `ws://<relay-host>:7100` (from `RELAY_WS_URL`, default
+ * `ws://127.0.0.1:7100`) with a native `ws` socket — no SOCKS agent.
+ *
+ * SOCKS/ATOR is OPT-IN: set `RELAY_SOCKS_PROXY` (or, for backward compatibility,
+ * the existing `SOCKS_PROXY` plus a `.anyone`/`.anon` relay URL via
+ * `RELAY_WS_URL`) to route to the relay hidden service through a SocksProxyAgent
+ * — the legacy harness behaviour, preserved byte-for-byte.
+ */
+export function resolveRelayTransport(
+  input: ResolveRelayTransportInput
+): ResolvedRelayTransport {
+  const relayWsUrl = input.env['RELAY_WS_URL']?.trim();
+  const relaySocksProxy = input.env['RELAY_SOCKS_PROXY']?.trim();
+
+  // SOCKS is opt-in. Two ways to ask for it:
+  //   - RELAY_SOCKS_PROXY explicitly set, OR
+  //   - RELAY_WS_URL points at a hidden service (.anyone / .anon) — that can
+  //     only be reached through the proxy, so honour the legacy SOCKS_PROXY.
+  const urlIsHiddenService =
+    relayWsUrl !== undefined && /\.(anyone|anon)(:|\/|$)/.test(relayWsUrl);
+  const wantSocks = relaySocksProxy !== undefined || urlIsHiddenService;
+
+  if (wantSocks) {
+    const proxy = relaySocksProxy || input.socksProxy;
+    const relayUrl = relayWsUrl || input.socksRelayUrl;
+    const createWebSocket = (url: string, timeoutMs: number): WsWebSocket => {
+      const agent = new SocksProxyAgent(proxy);
+      return new WsWebSocket(url, { agent, handshakeTimeout: timeoutMs });
+    };
+    return {
+      relayUrl,
+      createWebSocket,
+      mode: 'socks',
+      describe: `SOCKS ${proxy} → ${relayUrl}`,
+    };
+  }
+
+  // DIRECT (default): plain ws://, native socket, no SOCKS agent. Reads are free.
+  const relayUrl = relayWsUrl || 'ws://127.0.0.1:7100';
+  const createWebSocket = (url: string, timeoutMs: number): WsWebSocket =>
+    new WsWebSocket(url, { handshakeTimeout: timeoutMs });
+  return {
+    relayUrl,
+    createWebSocket,
+    mode: 'direct',
+    describe: `direct ws:// ${relayUrl} (no SOCKS)`,
   };
 }
 

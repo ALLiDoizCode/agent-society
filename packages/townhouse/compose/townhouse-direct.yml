@@ -45,7 +45,9 @@
 #   ${TOWNHOUSE_BTP_BIND:-127.0.0.1}:3000   connector BTP (external client dial)
 #   127.0.0.1:9401   connector admin
 #   127.0.0.1:28090  townhouse-api Fastify
-#   127.0.0.1:7100,3100  town (relay WS, BLS health) — profile gated
+#   ${TOWNHOUSE_RELAY_BIND:-127.0.0.1}:7100  town Nostr relay WS (external direct
+#                    READ/SUBSCRIBE — reads are free), 127.0.0.1:3100 BLS health
+#                    — both profile gated
 #   127.0.0.1:3200   mill BLS health — profile gated
 #   127.0.0.1:3400   dvm BLS health — profile gated
 #
@@ -183,6 +185,10 @@ services:
       # a non-loopback interface; pass it through so nested compose `up` of the
       # apex (if ever re-run by the API) resolves the same bind.
       TOWNHOUSE_BTP_BIND: '${TOWNHOUSE_BTP_BIND:-127.0.0.1}'
+      # Same passthrough for TOWNHOUSE_RELAY_BIND so the nested compose `up town`
+      # (lazy `node add town`) resolves the same relay-WS host bind. Defaults to
+      # loopback; set 0.0.0.0 to expose the relay read port on all interfaces.
+      TOWNHOUSE_RELAY_BIND: '${TOWNHOUSE_RELAY_BIND:-127.0.0.1}'
       # MILL_RELAYS is read by POST /api/nodes {type:'mill'} preflight check
       # inside the townhouse-api process. It must be in the API container's env
       # (not only the mill container's env) so the check works correctly.
@@ -221,7 +227,12 @@ services:
         condition: service_healthy
     expose: ['3000']
     ports:
-      - '127.0.0.1:7100:7100'
+      # Nostr relay WS — EXPOSED to the host so a host-run client can READ /
+      # SUBSCRIBE directly over plain ws://<host>:7100 (reads are free, no ILP).
+      # The bind interface defaults to 127.0.0.1 (loopback-only); set
+      # TOWNHOUSE_RELAY_BIND=0.0.0.0 to deliberately expose it on all interfaces
+      # (LAN / public). Mirrors the TOWNHOUSE_BTP_BIND knob on the connector.
+      - '${TOWNHOUSE_RELAY_BIND:-127.0.0.1}:7100:7100'
       - '127.0.0.1:3100:3100'
     environment:
       # nosemgrep: detect-insecure-websocket -- Docker-internal

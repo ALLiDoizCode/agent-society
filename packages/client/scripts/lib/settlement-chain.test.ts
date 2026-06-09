@@ -14,6 +14,7 @@ import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import {
   resolveSettlement,
   resolveBtpTransport,
+  resolveRelayTransport,
   generateMnemonic,
   type ResolveSettlementInput,
 } from './settlement-chain.js';
@@ -210,5 +211,73 @@ describe('resolveBtpTransport — direct vs SOCKS', () => {
     expect(t.mode).toBe('direct');
     expect(t.btpUrl).toBe('ws://127.0.0.1:3000/btp');
     expect(t.createWebSocket).toBeUndefined();
+  });
+});
+
+describe('resolveRelayTransport — direct (default) vs SOCKS (opt-in)', () => {
+  const RELAY_HS =
+    'ws://o7qefbfdcxsgh2h54dngvf43235vav3iniqi5nunusha7vi6z2whftyd.anyone:7100';
+  const common = {
+    socksRelayUrl: RELAY_HS,
+    socksProxy: 'socks5h://157.90.113.23:9052',
+  };
+
+  it('defaults to DIRECT plain ws://127.0.0.1:7100 (reads are free)', () => {
+    const t = resolveRelayTransport({ env: {}, ...common });
+    expect(t.mode).toBe('direct');
+    expect(t.relayUrl).toBe('ws://127.0.0.1:7100');
+    expect(typeof t.createWebSocket).toBe('function');
+  });
+
+  it('honours a custom direct RELAY_WS_URL (host-bound or in-network)', () => {
+    const t = resolveRelayTransport({
+      env: { RELAY_WS_URL: 'ws://townhouse-direct-town:7100' },
+      ...common,
+    });
+    expect(t.mode).toBe('direct');
+    expect(t.relayUrl).toBe('ws://townhouse-direct-town:7100');
+  });
+
+  it('opts into SOCKS when RELAY_SOCKS_PROXY is set (→ relay HS fallback url)', () => {
+    const t = resolveRelayTransport({
+      env: { RELAY_SOCKS_PROXY: 'socks5h://127.0.0.1:28050' },
+      ...common,
+    });
+    expect(t.mode).toBe('socks');
+    expect(t.relayUrl).toBe(RELAY_HS);
+    expect(t.describe).toContain('socks5h://127.0.0.1:28050');
+  });
+
+  it('auto-selects SOCKS when RELAY_WS_URL is a .anyone hidden service', () => {
+    const t = resolveRelayTransport({
+      env: { RELAY_WS_URL: RELAY_HS },
+      ...common,
+    });
+    expect(t.mode).toBe('socks');
+    expect(t.relayUrl).toBe(RELAY_HS);
+    // No RELAY_SOCKS_PROXY → falls back to the legacy SOCKS_PROXY value.
+    expect(t.describe).toContain('socks5h://157.90.113.23:9052');
+  });
+
+  it('auto-selects SOCKS when RELAY_WS_URL is a .anon hidden service', () => {
+    const t = resolveRelayTransport({
+      env: { RELAY_WS_URL: 'ws://abc.anon:7100' },
+      ...common,
+    });
+    expect(t.mode).toBe('socks');
+    expect(t.relayUrl).toBe('ws://abc.anon:7100');
+  });
+
+  it('RELAY_SOCKS_PROXY + custom RELAY_WS_URL: SOCKS to the given url via that proxy', () => {
+    const t = resolveRelayTransport({
+      env: {
+        RELAY_SOCKS_PROXY: 'socks5h://127.0.0.1:28050',
+        RELAY_WS_URL: 'ws://some-other.anyone:7100',
+      },
+      ...common,
+    });
+    expect(t.mode).toBe('socks');
+    expect(t.relayUrl).toBe('ws://some-other.anyone:7100');
+    expect(t.describe).toContain('socks5h://127.0.0.1:28050');
   });
 });
