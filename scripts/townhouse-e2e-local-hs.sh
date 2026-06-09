@@ -244,7 +244,11 @@ ensure_image_manifest() {
   # 3.9.1's #88 dynamic-peer settlement-chain resolution + blockchain-typed inbound
   # claim validation (validateSolanaClaim / validateMinaClaim / validateEVMClaim).
   # Pull lazily if missing locally.
-  local CONNECTOR_TAG=3.10.0
+  # Default 3.10.0 (the shipped pin); override via CONNECTOR_TAG env to test a
+  # locally-built connector image (e.g. CONNECTOR_TAG=solana-fix-local). The
+  # resolved digest is what gets pinned, so a local-only tag works on the same
+  # machine (resolve_digest falls back to the image Id / RepoDigest).
+  local CONNECTOR_TAG="${CONNECTOR_TAG:-3.10.0}"
   docker image inspect "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" >/dev/null 2>&1 \
     || docker pull "ghcr.io/toon-protocol/connector:${CONNECTOR_TAG}" 2>&1 | tail -2
 
