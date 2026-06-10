@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.3](https://github.com/toon-protocol/town/compare/v0.17.2...v0.17.3) (2026-06-10)
+
+### Bug Fixes
+
+* **client:** always await Mina initializeChannel inclusion so two-party channelHash lands before settle ([#158](https://github.com/toon-protocol/town/issues/158)) ([#160](https://github.com/toon-protocol/town/issues/160)) ([8d99ad6](https://github.com/toon-protocol/town/commit/8d99ad6cac825a1aa7209e68e7fc190f65440249)), closes [#155](https://github.com/toon-protocol/town/issues/155)
+* **mill:** set ILP_ADDRESS=g.townhouse.mill so apex-forwarded swaps stay local ([#157](https://github.com/toon-protocol/town/issues/157)) ([#161](https://github.com/toon-protocol/town/issues/161)) ([679c0e1](https://github.com/toon-protocol/town/commit/679c0e1d2a8e1e21dbe869525aca5d729e8d150c))
+
 ## [0.17.2](https://github.com/toon-protocol/town/compare/v0.17.1...v0.17.2) (2026-06-09)
 
 ### Bug Fixes
