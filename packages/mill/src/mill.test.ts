@@ -1304,6 +1304,66 @@ describe('Embedded-with-parent connector mode (connectorUrl)', () => {
       })
     ).rejects.toBeInstanceOf(MillStartError);
   });
+
+  // Regression for #152: a stale mill image applied the EVM required-field set
+  // (chainType/chainId/rpcUrl/registryAddress/tokenAddress) to EVERY
+  // chainProviders entry, so a legitimate solana/mina entry — which omits
+  // registryAddress/tokenAddress — was rejected at boot
+  // ("...registryAddress MUST be a non-empty string") and the container
+  // crash-looped. Mixing one evm + one solana + one mina entry (each carrying
+  // only its per-chainType required fields) MUST pass validateConfig and pass
+  // all three entries through to the embedded connector unchanged.
+  it('[P1] accepts a mixed evm+solana+mina chainProviders array (regression #152)', async () => {
+    const startMill = await loadStartMill();
+    const port = 33500 + Math.floor(Math.random() * 200);
+    const { connector: _ignored, ...withoutConnector } = baseConfig();
+    const providers = [
+      {
+        chainType: 'evm' as const,
+        chainId: 'evm:31337',
+        rpcUrl: 'http://localhost:8545',
+        registryAddress: '0x1111111111111111111111111111111111111111',
+        tokenAddress: '0x2222222222222222222222222222222222222222',
+      },
+      {
+        // Index [1]: the entry the stale image rejected on registryAddress.
+        chainType: 'solana' as const,
+        chainId: 'solana:devnet',
+        rpcUrl: 'http://localhost:8899',
+        programId: 'Foo1111111111111111111111111111111111111111',
+      },
+      {
+        chainType: 'mina' as const,
+        chainId: 'mina:devnet',
+        graphqlUrl: 'http://localhost:8080/graphql',
+        zkAppAddress: 'B62qtestzkappaddressxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      },
+    ];
+    const instance = (await startMill({
+      ...withoutConnector,
+      connectorUrl: 'ws://parent.invalid:3000',
+      btpServerPort: port,
+      chainProviders: providers,
+    })) as MillInstanceShape & { connector?: unknown };
+    try {
+      const c = (
+        instance.connector as unknown as {
+          _config: {
+            chainProviders?: readonly Record<string, unknown>[];
+          };
+        }
+      )._config;
+      expect(c.chainProviders).toBeDefined();
+      expect(c.chainProviders!).toHaveLength(3);
+      expect(c.chainProviders!.map((e) => e['chainType'])).toEqual([
+        'evm',
+        'solana',
+        'mina',
+      ]);
+    } finally {
+      await instance.stop();
+    }
+  });
 });
 
 describe('Story 12.8 AC-13 — publisher injection', () => {
