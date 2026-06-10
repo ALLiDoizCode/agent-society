@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.5](https://github.com/toon-protocol/town/compare/v0.17.4...v0.17.5) (2026-06-10)
+
+### Bug Fixes
+
+* **client:** sign Mina balance proof with conserved balanceB=depositTotal-balanceA so claimFromChannel signatureA verifies ([#158](https://github.com/toon-protocol/town/issues/158)) ([#164](https://github.com/toon-protocol/town/issues/164)) ([9baf273](https://github.com/toon-protocol/town/commit/9baf273600b29ca906fd3f70e01c2a92de403eca)), closes [toon-protocol/connector#133](https://github.com/toon-protocol/connector/issues/133)
+
 ## [0.17.4](https://github.com/toon-protocol/town/compare/v0.17.3...v0.17.4) (2026-06-10)
 
 ### Bug Fixes
