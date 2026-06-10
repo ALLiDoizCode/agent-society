@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.4](https://github.com/toon-protocol/town/compare/v0.17.3...v0.17.4) (2026-06-10)
+
+### Bug Fixes
+
+* **client:** await Mina deposit tx inclusion so connector reads funded depositTotal at settle ([#158](https://github.com/toon-protocol/town/issues/158)) ([#163](https://github.com/toon-protocol/town/issues/163)) ([0cb50a0](https://github.com/toon-protocol/town/commit/0cb50a0d565bbdef7290a3567f75c03080c0a170)), closes [#160](https://github.com/toon-protocol/town/issues/160) [#126](https://github.com/toon-protocol/town/issues/126) [#126](https://github.com/toon-protocol/town/issues/126)
+
 ## [0.17.3](https://github.com/toon-protocol/town/compare/v0.17.2...v0.17.3) (2026-06-10)
 
 ### Bug Fixes
