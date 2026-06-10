@@ -20,7 +20,7 @@ services:
   connector:
     # Image digest must match DEFAULT_CONNECTOR_IMAGE in packages/townhouse/src/constants.ts
     # Story 45.2: flipped from tag form to digest form per CONNECTOR_RELEASE_CONTRACT.md.
-    image: ghcr.io/toon-protocol/connector@sha256:539c03d8990e094f61c2975ff480ba93d3de4beb24ac099ea81041866424d49a
+    image: ghcr.io/toon-protocol/connector@sha256:314b7a5a912a81029df2ba3e4ec96f7620db1f4cf82507c8b4e7297dde498d93
     container_name: townhouse-connector
     networks:
       - townhouse-net
