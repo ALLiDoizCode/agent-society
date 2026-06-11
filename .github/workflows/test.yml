@@ -230,7 +230,13 @@ jobs:
 
       - name: Run connector contract canary
         working-directory: packages/sdk
-        run: pnpm test:integration -- tests/integration/connector-contract.test.ts --reporter=verbose
+        # EVM-shaped canary (connector-contract.test.ts) + the Solana/Mina
+        # non-EVM claim-envelope canary (connector-contract.multichain.test.ts).
+        # Both are pure (no Docker/RPC/chain) and finish in <2s; the Mina
+        # sign/verify round-trip self-skips when the optional `mina-signer` peer
+        # dep is absent. Keep both pinned so a non-EVM claim-path regression
+        # fails on every PR.
+        run: pnpm test:integration -- tests/integration/connector-contract.test.ts tests/integration/connector-contract.multichain.test.ts --reporter=verbose
 
   # ─────────────────────────────────────────────
   # Stage 2b: Security Audit (every PR)
