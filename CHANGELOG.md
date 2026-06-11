@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0](https://github.com/toon-protocol/town/compare/v0.17.7...v0.18.0) (2026-06-11)
+
+### Features
+
+* **sdk:** vary Solana + Mina derivation by accountIndex ([#177](https://github.com/toon-protocol/town/issues/177)) ([8538765](https://github.com/toon-protocol/town/commit/853876503bd896dc2d05669986593052330322fa)), closes [#176](https://github.com/toon-protocol/town/issues/176)
+
+### Bug Fixes
+
+* **test:** Solana claimFromChannel account layout — add participant account ([#172](https://github.com/toon-protocol/town/issues/172)) ([#175](https://github.com/toon-protocol/town/issues/175)) ([b905027](https://github.com/toon-protocol/town/commit/b90502741c2e9778b055467f375ea9f44ebcb013)), closes [pre-connector#99](https://github.com/toon-protocol/pre-connector/issues/99) [connector#99](https://github.com/toon-protocol/connector/issues/99) [#1](https://github.com/toon-protocol/town/issues/1)
+
 ## [0.17.7](https://github.com/toon-protocol/town/compare/v0.17.6...v0.17.7) (2026-06-11)
 
 ### Bug Fixes
