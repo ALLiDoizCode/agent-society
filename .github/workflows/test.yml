@@ -324,7 +324,9 @@ jobs:
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 45 (not 30) to absorb the extra Solana settlement + Solana swap E2E
+    # steps folded into this single infra boot.
+    timeout-minutes: 45
     needs: [lint-and-build, connector-contract-canary]
     # Only run on nightly schedule or manual dispatch (requires genesis infrastructure)
     if: >-
@@ -366,6 +368,24 @@ jobs:
         env:
           CI: true
 
+      # Solana on-chain settlement E2E. Reuses the infra boot above (Solana
+      # test-validator is stood up by sdk-e2e-infra.sh). !cancelled() so a
+      # failing EVM step still yields per-chain signal in one run.
+      - name: Run SDK Solana settlement E2E
+        if: ${{ !cancelled() }}
+        working-directory: packages/sdk
+        run: pnpm test:e2e:docker:solana -- --reporter=verbose
+        env:
+          CI: true
+
+      # Mill Solana swap E2E (real on-chain CLAIM_FROM_CHANNEL). Run from repo
+      # root so the --filter resolves; single file to keep the gate focused.
+      - name: Run Mill Solana swap E2E
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @toon-protocol/mill test:e2e:docker -- tests/e2e/docker-swap-flow-solana-e2e.test.ts --reporter=verbose
+        env:
+          CI: true
+
       - name: Upload E2E failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -386,6 +406,98 @@ jobs:
         with:
           name: e2e-service-logs
           path: sdk-e2e-logs.txt
+          retention-days: 7
+
+      - name: Tear down E2E infrastructure
+        if: always()
+        run: ./scripts/sdk-e2e-infra.sh down
+
+  # ─────────────────────────────────────────────
+  # Stage 4b: Mina E2E Tests (nightly or manual only)
+  # Isolated from e2e-tests: o1js proving + Mina lightnet slot timing are
+  # slow/flaky, so this runs on its own infra boot with a longer timeout and
+  # is kept NON-BLOCKING (continue-on-error) as a burn-in. Once it proves
+  # green over a stability window, remove continue-on-error to make it a
+  # required gate. See packages/sdk/tests/e2e/docker-mina-settlement-e2e.test.ts.
+  # ─────────────────────────────────────────────
+  e2e-tests-mina:
+    name: E2E Tests (Mina)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [lint-and-build, connector-contract-canary]
+    # Only run on nightly schedule or manual dispatch (requires genesis infrastructure)
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.test_level == 'e2e' ||
+        github.event.inputs.test_level == 'all'))
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Restore build artifacts
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            packages/*/dist
+            node_modules
+            packages/*/node_modules
+          key: build-${{ github.sha }}
+
+      - name: Start SDK E2E infrastructure
+        run: ./scripts/sdk-e2e-infra.sh up
+        env:
+          CI: true
+
+      # Mina burn-in: o1js proving + lightnet slot timing are flaky in CI.
+      # Keep non-blocking until a stability burn-in proves it green, THEN
+      # remove continue-on-error to make it a required gate. See <runbook>.
+      - name: Run SDK Mina settlement E2E
+        continue-on-error: true
+        working-directory: packages/sdk
+        run: pnpm test:e2e:docker:mina -- --reporter=verbose
+        env:
+          CI: true
+
+      # Mina burn-in: o1js proving + lightnet slot timing are flaky in CI.
+      # Keep non-blocking until a stability burn-in proves it green, THEN
+      # remove continue-on-error to make it a required gate. See <runbook>.
+      - name: Run Mill Mina swap E2E
+        continue-on-error: true
+        run: pnpm --filter @toon-protocol/mill test:e2e:docker -- tests/e2e/docker-swap-flow-mina-e2e.test.ts --reporter=verbose
+        env:
+          CI: true
+
+      - name: Upload Mina E2E failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-mina-failure-artifacts
+          path: |
+            packages/*/test-results/
+          retention-days: 7
+
+      - name: Collect service logs on failure
+        if: failure()
+        run: |
+          docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs > sdk-e2e-mina-logs.txt 2>&1 || true
+
+      - name: Upload service logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-mina-service-logs
+          path: sdk-e2e-mina-logs.txt
           retention-days: 7
 
       - name: Tear down E2E infrastructure
