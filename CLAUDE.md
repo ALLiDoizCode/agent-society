@@ -225,6 +225,7 @@ All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Con
 | DockerOrchestrator HS-profile entry point | `packages/townhouse/src/docker/orchestrator.ts` (`upHs`, `waitForHsHostname`) |
 | Townhouse `up` (direct apex, **default**) / `hs up` / `hs enable` / `hs down` CLI | `packages/townhouse/src/cli.ts` `handleDirectUp` (default `up`) / `handleHsUp` / `handleHsEnable` / `handleHsDown`; back-compat guard via `detectExistingHsConfig` (`hs-config-writer.ts`) |
 | Townhouse direct-apex compose template (exposes BTP `:3000`) | `packages/townhouse/compose/townhouse-direct.yml` → `dist/compose/townhouse-direct.yml`; `TOWNHOUSE_BTP_BIND` host bind |
+| **Multi-chain settlement operator runbook** (Solana + Mina recovery) | `packages/townhouse/RUNBOOK.md` (connector-restart route loss, nonce-watermark persistence, SettlementMonitor `IN_PROGRESS` wedge, town inbound-session race, Mina zkApp reset) |
 
 ## Browser Verification
 
