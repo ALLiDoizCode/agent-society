@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0](https://github.com/toon-protocol/town/compare/v0.18.2...v0.19.0) (2026-06-11)
+
+### Features
+
+* **e2e:** deploy payment-channel contracts to public testnets ([#181](https://github.com/toon-protocol/town/issues/181)) ([512d6ad](https://github.com/toon-protocol/town/commit/512d6ad374cff7943736b341de3a2470da09947b))
+
 ## [0.18.2](https://github.com/toon-protocol/town/compare/v0.18.1...v0.18.2) (2026-06-11)
 
 ### Bug Fixes
