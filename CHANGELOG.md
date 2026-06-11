@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.7](https://github.com/toon-protocol/town/compare/v0.17.6...v0.17.7) (2026-06-11)
+
+### Bug Fixes
+
+* **ci:** guard connector-version drift + smoke-test published images ([#168](https://github.com/toon-protocol/town/issues/168)) ([7f51f19](https://github.com/toon-protocol/town/commit/7f51f19bb2219d246cb514094b8e159fe6f966c8)), closes [#165](https://github.com/toon-protocol/town/issues/165) [#152](https://github.com/toon-protocol/town/issues/152)
+
 ## [0.17.6](https://github.com/toon-protocol/town/compare/v0.17.5...v0.17.6) (2026-06-11)
 
 ### Bug Fixes
