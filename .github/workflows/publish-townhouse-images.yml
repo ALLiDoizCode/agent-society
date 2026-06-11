@@ -548,11 +548,92 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
+  # Job 3b: smoke-images (post-publish liveness/marker guard)
+  # ---------------------------------------------------------------------------
+  #
+  # Pulls each freshly published image BY ITS MANIFEST-LIST DIGEST (the same
+  # `digest-<image>` artifacts build-image-manifest consumes) and asserts a
+  # cheap per-image marker so a broken or stale image can NEVER reach operators
+  # silently. This is the post-publish counterpart to the source-level
+  # alignment guards (preflight + the constants.ts ↔ workflow-env unit test):
+  # those catch drift at PR/build time, this catches a freshly-built-but-wrong
+  # image at publish time.
+  #
+  # Runs after merge-multi-arch (digests exist) and build-image-manifest (so a
+  # manifest is on record alongside the verified images). publish-npm gains it
+  # as a dependency below so a marker miss FAILS the publish.
+  #
+  # Markers (no chains booted — none are available in CI):
+  #   - mill: the per-chainType config validator string that distinguishes the
+  #     fixed mill from the stale one (issue #152). Must be present in the
+  #     bundled /app/entrypoint-mill.js.
+  #   - town / dvm / townhouse-api: the bundled entrypoint exists and is
+  #     non-empty, and the image's node binary loads (`node --version` → v20.x).
+  smoke-images:
+    runs-on: ubuntu-latest
+    needs: [merge-multi-arch, build-image-manifest]
+    timeout-minutes: 15
+
+    steps:
+      - name: Download manifest-list digest artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          pattern: digest-*
+          merge-multiple: false
+          path: /tmp/digests
+
+      - name: Log in to GHCR
+        # Needed to pull the freshly published (possibly private/rate-limited)
+        # images by digest.
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Smoke-test mill image (per-chainType validator marker, issue #152)
+        run: |
+          set -euo pipefail
+          DIGEST=$(cat /tmp/digests/digest-mill/digest-mill.txt)
+          IMG="ghcr.io/toon-protocol/mill@${DIGEST}"
+          echo "Verifying mill image: ${IMG}"
+          # The per-chainType config validator string is bundled into the
+          # entrypoint by esbuild. Its presence distinguishes the fixed mill
+          # from the stale one (issue #152). --entrypoint sh overrides the
+          # default node CMD so the container does not try to boot the service.
+          docker run --rm --entrypoint sh "${IMG}" -c \
+            "grep -q 'MUST be a non-empty string for chainType' /app/entrypoint-mill.js"
+          echo "✅ mill ${DIGEST}: per-chainType validator marker present"
+
+      - name: Smoke-test town / dvm / townhouse-api images (entrypoint + node binary)
+        run: |
+          set -euo pipefail
+          for image in town dvm townhouse-api; do
+            DIGEST=$(cat "/tmp/digests/digest-${image}/digest-${image}.txt")
+            IMG="ghcr.io/toon-protocol/${image}@${DIGEST}"
+            echo "Verifying ${image} image: ${IMG}"
+            # Cheap, robust marker: the bundled entrypoint file exists and is
+            # non-empty, and the image's node binary loads as v20.x. We do NOT
+            # boot the service (no chains/config available in CI).
+            ENTRYPOINT="/app/entrypoint-${image}.js"
+            docker run --rm --entrypoint sh "${IMG}" -c \
+              "test -s '${ENTRYPOINT}'" \
+              || { echo "FAIL: ${image} ${DIGEST}: ${ENTRYPOINT} missing or empty"; exit 1; }
+            NODE_VERSION=$(docker run --rm --entrypoint node "${IMG}" --version)
+            echo "  ${image} node --version: ${NODE_VERSION}"
+            case "${NODE_VERSION}" in
+              v20.*) ;;
+              *) echo "FAIL: ${image} ${DIGEST}: expected node v20.x, got ${NODE_VERSION}"; exit 1 ;;
+            esac
+            echo "✅ ${image} ${DIGEST}: ${ENTRYPOINT} present + node ${NODE_VERSION}"
+          done
+
+  # ---------------------------------------------------------------------------
   # Job 4: publish-npm (gated: tag pushes only, after all images signed)
   # ---------------------------------------------------------------------------
   publish-npm:
     runs-on: ubuntu-latest
-    needs: [merge-multi-arch, build-image-manifest]
+    needs: [merge-multi-arch, build-image-manifest, smoke-images]
     # Only npm-publish on real v* tag pushes — never on workflow_dispatch smoke runs
     if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
 
