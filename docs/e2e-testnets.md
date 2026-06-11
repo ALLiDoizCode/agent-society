@@ -119,7 +119,15 @@ unchanged. No per-role mnemonics needed.
 - ✅ Wallet funded (idx 2 / treasury) + `E2E_DEV_MNEMONIC` org secret.
 - ✅ **Contracts deployed to all three testnets** (Base Sepolia / Solana devnet
   / Mina devnet) and pinned in `e2e/testnets.json`, via the scripts above.
-- ⏳ Next: distribute treasury → peers (idx 0/1 need funding for the run); the
-  public-mode harness (`sdk-e2e-infra.sh --public` or equivalent) that skips
-  local chain boot and points peers/tests at the testnets; a nightly CI job
-  using the org secret.
+- ✅ **Public-mode harness** (`scripts/sdk-e2e-infra.sh --public`, #183): skips
+  the local chain boot and points the docker peers at the live testnets. It
+  derives the per-peer settlement keys (idx0=peer1, idx1=peer2) from
+  `E2E_DEV_MNEMONIC` via the SDK (`scripts/e2e-derive-peer-config.mjs`), reads
+  endpoints/addresses from `e2e/testnets.json` (refusing to run if any required
+  address is null), and layers `docker-compose-sdk-e2e.public.yml` over the base
+  compose (EVM chain-id suffix 31337→84532). Run the offline derivation gate
+  with `node scripts/e2e-derive-peer-config.mjs --check`.
+- ⏳ Next: distribute treasury → peers (idx 0/1 need funding for the run) —
+  `scripts/fund-e2e-peers.mjs` (#182/#187), invoked by `--public --fund`;
+  re-deploy the Mina zkApp as a BARE deploy (`MINA_SKIP_INIT=1`, #185/#186) and
+  pin it; a nightly CI job using the org secret.
