@@ -161,24 +161,34 @@ async function main() {
     }
   }
 
-  // Acquire a funded deployer account from the o1labs lightnet accounts-manager.
-  // Its `/acquire-account` endpoint is HTTP GET (not POST) — a POST returns
-  // "Method Not Allowed" on the `compatible-latest-lightnet` image. `unlockAccount`
-  // returns an unlocked key so we can sign the deploy without a separate unlock.
-  const acquireRes = await fetch(
-    `${ACCOUNTS_URL}/acquire-account?unlockAccount=true`,
-    { method: 'GET' }
-  );
-  if (!acquireRes.ok) {
-    throw new Error(
-      `Failed to acquire Mina account: ${acquireRes.status} ${acquireRes.statusText}`
+  // Acquire the deployer. On PUBLIC devnet there is no lightnet
+  // accounts-manager — set MINA_DEPLOYER_PRIVATE_KEY to a funded base58 ("EK…")
+  // key and we use it directly. Otherwise (lightnet) acquire a funded account
+  // from the o1labs accounts-manager: its `/acquire-account` endpoint is HTTP
+  // GET (POST → "Method Not Allowed" on `compatible-latest-lightnet`);
+  // `unlockAccount` returns an unlocked key so we can sign without a separate
+  // unlock.
+  let deployerKey: PrivateKey;
+  const deployerEnvKey = process.env.MINA_DEPLOYER_PRIVATE_KEY?.trim();
+  if (deployerEnvKey) {
+    deployerKey = PrivateKey.fromBase58(deployerEnvKey);
+    console.error('Using deployer from MINA_DEPLOYER_PRIVATE_KEY (public devnet)');
+  } else {
+    const acquireRes = await fetch(
+      `${ACCOUNTS_URL}/acquire-account?unlockAccount=true`,
+      { method: 'GET' }
     );
+    if (!acquireRes.ok) {
+      throw new Error(
+        `Failed to acquire Mina account: ${acquireRes.status} ${acquireRes.statusText}`
+      );
+    }
+    const deployerAccount = (await acquireRes.json()) as {
+      pk: string;
+      sk: string;
+    };
+    deployerKey = PrivateKey.fromBase58(deployerAccount.sk);
   }
-  const deployerAccount = (await acquireRes.json()) as {
-    pk: string;
-    sk: string;
-  };
-  const deployerKey = PrivateKey.fromBase58(deployerAccount.sk);
   const deployerPub = deployerKey.toPublicKey();
   console.error(`Deployer: ${deployerPub.toBase58()}`);
 
