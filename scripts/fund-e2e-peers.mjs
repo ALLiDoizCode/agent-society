@@ -1,18 +1,25 @@
 #!/usr/bin/env node
 // ---------------------------------------------------------------------------
-// fund-e2e-peers — distribute treasury (idx 2) → peers (idx 0 / idx 1) on all
-// three public testnets for the public-mode E2E.
+// fund-e2e-peers — distribute treasury (idx 2) → the public-mode E2E run
+// accounts on the three public testnets.
 //
 // The public-testnet payment-channel contracts are deployed and pinned in
 // e2e/testnets.json, but only the TREASURY role (BIP-32 account index 2) is
-// faucet-funded on each chain. A two-party channel/swap/settle flow needs BOTH
-// peers funded with native gas + tokens to deposit:
+// faucet-funded on each chain. The run needs funded:
 //
-//   idx 0 = peer1 settlement (also EVM contract deployer)
-//   idx 1 = peer2 settlement
+//   idx 0 = peer1 settlement (also EVM contract deployer)   — all chains
+//   idx 1 = peer2 settlement                                — all chains
+//   idx 3 = host-side publish/pay-to-write client           — EVM only
+//   idx 4 = host-side settlement participant A              — EVM only
+//   idx 5 = host-side settlement participant B              — EVM only
+//
+// idx 3/4/5 are the SDK e2e helper's EVM test actors (EVM_CLIENT_*/
+// EVM_SETTLEMENT_* in docker-e2e-setup.ts, derived by e2e-derive-peer-config.mjs);
+// they open/deposit/settle channels on Base Sepolia ONLY, so they need ETH+USDC
+// but no Solana/Mina funds.
 //
 // This script has the funded treasury send, on each chain:
-//   • Base Sepolia : ETH (gas) + MockUSDC transfer            → idx0 / idx1
+//   • Base Sepolia : ETH (gas) + MockUSDC transfer            → idx0/1/3/4/5
 //   • Solana devnet: SOL + mock-USDC SPL transfer (creates ATAs) → idx0 / idx1
 //   • Mina devnet  : MINA (covers the per-recipient account-creation fee)
 //                    via scripts/fund-e2e-peers-mina.ts (npx tsx) → idx0 / idx1
@@ -61,6 +68,15 @@ const SDK_DIST = join(REPO, 'packages', 'sdk', 'dist', 'index.js');
 // Role indices (must match scripts/e2e-wallet.mjs).
 const TREASURY_INDEX = Number(process.env.E2E_TREASURY_INDEX ?? '2');
 const PEER_INDICES = [0, 1];
+// Host-side EVM test actors used by the SDK e2e helper in public mode
+// (packages/sdk/tests/e2e/helpers/docker-e2e-setup.ts → EVM_CLIENT_*/
+// EVM_SETTLEMENT_* keys, derived by scripts/e2e-derive-peer-config.mjs):
+//   idx3 = publish/pay-to-write client, idx4/idx5 = settlement participants A/B.
+// They transact on EVM only (open/deposit/settle channels on Base Sepolia), so
+// they need ETH gas + MockUSDC — NOT Solana/Mina funds.
+const EVM_ACTOR_INDICES = [3, 4, 5];
+// Everyone who needs ETH + USDC on Base Sepolia.
+const EVM_FUND_INDICES = [...PEER_INDICES, ...EVM_ACTOR_INDICES];
 
 // Target native-gas floors + token amounts (small but enough for a two-party
 // channel deposit + the on-chain open/deposit/settle gas).
@@ -231,10 +247,11 @@ async function fundEvm({ evm, identities, dryRun }) {
   const gasFloorWei = parseEther(EVM_GAS_FLOOR_ETH);
   const usdcAmount = parseUnits(EVM_USDC_AMOUNT, tokenDecimals);
 
-  for (const idx of PEER_INDICES) {
+  for (const idx of EVM_FUND_INDICES) {
     const peer = identities[idx];
+    const role = PEER_INDICES.includes(idx) ? 'peer' : 'test-actor';
     const to = peer.evmAddress;
-    console.log(`\n-- idx ${idx} → ${to}`);
+    console.log(`\n-- idx ${idx} (${role}) → ${to}`);
 
     const bal = await publicClient.getBalance({ address: to });
     const tokenBal = await publicClient.readContract({
@@ -488,13 +505,16 @@ async function main() {
     `[fund-e2e-peers] chains=${opts.chains.join(',')} dryRun=${opts.dryRun}`
   );
   console.log(
-    `[fund-e2e-peers] funding peers idx ${PEER_INDICES.join('/')} ` +
+    `[fund-e2e-peers] funding peers idx ${PEER_INDICES.join('/')} (all chains) ` +
+      `+ EVM test-actors idx ${EVM_ACTOR_INDICES.join('/')} (EVM only) ` +
       `from treasury idx ${TREASURY_INDEX}`
   );
 
-  // Derive idx 0 / 1 / 2 the SAME way scripts/e2e-wallet.mjs does.
+  // Derive every index we fund (peers + EVM test-actors + treasury) the SAME
+  // way scripts/e2e-wallet.mjs / e2e-derive-peer-config.mjs do.
   const identities = {};
-  for (const idx of [...PEER_INDICES, TREASURY_INDEX]) {
+  const allIndices = [...new Set([...EVM_FUND_INDICES, TREASURY_INDEX])];
+  for (const idx of allIndices) {
     identities[idx] = await fromMnemonicFull(mnemonic, { accountIndex: idx });
   }
 
