@@ -1,0 +1,153 @@
+# Public-Testnet E2E (nightly burn-in)
+#
+# Runs the settlement + swap + pay-to-write E2E flows against REAL public
+# testnets — Base Sepolia (EVM), Solana devnet, Mina devnet — instead of the
+# local devnet stack. Pairs with (does NOT replace) the local nightly E2E gate
+# in `.github/workflows/test.yml`, which stays the fast/free/offline path.
+#
+# Triggers: schedule (nightly) + manual dispatch ONLY.
+#   NEVER add `pull_request`: fork PRs do not receive repo/org secrets, so the
+#   `E2E_DEV_MNEMONIC` injection would be empty and the harness would fail. The
+#   public gate must stay schedule/dispatch (and push, if ever added) only.
+#
+# Secrets: the funded testnet wallet seed is the org secret `E2E_DEV_MNEMONIC`.
+#   The harness derives per-peer settlement keys from it (idx0=peer1, idx1=peer2,
+#   idx2=treasury/deployer). Endpoints + deployed contract addresses are public
+#   and committed in `e2e/testnets.json`. See docs/e2e-testnets.md.
+#
+# Flow (per run): fund peers (treasury -> idx0/idx1) -> boot public-mode harness
+#   -> run SDK + mill settlement/swap/pay-to-write E2Es -> tear down.
+#
+# BURN-IN: every test step is `continue-on-error: true`. Public testnets are
+#   flaky (Solana devnet resets, Mina multi-minute slots, public-RPC rate
+#   limits), so this MUST NOT gate merges/releases yet. Promote individual steps
+#   to required (drop continue-on-error) only after a stability burn-in window.
+#
+# DEPENDS ON (in-flight, branched from main — not yet in this workflow's tree):
+#   - Public-mode harness: `scripts/sdk-e2e-infra.sh --public` (issue/PR #183).
+#   - Peer funding: `scripts/fund-e2e-peers.mjs` (issue #182 / PR #187).
+#   Until those land the harness/fund steps will no-op or fail; that is expected
+#   and absorbed by continue-on-error. See issue #184.
+
+name: E2E Public Testnet (nightly burn-in)
+
+on:
+  schedule:
+    # Nightly at 4 AM UTC — deliberately offset from the local nightly E2E gate
+    # (2 AM UTC in test.yml) so the flaky public burn-in doesn't collide with it.
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  e2e-public-testnet:
+    name: E2E Public Testnet (burn-in)
+    runs-on: ubuntu-latest
+    # Generous ceiling: public testnets are slow (Mina multi-minute slots,
+    # public-RPC rate limits) and this boots the harness + runs EVM/Solana/Mina
+    # settlement + swap + pay-to-write E2Es in one job.
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm -r --filter '!@toon-protocol/memvid-node' build
+
+      # Fund the peer roles from the treasury (idx2 -> idx0/idx1) BEFORE booting
+      # the harness: peers need gas + tokens to settle, and devnet resets wipe
+      # balances. continue-on-error because faucet / public-RPC flakiness here
+      # must not abort the run — the E2Es below self-skip / fail-soft if a chain
+      # is unfunded, and per-chain signal is still useful.
+      - name: Fund E2E peers (treasury -> idx0/idx1)
+        continue-on-error: true
+        run: node scripts/fund-e2e-peers.mjs
+        env:
+          E2E_DEV_MNEMONIC: ${{ secrets.E2E_DEV_MNEMONIC }}
+          CI: true
+
+      # Boot the PUBLIC-mode harness: no local chains; reads e2e/testnets.json
+      # for endpoints + deployed addresses; derives idx0/idx1 settlement keys
+      # from E2E_DEV_MNEMONIC; points the docker-compose-sdk-e2e peers at the
+      # live testnets.
+      - name: Start public-mode E2E infrastructure
+        continue-on-error: true
+        run: ./scripts/sdk-e2e-infra.sh --public
+        env:
+          E2E_DEV_MNEMONIC: ${{ secrets.E2E_DEV_MNEMONIC }}
+          CI: true
+
+      # SDK pay-to-write E2E (publish a paid event over the testnet channel).
+      - name: Run SDK E2E (pay-to-write / settlement)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        working-directory: packages/sdk
+        run: pnpm test:e2e:docker -- --reporter=verbose
+        env:
+          E2E_DEV_MNEMONIC: ${{ secrets.E2E_DEV_MNEMONIC }}
+          CI: true
+
+      # SDK integration E2Es against the same live stack.
+      - name: Run SDK integration tests
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        working-directory: packages/sdk
+        run: pnpm test:integration -- --reporter=verbose
+        env:
+          E2E_DEV_MNEMONIC: ${{ secrets.E2E_DEV_MNEMONIC }}
+          CI: true
+
+      # Mill multi-chain swap E2E (pay asset A -> receive asset B + signed
+      # target-chain claim) against the live testnets.
+      - name: Run Mill swap E2E
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: pnpm --filter @toon-protocol/mill test:e2e:docker -- --reporter=verbose
+        env:
+          E2E_DEV_MNEMONIC: ${{ secrets.E2E_DEV_MNEMONIC }}
+          CI: true
+
+      - name: Collect service logs
+        if: always()
+        run: |
+          docker compose -p toon-sdk-e2e -f docker-compose-sdk-e2e.yml logs > public-testnet-e2e-logs.txt 2>&1 || true
+
+      - name: Upload service logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-testnet-e2e-logs
+          path: public-testnet-e2e-logs.txt
+          retention-days: 7
+
+      - name: Upload E2E failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-testnet-e2e-failure-artifacts
+          path: |
+            packages/*/test-results/
+          retention-days: 7
+
+      - name: Tear down E2E infrastructure
+        if: always()
+        run: ./scripts/sdk-e2e-infra.sh down
