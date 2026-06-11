@@ -107,6 +107,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Restore build artifacts
+        id: build-cache
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -114,6 +115,19 @@ jobs:
             node_modules
             packages/*/node_modules
           key: build-${{ github.sha }}
+
+      # Fallback when the build cache misses (eviction / propagation race with
+      # lint-and-build). Without it, node_modules is absent and `pnpm test`
+      # fails with "vitest: not found" — a flake that masked real test failures
+      # (it short-circuits before any test runs). Mirrors the
+      # connector-contract-canary job's cache-miss fallback.
+      - name: Install dependencies (cache miss fallback)
+        if: steps.build-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages (cache miss fallback)
+        if: steps.build-cache.outputs.cache-hit != 'true'
+        run: pnpm -r --filter '!@toon-protocol/memvid-node' build
 
       - name: Run unit tests (vitest)
         run: pnpm test -- --run --reporter=verbose
