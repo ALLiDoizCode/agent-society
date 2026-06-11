@@ -138,10 +138,10 @@ unchanged. No per-role mnemonics needed.
   / `_B` (settlement). The harness derives these from `E2E_DEV_MNEMONIC` at
   dedicated indices — **client idx3, settlement A idx4, settlement B idx5** — and
   writes them into the gitignored `.env.sdk-e2e` (removed on `down`).
-- ⏳ Next: distribute treasury → the run accounts — `scripts/fund-e2e-peers.mjs`
-  (#182/#187), invoked by `--public --fund`. NOTE: that script currently funds
-  only the two **peers** (idx0/idx1); the host-side EVM test actors **idx3/idx4/
-  idx5** must also be funded (ETH gas + MockUSDC on Base Sepolia) for the public
-  pay-to-write + settlement e2e to pass — extend the funder to cover them.
-  Also: re-deploy the Mina zkApp BARE (`MINA_SKIP_INIT=1`, #185/#186) and pin it;
-  a nightly CI job using the org secret (#184).
+- ✅ **Funding covers the run accounts.** `scripts/fund-e2e-peers.mjs` (#182/#187,
+  invoked by `--public --fund`) distributes treasury (idx2) → peers idx0/idx1 on
+  all three chains, **plus the host-side EVM test actors idx3/idx4/idx5 (ETH gas +
+  MockUSDC on Base Sepolia only)** so the public pay-to-write + settlement e2e can
+  open its channels.
+- ⏳ Next: re-deploy the Mina zkApp BARE (`MINA_SKIP_INIT=1`, #185/#186) and pin
+  it; a nightly CI job using the org secret (#184).
