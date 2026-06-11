@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.6](https://github.com/toon-protocol/town/compare/v0.17.5...v0.17.6) (2026-06-11)
+
+### Bug Fixes
+
+* **ci:** align publish workflow connector pin to 3.10.3 to unblock image republish ([#167](https://github.com/toon-protocol/town/issues/167)) ([b9e05f8](https://github.com/toon-protocol/town/commit/b9e05f8b9bf9d31160cc3f237d50d56015fe1bda)), closes [#165](https://github.com/toon-protocol/town/issues/165)
+
 ## [0.17.5](https://github.com/toon-protocol/town/compare/v0.17.4...v0.17.5) (2026-06-10)
 
 ### Bug Fixes
