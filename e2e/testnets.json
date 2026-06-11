@@ -19,6 +19,7 @@
     "tokenMint": "9FtYCXjNiGDn17jSGvZuB5P4dZAKgVxUsDiQpLc8rbWy"
   },
   "mina": {
+    "$comment": "STALE for settlement (#185): this zkAppAddress was deployed WITH init (channelState=1), so its on-chain channelHash = Poseidon(deployer, deployer, 0) — which the connector's claimFromChannel (Poseidon(apex, client, 0)) can NEVER reproduce, so it CANNOT be settled. Before the real settle run, re-deploy BARE (MINA_SKIP_INIT=1) at a FRESH zkApp address via `node scripts/deploy-e2e-mina-zkapp-bare.mjs` (needs E2E_DEV_MNEMONIC + funded treasury + real testnet MINA); that script rewrites this field with the bare address and drops this $comment. See docs/e2e-testnets.md and packages/townhouse/RUNBOOK.md.",
     "name": "Mina Devnet",
     "chainId": "mina:devnet",
     "network": "devnet",
