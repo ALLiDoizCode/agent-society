@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.1](https://github.com/toon-protocol/town/compare/v0.18.0...v0.18.1) (2026-06-11)
+
+### Bug Fixes
+
+* **ci,client:** unit-tests cache-miss fallback + mina-signer loader under vitest ([#180](https://github.com/toon-protocol/town/issues/180)) ([ac75119](https://github.com/toon-protocol/town/commit/ac75119ab1a2f12e64228cc4e5babc5f1b2805a6))
+
 ## [0.18.0](https://github.com/toon-protocol/town/compare/v0.17.7...v0.18.0) (2026-06-11)
 
 ### Features
