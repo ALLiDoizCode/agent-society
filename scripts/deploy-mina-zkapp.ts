@@ -192,11 +192,81 @@ async function main() {
   const deployerPub = deployerKey.toPublicKey();
   console.error(`Deployer: ${deployerPub.toBase58()}`);
 
+  // Readiness gate (issue #173): wait until the deployer/fee-payer account
+  // actually EXISTS and is funded on-chain before we build the deploy tx.
+  //
+  // The lightnet accounts-manager may hand back a key the moment its container
+  // is up, but the Mina daemon's ledger has not yet seen (or finished syncing)
+  // the genesis-funded balance for it — so `fetchAccount` / o1js `getAccount`
+  // 404s ("Could not find account for public key …") and the deploy throws
+  // before any tx is built. Poll until the account is queryable AND has a
+  // non-zero balance (enough to cover the new-account fund + deploy fee), so
+  // the subsequent `Mina.transaction` precondition read resolves. Tunable via
+  // MINA_DEPLOYER_WAIT_ATTEMPTS (default 60) × MINA_DEPLOYER_WAIT_INTERVAL_MS
+  // (default 2000) ≈ 2 minutes, which comfortably covers lightnet warm-up and a
+  // public-devnet faucet-funded deployer that is still propagating.
+  const waitAttempts = Number(process.env.MINA_DEPLOYER_WAIT_ATTEMPTS ?? '60');
+  const waitIntervalMs = Number(
+    process.env.MINA_DEPLOYER_WAIT_INTERVAL_MS ?? '2000'
+  );
+  // Need at least the new-account funding (1 MINA) + the deploy fee on hand.
+  const MIN_DEPLOYER_BALANCE = 1_100_000_000n; // 1.1 MINA, in nanomina
+  console.error(
+    `Waiting for deployer account to be funded/queryable on-chain ` +
+      `(up to ${waitAttempts} × ${waitIntervalMs}ms)…`
+  );
+  let deployerFunded = false;
+  let lastBalance = 0n;
+  for (let attempt = 1; attempt <= waitAttempts; attempt++) {
+    const res = await fetchAccount({ publicKey: deployerPub }).catch(
+      (err: unknown) => ({
+        account: undefined,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+    if (res.account) {
+      // o1js exposes balance as a UInt64-ish; toString() → nanomina decimal.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const balRaw = (res.account as any).balance;
+      lastBalance = BigInt(balRaw?.toString?.() ?? balRaw ?? '0');
+      if (lastBalance >= MIN_DEPLOYER_BALANCE) {
+        deployerFunded = true;
+        console.error(
+          `Deployer funded after ${attempt} attempt(s): balance=${lastBalance} nanomina`
+        );
+        break;
+      }
+      console.error(
+        `  attempt ${attempt}/${waitAttempts}: account present but balance ` +
+          `${lastBalance} < ${MIN_DEPLOYER_BALANCE} nanomina — waiting…`
+      );
+    } else {
+      console.error(
+        `  attempt ${attempt}/${waitAttempts}: deployer account not on-chain yet ` +
+          `(${(res as { error?: string }).error ?? 'not found'}) — waiting…`
+      );
+    }
+    if (attempt < waitAttempts) {
+      await new Promise((r) => setTimeout(r, waitIntervalMs));
+    }
+  }
+  if (!deployerFunded) {
+    throw new Error(
+      `Deployer ${deployerPub.toBase58()} is not funded/queryable on ${GRAPHQL_URL} ` +
+        `after ${waitAttempts} attempts (last balance=${lastBalance} nanomina, ` +
+        `need ≥${MIN_DEPLOYER_BALANCE}). On lightnet the daemon may still be ` +
+        `syncing the genesis balance — increase MINA_DEPLOYER_WAIT_ATTEMPTS or ` +
+        `confirm the accounts-manager (${ACCOUNTS_URL}) handed back a funded key. ` +
+        `On public devnet, fund the deployer from the faucet first.`
+    );
+  }
+
   // Compile the contract (proof-level=none on lightnet, but compile is still required)
   console.error('Compiling PaymentChannel zkApp (o1js — slow, ~30-120s)…');
   await PaymentChannel.compile();
 
-  // Fetch deployer account from chain
+  // Re-fetch deployer account from chain (refresh into o1js's active-instance
+  // cache after the slow compile, so the deploy-tx precondition read is current).
   await fetchAccount({ publicKey: deployerPub });
 
   // Deploy, then initialize the channel in a SECOND transaction.
