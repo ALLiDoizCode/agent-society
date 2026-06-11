@@ -50,6 +50,16 @@ const TESTNETS_JSON = join(REPO_ROOT, 'e2e', 'testnets.json');
 // keys.
 const PEER1_INDEX = 0;
 const PEER2_INDEX = 1;
+// idx2 = treasury/funder (see e2e-wallet.mjs ROLES). The host-side e2e test
+// actors need their OWN funded keys, distinct from the two connector peers:
+//   idx3 = publish/pay-to-write client (TEST_PRIVATE_KEY)
+//   idx4 = settlement participant A (SETTLEMENT_PRIVATE_KEY_A)
+//   idx5 = settlement participant B (SETTLEMENT_PRIVATE_KEY_B)
+// The funder MUST fund idx3/idx4/idx5 on EVM for the public pay-to-write +
+// settlement e2e to pass (see docs/e2e-testnets.md).
+const CLIENT_INDEX = 3;
+const SETTLEMENT_A_INDEX = 4;
+const SETTLEMENT_B_INDEX = 5;
 
 function fail(msg) {
   console.error(`[e2e-derive-peer-config] ${msg}`);
@@ -150,6 +160,15 @@ async function derivePeers(mnemonic, testnets) {
 
   const peer1 = await fromMnemonicFull(mnemonic, { accountIndex: PEER1_INDEX });
   const peer2 = await fromMnemonicFull(mnemonic, { accountIndex: PEER2_INDEX });
+  const client = await fromMnemonicFull(mnemonic, {
+    accountIndex: CLIENT_INDEX,
+  });
+  const settleA = await fromMnemonicFull(mnemonic, {
+    accountIndex: SETTLEMENT_A_INDEX,
+  });
+  const settleB = await fromMnemonicFull(mnemonic, {
+    accountIndex: SETTLEMENT_B_INDEX,
+  });
 
   const mint = testnets.solana.tokenMint;
   const { chainKey: evmChainKey } = evmChainKeyFromCaip(testnets.evm.chainId);
@@ -170,6 +189,13 @@ async function derivePeers(mnemonic, testnets) {
       solanaTokenAccount: deriveATA(peer2.solana.publicKey, mint),
       minaAccount: peer2.mina?.publicKey ?? '',
     },
+    // Host-side EVM test actors (must be funded — see docs/e2e-testnets.md).
+    client: {
+      evmAddress: client.evmAddress,
+      evmPrivateKey: evmPrivHex(client.secretKey),
+    },
+    settlementA: { evmPrivateKey: evmPrivHex(settleA.secretKey) },
+    settlementB: { evmPrivateKey: evmPrivHex(settleB.secretKey) },
   };
 }
 
@@ -190,6 +216,11 @@ function toEnvLines(d, testnets) {
     `E2E_SOLANA_TOKEN_MINT=${testnets.solana.tokenMint}`,
     `E2E_MINA_GRAPHQL_URL=${testnets.mina.graphqlUrl}`,
     `E2E_MINA_ZKAPP_ADDRESS=${testnets.mina.zkAppAddress}`,
+    // --- host-side EVM test actors (idx3 client, idx4/idx5 settlement) ---
+    `E2E_EVM_CLIENT_PRIVATE_KEY=${d.client.evmPrivateKey}`,
+    `E2E_EVM_CLIENT_ADDRESS=${d.client.evmAddress}`,
+    `E2E_EVM_SETTLEMENT_PRIVATE_KEY_A=${d.settlementA.evmPrivateKey}`,
+    `E2E_EVM_SETTLEMENT_PRIVATE_KEY_B=${d.settlementB.evmPrivateKey}`,
     // --- peer1 (idx0) ---
     `PEER1_SETTLEMENT_PRIVATE_KEY=${d.peer1.evmPrivateKey}`,
     `PEER1_EVM_ADDRESS=${d.peer1.evmAddress}`,

@@ -360,8 +360,12 @@ cmd_up_public() {
   fi
 
   # ----- Persist endpoints/addresses for host-side test consumption -----
-  # The SDK e2e helper reads SOLANA_PROGRAM_ID / MINA_ZKAPP_ADDRESS from
-  # .env.sdk-e2e (process.env takes precedence). Write the testnet values.
+  # The SDK e2e helper (packages/sdk/tests/e2e/helpers/docker-e2e-setup.ts) reads
+  # these from .env.sdk-e2e (process.env wins). The EVM_* values override its
+  # Anvil defaults so the host-side client points at Base Sepolia, mirroring the
+  # SOLANA_PROGRAM_ID / MINA_ZKAPP_ADDRESS path. EVM_CLIENT_*/EVM_SETTLEMENT_* are
+  # the funded idx3/idx4/idx5 test-actor keys — ephemeral testnet keys derived
+  # from E2E_DEV_MNEMONIC. .env.sdk-e2e is gitignored and removed on `down`.
   cat > "$REPO_ROOT/.env.sdk-e2e" <<EOF
 SOLANA_PROGRAM_ID=${E2E_SOLANA_PROGRAM_ID}
 MINA_ZKAPP_ADDRESS=${E2E_MINA_ZKAPP_ADDRESS}
@@ -372,6 +376,10 @@ EVM_CHAIN_ID=84532
 EVM_REGISTRY_ADDRESS=${E2E_EVM_REGISTRY_ADDRESS}
 EVM_TOKEN_ADDRESS=${E2E_EVM_TOKEN_ADDRESS}
 EVM_TOKEN_NETWORK_ADDRESS=${E2E_EVM_TOKEN_NETWORK_ADDRESS}
+EVM_CLIENT_PRIVATE_KEY=${E2E_EVM_CLIENT_PRIVATE_KEY}
+EVM_CLIENT_ADDRESS=${E2E_EVM_CLIENT_ADDRESS}
+EVM_SETTLEMENT_PRIVATE_KEY_A=${E2E_EVM_SETTLEMENT_PRIVATE_KEY_A}
+EVM_SETTLEMENT_PRIVATE_KEY_B=${E2E_EVM_SETTLEMENT_PRIVATE_KEY_B}
 EOF
 
   # ----- Build image (same as local mode) -----

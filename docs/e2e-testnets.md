@@ -127,7 +127,21 @@ unchanged. No per-role mnemonics needed.
   address is null), and layers `docker-compose-sdk-e2e.public.yml` over the base
   compose (EVM chain-id suffix 31337→84532). Run the offline derivation gate
   with `node scripts/e2e-derive-peer-config.mjs --check`.
-- ⏳ Next: distribute treasury → peers (idx 0/1 need funding for the run) —
-  `scripts/fund-e2e-peers.mjs` (#182/#187), invoked by `--public --fund`;
-  re-deploy the Mina zkApp as a BARE deploy (`MINA_SKIP_INIT=1`, #185/#186) and
-  pin it; a nightly CI job using the org secret.
+- ✅ **Host-side EVM test actors point at the testnet too.** The SDK e2e helper
+  (`packages/sdk/tests/e2e/helpers/docker-e2e-setup.ts`) used to hardcode the
+  EVM RPC / chain-id / contract addresses / client keys to local Anvil values,
+  ignoring the testnet env — so the host-side client kept hitting Anvil under
+  `--public`. It now reads them from env (Anvil defaults preserved when unset):
+  `EVM_RPC_URL`, `EVM_CHAIN_ID`, `EVM_TOKEN_ADDRESS`, `EVM_TOKEN_NETWORK_ADDRESS`,
+  `EVM_REGISTRY_ADDRESS`, plus the funded test-actor keys `EVM_CLIENT_PRIVATE_KEY`
+  / `EVM_CLIENT_ADDRESS` (publish/pay-to-write) and `EVM_SETTLEMENT_PRIVATE_KEY_A`
+  / `_B` (settlement). The harness derives these from `E2E_DEV_MNEMONIC` at
+  dedicated indices — **client idx3, settlement A idx4, settlement B idx5** — and
+  writes them into the gitignored `.env.sdk-e2e` (removed on `down`).
+- ⏳ Next: distribute treasury → the run accounts — `scripts/fund-e2e-peers.mjs`
+  (#182/#187), invoked by `--public --fund`. NOTE: that script currently funds
+  only the two **peers** (idx0/idx1); the host-side EVM test actors **idx3/idx4/
+  idx5** must also be funded (ETH gas + MockUSDC on Base Sepolia) for the public
+  pay-to-write + settlement e2e to pass — extend the funder to cover them.
+  Also: re-deploy the Mina zkApp BARE (`MINA_SKIP_INIT=1`, #185/#186) and pin it;
+  a nightly CI job using the org secret (#184).
