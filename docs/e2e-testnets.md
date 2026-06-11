@@ -70,20 +70,28 @@ node scripts/e2e-wallet.mjs addresses
 
 ## Contract deployment (one time, needs funded keys)
 
-The local infra deploys the EVM registry/token, Solana program, and Mina zkApp
-fresh each run. On public testnets these are deployed **once** and their
-addresses pinned in `e2e/testnets.json`:
+Deployed **once** per testnet from the funded deployer (the role index in
+`E2E_DEPLOYER_INDEX`, default 2 — the only funded role today); addresses are
+pinned in `e2e/testnets.json`. Reproducible scripts:
 
-- **Base Sepolia:** deploy the payment-channel registry + a mock USDC (or use an
-  existing testnet token). Deployer = the funded EVM key at role index 0.
-- **Solana devnet:** deploy the payment-channel program (`contracts/solana/`).
-  ⚠️ Solana **devnet resets periodically** — when it does, the program + funds
-  are wiped and must be redeployed/refunded.
-- **Mina devnet:** deploy the PaymentChannel zkApp (o1js). Slow (multi-minute
-  slots) — keep Mina nightly, not per-PR.
+- **Base Sepolia** — `node scripts/deploy-e2e-testnet-evm.mjs`. Deploys
+  `MockERC20` (USDC) + `TokenNetworkRegistry` and creates the `TokenNetwork`,
+  via viem reading the connector's compiled Foundry artifacts (no `forge`
+  needed). Records `registryAddress` / `tokenAddress` / `tokenNetworkAddress`.
+- **Solana devnet** — `./scripts/deploy-e2e-testnet-solana.sh`. Deploys the
+  `contracts/solana/` program at its deterministic ID + a mock USDC SPL mint.
+  ⚠️ **Use a STABLE solana CLI (1.18.x)** — Agave 4.0.x fails fresh-program
+  deploys with `AccountNotFound … error sending request`. ⚠️ Solana **devnet
+  resets periodically** — re-run to redeploy/refresh after a reset.
+- **Mina devnet** — `MINA_GRAPHQL_URL=<devnet> MINA_DEPLOYER_PRIVATE_KEY=<EK>
+MINA_ZKAPP_PRIVATE_KEY=<EK> npx tsx scripts/deploy-mina-zkapp.ts`. Deploys +
+  initializes the PaymentChannel zkApp (channelState=1). Slow (o1js compile +
+  multi-minute devnet slots) — keep Mina nightly, not per-PR. Derive the
+  deployer/zkApp `EK…` keys from the mnemonic (idx 2 / a dedicated index) via
+  `@toon-protocol/core`'s `hexToMinaBase58PrivateKey`.
 
-> Deploy scripts targeting public testnets are tracked as the next phase (they
-> parameterize the existing local deploy scripts by RPC + `E2E_DEV_MNEMONIC`).
+The deployed addresses currently in `e2e/testnets.json` were produced by these
+scripts against the live testnets.
 
 ---
 
@@ -106,10 +114,12 @@ unchanged. No per-role mnemonics needed.
 ## Status
 
 - ✅ Key plumbing: `.env.e2e.example`, `.gitignore`, `scripts/e2e-wallet.mjs`,
-  `e2e/testnets.json` skeleton, this runbook.
+  `e2e/testnets.json`, this runbook.
 - ✅ Distinct per-peer keys on every chain from one seed (SDK #177).
-- ⏳ You: generate + fund the wallet, add the `E2E_DEV_MNEMONIC` org secret.
-- ⏳ Next: deploy contracts to the three testnets + record addresses in
-  `e2e/testnets.json`, add the public-mode harness (`sdk-e2e-infra.sh --public`
-  or equivalent) that skips local chain boot and points peers/tests at the
-  testnets, and a nightly CI job using the org secret.
+- ✅ Wallet funded (idx 2 / treasury) + `E2E_DEV_MNEMONIC` org secret.
+- ✅ **Contracts deployed to all three testnets** (Base Sepolia / Solana devnet
+  / Mina devnet) and pinned in `e2e/testnets.json`, via the scripts above.
+- ⏳ Next: distribute treasury → peers (idx 0/1 need funding for the run); the
+  public-mode harness (`sdk-e2e-infra.sh --public` or equivalent) that skips
+  local chain boot and points peers/tests at the testnets; a nightly CI job
+  using the org secret.

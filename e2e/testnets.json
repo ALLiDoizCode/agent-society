@@ -5,8 +5,9 @@
     "chainId": "eip155:84532",
     "rpcUrl": "https://sepolia.base.org",
     "explorer": "https://sepolia.basescan.org",
-    "registryAddress": null,
-    "tokenAddress": null
+    "registryAddress": "0xb9516c6c53c016c43f3671b1e5eb6096c83ec2c7",
+    "tokenAddress": "0xac80670b86db1eeb5c18c82e18a6bda98fcb4504",
+    "tokenNetworkAddress": "0x47616F4b9cF4dA25F74FD727Cd85E9CA0C70Ec5C"
   },
   "solana": {
     "name": "Solana Devnet",
@@ -14,8 +15,8 @@
     "cluster": "devnet",
     "rpcUrl": "https://api.devnet.solana.com",
     "explorer": "https://explorer.solana.com/?cluster=devnet",
-    "programId": null,
-    "tokenMint": null
+    "programId": "EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG",
+    "tokenMint": "9FtYCXjNiGDn17jSGvZuB5P4dZAKgVxUsDiQpLc8rbWy"
   },
   "mina": {
     "name": "Mina Devnet",
@@ -23,6 +24,6 @@
     "network": "devnet",
     "graphqlUrl": "https://api.minascan.io/node/devnet/v1/graphql",
     "explorer": "https://minascan.io/devnet",
-    "zkAppAddress": null
+    "zkAppAddress": "B62qnoW6Z43LthTHJa6cJ5CFFo1LjwX3pGMxSBNW2nPaAT7LHQHM1tz"
   }
 }
