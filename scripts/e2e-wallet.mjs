@@ -116,12 +116,10 @@ async function cmdAddresses() {
   console.log('Fund each via the faucets in docs/e2e-testnets.md, then deploy');
   console.log('contracts and record their addresses in e2e/testnets.json.\n');
   console.log(
-    'NOTE: only the EVM address varies by role index today — the SDK derives\n' +
-      "Solana (m/44'/501'/0'/0') and Mina (m/44'/12586'/0'/0/0) at FIXED paths,\n" +
-      'so every role shares one Solana key and one Mina key. Getting distinct\n' +
-      'per-peer Solana/Mina identities needs either an SDK derivation enhancement\n' +
-      '(thread accountIndex into the Solana/Mina paths) or a per-role mnemonic.\n' +
-      'See docs/e2e-testnets.md § "Open decision: distinct non-EVM keys".'
+    'NOTE: each role index derives a DISTINCT key on every chain — EVM/Nostr\n' +
+      "(m/44'/1237'|60'/…/{idx}), Solana (m/44'/501'/{idx}'/0'), and Mina\n" +
+      "(m/44'/12586'/{idx}'/0/0), via the accountIndex-varied SDK derivation\n" +
+      '(SDK #177). Index 0 matches the historical fixed paths (backward compatible).'
   );
   if (minaMissing) {
     console.error(

@@ -87,24 +87,19 @@ addresses pinned in `e2e/testnets.json`:
 
 ---
 
-## Open decision: distinct non-EVM keys
+## Distinct per-peer keys (resolved — SDK #177)
 
-The SDK's `fromMnemonicFull(mnemonic, { accountIndex })` only varies the
-**EVM/Nostr** key by `accountIndex`. Solana (`m/44'/501'/0'/0'`) and Mina
-(`m/44'/12586'/0'/0/0`) derive at **fixed** paths, so every role (peer1, peer2,
-treasury) shares **one** Solana key and **one** Mina key from a single mnemonic.
+`fromMnemonicFull(mnemonic, { accountIndex })` now varies **every** chain by
+`accountIndex`:
 
-A two-peer settlement/swap E2E needs **distinct** identities per peer on every
-chain. Two ways to get there:
+- EVM/Nostr: `m/44'/60'|1237'/…/{accountIndex}`
+- Solana: `m/44'/501'/{accountIndex}'/0'`
+- Mina: `m/44'/12586'/{accountIndex}'/0/0`
 
-1. **Enhance SDK derivation** (recommended) — thread `accountIndex` into the
-   Solana/Mina paths (`m/44'/501'/{idx}'/0'`, `m/44'/12586'/{idx}'/0/0`).
-   Backward-compatible at index 0; keeps the single-seed model. Touches the SDK
-   derivation golden-vector tests.
-2. **Per-role mnemonics** — one secret per peer (`E2E_PEER1_MNEMONIC`, …). No
-   SDK change; more secrets to manage.
-
-Pick one before deploying — it changes which addresses you fund.
+So a **single** `E2E_DEV_MNEMONIC` yields fully distinct per-peer identities on
+all chains (one account index per role; see `scripts/e2e-wallet.mjs`). Index 0
+is byte-identical to the historical fixed paths, so existing keys are
+unchanged. No per-role mnemonics needed.
 
 ---
 
@@ -112,7 +107,9 @@ Pick one before deploying — it changes which addresses you fund.
 
 - ✅ Key plumbing: `.env.e2e.example`, `.gitignore`, `scripts/e2e-wallet.mjs`,
   `e2e/testnets.json` skeleton, this runbook.
-- ⏳ Next: resolve the "distinct non-EVM keys" decision, deploy contracts to the
-  three testnets + record addresses, add the public-mode harness
-  (`sdk-e2e-infra.sh --public` or equivalent) that skips local chain boot and
-  points peers/tests at the testnets, and a nightly CI job using the org secret.
+- ✅ Distinct per-peer keys on every chain from one seed (SDK #177).
+- ⏳ You: generate + fund the wallet, add the `E2E_DEV_MNEMONIC` org secret.
+- ⏳ Next: deploy contracts to the three testnets + record addresses in
+  `e2e/testnets.json`, add the public-mode harness (`sdk-e2e-infra.sh --public`
+  or equivalent) that skips local chain boot and points peers/tests at the
+  testnets, and a nightly CI job using the org secret.
