@@ -1,0 +1,28 @@
+{
+  "$comment": "Public-testnet endpoints + deployed contract addresses for the public E2E mode. Endpoints and contract addresses are PUBLIC (not secrets) and committed here. The funded dev wallet seed is NOT here — it lives in the E2E_DEV_MNEMONIC env (org GitHub secret in CI, .env.e2e.local locally). Address fields are null until the one-time deploy runs (see docs/e2e-testnets.md); the public-mode harness must refuse to run while any required address is null.",
+  "evm": {
+    "name": "Base Sepolia",
+    "chainId": "eip155:84532",
+    "rpcUrl": "https://sepolia.base.org",
+    "explorer": "https://sepolia.basescan.org",
+    "registryAddress": null,
+    "tokenAddress": null
+  },
+  "solana": {
+    "name": "Solana Devnet",
+    "chainId": "solana:devnet",
+    "cluster": "devnet",
+    "rpcUrl": "https://api.devnet.solana.com",
+    "explorer": "https://explorer.solana.com/?cluster=devnet",
+    "programId": null,
+    "tokenMint": null
+  },
+  "mina": {
+    "name": "Mina Devnet",
+    "chainId": "mina:devnet",
+    "network": "devnet",
+    "graphqlUrl": "https://api.minascan.io/node/devnet/v1/graphql",
+    "explorer": "https://minascan.io/devnet",
+    "zkAppAddress": null
+  }
+}
