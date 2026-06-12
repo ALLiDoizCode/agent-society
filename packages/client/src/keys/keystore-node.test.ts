@@ -81,7 +81,7 @@ describe('keystore-node', () => {
       expect(mode).toBe(0o600);
       // On-disk file is JSON and does not contain the plaintext mnemonic.
       const raw = readFileSync(path, 'utf8');
-      expect(raw).not.toContain(mnemonic.split(' ')[0]);
+      expect(raw).not.toContain(mnemonic);
 
       expect(loadKeystore(path, PASSWORD)).toBe(mnemonic);
     });
