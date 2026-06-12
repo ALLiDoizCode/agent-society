@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.1](https://github.com/toon-protocol/town/compare/v0.22.0...v0.22.1) (2026-06-12)
+
+### Bug Fixes
+
+* **client:** route .anyone HS TLD only; reject .anon hostnames ([#201](https://github.com/toon-protocol/town/issues/201)) ([#206](https://github.com/toon-protocol/town/issues/206)) ([f5c84e7](https://github.com/toon-protocol/town/commit/f5c84e74d9a95030ca5ce1554fbf97394eb08ca7))
+
 ## [0.22.0](https://github.com/toon-protocol/town/compare/v0.21.4...v0.22.0) (2026-06-12)
 
 ### Features
