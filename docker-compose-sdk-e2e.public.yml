@@ -29,6 +29,12 @@ services:
     # Public testnets are reachable directly — no local chain dependency.
     depends_on: []
     environment:
+      # Chain-name preset (resolveChainConfig): Base Sepolia. The entrypoint
+      # maps this to the NUMERIC id (84532) when registering the EVM provider
+      # `evm:84532`, matching the `evm:84532` peer relation in BTP_PEERS and the
+      # `evm:base:84532` settlement keys. Must be the NAME, not the number —
+      # resolveChainConfig (used by the town relay) only accepts preset names.
+      TOON_CHAIN: 'base-sepolia'
       # --- EVM settlement: Base Sepolia (eip155:84532) ---
       SETTLEMENT_RPC_URL: '${E2E_EVM_RPC_URL}'
       SETTLEMENT_PRIVATE_KEY: '${PEER1_SETTLEMENT_PRIVATE_KEY}'
@@ -62,6 +68,8 @@ services:
   peer2:
     depends_on: []
     environment:
+      # See peer1: Base Sepolia preset name → numeric evm:84532 provider id.
+      TOON_CHAIN: 'base-sepolia'
       # --- EVM settlement: Base Sepolia (eip155:84532) ---
       SETTLEMENT_RPC_URL: '${E2E_EVM_RPC_URL}'
       SETTLEMENT_PRIVATE_KEY: '${PEER2_SETTLEMENT_PRIVATE_KEY}'

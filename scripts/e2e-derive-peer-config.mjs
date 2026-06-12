@@ -60,6 +60,18 @@ const PEER2_INDEX = 1;
 const CLIENT_INDEX = 3;
 const SETTLEMENT_A_INDEX = 4;
 const SETTLEMENT_B_INDEX = 5;
+// Per-suite host-side settlement signers. Each docker e2e suite spins up its OWN
+// ephemeral connector that opens a channel with peer1 and settles on-chain, so
+// each needs its OWN funded EVM key (distinct index → distinct nonce stream).
+// These map to the env-overridable keys in
+// packages/sdk/tests/e2e/helpers/docker-e2e-setup.ts and
+// packages/mill/tests/e2e/helpers/infra-gate.ts (EVM only — no Solana/Mina).
+const WORKFLOW_INDEX = 6; // docker-workflow-chain-e2e
+const DVM_LIFECYCLE_INDEX = 7; // docker-dvm-lifecycle-e2e
+const DVM_SUBMISSION_INDEX = 8; // docker-dvm-submission-e2e
+const SWARM_INDEX = 9; // docker-swarm-e2e
+const PET_DVM_INDEX = 10; // docker-pet-dvm-e2e (skip-gated, derived for parity)
+const MILL_CLIENT_INDEX = 11; // mill docker-swap-flow-* e2e
 
 function fail(msg) {
   console.error(`[e2e-derive-peer-config] ${msg}`);
@@ -169,6 +181,22 @@ async function derivePeers(mnemonic, testnets) {
   const settleB = await fromMnemonicFull(mnemonic, {
     accountIndex: SETTLEMENT_B_INDEX,
   });
+  // Per-suite host-side settlement signers (EVM only).
+  const suiteActors = {};
+  for (const [name, idx] of [
+    ['workflow', WORKFLOW_INDEX],
+    ['dvmLifecycle', DVM_LIFECYCLE_INDEX],
+    ['dvmSubmission', DVM_SUBMISSION_INDEX],
+    ['swarm', SWARM_INDEX],
+    ['petDvm', PET_DVM_INDEX],
+    ['millClient', MILL_CLIENT_INDEX],
+  ]) {
+    const id = await fromMnemonicFull(mnemonic, { accountIndex: idx });
+    suiteActors[name] = {
+      evmAddress: id.evmAddress,
+      evmPrivateKey: evmPrivHex(id.secretKey),
+    };
+  }
 
   const mint = testnets.solana.tokenMint;
   const { chainKey: evmChainKey } = evmChainKeyFromCaip(testnets.evm.chainId);
@@ -196,6 +224,8 @@ async function derivePeers(mnemonic, testnets) {
     },
     settlementA: { evmPrivateKey: evmPrivHex(settleA.secretKey) },
     settlementB: { evmPrivateKey: evmPrivHex(settleB.secretKey) },
+    // Per-suite host-side settlement signers (idx6-11, EVM only).
+    suiteActors,
   };
 }
 
@@ -221,6 +251,14 @@ function toEnvLines(d, testnets) {
     `E2E_EVM_CLIENT_ADDRESS=${d.client.evmAddress}`,
     `E2E_EVM_SETTLEMENT_PRIVATE_KEY_A=${d.settlementA.evmPrivateKey}`,
     `E2E_EVM_SETTLEMENT_PRIVATE_KEY_B=${d.settlementB.evmPrivateKey}`,
+    // --- per-suite host-side settlement signers (idx6-11, EVM only) ---
+    `E2E_EVM_WORKFLOW_PRIVATE_KEY=${d.suiteActors.workflow.evmPrivateKey}`,
+    `E2E_EVM_DVM_LIFECYCLE_PRIVATE_KEY=${d.suiteActors.dvmLifecycle.evmPrivateKey}`,
+    `E2E_EVM_DVM_SUBMISSION_PRIVATE_KEY=${d.suiteActors.dvmSubmission.evmPrivateKey}`,
+    `E2E_EVM_SWARM_PRIVATE_KEY=${d.suiteActors.swarm.evmPrivateKey}`,
+    `E2E_EVM_PET_DVM_PRIVATE_KEY=${d.suiteActors.petDvm.evmPrivateKey}`,
+    `E2E_EVM_MILL_CLIENT_PRIVATE_KEY=${d.suiteActors.millClient.evmPrivateKey}`,
+    `E2E_EVM_MILL_CLIENT_ADDRESS=${d.suiteActors.millClient.evmAddress}`,
     // --- peer1 (idx0) ---
     `PEER1_SETTLEMENT_PRIVATE_KEY=${d.peer1.evmPrivateKey}`,
     `PEER1_EVM_ADDRESS=${d.peer1.evmAddress}`,

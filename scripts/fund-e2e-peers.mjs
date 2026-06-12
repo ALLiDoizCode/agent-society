@@ -74,7 +74,11 @@ const PEER_INDICES = [0, 1];
 //   idx3 = publish/pay-to-write client, idx4/idx5 = settlement participants A/B.
 // They transact on EVM only (open/deposit/settle channels on Base Sepolia), so
 // they need ETH gas + MockUSDC — NOT Solana/Mina funds.
-const EVM_ACTOR_INDICES = [3, 4, 5];
+// idx3 client, idx4/5 settlement A/B, idx6-11 per-suite host-side settlement
+// signers (workflow/dvm-lifecycle/dvm-submission/swarm/pet-dvm/mill — each
+// docker e2e suite opens+settles its own channel, so each needs its own funded
+// EVM key; see scripts/e2e-derive-peer-config.mjs).
+const EVM_ACTOR_INDICES = [3, 4, 5, 6, 7, 8, 9, 10, 11];
 // Everyone who needs ETH + USDC on Base Sepolia.
 const EVM_FUND_INDICES = [...PEER_INDICES, ...EVM_ACTOR_INDICES];
 
