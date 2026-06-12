@@ -94,12 +94,12 @@ pinned in `e2e/testnets.json`. Reproducible scripts:
   ("Supplied participant keys do not match the on-chain channelHash"). A bare
   deploy lets the **client**'s `openMinaChannel` write the correct
   `(client, apex)` channelHash on-chain. The wrapper derives the deployer (idx 2)
-  + zkApp (idx 98) `EK…` keys from the mnemonic via the SDK + `@toon-protocol/core`'s
-  `hexToMinaBase58PrivateKey`, then delegates to `scripts/deploy-mina-zkapp.ts`
-  (the single source of truth for the o1js compile/deploy). Slow (o1js compile +
-  multi-minute devnet slots) — keep Mina nightly, not per-PR. You cannot re-init
-  over an existing account, so to deploy a genuinely fresh bare channel bump
-  `E2E_MINA_ZKAPP_INDEX`.
+  - zkApp (idx 98) `EK…` keys from the mnemonic via the SDK + `@toon-protocol/core`'s
+    `hexToMinaBase58PrivateKey`, then delegates to `scripts/deploy-mina-zkapp.ts`
+    (the single source of truth for the o1js compile/deploy). Slow (o1js compile +
+    multi-minute devnet slots) — keep Mina nightly, not per-PR. You cannot re-init
+    over an existing account, so to deploy a genuinely fresh bare channel bump
+    `E2E_MINA_ZKAPP_INDEX`.
 
   > **One-liner (init variant, NOT settle-able — kept for reference only):**
   > `MINA_GRAPHQL_URL=<devnet> MINA_DEPLOYER_PRIVATE_KEY=<EK> MINA_ZKAPP_PRIVATE_KEY=<EK> npx tsx scripts/deploy-mina-zkapp.ts`
