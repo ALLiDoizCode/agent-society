@@ -652,6 +652,25 @@ jobs:
             echo "  ✅ route marker present: ${route}"
           done
           echo "✅ townhouse-api ${DIGEST}: all route markers present (/api/nodes, /health, /api/transport)"
+      - name: Smoke-test town image (base-sepolia chain preset marker, issue #196)
+        run: |
+          set -euo pipefail
+          DIGEST=$(cat /tmp/digests/digest-town/digest-town.txt)
+          IMG="ghcr.io/toon-protocol/town@${DIGEST}"
+          echo "Verifying town image bundles current core: ${IMG}"
+          # Issue #196: a town image built from stale @toon-protocol/core
+          # (predating the base-* CHAIN_PRESETS, added in #73) crashes on
+          # TOON_CHAIN=base-sepolia with `Unknown chain "base-sepolia"`, which
+          # the entrypoint/node-version checks below do NOT catch. The
+          # base-sepolia preset name is esbuild-bundled into /app/entrypoint-town.js
+          # via core's CHAIN_PRESETS (town/cli -> resolveChainConfig). Its
+          # presence proves the image bundles core new enough to resolve
+          # base-sepolia. --entrypoint sh overrides the node CMD so the
+          # container does not boot the service (no chains/config in CI).
+          docker run --rm --entrypoint sh "${IMG}" -c \
+            "grep -q 'base-sepolia' /app/entrypoint-town.js" \
+            || { echo "FAIL: town ${DIGEST}: base-sepolia preset marker MISSING — image bundles stale core (issue #196)"; exit 1; }
+          echo "✅ town ${DIGEST}: base-sepolia chain preset marker present"
 
       - name: Smoke-test town / dvm / townhouse-api images (entrypoint + node binary)
         run: |
