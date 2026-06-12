@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.2](https://github.com/toon-protocol/town/compare/v0.21.1...v0.21.2) (2026-06-12)
+
+### Bug Fixes
+
+* **e2e:** ephemeral per-run settlement keys for public-testnet connectors ([#191](https://github.com/toon-protocol/town/issues/191)) ([#193](https://github.com/toon-protocol/town/issues/193)) ([ca8a392](https://github.com/toon-protocol/town/commit/ca8a392d9d26ff639f33a38d42c05b63188d74e5)), closes [#190](https://github.com/toon-protocol/town/issues/190) [#181](https://github.com/toon-protocol/town/issues/181) [#190](https://github.com/toon-protocol/town/issues/190)
+
 ## [0.21.1](https://github.com/toon-protocol/town/compare/v0.21.0...v0.21.1) (2026-06-12)
 
 ### Bug Fixes
