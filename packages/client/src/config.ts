@@ -61,7 +61,10 @@ export function applyNetworkPresets(
     ...config,
     supportedChains,
     chainRpcUrls: mergeRecord(config.chainRpcUrls, presets.chainRpcUrls),
-    preferredTokens: mergeRecord(config.preferredTokens, presets.preferredTokens),
+    preferredTokens: mergeRecord(
+      config.preferredTokens,
+      presets.preferredTokens
+    ),
     tokenNetworks: mergeRecord(config.tokenNetworks, presets.tokenNetworks),
     // settlementAddresses are identity-derived (per-client), so they have no
     // preset; pass any explicit value through unchanged.

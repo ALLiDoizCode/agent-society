@@ -7,11 +7,7 @@ import type {
   IlpClient,
 } from '@toon-protocol/core';
 import type { NetworkFamilyStatus } from '@toon-protocol/core';
-import {
-  validateConfig,
-  applyDefaults,
-  getNetworkStatus,
-} from './config.js';
+import { validateConfig, applyDefaults, getNetworkStatus } from './config.js';
 import { toBase64 } from './utils/binary.js';
 import type { ResolvedConfig } from './config.js';
 import { initializeHttpMode } from './modes/http.js';

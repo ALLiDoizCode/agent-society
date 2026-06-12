@@ -752,7 +752,9 @@ describe('network targeting (#202)', () => {
     });
 
     it('returns undefined for custom / unset', () => {
-      expect(getNetworkStatus(baseConfig({ network: 'custom' }))).toBeUndefined();
+      expect(
+        getNetworkStatus(baseConfig({ network: 'custom' }))
+      ).toBeUndefined();
       expect(getNetworkStatus(baseConfig())).toBeUndefined();
     });
   });
