@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.1](https://github.com/toon-protocol/town/compare/v0.21.0...v0.21.1) (2026-06-12)
+
+### Bug Fixes
+
+* **e2e:** public-testnet harness — Mina bare zkApp pin + EVM chain-id/peer/key fixes ([#190](https://github.com/toon-protocol/town/issues/190)) ([#192](https://github.com/toon-protocol/town/issues/192)) ([9cbcc91](https://github.com/toon-protocol/town/commit/9cbcc91530db431737f27fd16471b3da4ce5e055)), closes [#181](https://github.com/toon-protocol/town/issues/181)
+
 ## [0.21.0](https://github.com/toon-protocol/town/compare/v0.20.0...v0.21.0) (2026-06-12)
 
 ### Features
