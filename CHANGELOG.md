@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.3](https://github.com/toon-protocol/town/compare/v0.21.2...v0.21.3) (2026-06-12)
+
+### Bug Fixes
+
+* **ci:** bust stale gha cache + smoke-check townhouse-api route registration ([#195](https://github.com/toon-protocol/town/issues/195)) ([#198](https://github.com/toon-protocol/town/issues/198)) ([c62ce1d](https://github.com/toon-protocol/town/commit/c62ce1d5af69265a75c8814764245a51962a728f)), closes [#152](https://github.com/toon-protocol/town/issues/152)
+
 ## [0.21.2](https://github.com/toon-protocol/town/compare/v0.21.1...v0.21.2) (2026-06-12)
 
 ### Bug Fixes
