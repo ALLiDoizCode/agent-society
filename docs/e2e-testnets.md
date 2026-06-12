@@ -117,6 +117,63 @@ scripts against the live testnets.
 
 ---
 
+## Fund the peers (idx 0 / idx 1) from the treasury
+
+The contracts above are deployed, but only the **treasury** role (BIP-32 account
+index **2**) is faucet-funded on each chain. A two-party channel / swap / settle
+flow needs **both peers** funded with native gas + tokens to deposit:
+
+- **idx 0** = peer1 settlement (also the EVM contract deployer)
+- **idx 1** = peer2 settlement
+
+`scripts/fund-e2e-peers.mjs` has the funded treasury **distribute** to idx 0 /
+idx 1 on every chain (decision: distribute-from-treasury, not per-address
+faucet). One canonical invocation:
+
+```bash
+# Build the SDK + core once (the script + its Mina helper import their dists).
+pnpm --filter @toon-protocol/sdk build
+pnpm --filter @toon-protocol/core build
+
+# All three chains (reads E2E_DEV_MNEMONIC + e2e/testnets.json):
+node scripts/fund-e2e-peers.mjs
+
+# Subset / preview:
+node scripts/fund-e2e-peers.mjs --chains evm,solana
+node scripts/fund-e2e-peers.mjs --dry-run     # print the plan, broadcast nothing
+```
+
+What it sends to **each** of idx 0 / idx 1:
+
+| Chain         | Native gas (top-up to floor)                                      | Token                                                                     |
+| ------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Base Sepolia  | ETH → `EVM_GAS_FLOOR_ETH` (0.01)                                  | MockUSDC transfer (`EVM_USDC_AMOUNT`, 50, 18-decimal)                     |
+| Solana devnet | SOL → `SOL_GAS_FLOOR_SOL` (0.05)                                  | mock-USDC SPL transfer + recipient ATA (`SOL_USDC_AMOUNT`, 50, 6-decimal) |
+| Mina devnet   | MINA (`MINA_AMOUNT`, 5; includes the 1 MINA account-creation fee) | — (native only)                                                           |
+
+- **Derivation** matches `scripts/e2e-wallet.mjs`: `fromMnemonicFull(mnemonic, {
+accountIndex })` from the built SDK, so the funded addresses are exactly the
+  keys the harness transacts with (SDK #177 — every chain varies by index).
+- **Idempotent / re-runnable.** Amounts are **top-ups to a target floor**: a peer
+  already at/above the floor is skipped, and a re-run after a devnet reset (which
+  wipes balances) refunds. Recipient ATAs / Mina accounts are created on first
+  run only. Tune the floors via the `*_FLOOR_*` / `*_AMOUNT` env vars above.
+- **Mina** is delegated to `scripts/fund-e2e-peers-mina.ts` (`npx tsx`), which
+  signs a native MINA payment from the treasury's mnemonic-derived Mina key via
+  o1js against the real devnet GraphQL endpoint (there is no lightnet
+  accounts-manager on a public testnet). `fund-e2e-peers.mjs` invokes it
+  automatically; `--dry-run` prints the Mina plan **without** invoking it.
+- **Security.** Reads only the treasury seed (`E2E_DEV_MNEMONIC`, first from the
+  env, then `.env.e2e.local`) to sign treasury-funded transfers. It never prints
+  a private key. Use a TESTNET-ONLY wallet.
+
+> **Live broadcast is operator/CI-only** — it requires the real
+> `E2E_DEV_MNEMONIC` secret and a faucet-funded treasury on all three public
+> testnets. Locally without the secret, validate with `--dry-run` (it reads
+> live public RPC balances and prints the transfer plan, broadcasting nothing).
+
+---
+
 ## Distinct per-peer keys (resolved — SDK #177)
 
 `fromMnemonicFull(mnemonic, { accountIndex })` now varies **every** chain by
@@ -141,7 +198,11 @@ unchanged. No per-role mnemonics needed.
 - ✅ Wallet funded (idx 2 / treasury) + `E2E_DEV_MNEMONIC` org secret.
 - ✅ **Contracts deployed to all three testnets** (Base Sepolia / Solana devnet
   / Mina devnet) and pinned in `e2e/testnets.json`, via the scripts above.
-- ⏳ Next: distribute treasury → peers (idx 0/1 need funding for the run); the
-  public-mode harness (`sdk-e2e-infra.sh --public` or equivalent) that skips
-  local chain boot and points peers/tests at the testnets; a nightly CI job
-  using the org secret.
+- ✅ **Peer-funding script** (`scripts/fund-e2e-peers.mjs`) — distributes
+  treasury (idx 2) → peers (idx 0/1) gas + tokens on all three chains;
+  idempotent top-ups; `--dry-run` validated. **Live run is operator/CI-only**
+  (needs the secret + a funded treasury — see "Fund the peers" above).
+- ⏳ Next: the public-mode harness (`sdk-e2e-infra.sh --public` or equivalent)
+  that skips local chain boot and points peers/tests at the testnets; a nightly
+  CI job that runs `fund-e2e-peers.mjs` then the public-mode suite using the org
+  secret.
