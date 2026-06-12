@@ -206,15 +206,19 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
     tokenNetworkAddress: '',
     registryAddress: '',
   },
-  // Base Sepolia (public testnet). USDC is Circle's native testnet USDC.
-  // TOON TokenNetwork/registry not deployed yet → settlement relay-only.
+  // Base Sepolia (public testnet). TOON settlement contracts (registry +
+  // TokenNetwork) are DEPLOYED here against the Mock-USDC token below — these
+  // are the live devnet/testnet-tier addresses (promoted from e2e/testnets.json),
+  // so both node and client default to the real contracts. The `usdcAddress` is
+  // the token the deployed TokenNetwork was bound to (NOT Circle's native
+  // testnet USDC) so the EIP-712 claim verifies against the right token.
   'base-sepolia': {
     name: 'base-sepolia',
     chainId: 84532,
     rpcUrl: 'https://sepolia.base.org',
-    usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-    tokenNetworkAddress: '',
-    registryAddress: '',
+    usdcAddress: '0xac80670b86db1eeb5c18c82e18a6bda98fcb4504',
+    tokenNetworkAddress: '0x47616F4b9cF4dA25F74FD727Cd85E9CA0C70Ec5C',
+    registryAddress: '0xb9516c6c53c016c43f3671b1e5eb6096c83ec2c7',
   },
   // Base mainnet (public). USDC is Circle's native USDC on Base.
   // TOON TokenNetwork/registry not deployed yet → settlement relay-only.

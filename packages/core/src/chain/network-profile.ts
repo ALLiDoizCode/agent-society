@@ -163,8 +163,10 @@ const SOLANA_TIER: Record<DerivableTier, SolanaTierCfg> = {
   devnet: {
     rpcUrl: 'https://api.devnet.solana.com',
     cluster: 'devnet',
-    usdcMint: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
-    programId: '',
+    // Deployed Mock-USDC mint + payment-channel program on Solana devnet
+    // (promoted from e2e/testnets.json) → settlement-configured for this tier.
+    usdcMint: '9FtYCXjNiGDn17jSGvZuB5P4dZAKgVxUsDiQpLc8rbWy',
+    programId: 'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG',
   },
 };
 
@@ -184,12 +186,15 @@ const MINA_TIER: Record<DerivableTier, MinaTierCfg> = {
   testnet: {
     graphqlUrl: 'https://api.minascan.io/node/devnet/v1/graphql',
     network: 'devnet',
-    zkAppAddress: '',
+    // Shares the devnet network endpoint, so the deployed devnet zkApp applies.
+    zkAppAddress: 'B62qjFgXZWDWVE4P6h63JSzdMRzXpqJEgMM3Gt6PvWzzrSCawBZ4hE3',
   },
   devnet: {
     graphqlUrl: 'https://api.minascan.io/node/devnet/v1/graphql',
     network: 'devnet',
-    zkAppAddress: '',
+    // Deployed payment-channel zkApp on Mina devnet (promoted from
+    // e2e/testnets.json) → settlement-configured for this tier.
+    zkAppAddress: 'B62qjFgXZWDWVE4P6h63JSzdMRzXpqJEgMM3Gt6PvWzzrSCawBZ4hE3',
   },
 };
 
@@ -294,6 +299,122 @@ export function resolveNetworkProfile(
   }
 
   return { network, chainProviders, nodeEnv, status };
+}
+
+/**
+ * Client-facing per-chain settlement presets resolved from a network mode.
+ *
+ * Where {@link NetworkProfile} targets the apex connector + node containers
+ * (env overlay + `chainProviders`), this targets the @toon-protocol/client
+ * `ToonClientConfig` shape: identifier-keyed maps (`evm:<name>:<chainId>`,
+ * `solana:<cluster>`, `mina:<network>`) plus the Solana/Mina channel params.
+ * It draws from the SAME presets (`CHAIN_PRESETS`, `SOLANA_TIER`, `MINA_TIER`),
+ * so node and client default to the identical live contracts — no duplicated
+ * address tables in the client package.
+ *
+ * Only `mainnet | testnet | devnet` are resolvable here; `custom` is the
+ * client's fully-manual path and is intentionally not handled.
+ */
+export interface ClientNetworkPresets {
+  /** Chain identifiers (`evm:base:84532`, `solana:devnet`, `mina:devnet`). */
+  supportedChains: string[];
+  /** identifier → JSON-RPC / GraphQL URL. */
+  chainRpcUrls: Record<string, string>;
+  /** identifier → preferred token (USDC / SPL mint) address. */
+  preferredTokens: Record<string, string>;
+  /** identifier → EVM TokenNetwork contract address (EVM only). */
+  tokenNetworks: Record<string, string>;
+  /** Solana channel params (rpcUrl + programId + tokenMint), if deployed. */
+  solanaChannel?: { rpcUrl: string; programId: string; tokenMint?: string };
+  /** Mina channel params (graphqlUrl + zkAppAddress + networkId), if deployed. */
+  minaChannel?: {
+    graphqlUrl: string;
+    zkAppAddress: string;
+    networkId: 'devnet' | 'mainnet';
+  };
+  /** Per-family settlement readiness (mirrors the node). */
+  status: NetworkFamilyStatus;
+}
+
+/** EVM client identifier: `evm:<family>:<chainId>` (family = base/arbitrum/…). */
+function evmClientId(preset: ChainPreset): string {
+  const family = preset.name.split('-')[0] ?? preset.name;
+  return `evm:${family}:${preset.chainId}`;
+}
+
+/**
+ * Resolve {@link ClientNetworkPresets} for a derivable network tier.
+ *
+ * Mirrors {@link resolveNetworkProfile}'s address sourcing but emits the
+ * client config shape. The EVM family is the tier's primary chain (Base);
+ * Solana/Mina are the public tier endpoints. Only families with deployed TOON
+ * contracts contribute settlement maps + channel params (others stay relay-only
+ * and are reported `unconfigured`).
+ */
+export function resolveClientNetwork(
+  network: DerivableTier
+): ClientNetworkPresets {
+  const supportedChains: string[] = [];
+  const chainRpcUrls: Record<string, string> = {};
+  const preferredTokens: Record<string, string> = {};
+  const tokenNetworks: Record<string, string> = {};
+  const status: NetworkFamilyStatus = {
+    evm: 'unconfigured',
+    solana: 'unconfigured',
+    mina: 'unconfigured',
+  };
+
+  // ── EVM (primary Base) ──
+  const evm = CHAIN_PRESETS[EVM_TIER[network].primary];
+  const evmId = evmClientId(evm);
+  supportedChains.push(evmId);
+  chainRpcUrls[evmId] = evm.rpcUrl;
+  if (evm.usdcAddress) preferredTokens[evmId] = evm.usdcAddress;
+  if (evmSettlementComplete(evm)) {
+    tokenNetworks[evmId] = evm.tokenNetworkAddress;
+    status.evm = 'configured';
+  }
+
+  // ── Solana ──
+  const sol = SOLANA_TIER[network];
+  const solId = `solana:${sol.cluster}`;
+  supportedChains.push(solId);
+  chainRpcUrls[solId] = sol.rpcUrl;
+  if (sol.usdcMint) preferredTokens[solId] = sol.usdcMint;
+  let solanaChannel: ClientNetworkPresets['solanaChannel'];
+  if (sol.programId) {
+    solanaChannel = {
+      rpcUrl: sol.rpcUrl,
+      programId: sol.programId,
+      ...(sol.usdcMint && { tokenMint: sol.usdcMint }),
+    };
+    status.solana = 'configured';
+  }
+
+  // ── Mina ──
+  const mina = MINA_TIER[network];
+  const minaId = `mina:${mina.network}`;
+  supportedChains.push(minaId);
+  chainRpcUrls[minaId] = mina.graphqlUrl;
+  let minaChannel: ClientNetworkPresets['minaChannel'];
+  if (mina.zkAppAddress) {
+    minaChannel = {
+      graphqlUrl: mina.graphqlUrl,
+      zkAppAddress: mina.zkAppAddress,
+      networkId: mina.network === 'mainnet' ? 'mainnet' : 'devnet',
+    };
+    status.mina = 'configured';
+  }
+
+  return {
+    supportedChains,
+    chainRpcUrls,
+    preferredTokens,
+    tokenNetworks,
+    ...(solanaChannel && { solanaChannel }),
+    ...(minaChannel && { minaChannel }),
+    status,
+  };
 }
 
 /**

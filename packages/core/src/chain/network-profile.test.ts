@@ -60,14 +60,45 @@ describe('resolveNetworkProfile', () => {
     it('uses Base Sepolia as primary EVM (no public EVM devnet)', () => {
       expect(p.nodeEnv.EVM_CHAIN).toBe('base-sepolia');
     });
-    it('uses public Solana devnet + USDC mint', () => {
+    it('uses public Solana devnet + deployed Mock-USDC mint', () => {
       expect(p.nodeEnv.SOLANA_RPC_URL).toBe('https://api.devnet.solana.com');
       expect(p.nodeEnv.SOLANA_USDC_MINT).toBe(
-        '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
+        '9FtYCXjNiGDn17jSGvZuB5P4dZAKgVxUsDiQpLc8rbWy'
       );
     });
     it('does not use the local solana-devnet/mina-devnet presets', () => {
       expect(p.nodeEnv.SOLANA_RPC_URL).not.toContain('19899');
+    });
+  });
+
+  describe('deployed-contract tiers (testnet/devnet are settlement-configured)', () => {
+    it('testnet: EVM (Base Sepolia) is configured with a keyId', () => {
+      const p = resolveNetworkProfile('testnet', { keyId: '0xkey' });
+      expect(p.status.evm).toBe('configured');
+      const evm = p.chainProviders.find((c) => c.chainType === 'evm');
+      expect(evm).toBeDefined();
+      expect((evm as { registryAddress: string }).registryAddress).toBe(
+        '0xb9516c6c53c016c43f3671b1e5eb6096c83ec2c7'
+      );
+    });
+
+    it('devnet: Solana + Mina are configured with a keyId', () => {
+      const p = resolveNetworkProfile('devnet', { keyId: '0xkey' });
+      expect(p.status.solana).toBe('configured');
+      expect(p.status.mina).toBe('configured');
+      const sol = p.chainProviders.find((c) => c.chainType === 'solana');
+      expect((sol as { programId: string }).programId).toBe(
+        'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG'
+      );
+      const mina = p.chainProviders.find((c) => c.chainType === 'mina');
+      expect((mina as { zkAppAddress: string }).zkAppAddress).toBe(
+        'B62qjFgXZWDWVE4P6h63JSzdMRzXpqJEgMM3Gt6PvWzzrSCawBZ4hE3'
+      );
+    });
+
+    it('mina is configured even without a keyId (zkApp provider needs no key)', () => {
+      const p = resolveNetworkProfile('devnet');
+      expect(p.status.mina).toBe('configured');
     });
   });
 
