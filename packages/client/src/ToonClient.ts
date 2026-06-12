@@ -42,6 +42,12 @@ interface ToonClientState {
   runtimeClient: IlpClient;
   peersDiscovered: number;
   btpClient?: BtpRuntimeClient;
+  /**
+   * Teardown for a managed `anon` SOCKS5h proxy auto-started during start()
+   * for a `.anyone` btpUrl. Present only when the SDK launched its own daemon;
+   * `stop()` invokes it so the proxy does not outlive the client.
+   */
+  stopManagedProxy?: () => Promise<void>;
 }
 
 /**
@@ -179,9 +185,12 @@ export class ToonClient {
    * the ChannelManager. Mirrors how the EVM signer is wired, but for the
    * non-secp256k1 chains. Skips any chain whose optional dependency is missing.
    */
-  private async registerMnemonicChainSigners(mnemonic: string): Promise<void> {
+  private async registerMnemonicChainSigners(
+    mnemonic: string,
+    accountIndex = 0
+  ): Promise<void> {
     if (!this.channelManager) return;
-    const identity = await deriveFullIdentity(mnemonic);
+    const identity = await deriveFullIdentity(mnemonic, accountIndex);
 
     // Solana: @noble/curves Ed25519 expects a 32-byte seed; deriveFullIdentity
     // returns a 64-byte keypair (seed||pubkey).
@@ -235,15 +244,23 @@ export class ToonClient {
         // synchronous constructor. Gracefully skips a chain whose optional dep
         // is absent (e.g. mina-signer) — deriveFullIdentity leaves it empty.
         if (this.config.mnemonic) {
-          await this.registerMnemonicChainSigners(this.config.mnemonic);
+          await this.registerMnemonicChainSigners(
+            this.config.mnemonic,
+            this.config.mnemonicAccountIndex ?? 0
+          );
         }
       }
 
       // Initialize HTTP mode components
       const initialization = await initializeHttpMode(this.config);
 
-      const { bootstrapService, discoveryTracker, runtimeClient, btpClient } =
-        initialization;
+      const {
+        bootstrapService,
+        discoveryTracker,
+        runtimeClient,
+        btpClient,
+        stopManagedProxy,
+      } = initialization;
 
       // Wire claim signer to bootstrap service if we have channel manager
       if (this.channelManager) {
@@ -400,6 +417,7 @@ export class ToonClient {
         runtimeClient,
         peersDiscovered: bootstrapResults.length,
         btpClient: btpClient ?? undefined,
+        ...(stopManagedProxy ? { stopManagedProxy } : {}),
       };
 
       return {
@@ -877,10 +895,18 @@ export class ToonClient {
       throw new ToonClientError('Client not started', 'INVALID_STATE');
     }
 
+    const stopManagedProxy = this.state.stopManagedProxy;
     try {
       // Disconnect BTP client if connected
       if (this.state.btpClient) {
         await this.state.btpClient.disconnect();
+      }
+
+      // Tear down a managed `anon` proxy this client auto-started (.anyone host
+      // with no explicit proxy). Best-effort — a proxy stop failure must not
+      // mask a clean disconnect. No-op when the SDK did not launch a proxy.
+      if (stopManagedProxy) {
+        await stopManagedProxy();
       }
 
       // Clear state

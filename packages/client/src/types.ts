@@ -135,6 +135,20 @@ export interface ToonClientConfig {
   mnemonic?: string;
 
   /**
+   * BIP-44 account index used when deriving the multi-chain identity from
+   * `mnemonic`. Defaults to 0 (back-compat). A non-zero index derives a
+   * dedicated wallet from a shared mnemonic, producing the SAME addresses as
+   * the SDK's `fromMnemonicFull(mnemonic, { accountIndex })`:
+   *   - Nostr (secp256k1): m/44'/1237'/0'/0/{index}
+   *   - EVM (secp256k1): same key as Nostr
+   *   - Solana (Ed25519): m/44'/501'/{index}'/0' (SLIP-0010)
+   *   - Mina (Pallas): m/44'/12586'/{index}'/0/0
+   *
+   * Ignored unless `mnemonic` is provided.
+   */
+  mnemonicAccountIndex?: number;
+
+  /**
    * 32-byte Nostr private key (hex or Uint8Array).
    * Optional — if omitted, a keypair is auto-generated in applyDefaults()
    * (or derived from `mnemonic` when that is provided instead).
@@ -301,6 +315,26 @@ export interface ToonClientConfig {
    *   The gateway proxies through ator server-side.
    */
   transport?: ClientTransportConfig;
+
+  /**
+   * Self-managed `anon` (anyone-protocol / ATOR) SOCKS5h proxy (Node.js only).
+   *
+   * When the `btpUrl` host ends in `.anyone` and NO explicit proxy is configured
+   * (`transport.socksProxy` / `transport.type === 'gateway'`) and the
+   * `ANYONE_PROXY_URLS` env var is unset, the SDK auto-downloads + spawns its own
+   * `anon` daemon, waits for it to bootstrap + bind a loopback SOCKS5 port, and
+   * routes BTP/HTTP through it — ZERO manual proxy setup. `client.stop()` tears
+   * the daemon down.
+   *
+   * - `undefined` (default): auto — managed proxy starts for `.anyone` hosts.
+   * - `false`: opt out — never auto-start (you must supply your own proxy).
+   *
+   * Ignored in browser bundles (the node-only daemon module is never loaded).
+   */
+  managedAnonProxy?: boolean;
+
+  /** Loopback SOCKS port the managed `anon` daemon binds. Default 9050. */
+  managedAnonSocksPort?: number;
 
   // ============================================================================
   // NETWORK (optional with defaults)

@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0](https://github.com/toon-protocol/town/compare/v0.23.0...v0.24.0) (2026-06-12)
+
+### Features
+
+* **client:** mnemonic keystore + accountIndex derivation ([#203](https://github.com/toon-protocol/town/issues/203)) ([#207](https://github.com/toon-protocol/town/issues/207)) ([151b8c2](https://github.com/toon-protocol/town/commit/151b8c239e579e9291b1beb12db37af3cd7603e0))
+
+## [0.23.0](https://github.com/toon-protocol/town/compare/v0.22.1...v0.23.0) (2026-06-12)
+
+### Features
+
+* **client:** self-managed anon SOCKS5h proxy for .anyone HS ([#200](https://github.com/toon-protocol/town/issues/200)) ([#208](https://github.com/toon-protocol/town/issues/208)) ([f435d48](https://github.com/toon-protocol/town/commit/f435d48e5157a7b468645c1c11dec76f25ada24a)), closes [#204](https://github.com/toon-protocol/town/issues/204)
+
+## [0.22.1](https://github.com/toon-protocol/town/compare/v0.22.0...v0.22.1) (2026-06-12)
+
+### Bug Fixes
+
+* **client:** route .anyone HS TLD only; reject .anon hostnames ([#201](https://github.com/toon-protocol/town/issues/201)) ([#206](https://github.com/toon-protocol/town/issues/206)) ([f5c84e7](https://github.com/toon-protocol/town/commit/f5c84e74d9a95030ca5ce1554fbf97394eb08ca7))
+
+## [0.22.0](https://github.com/toon-protocol/town/compare/v0.21.4...v0.22.0) (2026-06-12)
+
+### Features
+
+* **core:** bake deployed public-testnet settlement addresses into network presets ([#194](https://github.com/toon-protocol/town/issues/194)) ([fa4eb6d](https://github.com/toon-protocol/town/commit/fa4eb6db651344a9700b01688ac1c5a4815da4c1))
+
+## [0.21.4](https://github.com/toon-protocol/town/compare/v0.21.3...v0.21.4) (2026-06-12)
+
+### Bug Fixes
+
+* **core:** accurate Unknown-chain error + CI smoke guard for base-sepolia town image ([#196](https://github.com/toon-protocol/town/issues/196)) ([#199](https://github.com/toon-protocol/town/issues/199)) ([6152256](https://github.com/toon-protocol/town/commit/6152256984d4d1c7f170bf1faaf28f28129dd72d)), closes [#73](https://github.com/toon-protocol/town/issues/73) [#152](https://github.com/toon-protocol/town/issues/152) [#194](https://github.com/toon-protocol/town/issues/194)
+
+## [0.21.3](https://github.com/toon-protocol/town/compare/v0.21.2...v0.21.3) (2026-06-12)
+
+### Bug Fixes
+
+* **ci:** bust stale gha cache + smoke-check townhouse-api route registration ([#195](https://github.com/toon-protocol/town/issues/195)) ([#198](https://github.com/toon-protocol/town/issues/198)) ([c62ce1d](https://github.com/toon-protocol/town/commit/c62ce1d5af69265a75c8814764245a51962a728f)), closes [#152](https://github.com/toon-protocol/town/issues/152)
+
 ## [0.21.2](https://github.com/toon-protocol/town/compare/v0.21.1...v0.21.2) (2026-06-12)
 
 ### Bug Fixes

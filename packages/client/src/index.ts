@@ -1,6 +1,14 @@
 // Main Client
 export { ToonClient } from './ToonClient.js';
 
+// Hidden-service hostname validation (.anyone TLD only — see issue #201)
+export {
+  isRoutableHsHostname,
+  assertRoutableHsHostname,
+  HS_HOSTNAME_REGEX,
+  HS_HOSTNAME_MAX_LENGTH,
+} from './transport/hs-hostname.js';
+
 // Types
 export type {
   ToonClientConfig,
@@ -52,6 +60,20 @@ export {
 
 // Utilities
 export { withRetry, type RetryOptions } from './utils/index.js';
+
+// Managed `anon` (ATOR) SOCKS5h proxy — Node-only. Exposed for advanced
+// consumers who want to drive the daemon directly; ToonClient auto-starts it for
+// `.anyone` hosts. Importing these names is safe in any environment (the actual
+// node-only deps are loaded lazily inside the functions).
+export {
+  startManagedAnonProxy,
+  selectAnonAsset,
+  ANON_VERSION,
+  ANON_ASSETS,
+  type ManagedAnonProxy,
+  type StartManagedAnonProxyOptions,
+  type AnonAsset,
+} from './transport/anon-proxy.js';
 
 // Config validation (for advanced use cases)
 export {
@@ -108,10 +130,17 @@ export {
   buildBackupEvent,
   buildBackupFilter,
   parseBackupPayload,
+  encryptMnemonic,
+  decryptMnemonic,
+  generateKeystore,
+  importKeystore,
+  loadKeystore,
+  writeKeystoreFile,
   type ToonIdentity,
   type ToonSigners,
   type PasskeyInfo,
   type KeyManagerConfig,
   type BackupPayload,
   type VaultData,
+  type EncryptedKeystore,
 } from './keys/index.js';

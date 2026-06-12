@@ -156,6 +156,17 @@ export function validateConfig(config: ToonClientConfig): void {
     }
   }
 
+  // Validate mnemonicAccountIndex when provided (must be a non-negative
+  // integer within the BIP-32 non-hardened range, matching the SDK guard).
+  if (config.mnemonicAccountIndex !== undefined) {
+    const idx = config.mnemonicAccountIndex;
+    if (!Number.isInteger(idx) || idx < 0 || idx > 0x7fffffff) {
+      throw new ValidationError(
+        'mnemonicAccountIndex must be a non-negative integer (0 to 2147483647)'
+      );
+    }
+  }
+
   if (!config.ilpInfo?.ilpAddress) {
     throw new ValidationError('ilpInfo.ilpAddress is required');
   }
@@ -209,7 +220,7 @@ export function validateConfig(config: ToonClientConfig): void {
       if (!config.transport.socksProxy?.startsWith('socks5h://')) {
         throw new ValidationError(
           'transport.socksProxy must use socks5h:// scheme to prevent DNS leaks. ' +
-            'The "h" suffix ensures .anon hostnames are resolved by the proxy, not locally.'
+            'The "h" suffix ensures .anyone hostnames are resolved by the proxy, not locally.'
         );
       }
     } else if (config.transport.type === 'gateway') {
@@ -246,6 +257,7 @@ export type ResolvedConfig = Required<
     ToonClientConfig,
     | 'connector'
     | 'mnemonic'
+    | 'mnemonicAccountIndex'
     | 'evmPrivateKey'
     | 'network'
     | 'supportedChains'
@@ -264,6 +276,8 @@ export type ResolvedConfig = Required<
     | 'knownPeers'
     | 'destinationAddress'
     | 'transport'
+    | 'managedAnonProxy'
+    | 'managedAnonSocksPort'
   >
 > & {
   connector?: unknown;
@@ -275,10 +289,20 @@ export type ResolvedConfig = Required<
    * keys are already resolved synchronously into `secretKey`/`evmPrivateKey`.
    */
   mnemonic?: string;
+  /**
+   * BIP-44 account index for mnemonic-based derivation (defaults to 0).
+   * Retained so `ToonClient.start()` derives the Solana/Mina signers at the
+   * same index as the synchronously-resolved Nostr/EVM keys.
+   */
+  mnemonicAccountIndex?: number;
   /** Transport privacy config (optional — defaults to direct). */
   transport?: ClientTransportConfig;
   /** Named network tier, retained for `getNetworkStatus()`. */
   network?: ToonClientConfig['network'];
+  /** Self-managed `anon` SOCKS5h proxy opt-out (default auto). */
+  managedAnonProxy?: boolean;
+  /** Loopback SOCKS port for the managed `anon` daemon (default 9050). */
+  managedAnonSocksPort?: number;
   supportedChains?: string[];
   settlementAddresses?: Record<string, string>;
   preferredTokens?: Record<string, string>;
@@ -318,7 +342,10 @@ export function applyDefaults(rawConfig: ToonClientConfig): ResolvedConfig {
   const secretKey =
     config.secretKey ??
     (config.mnemonic
-      ? deriveNostrKeyFromMnemonic(config.mnemonic).secretKey
+      ? deriveNostrKeyFromMnemonic(
+          config.mnemonic,
+          config.mnemonicAccountIndex ?? 0
+        ).secretKey
       : generateSecretKey());
 
   // Derive btpUrl from connectorUrl when not explicitly provided

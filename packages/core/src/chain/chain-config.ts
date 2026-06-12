@@ -206,12 +206,11 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
     tokenNetworkAddress: '',
     registryAddress: '',
   },
-  // Base Sepolia (public testnet). TOON settlement contracts (registry +
-  // TokenNetwork) are DEPLOYED here against the Mock-USDC token below — these
-  // are the live devnet/testnet-tier addresses (promoted from e2e/testnets.json),
-  // so both node and client default to the real contracts. The `usdcAddress` is
-  // the token the deployed TokenNetwork was bound to (NOT Circle's native
-  // testnet USDC) so the EIP-712 claim verifies against the right token.
+  // Base Sepolia (public testnet) — TOON's deployed public-testnet settlement
+  // environment (source of truth: e2e/testnets.json). USDC is the deployed test
+  // token the TokenNetwork was opened against (NOT Circle's native testnet USDC,
+  // which the channel would not recognise). Registry + TokenNetwork are live, so
+  // this preset is settlement-complete: `--network testnet|devnet` settles here.
   'base-sepolia': {
     name: 'base-sepolia',
     chainId: 84532,
@@ -261,8 +260,14 @@ export function resolveChainConfig(chain?: ChainName | string): ChainPreset {
   // 2. Look up the chain name in presets
   const preset = CHAIN_PRESETS[name as ChainName];
   if (!preset) {
+    // Enumerate the ACTUAL allow-list from CHAIN_PRESETS rather than a
+    // hard-coded literal. A stale literal here (it previously read
+    // "anvil, arbitrum-sepolia, arbitrum-one") masks newer presets such as
+    // base-sepolia/base-mainnet and produces a misleading diagnostic when an
+    // image bundles older core (see issue #196).
+    const validNames = Object.keys(CHAIN_PRESETS).join(', ');
     throw new ToonError(
-      `Unknown chain "${name}". Valid chains: anvil, arbitrum-sepolia, arbitrum-one`,
+      `Unknown chain "${name}". Valid chains: ${validNames}`,
       'INVALID_CHAIN'
     );
   }

@@ -288,6 +288,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute Dockerfile cache key (issue #195)
+        id: cachekey
+        # The gha cache scope MUST be sensitive to the Dockerfile content. Before
+        # this guard the scope was `<image>-<platform>` only, so a corrected
+        # Dockerfile (e.g. the #143/#149 fix that copies ALL workspace manifests
+        # for deterministic tsup DTS resolution) would still RESTORE the stale
+        # `pnpm install` / `pnpm -r build` layers cached from the PRIOR, buggy
+        # partial-manifest revision — silently re-publishing an image whose
+        # townhouse dist dropped route modules (POST /api/nodes 404, node add
+        # fails). Folding a short hash of the image's own Dockerfile into the
+        # scope means any Dockerfile change auto-invalidates the bucket, so the
+        # build can never reuse pre-fix layers. (The hash, not the bytes, keeps
+        # the scope a stable short token.)
+        env:
+          DOCKERFILE: docker/Dockerfile.${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          DF_HASH=$(sha256sum "$DOCKERFILE" | cut -c1-12)
+          echo "df_hash=$DF_HASH" >> "$GITHUB_OUTPUT"
+          echo "Dockerfile cache key for ${DOCKERFILE}: $DF_HASH"
+
       - name: Build and push platform image (by digest)
         id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
@@ -301,9 +322,11 @@ jobs:
           # stable for cosign signing.
           outputs: type=image,name=ghcr.io/toon-protocol/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
           # Per-platform cache buckets — sharing one bucket across platforms
-          # causes restoration of the wrong-arch layers.
-          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.platform_pair }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.platform_pair }}
+          # causes restoration of the wrong-arch layers. The trailing
+          # Dockerfile-content hash (issue #195) busts the bucket whenever the
+          # Dockerfile changes, so a stale pre-fix layer can never be restored.
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.platform_pair }}-${{ steps.cachekey.outputs.df_hash }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.platform_pair }}-${{ steps.cachekey.outputs.df_hash }}
 
       - name: Install cosign
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac  # v3.9.1
@@ -604,6 +627,50 @@ jobs:
           docker run --rm --entrypoint sh "${IMG}" -c \
             "grep -q 'MUST be a non-empty string for chainType' /app/entrypoint-mill.js"
           echo "✅ mill ${DIGEST}: per-chainType validator marker present"
+
+      - name: Smoke-test townhouse-api routes (POST /api/nodes registered, issue #195)
+        run: |
+          set -euo pipefail
+          DIGEST=$(cat /tmp/digests/digest-townhouse-api/digest-townhouse-api.txt)
+          IMG="ghcr.io/toon-protocol/townhouse-api@${DIGEST}"
+          echo "Verifying townhouse-api route registration: ${IMG}"
+          # Issue #195 / #143: under a partial workspace-manifest set the tsup DTS
+          # pass fails to resolve @toon-protocol/connector and route modules get
+          # dropped from the townhouse dist that esbuild bundles — the ESM bundle
+          # still builds, but createApiServer registers only a subset (/api/transport)
+          # and NOT the node-lifecycle / health routes, so POST /api/nodes 404s and
+          # `townhouse node add` fails. The fixed image bundles all route modules;
+          # their path literals survive esbuild --minify (string literals are never
+          # stripped). Assert the three routes the #195 probe found 404ing —
+          # /api/nodes, /health, /api/transport — are all present in the bundle.
+          # This is a build-marker check (no chains/config available in CI to boot
+          # the server), mirroring the mill per-chainType validator marker above.
+          for route in '/api/nodes' '/health' '/api/transport'; do
+            docker run --rm --entrypoint sh "${IMG}" -c \
+              "grep -q '${route}' /app/entrypoint-townhouse-api.js" \
+              || { echo "FAIL: townhouse-api ${DIGEST}: route marker '${route}' MISSING from bundled entrypoint — route registration was dropped (issue #195/#143 DTS regression). Refusing to publish."; exit 1; }
+            echo "  ✅ route marker present: ${route}"
+          done
+          echo "✅ townhouse-api ${DIGEST}: all route markers present (/api/nodes, /health, /api/transport)"
+      - name: Smoke-test town image (base-sepolia chain preset marker, issue #196)
+        run: |
+          set -euo pipefail
+          DIGEST=$(cat /tmp/digests/digest-town/digest-town.txt)
+          IMG="ghcr.io/toon-protocol/town@${DIGEST}"
+          echo "Verifying town image bundles current core: ${IMG}"
+          # Issue #196: a town image built from stale @toon-protocol/core
+          # (predating the base-* CHAIN_PRESETS, added in #73) crashes on
+          # TOON_CHAIN=base-sepolia with `Unknown chain "base-sepolia"`, which
+          # the entrypoint/node-version checks below do NOT catch. The
+          # base-sepolia preset name is esbuild-bundled into /app/entrypoint-town.js
+          # via core's CHAIN_PRESETS (town/cli -> resolveChainConfig). Its
+          # presence proves the image bundles core new enough to resolve
+          # base-sepolia. --entrypoint sh overrides the node CMD so the
+          # container does not boot the service (no chains/config in CI).
+          docker run --rm --entrypoint sh "${IMG}" -c \
+            "grep -q 'base-sepolia' /app/entrypoint-town.js" \
+            || { echo "FAIL: town ${DIGEST}: base-sepolia preset marker MISSING — image bundles stale core (issue #196)"; exit 1; }
+          echo "✅ town ${DIGEST}: base-sepolia chain preset marker present"
 
       - name: Smoke-test town / dvm / townhouse-api images (entrypoint + node binary)
         run: |
