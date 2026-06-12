@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.4](https://github.com/toon-protocol/town/compare/v0.21.3...v0.21.4) (2026-06-12)
+
+### Bug Fixes
+
+* **core:** accurate Unknown-chain error + CI smoke guard for base-sepolia town image ([#196](https://github.com/toon-protocol/town/issues/196)) ([#199](https://github.com/toon-protocol/town/issues/199)) ([6152256](https://github.com/toon-protocol/town/commit/6152256984d4d1c7f170bf1faaf28f28129dd72d)), closes [#73](https://github.com/toon-protocol/town/issues/73) [#152](https://github.com/toon-protocol/town/issues/152) [#194](https://github.com/toon-protocol/town/issues/194)
+
 ## [0.21.3](https://github.com/toon-protocol/town/compare/v0.21.2...v0.21.3) (2026-06-12)
 
 ### Bug Fixes
