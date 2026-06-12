@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0](https://github.com/toon-protocol/town/compare/v0.20.0...v0.21.0) (2026-06-12)
+
+### Features
+
+* **e2e:** public-mode harness — sdk-e2e-infra.sh --public against live testnets ([#183](https://github.com/toon-protocol/town/issues/183)) ([#189](https://github.com/toon-protocol/town/issues/189)) ([9edfc59](https://github.com/toon-protocol/town/commit/9edfc590e32df15a57d5e5f77bbe90b76d6e5a81)), closes [#177](https://github.com/toon-protocol/town/issues/177) [182/#187](https://github.com/182/town/issues/187) [185/#186](https://github.com/185/town/issues/186) [#187](https://github.com/toon-protocol/town/issues/187)
+
 ## [0.20.0](https://github.com/toon-protocol/town/compare/v0.19.0...v0.20.0) (2026-06-12)
 
 ### Features
