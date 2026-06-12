@@ -203,16 +203,23 @@ cmd_up() {
   done
   if $mina_accounts_ready; then
     log_success "Mina lightnet accounts manager is ready"
-    # Attempt zkApp deploy without waiting for sync (tests skip if Mina unavailable)
+    # Deploy the zkApp. The deploy script (scripts/deploy-mina-zkapp.ts) now
+    # gates on the deployer account being funded/queryable on-chain before it
+    # builds the tx (issue #173) — so we no longer need a separate sync wait
+    # here. Only STDOUT carries the zkApp address; STDERR (diagnostics + any
+    # failure) is intentionally NOT swallowed (was `2>/dev/null`, which hid the
+    # real "Could not find account" cause) so the operator/CI can diagnose a
+    # failed deploy. The step stays NON-FATAL: if it fails, MINA_ZKAPP_ADDRESS
+    # is empty and the Mina settlement E2E skips rather than aborting bring-up.
     log_info "Deploying Mina Payment Channel zkApp..."
     mina_zkapp_address=$(cd "$REPO_ROOT" && \
       MINA_GRAPHQL_URL="http://localhost:19085/graphql" \
       MINA_ACCOUNTS_URL="http://localhost:19181" \
-      npx tsx scripts/deploy-mina-zkapp.ts 2>/dev/null) || true
+      npx tsx scripts/deploy-mina-zkapp.ts) || true
     if [ -n "$mina_zkapp_address" ]; then
       log_success "Mina zkApp deployed: $mina_zkapp_address"
     else
-      log_warning "Mina zkApp deployment failed (non-fatal — Mina tests may fail)"
+      log_warning "Mina zkApp deployment failed (non-fatal — Mina tests may skip; see stderr above)"
     fi
   else
     log_warning "Mina lightnet accounts manager not ready (non-fatal — Mina tests may fail)"
