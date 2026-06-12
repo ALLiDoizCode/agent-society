@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0](https://github.com/toon-protocol/town/compare/v0.19.0...v0.20.0) (2026-06-12)
+
+### Features
+
+* **e2e:** fund e2e peers (idx0/idx1) from treasury on all 3 testnets ([#182](https://github.com/toon-protocol/town/issues/182)) ([#187](https://github.com/toon-protocol/town/issues/187)) ([e43e87b](https://github.com/toon-protocol/town/commit/e43e87b758d681828f379d2d554482f9ef2b5bae)), closes [#177](https://github.com/toon-protocol/town/issues/177) [#189](https://github.com/toon-protocol/town/issues/189)
+
+### Bug Fixes
+
+* **e2e:** Mina zkApp deploy — local lightnet readiness gate ([#173](https://github.com/toon-protocol/town/issues/173)) + public bare-redeploy path ([#185](https://github.com/toon-protocol/town/issues/185)) ([#186](https://github.com/toon-protocol/town/issues/186)) ([df9c12a](https://github.com/toon-protocol/town/commit/df9c12a48114120d6871712401b64b9ee153d910))
+
 ## [0.19.0](https://github.com/toon-protocol/town/compare/v0.18.2...v0.19.0) (2026-06-11)
 
 ### Features
