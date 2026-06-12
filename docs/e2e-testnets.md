@@ -94,12 +94,12 @@ pinned in `e2e/testnets.json`. Reproducible scripts:
   ("Supplied participant keys do not match the on-chain channelHash"). A bare
   deploy lets the **client**'s `openMinaChannel` write the correct
   `(client, apex)` channelHash on-chain. The wrapper derives the deployer (idx 2)
-  + zkApp (idx 98) `EK…` keys from the mnemonic via the SDK + `@toon-protocol/core`'s
-  `hexToMinaBase58PrivateKey`, then delegates to `scripts/deploy-mina-zkapp.ts`
-  (the single source of truth for the o1js compile/deploy). Slow (o1js compile +
-  multi-minute devnet slots) — keep Mina nightly, not per-PR. You cannot re-init
-  over an existing account, so to deploy a genuinely fresh bare channel bump
-  `E2E_MINA_ZKAPP_INDEX`.
+  - zkApp (idx 98) `EK…` keys from the mnemonic via the SDK + `@toon-protocol/core`'s
+    `hexToMinaBase58PrivateKey`, then delegates to `scripts/deploy-mina-zkapp.ts`
+    (the single source of truth for the o1js compile/deploy). Slow (o1js compile +
+    multi-minute devnet slots) — keep Mina nightly, not per-PR. You cannot re-init
+    over an existing account, so to deploy a genuinely fresh bare channel bump
+    `E2E_MINA_ZKAPP_INDEX`.
 
   > **One-liner (init variant, NOT settle-able — kept for reference only):**
   > `MINA_GRAPHQL_URL=<devnet> MINA_DEPLOYER_PRIVATE_KEY=<EK> MINA_ZKAPP_PRIVATE_KEY=<EK> npx tsx scripts/deploy-mina-zkapp.ts`
@@ -198,11 +198,35 @@ unchanged. No per-role mnemonics needed.
 - ✅ Wallet funded (idx 2 / treasury) + `E2E_DEV_MNEMONIC` org secret.
 - ✅ **Contracts deployed to all three testnets** (Base Sepolia / Solana devnet
   / Mina devnet) and pinned in `e2e/testnets.json`, via the scripts above.
-- ✅ **Peer-funding script** (`scripts/fund-e2e-peers.mjs`) — distributes
-  treasury (idx 2) → peers (idx 0/1) gas + tokens on all three chains;
-  idempotent top-ups; `--dry-run` validated. **Live run is operator/CI-only**
-  (needs the secret + a funded treasury — see "Fund the peers" above).
-- ⏳ Next: the public-mode harness (`sdk-e2e-infra.sh --public` or equivalent)
-  that skips local chain boot and points peers/tests at the testnets; a nightly
-  CI job that runs `fund-e2e-peers.mjs` then the public-mode suite using the org
-  secret.
+- ✅ **Public-mode harness** (`scripts/sdk-e2e-infra.sh --public`, #183): skips
+  the local chain boot and points the docker peers at the live testnets. It
+  derives the per-peer settlement keys (idx0=peer1, idx1=peer2) from
+  `E2E_DEV_MNEMONIC` via the SDK (`scripts/e2e-derive-peer-config.mjs`), reads
+  endpoints/addresses from `e2e/testnets.json` (refusing to run if any required
+  address is null), and layers `docker-compose-sdk-e2e.public.yml` over the base
+  compose (EVM chain-id suffix 31337→84532). Run the offline derivation gate
+  with `node scripts/e2e-derive-peer-config.mjs --check`.
+- ✅ **Host-side EVM test actors point at the testnet too.** The SDK e2e helper
+  (`packages/sdk/tests/e2e/helpers/docker-e2e-setup.ts`) used to hardcode the
+  EVM RPC / chain-id / contract addresses / client keys to local Anvil values,
+  ignoring the testnet env — so the host-side client kept hitting Anvil under
+  `--public`. It now reads them from env (Anvil defaults preserved when unset):
+  `EVM_RPC_URL`, `EVM_CHAIN_ID`, `EVM_TOKEN_ADDRESS`, `EVM_TOKEN_NETWORK_ADDRESS`,
+  `EVM_REGISTRY_ADDRESS`, plus the funded test-actor keys `EVM_CLIENT_PRIVATE_KEY`
+  / `EVM_CLIENT_ADDRESS` (publish/pay-to-write) and `EVM_SETTLEMENT_PRIVATE_KEY_A`
+  / `_B` (settlement). The harness derives these from `E2E_DEV_MNEMONIC` at
+  dedicated indices — **client idx3, settlement A idx4, settlement B idx5** — and
+  writes them into the gitignored `.env.sdk-e2e` (removed on `down`).
+- ✅ **Funding covers the run accounts.** `scripts/fund-e2e-peers.mjs` (#182/#187,
+  invoked by `--public --fund`) distributes treasury (idx2) → peers idx0/idx1 on
+  all three chains, **plus the host-side EVM test actors idx3/idx4/idx5 (ETH gas +
+  MockUSDC on Base Sepolia only)** so the public pay-to-write + settlement e2e can
+  open its channels. Idempotent top-ups; `--dry-run` validated. **Live run is
+  operator/CI-only** (needs the secret + a funded treasury).
+- ✅ **Nightly CI burn-in** (`.github/workflows/e2e-public-testnet.yml`, #184):
+  `schedule` + `workflow_dispatch` only (fork PRs get no secret), injects
+  `E2E_DEV_MNEMONIC`, and runs fund → `--public` up → SDK/mill e2es → teardown,
+  every step `continue-on-error` until proven stable.
+- ⏳ Next: run the live Mina **bare** deploy (`scripts/deploy-e2e-mina-zkapp-bare.mjs`,
+  #185/#186) against devnet and pin the address; then, once the burn-in is stable,
+  promote the nightly job from `continue-on-error` to a required gate.

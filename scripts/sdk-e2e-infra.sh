@@ -5,13 +5,29 @@
 # two TOON peers with NIP-59 privacy wrapping enabled.
 #
 # Usage:
-#   ./scripts/sdk-e2e-infra.sh up      # Build, start, wait for health
-#   ./scripts/sdk-e2e-infra.sh down     # Stop containers
-#   ./scripts/sdk-e2e-infra.sh down-v   # Stop and remove volumes
+#   ./scripts/sdk-e2e-infra.sh up         # Build, start LOCAL chains + peers, wait for health
+#   ./scripts/sdk-e2e-infra.sh --public   # PUBLIC mode: skip local chains; point peers
+#                                          #   at live testnets (Base Sepolia / Solana
+#                                          #   devnet / Mina devnet) from e2e/testnets.json,
+#                                          #   with per-peer keys derived from E2E_DEV_MNEMONIC.
+#   ./scripts/sdk-e2e-infra.sh --public --fund   # ...also fund idx0/idx1 from treasury (#182/#187)
+#   ./scripts/sdk-e2e-infra.sh down        # Stop containers
+#   ./scripts/sdk-e2e-infra.sh down-v      # Stop and remove volumes
+#
+# PUBLIC-mode prerequisites (offline gate cannot run these):
+#   • E2E_DEV_MNEMONIC set (env in CI, .env.e2e.local locally).
+#   • e2e/testnets.json fully populated (no null addresses) — the harness refuses
+#     to start otherwise.
+#   • Peers (idx0/idx1) funded on all three testnets — either pass --fund (calls
+#     scripts/fund-e2e-peers.mjs, #182/#187) or fund manually beforehand.
+#   • The pinned Mina zkApp MUST be the BARE-deployed one (MINA_SKIP_INIT=1) and
+#     client-opened (#185/#186). Public mode NEVER re-deploys Mina — it only
+#     consumes mina.zkAppAddress from testnets.json.
 
 set -e
 
 COMPOSE_FILE="docker-compose-sdk-e2e.yml"
+COMPOSE_PUBLIC_OVERRIDE="docker-compose-sdk-e2e.public.yml"
 PROJECT_NAME="toon-sdk-e2e"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -267,6 +283,152 @@ EOF
   echo ""
 }
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# PUBLIC mode — point peers at live public testnets (no local chains).
+# Additive to local mode; local `up` behaviour is untouched.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cmd_up_public() {
+  local do_fund="${1:-false}"
+  log_info "Starting SDK E2E infrastructure (PUBLIC testnet mode)..."
+
+  # ----- Preconditions -----
+  if [ -z "${E2E_DEV_MNEMONIC:-}" ] && ! grep -q '^[[:space:]]*E2E_DEV_MNEMONIC[[:space:]]*=' "$REPO_ROOT/.env.e2e.local" 2>/dev/null; then
+    log_error "E2E_DEV_MNEMONIC not set (env) and not found in .env.e2e.local."
+    log_error "See docs/e2e-testnets.md to bootstrap the dev wallet."
+    exit 1
+  fi
+  if [ ! -f "$REPO_ROOT/packages/sdk/dist/index.js" ]; then
+    log_error "SDK not built. Run: pnpm --filter @toon-protocol/sdk build"
+    exit 1
+  fi
+
+  # Guard against chain-id drift: public mode is pinned to Base Sepolia (84532),
+  # which the compose override hardcodes in its *_EVM_BASE_84532 env keys.
+  local evm_chain_id
+  evm_chain_id=$(node -e "console.log(require('$REPO_ROOT/e2e/testnets.json').evm.chainId)" 2>/dev/null || true)
+  if [ "$evm_chain_id" != "eip155:84532" ]; then
+    log_error "e2e/testnets.json evm.chainId is '$evm_chain_id', expected 'eip155:84532'."
+    log_error "The public compose override hardcodes the 84532 chain-id suffix; update both together."
+    exit 1
+  fi
+
+  # ----- Derive per-peer config from the seed + testnets.json -----
+  # e2e-derive-peer-config.mjs validates testnets.json has no null addresses and
+  # REFUSES (non-zero) otherwise. Keys live in env only — never written to disk.
+  log_info "Deriving per-peer settlement config (idx0=peer1, idx1=peer2)..."
+  local derived_env
+  if ! derived_env=$(cd "$REPO_ROOT" && node scripts/e2e-derive-peer-config.mjs 2>/tmp/e2e-derive.err); then
+    cat /tmp/e2e-derive.err >&2 || true
+    log_error "Failed to derive peer config (see error above)."
+    exit 1
+  fi
+  # Export every derived KEY=value line into the environment for compose + tests.
+  set -a
+  eval "$derived_env"
+  # The BASE compose still references the bare (local-mode) substitution names
+  # SOLANA_PROGRAM_ID / SOLANA_TOKEN_MINT / MINA_ZKAPP_ADDRESS for the chain
+  # services and any non-overridden peer keys. The public override wins for the
+  # peers (it uses the E2E_* names), but exporting these bare aliases too keeps
+  # the rendered config free of "variable is not set" warnings.
+  SOLANA_PROGRAM_ID="$E2E_SOLANA_PROGRAM_ID"
+  SOLANA_TOKEN_MINT="$E2E_SOLANA_TOKEN_MINT"
+  MINA_ZKAPP_ADDRESS="$E2E_MINA_ZKAPP_ADDRESS"
+  set +a
+  log_success "Derived peer config (EVM suffix: ${E2E_EVM_CHAIN_SUFFIX})"
+  log_info "  peer1 EVM: ${PEER1_EVM_ADDRESS} | Solana ATA: ${PEER1_SOLANA_TOKEN_ACCOUNT}"
+  log_info "  peer2 EVM: ${PEER2_EVM_ADDRESS} | Solana ATA: ${PEER2_SOLANA_TOKEN_ACCOUNT}"
+
+  # ----- Optional: fund the peers (idx0/idx1) from the treasury (idx2) -----
+  if [ "$do_fund" = "true" ]; then
+    if [ -f "$REPO_ROOT/scripts/fund-e2e-peers.mjs" ]; then
+      log_info "Funding peers (idx0/idx1) from treasury (idx2) via fund-e2e-peers.mjs..."
+      (cd "$REPO_ROOT" && node scripts/fund-e2e-peers.mjs --chains evm,solana,mina) \
+        || log_warning "Funding step failed (non-fatal) — peers may be underfunded."
+    else
+      log_warning "--fund requested but scripts/fund-e2e-peers.mjs not present yet (#182/#187)."
+      log_warning "Fund idx0/idx1 manually before running paid flows. Continuing."
+    fi
+  else
+    log_warning "Skipping funding. Peers MUST already be funded on all testnets (#182/#187)."
+  fi
+
+  # ----- NIP-59 / bootstrap pubkey exchange (same as local mode) -----
+  local peer1_pubkey peer2_pubkey
+  peer1_pubkey=$(derive_nostr_pubkey "$PEER1_SECRET_KEY")
+  peer2_pubkey=$(derive_nostr_pubkey "$PEER2_SECRET_KEY")
+  if [ -n "$peer1_pubkey" ]; then
+    export PEER2_BOOTSTRAP_PEERS="[{\"pubkey\":\"$peer1_pubkey\",\"relayUrl\":\"ws://peer1:7100\",\"btpEndpoint\":\"ws://peer1:3000\"}]"
+    export PEER2_NIP59_PEER_PUBKEYS="$peer1_pubkey"
+  else
+    export PEER2_BOOTSTRAP_PEERS="[]"
+  fi
+  if [ -n "$peer2_pubkey" ]; then
+    export PEER1_NIP59_PEER_PUBKEYS="$peer2_pubkey"
+  fi
+
+  # ----- Persist endpoints/addresses for host-side test consumption -----
+  # The SDK e2e helper (packages/sdk/tests/e2e/helpers/docker-e2e-setup.ts) reads
+  # these from .env.sdk-e2e (process.env wins). The EVM_* values override its
+  # Anvil defaults so the host-side client points at Base Sepolia, mirroring the
+  # SOLANA_PROGRAM_ID / MINA_ZKAPP_ADDRESS path. EVM_CLIENT_*/EVM_SETTLEMENT_* are
+  # the funded idx3/idx4/idx5 test-actor keys — ephemeral testnet keys derived
+  # from E2E_DEV_MNEMONIC. .env.sdk-e2e is gitignored and removed on `down`.
+  cat > "$REPO_ROOT/.env.sdk-e2e" <<EOF
+SOLANA_PROGRAM_ID=${E2E_SOLANA_PROGRAM_ID}
+MINA_ZKAPP_ADDRESS=${E2E_MINA_ZKAPP_ADDRESS}
+SOLANA_RPC_URL=${E2E_SOLANA_RPC_URL}
+MINA_GRAPHQL_URL=${E2E_MINA_GRAPHQL_URL}
+EVM_RPC_URL=${E2E_EVM_RPC_URL}
+EVM_CHAIN_ID=84532
+EVM_REGISTRY_ADDRESS=${E2E_EVM_REGISTRY_ADDRESS}
+EVM_TOKEN_ADDRESS=${E2E_EVM_TOKEN_ADDRESS}
+EVM_TOKEN_NETWORK_ADDRESS=${E2E_EVM_TOKEN_NETWORK_ADDRESS}
+EVM_CLIENT_PRIVATE_KEY=${E2E_EVM_CLIENT_PRIVATE_KEY}
+EVM_CLIENT_ADDRESS=${E2E_EVM_CLIENT_ADDRESS}
+EVM_SETTLEMENT_PRIVATE_KEY_A=${E2E_EVM_SETTLEMENT_PRIVATE_KEY_A}
+EVM_SETTLEMENT_PRIVATE_KEY_B=${E2E_EVM_SETTLEMENT_PRIVATE_KEY_B}
+EOF
+
+  # ----- Build image (same as local mode) -----
+  log_info "Building toon:sdk-e2e image..."
+  DOCKER_BUILDKIT=1 docker build \
+    -f "$REPO_ROOT/docker/Dockerfile.sdk-e2e" \
+    -t toon:sdk-e2e \
+    "$REPO_ROOT"
+  log_success "Docker image built"
+
+  # ----- Start ONLY the peers (no chain services) with the override layered on -----
+  # --no-deps is REQUIRED: a compose override cannot delete the base file's
+  # `depends_on` map (it merges), so without --no-deps `up peer1 peer2` would
+  # still try to boot anvil/solana-validator/mina-lightnet. --no-deps skips them.
+  log_info "Starting TOON peers against public testnets (no local chain deps)..."
+  docker compose -p "$PROJECT_NAME" \
+    -f "$REPO_ROOT/$COMPOSE_FILE" \
+    -f "$REPO_ROOT/$COMPOSE_PUBLIC_OVERRIDE" \
+    up -d --no-deps peer1 peer2
+  log_success "Peer containers started"
+
+  log_info "Waiting for TOON peers..."
+  wait_for_health "http://localhost:19100/health" "Peer1 BLS" 60
+  wait_for_health "http://localhost:19110/health" "Peer2 BLS" 60
+
+  echo ""
+  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${GREEN}  TOON PUBLIC-TESTNET E2E Ready (Base Sepolia + Solana devnet + Mina devnet)${NC}"
+  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  echo "  EVM RPC:           ${E2E_EVM_RPC_URL} (eip155:84532)"
+  echo "  Solana RPC:        ${E2E_SOLANA_RPC_URL}"
+  echo "  Mina GraphQL:      ${E2E_MINA_GRAPHQL_URL}"
+  echo ""
+  echo "  Peer1 BLS:         http://localhost:19100   EVM ${PEER1_EVM_ADDRESS}"
+  echo "  Peer2 BLS:         http://localhost:19110   EVM ${PEER2_EVM_ADDRESS}"
+  echo ""
+  echo "  Tests:   cd packages/sdk && pnpm test:e2e:docker"
+  echo "           cd packages/mill && pnpm test:e2e:docker"
+  echo ""
+}
+
 cmd_down() {
   log_info "Stopping SDK E2E infrastructure..."
   docker compose -p "$PROJECT_NAME" -f "$REPO_ROOT/$COMPOSE_FILE" down
@@ -285,6 +447,14 @@ case "${1:-}" in
   up)
     cmd_up
     ;;
+  --public|public)
+    # Optional --fund flag (any position after the mode token).
+    do_fund=false
+    for arg in "${@:2}"; do
+      [ "$arg" = "--fund" ] && do_fund=true
+    done
+    cmd_up_public "$do_fund"
+    ;;
   down)
     cmd_down
     ;;
@@ -292,7 +462,7 @@ case "${1:-}" in
     cmd_down_v
     ;;
   *)
-    echo "Usage: $0 {up|down|down-v}"
+    echo "Usage: $0 {up|--public [--fund]|down|down-v}"
     exit 1
     ;;
 esac

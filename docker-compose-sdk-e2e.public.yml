@@ -1,0 +1,90 @@
+# SDK E2E Test Stack — PUBLIC-TESTNET OVERRIDE (Base Sepolia / Solana devnet / Mina devnet)
+#
+# Layered ON TOP of docker-compose-sdk-e2e.yml:
+#   docker compose -f docker-compose-sdk-e2e.yml -f docker-compose-sdk-e2e.public.yml ...
+#
+# Driven by `scripts/sdk-e2e-infra.sh --public`. This override replaces the
+# peers' hardcoded LOCAL (Anvil/Solana-validator/Mina-lightnet) settlement
+# values with `${...}` substitutions sourced from `e2e/testnets.json` + the
+# E2E_DEV_MNEMONIC-derived per-peer keys (see scripts/e2e-derive-peer-config.mjs).
+#
+# Key differences vs. local mode:
+#   • No anvil / solana-validator / mina-lightnet services — peers point at the
+#     live public testnet endpoints.
+#   • EVM chain id shifts 31337 -> 84532 (Base Sepolia, eip155:84532), so the
+#     chain-id-SUFFIXED env-var NAMES shift too:
+#       *_EVM_BASE_31337  ->  *_EVM_BASE_84532
+#     and SUPPORTED_CHAINS uses `evm:base:84532`. The base file's *_EVM_BASE_31337
+#     keys still merge in but are INERT: the connector only reads the suffixes
+#     named in SUPPORTED_CHAINS (which this override sets to *_84532).
+#   • Solana/Mina RPCs are the public devnets; addresses come from testnets.json.
+#
+# A compose override cannot DELETE the base file's `depends_on` map (env/maps
+# merge, they don't replace), so the harness runs `up --no-deps peer1 peer2`:
+# that is what actually skips booting anvil/solana-validator/mina-lightnet.
+# The `depends_on: []` below documents intent and is harmless either way.
+
+services:
+  peer1:
+    # Public testnets are reachable directly — no local chain dependency.
+    depends_on: []
+    environment:
+      # --- EVM settlement: Base Sepolia (eip155:84532) ---
+      SETTLEMENT_RPC_URL: '${E2E_EVM_RPC_URL}'
+      SETTLEMENT_PRIVATE_KEY: '${PEER1_SETTLEMENT_PRIVATE_KEY}'
+      SETTLEMENT_REGISTRY_ADDRESS: '${E2E_EVM_REGISTRY_ADDRESS}'
+      SETTLEMENT_TOKEN_ADDRESS: '${E2E_EVM_TOKEN_ADDRESS}'
+
+      # Settlement info (published in kind:10032) — chain-id suffix 31337 -> 84532.
+      SUPPORTED_CHAINS: 'evm:base:84532,solana:devnet,mina:devnet'
+      SETTLEMENT_ADDRESS_EVM_BASE_84532: '${PEER1_EVM_ADDRESS}'
+      PREFERRED_TOKEN_EVM_BASE_84532: '${E2E_EVM_TOKEN_ADDRESS}'
+      TOKEN_NETWORK_EVM_BASE_84532: '${E2E_EVM_TOKEN_NETWORK_ADDRESS}'
+      SETTLEMENT_ADDRESS_SOLANA_DEVNET: '${PEER1_SOLANA_TOKEN_ACCOUNT}'
+      PREFERRED_TOKEN_SOLANA_DEVNET: '${E2E_SOLANA_TOKEN_MINT}'
+      TOKEN_NETWORK_SOLANA_DEVNET: '${E2E_SOLANA_PROGRAM_ID}'
+      SETTLEMENT_ADDRESS_MINA_DEVNET: '${PEER1_MINA_ACCOUNT}'
+      PREFERRED_TOKEN_MINA_DEVNET: 'MINA'
+      TOKEN_NETWORK_MINA_DEVNET: '${E2E_MINA_ZKAPP_ADDRESS}'
+
+      # Static BTP peer (peer2) — use the derived peer2 EVM addr + chain 84532.
+      BTP_PEERS: '[{"id":"peer2","url":"ws://peer2:3000","authToken":"","evmAddress":"${PEER2_EVM_ADDRESS}","chain":"evm:84532"}]'
+
+      # Multi-chain settlement endpoints (public devnets).
+      SOLANA_RPC_URL: '${E2E_SOLANA_RPC_URL}'
+      SOLANA_PROGRAM_ID: '${E2E_SOLANA_PROGRAM_ID}'
+      MINA_GRAPHQL_URL: '${E2E_MINA_GRAPHQL_URL}'
+      MINA_ZKAPP_ADDRESS: '${E2E_MINA_ZKAPP_ADDRESS}'
+      # Public Mina devnet has no lightnet accounts-manager — unset it so the
+      # peer does not try to fund/acquire accounts via the local manager.
+      MINA_ACCOUNTS_MANAGER_URL: ''
+
+  peer2:
+    depends_on: []
+    environment:
+      # --- EVM settlement: Base Sepolia (eip155:84532) ---
+      SETTLEMENT_RPC_URL: '${E2E_EVM_RPC_URL}'
+      SETTLEMENT_PRIVATE_KEY: '${PEER2_SETTLEMENT_PRIVATE_KEY}'
+      SETTLEMENT_REGISTRY_ADDRESS: '${E2E_EVM_REGISTRY_ADDRESS}'
+      SETTLEMENT_TOKEN_ADDRESS: '${E2E_EVM_TOKEN_ADDRESS}'
+
+      # Settlement info — peer2 prefers Solana (mixed-chain E2E). Suffix -> 84532.
+      SUPPORTED_CHAINS: 'solana:devnet,evm:base:84532,mina:devnet'
+      SETTLEMENT_ADDRESS_EVM_BASE_84532: '${PEER2_EVM_ADDRESS}'
+      PREFERRED_TOKEN_EVM_BASE_84532: '${E2E_EVM_TOKEN_ADDRESS}'
+      TOKEN_NETWORK_EVM_BASE_84532: '${E2E_EVM_TOKEN_NETWORK_ADDRESS}'
+      SETTLEMENT_ADDRESS_SOLANA_DEVNET: '${PEER2_SOLANA_TOKEN_ACCOUNT}'
+      PREFERRED_TOKEN_SOLANA_DEVNET: '${E2E_SOLANA_TOKEN_MINT}'
+      TOKEN_NETWORK_SOLANA_DEVNET: '${E2E_SOLANA_PROGRAM_ID}'
+      SETTLEMENT_ADDRESS_MINA_DEVNET: '${PEER2_MINA_ACCOUNT}'
+      PREFERRED_TOKEN_MINA_DEVNET: 'MINA'
+      TOKEN_NETWORK_MINA_DEVNET: '${E2E_MINA_ZKAPP_ADDRESS}'
+
+      # Static BTP peer (peer1) — use the derived peer1 EVM addr + chain 84532.
+      BTP_PEERS: '[{"id":"peer1","url":"ws://peer1:3000","authToken":"","evmAddress":"${PEER1_EVM_ADDRESS}","chain":"evm:84532"}]'
+
+      SOLANA_RPC_URL: '${E2E_SOLANA_RPC_URL}'
+      SOLANA_PROGRAM_ID: '${E2E_SOLANA_PROGRAM_ID}'
+      MINA_GRAPHQL_URL: '${E2E_MINA_GRAPHQL_URL}'
+      MINA_ZKAPP_ADDRESS: '${E2E_MINA_ZKAPP_ADDRESS}'
+      MINA_ACCOUNTS_MANAGER_URL: ''
