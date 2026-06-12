@@ -36,8 +36,11 @@ describe('keystore-node', () => {
       expect(enc.iv).toBeTypeOf('string');
       expect(enc.ciphertext).toBeTypeOf('string');
       expect(enc.tag).toBeTypeOf('string');
-      // Ciphertext must NOT contain the plaintext.
-      expect(enc.ciphertext).not.toContain('legal');
+      // Ciphertext must NOT leak the plaintext mnemonic. Assert against the
+      // full phrase (not a single word) so the check cannot collide with
+      // base64/JSON envelope fragments, and confirm it differs from plaintext.
+      expect(enc.ciphertext).not.toContain(VALID_MNEMONIC);
+      expect(enc.ciphertext).not.toBe(VALID_MNEMONIC);
 
       const out = decryptMnemonic(enc, PASSWORD);
       expect(out).toBe(VALID_MNEMONIC);
