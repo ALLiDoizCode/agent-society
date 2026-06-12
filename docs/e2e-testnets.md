@@ -83,12 +83,34 @@ pinned in `e2e/testnets.json`. Reproducible scripts:
   ⚠️ **Use a STABLE solana CLI (1.18.x)** — Agave 4.0.x fails fresh-program
   deploys with `AccountNotFound … error sending request`. ⚠️ Solana **devnet
   resets periodically** — re-run to redeploy/refresh after a reset.
-- **Mina devnet** — `MINA_GRAPHQL_URL=<devnet> MINA_DEPLOYER_PRIVATE_KEY=<EK>
-MINA_ZKAPP_PRIVATE_KEY=<EK> npx tsx scripts/deploy-mina-zkapp.ts`. Deploys +
-  initializes the PaymentChannel zkApp (channelState=1). Slow (o1js compile +
-  multi-minute devnet slots) — keep Mina nightly, not per-PR. Derive the
-  deployer/zkApp `EK…` keys from the mnemonic (idx 2 / a dedicated index) via
-  `@toon-protocol/core`'s `hexToMinaBase58PrivateKey`.
+- **Mina devnet** — `node scripts/deploy-e2e-mina-zkapp-bare.mjs` (needs
+  `E2E_DEV_MNEMONIC` + a funded treasury idx-2 Mina account). Deploys the
+  PaymentChannel zkApp **BARE** (`MINA_SKIP_INIT=1`, channelState=0) at a
+  **dedicated deterministic index** (`E2E_MINA_ZKAPP_INDEX`, default **98**) and
+  records the address into `e2e/testnets.json` `mina.zkAppAddress`. **Bare is
+  required for settlement** (issue #185): a deployer-**initialized** zkApp writes
+  `channelHash = Poseidon(deployer, deployer, 0)`, which the connector's
+  `claimFromChannel` (`Poseidon(apex, client, 0)`) can never reproduce
+  ("Supplied participant keys do not match the on-chain channelHash"). A bare
+  deploy lets the **client**'s `openMinaChannel` write the correct
+  `(client, apex)` channelHash on-chain. The wrapper derives the deployer (idx 2)
+  + zkApp (idx 98) `EK…` keys from the mnemonic via the SDK + `@toon-protocol/core`'s
+  `hexToMinaBase58PrivateKey`, then delegates to `scripts/deploy-mina-zkapp.ts`
+  (the single source of truth for the o1js compile/deploy). Slow (o1js compile +
+  multi-minute devnet slots) — keep Mina nightly, not per-PR. You cannot re-init
+  over an existing account, so to deploy a genuinely fresh bare channel bump
+  `E2E_MINA_ZKAPP_INDEX`.
+
+  > **One-liner (init variant, NOT settle-able — kept for reference only):**
+  > `MINA_GRAPHQL_URL=<devnet> MINA_DEPLOYER_PRIVATE_KEY=<EK> MINA_ZKAPP_PRIVATE_KEY=<EK> npx tsx scripts/deploy-mina-zkapp.ts`
+  > deploys + **initializes** the zkApp (channelState=1). The connector cannot
+  > settle against it — use the bare wrapper above for the real settle run.
+
+  **Verify settlement (after the client opens the channel on-chain):** the
+  connector settles by landing an on-chain `claimFromChannel`. Confirm the Mina
+  `nonceField` advances **0 → 1** on the first settled publish (that transition
+  is the on-chain proof a Mina-settled write landed). See
+  `packages/townhouse/RUNBOOK.md` § "Mina reset gotcha — bare-zkApp precondition".
 
 The deployed addresses currently in `e2e/testnets.json` were produced by these
 scripts against the live testnets.
