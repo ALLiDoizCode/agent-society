@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0](https://github.com/toon-protocol/town/compare/v0.22.1...v0.23.0) (2026-06-12)
+
+### Features
+
+* **client:** self-managed anon SOCKS5h proxy for .anyone HS ([#200](https://github.com/toon-protocol/town/issues/200)) ([#208](https://github.com/toon-protocol/town/issues/208)) ([f435d48](https://github.com/toon-protocol/town/commit/f435d48e5157a7b468645c1c11dec76f25ada24a)), closes [#204](https://github.com/toon-protocol/town/issues/204)
+
 ## [0.22.1](https://github.com/toon-protocol/town/compare/v0.22.0...v0.22.1) (2026-06-12)
 
 ### Bug Fixes
