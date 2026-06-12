@@ -62,7 +62,12 @@ const CHAINS = (process.env['LIVE_HS_CHAINS'] ?? 'evm')
 type ChainKind = 'evm' | 'solana' | 'mina';
 
 interface Testnets {
-  evm: { chainId: string; rpcUrl: string; tokenAddress: string; tokenNetworkAddress: string };
+  evm: {
+    chainId: string;
+    rpcUrl: string;
+    tokenAddress: string;
+    tokenNetworkAddress: string;
+  };
   solana: { rpcUrl: string; programId: string; tokenMint: string };
   mina: { graphqlUrl: string; zkAppAddress: string };
 }
@@ -87,7 +92,9 @@ describeLive('live HS apex paid publish (RUN_LIVE_HS_E2E=1)', () => {
 
   it('has the required env configured', () => {
     expect(mnemonic, 'E2E_DEV_MNEMONIC').not.toBe('');
-    expect(btpUrl, 'LIVE_HS_BTP_URL').toMatch(/^wss?:\/\/.+\.anyone(:\d+)?\/btp$/);
+    expect(btpUrl, 'LIVE_HS_BTP_URL').toMatch(
+      /^wss?:\/\/.+\.anyone(:\d+)?\/btp$/
+    );
   });
 
   for (const chain of CHAINS as ChainKind[]) {
@@ -113,8 +120,12 @@ describeLive('live HS apex paid publish (RUN_LIVE_HS_E2E=1)', () => {
                 supportedChains: [`evm:base:${evmChainId}`],
                 chainRpcUrls: { [`evm:base:${evmChainId}`]: t.evm.rpcUrl },
                 settlementAddresses: { [`evm:base:${evmChainId}`]: self.evm },
-                preferredTokens: { [`evm:base:${evmChainId}`]: t.evm.tokenAddress },
-                tokenNetworks: { [`evm:base:${evmChainId}`]: t.evm.tokenNetworkAddress },
+                preferredTokens: {
+                  [`evm:base:${evmChainId}`]: t.evm.tokenAddress,
+                },
+                tokenNetworks: {
+                  [`evm:base:${evmChainId}`]: t.evm.tokenNetworkAddress,
+                },
                 neg: {
                   chain: `evm:base:${evmChainId}`,
                   chainType: 'evm' as const,
@@ -152,7 +163,10 @@ describeLive('live HS apex paid publish (RUN_LIVE_HS_E2E=1)', () => {
                   chainRpcUrls: { 'mina:devnet': t.mina.graphqlUrl },
                   settlementAddresses: { 'mina:devnet': self.mina },
                   tokenNetworks: { 'mina:devnet': t.mina.zkAppAddress },
-                  minaChannel: { graphqlUrl: t.mina.graphqlUrl, zkAppAddress: t.mina.zkAppAddress },
+                  minaChannel: {
+                    graphqlUrl: t.mina.graphqlUrl,
+                    zkAppAddress: t.mina.zkAppAddress,
+                  },
                   neg: {
                     chain: 'mina:devnet',
                     chainType: 'mina' as const,
@@ -196,7 +210,9 @@ describeLive('live HS apex paid publish (RUN_LIVE_HS_E2E=1)', () => {
           // Bootstrap returns no peers for a bare apex dial, so inject the apex's
           // per-chain settlement metadata manually (mirrors the connector handshake).
           (
-            client as unknown as { peerNegotiations: Map<string, PeerNegotiation> }
+            client as unknown as {
+              peerNegotiations: Map<string, PeerNegotiation>;
+            }
           ).peerNegotiations.set('town', neg as PeerNegotiation);
 
           const channelId = await client.openChannel('g.townhouse.town');
@@ -212,17 +228,23 @@ describeLive('live HS apex paid publish (RUN_LIVE_HS_E2E=1)', () => {
                 tags: [],
                 created_at: Math.floor(Date.now() / 1000),
               },
-              generateSecretKey(),
+              generateSecretKey()
             );
-            const res = await client.publishEvent(event, { claim: proof, ilpAmount: fee });
-            expect(res.success, `publish #${i} (${chain}): ${res.error ?? ''}`).toBe(true);
+            const res = await client.publishEvent(event, {
+              claim: proof,
+              ilpAmount: fee,
+            });
+            expect(
+              res.success,
+              `publish #${i} (${chain}): ${res.error ?? ''}`
+            ).toBe(true);
             expect(res.eventId).toBeTruthy();
           }
         } finally {
           await client.stop();
         }
       },
-      perChainTimeout,
+      perChainTimeout
     );
   }
 });
