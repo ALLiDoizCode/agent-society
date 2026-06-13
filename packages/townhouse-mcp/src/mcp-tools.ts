@@ -1,0 +1,461 @@
+/**
+ * MCP tool definitions + dispatch. The MCP server is a thin proxy: each
+ * `townhouse_*` tool maps to either the apex Fastify API (live telemetry +
+ * money/topology) or the `townhouse` CLI (lifecycle / config that must work
+ * before the apex is up). This module is the testable core (no stdio / SDK
+ * transport) so the tool→api/cli mapping and the "booting — retry" handling can
+ * be unit-tested directly. Mirrors client-mcp's mcp-tools.ts contract.
+ */
+import { ApiError, ApexUnreachableError } from './api-client.js';
+import type { ApiClient } from './api-client.js';
+import type { CliDriver } from './cli-driver.js';
+import { CliError } from './cli-driver.js';
+import type { ResolvedConfig } from './config.js';
+import { readUpStatus, spawnUpDetached } from './apex-lifecycle.js';
+import type { WithdrawRequest } from '@toon-protocol/townhouse';
+
+/** A JSON-Schema-described MCP tool. */
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+/** MCP tool-call result shape (subset of the SDK's CallToolResult). */
+export interface ToolResult {
+  content: { type: 'text'; text: string }[];
+  isError?: boolean;
+}
+
+/** Dependencies threaded into dispatch — injectable for tests. */
+export interface ToolCtx {
+  api: ApiClient;
+  cli: CliDriver;
+  cfg: ResolvedConfig;
+}
+
+const EMPTY = {
+  type: 'object',
+  properties: {},
+  additionalProperties: false,
+} as const;
+
+export const TOOL_DEFINITIONS: ToolDefinition[] = [
+  // ── lifecycle ──
+  {
+    name: 'townhouse_init',
+    description:
+      'Create townhouse config. Loads TOWNHOUSE_MNEMONIC if set, otherwise ' +
+      'generates and returns a fresh operator mnemonic for the agent to custody.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        preset: { type: 'string', description: 'Optional preset (e.g. demo).' },
+        network: {
+          type: 'string',
+          description: 'mainnet | testnet | devnet | custom.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'townhouse_up',
+    description:
+      'Boot the apex (direct default, or transport:"hs"). Returns a handle ' +
+      'immediately — poll townhouse_up_status for per-step boot progress.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        transport: { type: 'string', enum: ['direct', 'hs'] },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'townhouse_up_status',
+    description:
+      'Per-step boot progress for an in-flight or completed townhouse_up ' +
+      '(reads the up.log job record).',
+    inputSchema: EMPTY,
+  },
+  {
+    name: 'townhouse_down',
+    description: 'Stop the apex stack (hs:true for a hidden-service apex).',
+    inputSchema: {
+      type: 'object',
+      properties: { hs: { type: 'boolean' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'townhouse_status',
+    description: 'Apex / connector / node / .anyone health.',
+    inputSchema: EMPTY,
+  },
+  // ── nodes ──
+  {
+    name: 'townhouse_list_nodes',
+    description: 'List provisioned nodes (id, type, ilpAddress, status).',
+    inputSchema: EMPTY,
+  },
+  {
+    name: 'townhouse_add_node',
+    description: 'Provision a town | mill | dvm child node.',
+    inputSchema: {
+      type: 'object',
+      properties: { type: { type: 'string', enum: ['town', 'mill', 'dvm'] } },
+      required: ['type'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'townhouse_remove_node',
+    description: 'Deprovision a node by id.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'townhouse_set_node_fees',
+    description:
+      'Tune fees: town feePerEvent / mill feeBasisPoints / dvm feePerJob + ' +
+      'kindPricing; or toggle enabled.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['town', 'mill', 'dvm'] },
+        feePerEvent: { type: 'number' },
+        feeBasisPoints: { type: 'number' },
+        feePerJob: { type: 'number' },
+        kindPricing: { type: 'object' },
+        enabled: { type: 'boolean' },
+      },
+      required: ['type'],
+      additionalProperties: false,
+    },
+  },
+  // ── chains / transport ──
+  {
+    name: 'townhouse_chains',
+    description:
+      'List, add, or remove settlement chains (op: list | add | remove). ' +
+      'add/remove pass through CLI flags in `args`.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        op: { type: 'string', enum: ['list', 'add', 'remove'] },
+        args: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Extra CLI args for add/remove.',
+        },
+      },
+      required: ['op'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'townhouse_transport',
+    description: 'Get transport status, or flip it (set: direct | hs).',
+    inputSchema: {
+      type: 'object',
+      properties: { set: { type: 'string', enum: ['direct', 'hs'] } },
+      additionalProperties: false,
+    },
+  },
+  // ── wallet / earnings / $ ──
+  {
+    name: 'townhouse_balances',
+    description: 'EVM / Solana / Arweave balances per node.',
+    inputSchema: EMPTY,
+  },
+  {
+    name: 'townhouse_earnings',
+    description: 'Apex + per-peer earnings with today/month/year deltas.',
+    inputSchema: EMPTY,
+  },
+  {
+    name: 'townhouse_seed',
+    description: 'Reveal the operator mnemonic for backup (the agent owns it).',
+    inputSchema: EMPTY,
+  },
+  {
+    name: 'townhouse_withdraw',
+    description:
+      'Withdraw earnings to a recipient (EVM in v1). Set dryRun:true for a ' +
+      'gas/fee estimate without broadcasting.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nodeType: { type: 'string', enum: ['town', 'mill', 'dvm'] },
+        chainFamily: { type: 'string', enum: ['evm', 'solana', 'mina'] },
+        token: { type: 'string' },
+        recipient: { type: 'string' },
+        amount: { type: 'string' },
+        dryRun: { type: 'boolean' },
+      },
+      required: ['nodeType', 'chainFamily', 'token', 'recipient', 'amount'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'townhouse_credits',
+    description: 'Buy or check Arweave upload credits (op: buy | balance).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        op: { type: 'string', enum: ['buy', 'balance'] },
+        token: { type: 'string' },
+        amount: { type: 'string' },
+        quoteOnly: { type: 'boolean' },
+      },
+      required: ['op'],
+      additionalProperties: false,
+    },
+  },
+  // ── telemetry ──
+  {
+    name: 'townhouse_logs',
+    description: 'Tail a bounded slice of node logs (filter by service/level).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        service: { type: 'string' },
+        level: { type: 'string' },
+        maxLines: { type: 'number' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'townhouse_metrics',
+    description: 'Connector metrics snapshot.',
+    inputSchema: EMPTY,
+  },
+  {
+    name: 'townhouse_channels',
+    description: 'Open payment channels (nonce watermark + transferred).',
+    inputSchema: EMPTY,
+  },
+  {
+    name: 'townhouse_health',
+    description: 'Probe apex / api / nodes / .anyone.',
+    inputSchema: EMPTY,
+  },
+];
+
+/**
+ * Dispatch an MCP tool call. Always resolves a `ToolResult` (errors are encoded
+ * as `isError:true` text, not thrown, so the agent sees a readable message). An
+ * unreachable apex under AUTOUP yields a clear "booting — retry" message.
+ */
+export async function dispatchTool(
+  ctx: ToolCtx,
+  name: string,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  const { api, cli, cfg } = ctx;
+  try {
+    switch (name) {
+      // ── lifecycle → CLI / job record ──
+      case 'townhouse_init':
+        return ok(await cli.runJson(['init', ...presetArgs(args)]));
+      case 'townhouse_up': {
+        const transport =
+          args['transport'] === 'hs' || args['transport'] === 'direct'
+            ? (args['transport'] as 'hs' | 'direct')
+            : cfg.transport;
+        const pid = spawnUpDetached(cfg, transport);
+        return ok({
+          started: true,
+          pid,
+          transport,
+          poll: 'townhouse_up_status',
+        });
+      }
+      case 'townhouse_up_status':
+        return ok(readUpStatus(cfg));
+      case 'townhouse_down':
+        return ok(await cli.runJson(args['hs'] ? ['hs', 'down'] : ['down']));
+      case 'townhouse_status':
+        return ok(await statusPreferApi(ctx));
+
+      // ── nodes → API ──
+      case 'townhouse_list_nodes':
+        return ok(await api.listNodes());
+      case 'townhouse_add_node':
+        return ok(await api.addNode({ type: asNodeType(args['type']) }));
+      case 'townhouse_remove_node':
+        return ok(await api.removeNode(String(args['id'])));
+      case 'townhouse_set_node_fees':
+        return ok(
+          await api.setNodeConfig(String(args['type']), stripType(args))
+        );
+
+      // ── chains / transport ──
+      case 'townhouse_chains':
+        return ok(await chains(ctx, args));
+      case 'townhouse_transport':
+        return ok(
+          args['set']
+            ? await api.setTransport({ mode: asTransport(args['set']) })
+            : await api.transport()
+        );
+
+      // ── wallet / $ ──
+      case 'townhouse_balances':
+        return ok(await api.balances());
+      case 'townhouse_earnings':
+        return ok(await api.earnings());
+      case 'townhouse_seed':
+        return ok(await cli.runJson(['wallet', 'seed', '--confirm']));
+      case 'townhouse_withdraw':
+        return ok(await api.withdraw(args as unknown as WithdrawRequest));
+      case 'townhouse_credits':
+        return ok(await credits(cli, args));
+
+      // ── telemetry ──
+      case 'townhouse_logs':
+        return ok(await tailLogs(ctx, args));
+      case 'townhouse_metrics':
+        return ok(await cli.runJson(['metrics']));
+      case 'townhouse_channels':
+        return ok(await cli.runJson(['channels']));
+      case 'townhouse_health':
+        return ok(await cli.runJson(['health']));
+
+      default:
+        return err(`Unknown tool: ${name}`);
+    }
+  } catch (e) {
+    return toErrorResult(e, cfg);
+  }
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function presetArgs(args: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  if (typeof args['preset'] === 'string') out.push('--preset', args['preset']);
+  if (typeof args['network'] === 'string')
+    out.push('--network', args['network']);
+  return out;
+}
+
+function stripType(args: Record<string, unknown>): Record<string, unknown> {
+  const { type: _omit, ...rest } = args;
+  return rest;
+}
+
+function asNodeType(v: unknown): 'town' | 'mill' | 'dvm' {
+  if (v === 'town' || v === 'mill' || v === 'dvm') return v;
+  throw new ApiError(`invalid node type: ${String(v)}`, 400, false);
+}
+
+function asTransport(v: unknown): 'direct' | 'hs' {
+  if (v === 'direct' || v === 'hs') return v;
+  throw new ApiError(`invalid transport: ${String(v)}`, 400, false);
+}
+
+/** Prefer the API for status; fall back to the CLI when the apex is down. */
+async function statusPreferApi(ctx: ToolCtx): Promise<unknown> {
+  try {
+    const [nodes, transport] = await Promise.all([
+      ctx.api.listNodes(),
+      ctx.api.transport(),
+    ]);
+    return { source: 'api', nodes, transport };
+  } catch (e) {
+    if (e instanceof ApexUnreachableError) {
+      return { source: 'cli', ...(await ctx.cli.runJson<object>(['status'])) };
+    }
+    throw e;
+  }
+}
+
+async function chains(
+  ctx: ToolCtx,
+  args: Record<string, unknown>
+): Promise<unknown> {
+  const op = args['op'];
+  if (op === 'list') return ctx.api.chains();
+  const extra = Array.isArray(args['args'])
+    ? (args['args'] as unknown[]).map(String)
+    : [];
+  if (op === 'add') return ctx.cli.runJson(['chains', 'add', ...extra]);
+  if (op === 'remove') return ctx.cli.runJson(['chains', 'remove', ...extra]);
+  throw new ApiError(`invalid chains op: ${String(op)}`, 400, false);
+}
+
+async function credits(
+  cli: CliDriver,
+  args: Record<string, unknown>
+): Promise<unknown> {
+  const op = args['op'];
+  const flags: string[] = [];
+  if (typeof args['token'] === 'string') flags.push('--token', args['token']);
+  if (op === 'balance') return cli.runJson(['credits', 'balance', ...flags]);
+  if (op === 'buy') {
+    if (typeof args['amount'] === 'string')
+      flags.push('--amount', args['amount']);
+    if (args['quoteOnly']) flags.push('--quote-only');
+    flags.push('--yes');
+    return cli.runJson(['credits', 'buy', ...flags]);
+  }
+  throw new ApiError(`invalid credits op: ${String(op)}`, 400, false);
+}
+
+async function tailLogs(
+  ctx: ToolCtx,
+  args: Record<string, unknown>
+): Promise<unknown> {
+  const maxLines =
+    typeof args['maxLines'] === 'number' ? args['maxLines'] : 100;
+  const lines = await ctx.cli.runNdjson<Record<string, unknown>>([
+    'logs',
+    '--lines',
+    String(maxLines),
+  ]);
+  const service = args['service'];
+  const level = args['level'];
+  const filtered = lines.filter(
+    (l) =>
+      (service === undefined || l['service'] === service) &&
+      (level === undefined || l['level'] === level)
+  );
+  return { count: filtered.length, events: filtered };
+}
+
+function toErrorResult(e: unknown, cfg: ResolvedConfig): ToolResult {
+  if (e instanceof ApexUnreachableError) {
+    return err(
+      `Townhouse apex API not reachable at ${e.baseUrl}. If AUTOUP is on it may ` +
+        `be booting (image pulls / HS bootstrap can take minutes) — poll ` +
+        `townhouse_up_status and retry. Boot log: ${cfg.configDir}/up.log.`
+    );
+  }
+  if (e instanceof ApiError && e.retryable) {
+    return err(`Apex busy or still booting — retry shortly. (${e.message})`);
+  }
+  if (e instanceof ApiError) {
+    return err(`${e.message}${e.detail ? `: ${e.detail}` : ''}`);
+  }
+  if (e instanceof CliError) {
+    return err(
+      `townhouse CLI failed (exit ${e.exitCode}): ${e.stderr.trim() || e.message}`
+    );
+  }
+  return err(e instanceof Error ? e.message : String(e));
+}
+
+function ok(data: unknown): ToolResult {
+  return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+}
+
+function err(message: string): ToolResult {
+  return { content: [{ type: 'text', text: message }], isError: true };
+}
