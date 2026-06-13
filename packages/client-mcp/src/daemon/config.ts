@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { loadKeystore } from '@toon-protocol/client';
-import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/core';
 import type { ToonClientConfig } from '@toon-protocol/client';
 import type { SettlementChain } from '../control-api.js';
 

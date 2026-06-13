@@ -32,7 +32,7 @@ import { mkdtempSync } from 'node:fs';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { finalizeEvent, generateSecretKey } from 'nostr-tools/pure';
 import { ToonClient } from '@toon-protocol/client';
-import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/core';
 import type { ToonClientConfig } from '@toon-protocol/client';
 import { deriveFullIdentity } from '@toon-protocol/client';
 import { ClientRunner, type ToonClientLike } from '../daemon/client-runner.js';

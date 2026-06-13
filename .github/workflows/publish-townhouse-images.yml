@@ -799,3 +799,44 @@ jobs:
         run: pnpm --filter @toon-protocol/townhouse publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # ── @toon-protocol/client-mcp (agent client: daemon + MCP server) ──────
+      # Published from the SAME release tag, lockstep-versioned with the release
+      # (single source of truth = the vX.Y.Z tag, same as townhouse). The package
+      # BUNDLES its @toon-protocol/* workspace deps into dist (tsup noExternal),
+      # so the published package.json carries zero @toon-protocol/* runtime deps
+      # (enforced by packages/client-mcp/src/package-structure.test.ts).
+      - name: Build @toon-protocol/client-mcp (and workspace dependencies)
+        # Build the bundled workspace deps first (client → core), then the
+        # package itself — tsup inlines client/core from their built dist.
+        run: |
+          pnpm --filter "@toon-protocol/client..." build
+          pnpm --filter @toon-protocol/client-mcp build
+
+      - name: Set client-mcp version to the release tag
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          node -e "const f='packages/client-mcp/package.json';const fs=require('fs');const p=JSON.parse(fs.readFileSync(f));p.version=process.env.VERSION;fs.writeFileSync(f,JSON.stringify(p,null,2)+'\n');console.log('client-mcp version set to',p.version)"
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+
+      - name: Verify client-mcp tarball is self-contained (no @toon-protocol/* runtime deps)
+        run: |
+          set -euo pipefail
+          PACK_OUT=$(mktemp -d)
+          (cd packages/client-mcp && pnpm pack --pack-destination "$PACK_OUT")
+          TGZ=$(ls "$PACK_OUT"/toon-protocol-client-mcp-*.tgz | head -1)
+          [ -f "$TGZ" ] || { echo "FAIL: pnpm pack produced no tgz"; exit 1; }
+          for f in package/dist/daemon.js package/dist/mcp.js package/dist/index.js package/README.md; do
+            tar -tzf "$TGZ" | grep -qE "^${f}\$" || { echo "MISSING from tarball: $f"; exit 1; }
+          done
+          # The bundled package must NOT carry @toon-protocol/* runtime deps.
+          LEAK=$(node -e "const p=require('./packages/client-mcp/package.json');const a={...p.dependencies,...p.optionalDependencies};console.log(Object.keys(a).filter(k=>k.startsWith('@toon-protocol/')).join(','))")
+          [ -z "$LEAK" ] || { echo "FAIL: @toon-protocol/* runtime deps leaked into published package: $LEAK"; exit 1; }
+          echo "✅ client-mcp tarball OK (bins present, zero @toon-protocol/* runtime deps)"
+
+      - name: Publish @toon-protocol/client-mcp to npm
+        run: pnpm --filter @toon-protocol/client-mcp publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -182,14 +182,19 @@ persisted. See `src/__integration__/`.
 
 ## Publishing
 
-> **Not yet wired into CI/CD.** The repo's release pipeline (`.github/workflows/release.yml`
-> → `publish-townhouse-images.yml`) only versions and npm-publishes
-> **`@toon-protocol/townhouse`** (`pnpm --filter @toon-protocol/townhouse publish`).
-> `@toon-protocol/client-mcp` is publishable (not `private`) but is **not** released
-> automatically — semantic-release does not bump it and no publish job packs it.
->
-> To ship it, either add it to the publish job (a `pnpm --filter
-> @toon-protocol/client-mcp publish --access public` step on tag) or publish
-> manually with `pnpm --filter @toon-protocol/client-mcp publish --access public`.
-> Note its `workspace:*` deps (`@toon-protocol/client`, `core`, `relay`) must be
-> published at resolvable versions first, or bundled.
+This package is **published to npm automatically by CI/CD**, in lockstep with the
+repo's release tag (the same `vX.Y.Z` semantic-release cuts for
+`@toon-protocol/townhouse`). On a release, `publish-townhouse-images.yml` builds
+this package, sets its version to the tag, and runs
+`pnpm --filter @toon-protocol/client-mcp publish --access public`.
+
+It is **self-contained**: its `@toon-protocol/*` workspace deps (`client`, `core`)
+are **bundled into `dist`** at build time (tsup `noExternal`), so the published
+`package.json` carries **zero `@toon-protocol/*` runtime deps** — only npm
+packages (`fastify`, `@modelcontextprotocol/sdk`, `nostr-tools`, `viem`, `ws`,
+`@toon-format/toon`) plus optional chain libs (`o1js`, `mina-signer`,
+`@solana/web3.js`, `socks-proxy-agent`) installed only when you use those chains.
+A guard test (`src/package-structure.test.ts`) fails the build if a
+`@toon-protocol/*` runtime dep ever leaks in.
+
+To publish manually: `pnpm --filter @toon-protocol/client-mcp build && pnpm --filter @toon-protocol/client-mcp publish --access public`.

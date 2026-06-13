@@ -14,7 +14,7 @@
  */
 
 import type { NostrEvent } from 'nostr-tools/pure';
-import { decodeEventFromToon } from '@toon-protocol/relay';
+import { decodeEventFromToon } from '@toon-protocol/core';
 import { RelaySubscription } from '../relay-subscription.js';
 import type {
   ChannelsResponse,
