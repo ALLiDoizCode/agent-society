@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { NostrEvent } from 'nostr-tools/pure';
 import {
   ClientRunner,
@@ -9,6 +12,8 @@ import {
 import type { ResolvedDaemonConfig } from './config.js';
 import { RelaySubscription } from '../relay-subscription.js';
 
+let tmpDir: string;
+
 function makeConfig(
   overrides: Partial<ResolvedDaemonConfig> = {}
 ): ResolvedDaemonConfig {
@@ -18,6 +23,7 @@ function makeConfig(
     destination: 'g.townhouse.town',
     feePerEvent: 1n,
     chain: 'evm',
+    apexChannelStorePath: join(tmpDir, 'apex-channels.json'),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     toonClientConfig: { btpUrl: 'ws://apex.test/btp' } as any,
     ...overrides,
@@ -113,6 +119,7 @@ describe('ClientRunner', () => {
   let runner: ClientRunner;
 
   beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'toon-runner-'));
     client = new FakeClient();
     runner = new ClientRunner({
       config: makeConfig({
@@ -132,6 +139,10 @@ describe('ClientRunner', () => {
     });
   });
 
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
   it('reports bootstrapping before ready, then ready after bootstrap', async () => {
     runner.start();
     expect(runner.isBootstrapping()).toBe(true);
@@ -148,6 +159,70 @@ describe('ClientRunner', () => {
       settlementAddress: '0xapex',
       tokenNetwork: '0xtn',
     });
+  });
+
+  it('persists the apex channelId after first open', async () => {
+    await runner.bootstrap();
+    const saved = JSON.parse(
+      readFileSync(join(tmpDir, 'apex-channels.json'), 'utf8')
+    );
+    expect(saved['g.townhouse.town|evm'].channelId).toBe('chan-1');
+    expect(saved['g.townhouse.town|evm'].context).toMatchObject({
+      chainType: 'evm',
+      chainId: 84532,
+      recipient: '0xapex',
+    });
+  });
+
+  it('resumes (tracks) the saved channel on restart instead of re-opening', async () => {
+    // Seed a saved apex channel + a client whose channelManager records tracking.
+    writeFileSync(
+      join(tmpDir, 'apex-channels.json'),
+      JSON.stringify({
+        'g.townhouse.town|evm': {
+          channelId: 'existing-chan',
+          context: {
+            chainType: 'evm',
+            chainId: 84532,
+            tokenNetworkAddress: '0xtn',
+            recipient: '0xapex',
+          },
+        },
+      })
+    );
+    const tracked: { id: string }[] = [];
+    const trackingClient = new FakeClient();
+    const openSpy = vi.spyOn(trackingClient, 'openChannel');
+    // Give the fake a channelManager.trackChannel like the real ToonClient.
+    (trackingClient as unknown as { channelManager: unknown }).channelManager =
+      {
+        trackChannel: (id: string) => {
+          tracked.push({ id });
+          trackingClient.channels[id] = { nonce: 7, cumulative: 7n };
+        },
+      };
+    const r = new ClientRunner({
+      config: makeConfig({
+        apex: {
+          destination: 'g.townhouse.town',
+          peerId: 'town',
+          chain: 'evm',
+          chainKey: 'evm:base:84532',
+          chainId: 84532,
+          settlementAddress: '0xapex',
+          tokenNetwork: '0xtn',
+        },
+      }),
+      createClient: () => trackingClient,
+      createRelay: fakeRelay,
+    });
+    await r.bootstrap();
+    expect(r.isReady()).toBe(true);
+    expect(tracked).toEqual([{ id: 'existing-chan' }]);
+    expect(openSpy).not.toHaveBeenCalled(); // no re-open / re-deposit
+    // Publishes continue from the resumed channel.
+    const res = await r.publish({ event: { id: 'e' } as NostrEvent });
+    expect(res.channelId).toBe('existing-chan');
   });
 
   it('records lastError when bootstrap fails and stays not-ready', async () => {

@@ -96,6 +96,35 @@ describe('RelaySubscription', () => {
     expect(next.events.map((e) => e.id)).toEqual(['c']);
   });
 
+  it('decodes TOON-string EVENT payloads via the injected decoder', () => {
+    const decoded = new RelaySubscription({
+      relayUrl: 'ws://relay.test',
+      // Simulate the TOON relay: the EVENT payload is a string, decoded here.
+      decodeEvent: (raw) => ({ ...makeEvent('toon-1'), content: raw }),
+      wsFactory: () => {
+        const ws = new FakeWebSocket();
+        sockets.push(ws);
+        return ws;
+      },
+    });
+    decoded.start();
+    current().emit('open');
+    const id = decoded.subscribe({ kinds: [1] });
+    // Relay sends a TOON-encoded string as the 3rd element, not a JSON object.
+    current().push(['EVENT', id, 'id: toon-1\nkind: 1\ncontent: hi']);
+    const events = decoded.getEvents().events;
+    expect(events).toHaveLength(1);
+    expect(events[0]!.id).toBe('toon-1');
+  });
+
+  it('drops a string EVENT payload when no decoder is configured', () => {
+    sub.start();
+    current().emit('open');
+    const id = sub.subscribe({ kinds: [1] });
+    current().push(['EVENT', id, 'id: x\nkind: 1']);
+    expect(sub.getEvents().events).toHaveLength(0);
+  });
+
   it('de-duplicates events by id', () => {
     sub.start();
     current().emit('open');

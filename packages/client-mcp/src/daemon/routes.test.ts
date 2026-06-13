@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { NostrEvent } from 'nostr-tools/pure';
 import { registerRoutes } from './routes.js';
@@ -62,6 +64,10 @@ function config(): ResolvedDaemonConfig {
     destination: 'g.townhouse.town',
     feePerEvent: 1n,
     chain: 'evm',
+    apexChannelStorePath: join(
+      tmpdir(),
+      `toon-routes-apex-${process.pid}.json`
+    ),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     toonClientConfig: { btpUrl: 'ws://apex/btp' } as any,
   };

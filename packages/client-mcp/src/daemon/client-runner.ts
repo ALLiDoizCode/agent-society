@@ -14,6 +14,7 @@
  */
 
 import type { NostrEvent } from 'nostr-tools/pure';
+import { decodeEventFromToon } from '@toon-protocol/relay';
 import { RelaySubscription } from '../relay-subscription.js';
 import type {
   ChannelsResponse,
@@ -31,6 +32,11 @@ import type {
   SwapRequest,
 } from '../control-api.js';
 import type { ApexNegotiationConfig, ResolvedDaemonConfig } from './config.js';
+import {
+  loadApexChannel,
+  saveApexChannel,
+  type PersistedChannelContext,
+} from './apex-channel-store.js';
 
 /** The subset of `ToonClient` the runner depends on. */
 export interface ToonClientLike {
@@ -100,6 +106,9 @@ export class ClientRunner {
         relayUrl: deps.config.relayUrl,
         socksProxy: deps.config.socksProxy,
         logger: deps.logger,
+        // The TOON relay sends events TOON-encoded (text) on reads, not as JSON.
+        decodeEvent: (raw) =>
+          decodeEventFromToon(new TextEncoder().encode(raw)),
       });
     this.log = deps.logger ?? ((): void => undefined);
   }
@@ -122,11 +131,7 @@ export class ClientRunner {
     try {
       await this.client.start();
       this.injectApexNegotiation(this.config.apex);
-      // Eagerly open the apex channel so the first publish doesn't pay the
-      // open latency — and so the nonce watermark is visible immediately.
-      this.apexChannelId = await this.client.openChannel(
-        this.config.destination
-      );
+      this.apexChannelId = await this.openOrResumeApexChannel();
       this.ready = true;
       this.lastError = undefined;
       this.log(`[runner] ready; apex channel ${this.apexChannelId}`);
@@ -136,6 +141,53 @@ export class ClientRunner {
     } finally {
       this.bootstrapping = false;
     }
+  }
+
+  /**
+   * Open the apex channel — or, on a restart, RESUME the existing one.
+   *
+   * `ChannelManager` persists the nonce watermark (by channelId) but not the
+   * peer→channelId mapping, so a naive `openChannel()` after restart re-deposits
+   * into a fresh channel and reverts on-chain. We persist the channelId here and,
+   * when present, `trackChannel()` the live channel (which rehydrates the nonce
+   * from the channel store) — no on-chain write, watermark continues.
+   */
+  private async openOrResumeApexChannel(): Promise<string> {
+    const { destination, chain, apexChannelStorePath } = this.config;
+    const saved = loadApexChannel(apexChannelStorePath, destination, chain);
+    const cm = (
+      this.client as unknown as {
+        channelManager?: {
+          trackChannel?: (id: string, ctx: PersistedChannelContext) => void;
+        };
+      }
+    ).channelManager;
+
+    if (saved && cm && typeof cm.trackChannel === 'function') {
+      cm.trackChannel(saved.channelId, saved.context);
+      this.log(
+        `[runner] resumed apex channel ${saved.channelId} (tracked, no re-deposit)`
+      );
+      return saved.channelId;
+    }
+
+    // First open for this (destination, chain): open on-chain and persist the
+    // channelId + context so the next restart resumes instead of re-depositing.
+    const channelId = await this.client.openChannel(destination);
+    if (this.config.apex) {
+      const a = this.config.apex;
+      saveApexChannel(apexChannelStorePath, destination, chain, {
+        channelId,
+        context: {
+          chainType: a.chain,
+          chainId: a.chainId,
+          tokenNetworkAddress: a.tokenNetwork ?? '',
+          tokenAddress: a.tokenAddress,
+          recipient: a.settlementAddress,
+        },
+      });
+    }
+    return channelId;
   }
 
   /**

@@ -141,6 +141,7 @@ describeLive(
         destination: 'g.townhouse.town',
         feePerEvent: 1n,
         chain: 'evm',
+        apexChannelStorePath: join(storeDir, 'apex-channels.json'),
         apex: {
           destination: 'g.townhouse.town',
           peerId: 'town',

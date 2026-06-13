@@ -98,6 +98,8 @@ export interface ResolvedDaemonConfig {
   apex?: ApexNegotiationConfig;
   /** The active settlement chain for paid writes. */
   chain: SettlementChain;
+  /** File mapping (destination, chain) → on-chain channelId for restart resume. */
+  apexChannelStorePath: string;
   /** Fully-built config for the `ToonClient` constructor. */
   toonClientConfig: ToonClientConfig;
   network?: string;
@@ -217,6 +219,7 @@ export function resolveConfig(file: DaemonConfigFile): ResolvedDaemonConfig {
 
   const channelStorePath =
     file.channelStorePath ?? join(configDir(), 'channels.json');
+  const apexChannelStorePath = join(configDir(), 'apex-channels.json');
 
   const toonClientConfig: ToonClientConfig = {
     // Required by validateConfig but unused at runtime (BTP transport is used).
@@ -261,6 +264,7 @@ export function resolveConfig(file: DaemonConfigFile): ResolvedDaemonConfig {
     feePerEvent,
     apex,
     chain,
+    apexChannelStorePath,
     toonClientConfig,
     network,
   };

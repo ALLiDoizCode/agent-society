@@ -47,6 +47,13 @@ export interface RelaySubscriptionOptions {
   reconnectMaxMs?: number;
   /** Inject a WebSocket factory (tests / proxy customisation). */
   wsFactory?: WebSocketFactory;
+  /**
+   * Decode an `EVENT` payload that arrived as a string. The TOON relay sends
+   * events TOON-encoded (key/value text) rather than as a JSON object, so the
+   * daemon injects a TOON decoder here. When the payload is already a JSON
+   * object it is used directly and this is not called.
+   */
+  decodeEvent?: (raw: string) => NostrEvent;
   /** Optional logger. */
   logger?: (msg: string) => void;
 }
@@ -79,6 +86,7 @@ export class RelaySubscription {
   private readonly reconnectMaxMs: number;
   private readonly log: (msg: string) => void;
   private readonly wsFactory: WebSocketFactory;
+  private readonly decodeEvent?: (raw: string) => NostrEvent;
 
   /** Active subscriptions: subId -> filters (re-sent on every (re)connect). */
   private readonly subscriptions = new Map<string, NostrFilter[]>();
@@ -104,6 +112,7 @@ export class RelaySubscription {
     this.reconnectMaxMs = opts.reconnectMaxMs ?? DEFAULT_MAX_MS;
     this.log = opts.logger ?? noop;
     this.wsFactory = opts.wsFactory ?? defaultWebSocketFactory(this.socksProxy);
+    this.decodeEvent = opts.decodeEvent;
   }
 
   /** Whether the underlying socket is currently open. */
@@ -262,7 +271,7 @@ export class RelaySubscription {
     switch (type) {
       case 'EVENT': {
         const subId = typeof parsed[1] === 'string' ? parsed[1] : '';
-        const event = parsed[2] as NostrEvent | undefined;
+        const event = this.parseEventPayload(parsed[2]);
         if (event && typeof event.id === 'string')
           this.bufferEvent(subId, event);
         break;
@@ -281,6 +290,30 @@ export class RelaySubscription {
       default:
         break;
     }
+  }
+
+  /**
+   * Normalise an `EVENT` payload to a NostrEvent. Standard relays send a JSON
+   * object; the TOON relay sends a TOON-encoded string, decoded via the injected
+   * `decodeEvent`. Returns undefined when it can't be parsed.
+   */
+  private parseEventPayload(raw: unknown): NostrEvent | undefined {
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      typeof (raw as NostrEvent).id === 'string'
+    ) {
+      return raw as NostrEvent;
+    }
+    if (typeof raw === 'string' && this.decodeEvent) {
+      try {
+        return this.decodeEvent(raw);
+      } catch (err) {
+        this.log(`[relay] event decode failed: ${errMsg(err)}`);
+        return undefined;
+      }
+    }
+    return undefined;
   }
 
   private bufferEvent(subId: string, event: NostrEvent): void {
