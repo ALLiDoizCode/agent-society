@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.2](https://github.com/toon-protocol/town/compare/v0.25.1...v0.25.2) (2026-06-13)
+
+### Bug Fixes
+
+* **client:** thread on-chain depositTotal into Mina balance-proof signing ([#223](https://github.com/toon-protocol/town/issues/223)) ([#224](https://github.com/toon-protocol/town/issues/224)) ([3d85234](https://github.com/toon-protocol/town/commit/3d852344d6471acaf3c583343c9ab1c15d0b3348)), closes [#220](https://github.com/toon-protocol/town/issues/220) [#220](https://github.com/toon-protocol/town/issues/220) [#218](https://github.com/toon-protocol/town/issues/218) [#197](https://github.com/toon-protocol/town/issues/197)
+
 ## [0.25.1](https://github.com/toon-protocol/town/compare/v0.25.0...v0.25.1) (2026-06-13)
 
 ### Bug Fixes
