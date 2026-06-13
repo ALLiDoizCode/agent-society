@@ -4,12 +4,22 @@ Let a Claude agent — **Claude Desktop or Claude Code** — act as a full TOON
 Protocol client: **pay-to-write** publishing, **free** reads/subscriptions,
 payment-channel/balance management, and mill swaps.
 
-The agent surface is an **MCP server** (`toon-mcp`). The two long-lived
+The agent surface is an **MCP server** — bin **`toon-mcp`**, which registers
+with the host under the server name **`toon-client`** (this is the name that
+appears in Claude's MCP server list and in the `initialize` handshake;
+`mcpServers.toon` in config is just your local alias). The two long-lived
 connections that can't live in an ephemeral agent session — a **BTP** session
 (paid writes via the connector/apex, optionally over a managed `.anyone`
 SOCKS5h proxy) and a **town-relay Nostr-WS** subscription (free reads) — live in
 an **always-on detached daemon** (`toon-clientd`). The MCP server is a thin
 stdio proxy that auto-spawns the daemon and never holds chain keys.
+
+| | Name |
+|---|---|
+| npm package | `@toon-protocol/client-mcp` |
+| MCP server name (handshake) | `toon-client` |
+| MCP server bin | `toon-mcp` |
+| Daemon bin | `toon-clientd` |
 
 ```
 Claude (Desktop / Code)
@@ -30,13 +40,18 @@ Claude (Desktop / Code)
 
 ## Tools
 
+The `toon-client` MCP server exposes **8 tools**:
+
 | MCP tool | Daemon endpoint | Backing |
 |---|---|---|
-| `toon_status` / `toon_identity` | `GET /status` | identity getters, `getNetworkStatus`, relay/BTP health, `bootstrapping?` |
-| `toon_publish(event,{destination?,fee?})` | `POST /publish` | `signBalanceProof` + `publishEvent` |
-| `toon_subscribe(filters)` / `toon_read({subId?,cursor?,limit?})` | `POST /subscribe`, `GET /events` | persistent relay subscription buffer (free) |
-| `toon_open_channel` / `toon_channels` | `POST /channels`, `GET /channels` | `openChannel`, `getTrackedChannels`/`getChannelNonce`/`getChannelCumulativeAmount` |
-| `toon_swap(destination,amount,toonData?)` | `POST /swap` | `sendSwapPacket` |
+| `toon_status` | `GET /status` | ready/bootstrapping, transport, relay health, per-chain settlement, active chain |
+| `toon_identity` | `GET /status` | Nostr pubkey + EVM/Solana/Mina addresses (no keys) |
+| `toon_publish(event,{destination?,fee?})` | `POST /publish` | `signBalanceProof` + `publishEvent` (paid write) |
+| `toon_subscribe(filters,{subId?})` | `POST /subscribe` | register a persistent free-read subscription |
+| `toon_read({subId?,cursor?,limit?})` | `GET /events` | drain buffered events by cursor (free) |
+| `toon_open_channel({destination?})` | `POST /channels` | `openChannel` (pre-open / fetch a channel) |
+| `toon_channels` | `GET /channels` | `getTrackedChannels` + nonce watermark + cumulative spend |
+| `toon_swap(destination,amount,{toonData?})` | `POST /swap` | `sendSwapPacket` (mill swap) |
 
 ## Install
 
@@ -164,3 +179,17 @@ The gated integration test boots the daemon against a live `.anyone` HS apex,
 publishes a paid event, reads it back through the subscription, verifies the
 channel nonce advanced, restarts the daemon, and confirms the nonce watermark
 persisted. See `src/__integration__/`.
+
+## Publishing
+
+> **Not yet wired into CI/CD.** The repo's release pipeline (`.github/workflows/release.yml`
+> → `publish-townhouse-images.yml`) only versions and npm-publishes
+> **`@toon-protocol/townhouse`** (`pnpm --filter @toon-protocol/townhouse publish`).
+> `@toon-protocol/client-mcp` is publishable (not `private`) but is **not** released
+> automatically — semantic-release does not bump it and no publish job packs it.
+>
+> To ship it, either add it to the publish job (a `pnpm --filter
+> @toon-protocol/client-mcp publish --access public` step on tag) or publish
+> manually with `pnpm --filter @toon-protocol/client-mcp publish --access public`.
+> Note its `workspace:*` deps (`@toon-protocol/client`, `core`, `relay`) must be
+> published at resolvable versions first, or bundled.
