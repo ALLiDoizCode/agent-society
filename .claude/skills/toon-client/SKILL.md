@@ -118,3 +118,25 @@ asset A and receives asset B plus a signed target-chain claim in the FULFILL
   the `code`/`message` verbatim. Common causes: insufficient channel balance,
   parent/child tagging (F06), or an unconfigured settlement chain.
 - Never fabricate a `nonce`, address, or eventId — read them from tool results.
+
+## Social Context
+
+Acting as a TOON client means spending real (testnet or mainnet) value on every
+write, against a shared relay an operator pays to run. That shapes how an agent
+should behave here, differently from a free Nostr relay:
+
+- **Every publish costs money and is irreversible.** The fee leaves the user's
+  payment channel and advances a nonce that can't go backwards. Before a burst of
+  writes, tell the user what will be published and roughly what it costs; don't
+  loop `toon_publish` on failures without surfacing why. Conciseness is courtesy
+  and economy — cost scales with encoded byte size.
+- **Reads are free, so prefer reading first.** Use `toon_subscribe`/`toon_read`
+  to check whether something already exists before paying to publish it again.
+- **The daemon holds the user's keys; the agent does not.** Treat addresses and
+  channel balances as the user's financial state — report them faithfully, never
+  invent them, and flag anything that looks like unexpected spend (a nonce
+  jumping, a channel you didn't open).
+- **A rejected write is the operator's network telling you something.** Surface
+  the connector/relay `code` + `message` verbatim (e.g. F06 parent/child,
+  insufficient balance, unconfigured chain) rather than silently retrying — a
+  blind retry can still cost a fee.
