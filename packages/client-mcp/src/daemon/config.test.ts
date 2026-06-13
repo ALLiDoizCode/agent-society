@@ -72,12 +72,27 @@ describe('daemon config', () => {
     expect(cfg.toonClientConfig.managedAnonProxy).toBe(false);
   });
 
-  it('auto-enables managed anon proxy for .anyone BTP hosts', () => {
+  it('auto-enables managed anon proxy for .anyone BTP hosts and points reads at it', () => {
     const cfg = resolveConfig({
       mnemonic: MNEMONIC,
       btpUrl: 'ws://abc.anyone:3000/btp',
     });
     expect(cfg.toonClientConfig.managedAnonProxy).toBe(true);
+    expect(cfg.toonClientConfig.managedAnonSocksPort).toBe(9050);
+    // BTP routes through the managed proxy (direct transport); free reads point
+    // at the same loopback SOCKS port so a `.anyone` relay is reachable.
+    expect(cfg.toonClientConfig.transport).toEqual({ type: 'direct' });
+    expect(cfg.socksProxy).toBe('socks5h://127.0.0.1:9050');
+  });
+
+  it('honors a custom managedAnonSocksPort for both client and reads', () => {
+    const cfg = resolveConfig({
+      mnemonic: MNEMONIC,
+      btpUrl: 'ws://abc.anyone:3000/btp',
+      managedAnonSocksPort: 9999,
+    });
+    expect(cfg.toonClientConfig.managedAnonSocksPort).toBe(9999);
+    expect(cfg.socksProxy).toBe('socks5h://127.0.0.1:9999');
   });
 
   it('uses a socks5 transport when a proxy is configured', () => {

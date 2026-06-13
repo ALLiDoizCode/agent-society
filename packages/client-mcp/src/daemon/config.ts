@@ -50,6 +50,8 @@ export interface DaemonConfigFile {
   socksProxy?: string;
   /** Auto-manage the anon proxy for `.anyone` BTP hosts. Default true for HS. */
   managedAnonProxy?: boolean;
+  /** Loopback SOCKS port the managed anon proxy binds (also used for reads). Default 9050. */
+  managedAnonSocksPort?: number;
   /** Town relay WS URL for FREE reads. */
   relayUrl?: string;
   /** Default ILP publish destination. Default `g.townhouse.town`. */
@@ -167,7 +169,7 @@ export function resolveConfig(file: DaemonConfigFile): ResolvedDaemonConfig {
     process.env['TOON_CLIENT_RELAY_URL'] ??
     file.relayUrl ??
     'ws://localhost:7100';
-  const socksProxy = process.env['TOON_CLIENT_SOCKS'] ?? file.socksProxy;
+  const explicitSocks = process.env['TOON_CLIENT_SOCKS'] ?? file.socksProxy;
   const httpPort = Number(
     process.env['TOON_CLIENT_HTTP_PORT'] ?? file.httpPort ?? 8787
   );
@@ -183,11 +185,35 @@ export function resolveConfig(file: DaemonConfigFile): ResolvedDaemonConfig {
     'evm') as SettlementChain;
   const apex = file.apexChains?.[chain] ?? file.apex;
 
-  // Identify the BTP peer from the EVM address used elsewhere. The ILP address
-  // mirrors the entrypoint convention: g.toon.client.<evm16>.
-  const transport: ToonClientConfig['transport'] = socksProxy
-    ? { type: 'socks5', socksProxy }
-    : { type: 'direct' };
+  // Transport / proxy resolution. Three modes:
+  //  • explicit socksProxy → BTP uses it; reads route through it too.
+  //  • managed anon (auto for `.anyone` hosts with no explicit proxy, or forced
+  //    via managedAnonProxy:true) → the ToonClient spawns its own anon daemon on
+  //    a loopback SOCKS port; the relay subscription points at that SAME port so
+  //    free reads to a `.anyone` relay work with zero external setup.
+  //  • otherwise → direct, no proxy.
+  const managedPort = Number(file.managedAnonSocksPort ?? 9050);
+  const wantManaged =
+    file.managedAnonProxy ?? (explicitSocks ? false : isAnyoneHost(btpUrl));
+
+  let transport: ToonClientConfig['transport'];
+  let managedAnonProxy: boolean;
+  let managedAnonSocksPort: number | undefined;
+  // The proxy the relay subscription uses for free reads (may differ from BTP).
+  let readsSocksProxy: string | undefined;
+  if (explicitSocks) {
+    transport = { type: 'socks5', socksProxy: explicitSocks };
+    managedAnonProxy = false;
+    readsSocksProxy = explicitSocks;
+  } else if (wantManaged) {
+    transport = { type: 'direct' };
+    managedAnonProxy = true;
+    managedAnonSocksPort = managedPort;
+    readsSocksProxy = `socks5h://127.0.0.1:${managedPort}`;
+  } else {
+    transport = { type: 'direct' };
+    managedAnonProxy = false;
+  }
 
   const channelStorePath =
     file.channelStorePath ?? join(configDir(), 'channels.json');
@@ -209,10 +235,8 @@ export function resolveConfig(file: DaemonConfigFile): ResolvedDaemonConfig {
     btpUrl,
     btpAuthToken: '',
     transport,
-    // Auto-manage the anon proxy only when no explicit proxy is given AND the
-    // BTP host is a `.anyone` hidden service.
-    managedAnonProxy:
-      file.managedAnonProxy ?? (socksProxy ? false : isAnyoneHost(btpUrl)),
+    managedAnonProxy,
+    ...(managedAnonSocksPort !== undefined ? { managedAnonSocksPort } : {}),
     destinationAddress: destination,
     relayUrl: '', // reads use our own RelaySubscription, not bootstrap discovery
     knownPeers: [],
@@ -232,7 +256,7 @@ export function resolveConfig(file: DaemonConfigFile): ResolvedDaemonConfig {
   return {
     httpPort,
     relayUrl,
-    socksProxy,
+    ...(readsSocksProxy !== undefined ? { socksProxy: readsSocksProxy } : {}),
     destination,
     feePerEvent,
     apex,
