@@ -24,6 +24,6 @@
     "network": "devnet",
     "graphqlUrl": "https://api.minascan.io/node/devnet/v1/graphql",
     "explorer": "https://minascan.io/devnet",
-    "zkAppAddress": "B62qjFgXZWDWVE4P6h63JSzdMRzXpqJEgMM3Gt6PvWzzrSCawBZ4hE3"
+    "zkAppAddress": "B62qrH1As4odHiNyKpTZMHaM6tRs6gi5DJ53efZKQBtbaR5CUctbDs6"
   }
 }
