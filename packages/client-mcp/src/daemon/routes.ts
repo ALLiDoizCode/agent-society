@@ -9,12 +9,8 @@
 
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { NostrEvent } from 'nostr-tools/pure';
-import type {
-  ClientRunner} from './client-runner.js';
-import {
-  NotReadyError,
-  PublishRejectedError,
-} from './client-runner.js';
+import type { ClientRunner } from './client-runner.js';
+import { NotReadyError, PublishRejectedError } from './client-runner.js';
 import type {
   EventsQuery,
   OpenChannelRequest,

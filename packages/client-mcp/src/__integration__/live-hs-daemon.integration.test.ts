@@ -140,6 +140,7 @@ describeLive(
         socksProxy: SOCKS,
         destination: 'g.townhouse.town',
         feePerEvent: 1n,
+        chain: 'evm',
         apex: {
           destination: 'g.townhouse.town',
           peerId: 'town',

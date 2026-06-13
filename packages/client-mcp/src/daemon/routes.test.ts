@@ -61,6 +61,7 @@ function config(): ResolvedDaemonConfig {
     relayUrl: 'ws://relay.test',
     destination: 'g.townhouse.town',
     feePerEvent: 1n,
+    chain: 'evm',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     toonClientConfig: { btpUrl: 'ws://apex/btp' } as any,
   };

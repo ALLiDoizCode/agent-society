@@ -60,14 +60,31 @@ export interface DaemonConfigFile {
   channelStorePath?: string;
   /** Localhost control-plane port. Default 8787. */
   httpPort?: number;
+  /**
+   * Active settlement chain for paid writes to the apex. A single daemon settles
+   * to a given peer on ONE chain (the `ChannelManager` keys channels per peer +
+   * each `ToonClient` owns one BTP session). Default `evm`. Override with
+   * `TOON_CLIENT_CHAIN`. For simultaneous multi-chain, run one daemon per chain
+   * (distinct `httpPort` + `channelStorePath`).
+   */
+  chain?: SettlementChain;
   /** Manual apex negotiation (HS / direct-apex mode where bootstrap finds 0 peers). */
   apex?: ApexNegotiationConfig;
+  /**
+   * Per-chain apex negotiations. The entry for the active `chain` is used; the
+   * others are retained so switching chains needs only a `chain`/restart change.
+   */
+  apexChains?: Partial<Record<SettlementChain, ApexNegotiationConfig>>;
   /** Extra settlement overrides passed straight through to ToonClient. */
   supportedChains?: string[];
   settlementAddresses?: Record<string, string>;
   preferredTokens?: Record<string, string>;
   tokenNetworks?: Record<string, string>;
   chainRpcUrls?: Record<string, string>;
+  /** Solana on-chain payment-channel params (required when `chain` is solana). */
+  solanaChannel?: ToonClientConfig['solanaChannel'];
+  /** Mina on-chain payment-channel params (required when `chain` is mina). */
+  minaChannel?: ToonClientConfig['minaChannel'];
 }
 
 export interface ResolvedDaemonConfig {
@@ -77,6 +94,8 @@ export interface ResolvedDaemonConfig {
   destination: string;
   feePerEvent: bigint;
   apex?: ApexNegotiationConfig;
+  /** The active settlement chain for paid writes. */
+  chain: SettlementChain;
   /** Fully-built config for the `ToonClient` constructor. */
   toonClientConfig: ToonClientConfig;
   network?: string;
@@ -158,6 +177,12 @@ export function resolveConfig(file: DaemonConfigFile): ResolvedDaemonConfig {
     | ToonClientConfig['network']
     | undefined;
 
+  // Active settlement chain + the matching apex negotiation.
+  const chain = (process.env['TOON_CLIENT_CHAIN'] ??
+    file.chain ??
+    'evm') as SettlementChain;
+  const apex = file.apexChains?.[chain] ?? file.apex;
+
   // Identify the BTP peer from the EVM address used elsewhere. The ILP address
   // mirrors the entrypoint convention: g.toon.client.<evm16>.
   const transport: ToonClientConfig['transport'] = socksProxy
@@ -200,6 +225,8 @@ export function resolveConfig(file: DaemonConfigFile): ResolvedDaemonConfig {
     ...(file.preferredTokens ? { preferredTokens: file.preferredTokens } : {}),
     ...(file.tokenNetworks ? { tokenNetworks: file.tokenNetworks } : {}),
     ...(file.chainRpcUrls ? { chainRpcUrls: file.chainRpcUrls } : {}),
+    ...(file.solanaChannel ? { solanaChannel: file.solanaChannel } : {}),
+    ...(file.minaChannel ? { minaChannel: file.minaChannel } : {}),
   };
 
   return {
@@ -208,7 +235,8 @@ export function resolveConfig(file: DaemonConfigFile): ResolvedDaemonConfig {
     socksProxy,
     destination,
     feePerEvent,
-    apex: file.apex,
+    apex,
+    chain,
     toonClientConfig,
     network,
   };

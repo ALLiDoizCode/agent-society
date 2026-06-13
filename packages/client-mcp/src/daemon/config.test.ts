@@ -10,6 +10,7 @@ const ENV_KEYS = [
   'TOON_CLIENT_SOCKS',
   'TOON_CLIENT_HTTP_PORT',
   'TOON_CLIENT_NETWORK',
+  'TOON_CLIENT_CHAIN',
   'TOON_CLIENT_KEYSTORE_PASSWORD',
 ];
 
@@ -117,5 +118,68 @@ describe('daemon config', () => {
     });
     expect(cfg.toonClientConfig.network).toBe('testnet');
     expect(cfg.network).toBe('testnet');
+  });
+
+  it('defaults the active settlement chain to evm', () => {
+    const cfg = resolveConfig({ mnemonic: MNEMONIC, btpUrl: 'ws://apex/btp' });
+    expect(cfg.chain).toBe('evm');
+  });
+
+  it('selects the apex negotiation for the active chain from apexChains', () => {
+    const apexChains = {
+      evm: {
+        destination: 'g.townhouse.town',
+        peerId: 'town',
+        chain: 'evm' as const,
+        chainKey: 'evm:base:84532',
+        chainId: 84532,
+        settlementAddress: '0xevm',
+      },
+      solana: {
+        destination: 'g.townhouse.town',
+        peerId: 'town',
+        chain: 'solana' as const,
+        chainKey: 'solana:devnet',
+        chainId: 0,
+        settlementAddress: 'SoLApex',
+      },
+    };
+    const evm = resolveConfig({
+      mnemonic: MNEMONIC,
+      btpUrl: 'ws://apex/btp',
+      apexChains,
+    });
+    expect(evm.chain).toBe('evm');
+    expect(evm.apex?.settlementAddress).toBe('0xevm');
+
+    const sol = resolveConfig({
+      mnemonic: MNEMONIC,
+      btpUrl: 'ws://apex/btp',
+      chain: 'solana',
+      apexChains,
+    });
+    expect(sol.chain).toBe('solana');
+    expect(sol.apex?.settlementAddress).toBe('SoLApex');
+  });
+
+  it('TOON_CLIENT_CHAIN overrides the configured chain', () => {
+    process.env['TOON_CLIENT_CHAIN'] = 'mina';
+    const cfg = resolveConfig({
+      mnemonic: MNEMONIC,
+      btpUrl: 'ws://apex/btp',
+      chain: 'evm',
+    });
+    expect(cfg.chain).toBe('mina');
+  });
+
+  it('passes solanaChannel and minaChannel through to the ToonClient config', () => {
+    const cfg = resolveConfig({
+      mnemonic: MNEMONIC,
+      btpUrl: 'ws://apex/btp',
+      solanaChannel: { rpcUrl: 'https://sol', programId: 'Prog' },
+      minaChannel: { graphqlUrl: 'https://mina', zkAppAddress: 'B62zk' },
+    });
+    expect(cfg.toonClientConfig.solanaChannel?.programId).toBe('Prog');
+    expect(cfg.toonClientConfig.minaChannel?.zkAppAddress).toBe('B62zk');
   });
 });

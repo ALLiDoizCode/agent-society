@@ -187,6 +187,7 @@ export class ClientRunner {
       uptimeMs: Date.now() - this.startedAt,
       bootstrapping: this.bootstrapping,
       ready: this.ready,
+      settlementChain: this.config.chain,
       identity: {
         nostrPubkey: safe(() => this.client.getPublicKey()) ?? '',
         evmAddress: safe(() => this.client.getEvmAddress()),

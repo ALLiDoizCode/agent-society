@@ -32,6 +32,8 @@ export interface StatusResponse {
   bootstrapping: boolean;
   /** True once the client has started and a channel is open (ready to publish). */
   ready: boolean;
+  /** The active settlement chain for paid writes to the apex. */
+  settlementChain: SettlementChain;
   identity: {
     nostrPubkey: string;
     evmAddress?: string;

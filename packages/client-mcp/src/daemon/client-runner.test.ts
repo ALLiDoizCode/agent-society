@@ -17,6 +17,7 @@ function makeConfig(
     relayUrl: 'ws://relay.test',
     destination: 'g.townhouse.town',
     feePerEvent: 1n,
+    chain: 'evm',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     toonClientConfig: { btpUrl: 'ws://apex.test/btp' } as any,
     ...overrides,
@@ -30,9 +31,7 @@ class FakeClient implements ToonClientLike {
   stopped = false;
   channels: Record<string, { nonce: number; cumulative: bigint }> = {};
   startImpl: () => Promise<void> = async () => {};
-  publishImpl: (
-    e: NostrEvent
-  ) => Promise<{
+  publishImpl: (e: NostrEvent) => Promise<{
     success: boolean;
     eventId?: string;
     data?: string;
@@ -64,9 +63,7 @@ class FakeClient implements ToonClientLike {
     | undefined {
     return { evm: 'configured', solana: 'unconfigured', mina: 'unconfigured' };
   }
-  async publishEvent(
-    event: NostrEvent
-  ): Promise<{
+  async publishEvent(event: NostrEvent): Promise<{
     success: boolean;
     eventId?: string;
     data?: string;
@@ -163,7 +160,6 @@ describe('ClientRunner', () => {
   });
 
   it('publish throws NotReadyError while bootstrapping', async () => {
-     
     await expect(
       runner.publish({ event: { id: 'x' } as any })
     ).rejects.toBeInstanceOf(NotReadyError);
