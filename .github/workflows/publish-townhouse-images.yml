@@ -833,8 +833,13 @@ jobs:
           (cd packages/client-mcp && pnpm pack --pack-destination "$PACK_OUT")
           TGZ=$(ls "$PACK_OUT"/toon-protocol-client-mcp-*.tgz | head -1)
           [ -f "$TGZ" ] || { echo "FAIL: pnpm pack produced no tgz"; exit 1; }
+          # Write the listing to a file first, then grep it. Do NOT pipe
+          # `tar -tzf … | grep -q`: grep -q closes the pipe early, tar takes a
+          # SIGPIPE write error, and `set -o pipefail` turns that into a false
+          # "MISSING" (mirrors the townhouse verify step's file-based approach).
+          tar -tzf "$TGZ" > "$PACK_OUT/listing.txt"
           for f in package/dist/daemon.js package/dist/mcp.js package/dist/index.js package/README.md; do
-            tar -tzf "$TGZ" | grep -qE "^${f}\$" || { echo "MISSING from tarball: $f"; exit 1; }
+            grep -qE "^${f}\$" "$PACK_OUT/listing.txt" || { echo "MISSING from tarball: $f"; exit 1; }
           done
           # The bundled package must NOT carry @toon-protocol/* runtime deps.
           LEAK=$(node -e "const p=require('./packages/client-mcp/package.json');const a={...p.dependencies,...p.optionalDependencies};console.log(Object.keys(a).filter(k=>k.startsWith('@toon-protocol/')).join(','))")
