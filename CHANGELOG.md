@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0](https://github.com/toon-protocol/town/compare/v0.25.2...v0.26.0) (2026-06-13)
+
+### Features
+
+* **client-mcp:** agent TOON client — detached daemon + MCP server + skill ([#221](https://github.com/toon-protocol/town/issues/221)) ([#222](https://github.com/toon-protocol/town/issues/222)) ([41deb7e](https://github.com/toon-protocol/town/commit/41deb7e1e3c0e1c29ac866db53115f79cba47f6b)), closes [#197](https://github.com/toon-protocol/town/issues/197) [#197](https://github.com/toon-protocol/town/issues/197)
+
 ## [0.25.2](https://github.com/toon-protocol/town/compare/v0.25.1...v0.25.2) (2026-06-13)
 
 ### Bug Fixes
