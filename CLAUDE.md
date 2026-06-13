@@ -191,6 +191,13 @@ All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Con
 | Docker entrypoint (embedded connector) | `docker/src/entrypoint-sdk.ts` |
 | Mill package (multi-chain swap peer) | `packages/mill/` |
 | Mill entrypoint + CLI | `packages/mill/src/mill.ts`, `packages/mill/src/cli.ts` |
+| **Agent client (MCP + daemon)** | `packages/client-mcp/` (bins: `toon-clientd`, `toon-mcp`) |
+| Client daemon (connection owner) | `packages/client-mcp/src/daemon.ts`, `src/daemon/` (config, lifecycle, client-runner, routes) |
+| Client MCP stdio server + tools | `packages/client-mcp/src/mcp.ts`, `src/mcp-tools.ts` |
+| Client persistent relay subscription (free reads) | `packages/client-mcp/src/relay-subscription.ts` |
+| Client control API + HTTP client | `packages/client-mcp/src/control-api.ts`, `src/control-client.ts` |
+| `toon-client` agent skill | `.claude/skills/toon-client/SKILL.md` |
+| Client-MCP live-HS gated E2E (`RUN_LIVE_HS_E2E=1`) | `packages/client-mcp/src/__integration__/live-hs-daemon.integration.test.ts` |
 | SDK swap modules (gift-wrap, handler, stream, settlement) | `packages/sdk/src/gift-wrap.ts`, `swap-handler.ts`, `stream-swap.ts`, `settlement/` |
 | SwapPair validation + chain-id | `packages/core/src/events/swap-pair-validation.ts`, `packages/core/src/chain/chain-id.ts` |
 | Content publishing pipeline | `_bmad-output/planning-artifacts/content-strategy-2026-q1.md` |

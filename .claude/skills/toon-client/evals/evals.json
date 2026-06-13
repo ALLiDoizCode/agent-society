@@ -1,0 +1,20 @@
+{
+  "trigger_evals": [
+    { "query": "How do I publish a note to TOON?", "should_trigger": true },
+    { "query": "How do I post on the TOON network from Claude?", "should_trigger": true },
+    { "query": "How do I read events from a TOON relay?", "should_trigger": true },
+    { "query": "How do I subscribe to events on TOON?", "should_trigger": true },
+    { "query": "Use toon_publish to send this event", "should_trigger": true },
+    { "query": "Why is reading free but writing costs money on TOON?", "should_trigger": true },
+    { "query": "How do I check my TOON payment channel nonce and balance?", "should_trigger": true },
+    { "query": "How do I open a payment channel on TOON?", "should_trigger": true },
+    { "query": "Am I connected to the TOON network? What is my TOON address?", "should_trigger": true },
+    { "query": "How do I swap tokens via a TOON mill?", "should_trigger": true },
+    { "query": "The toon tool says it is bootstrapping, what do I do?", "should_trigger": true },
+    { "query": "How does pay-to-write work with payment channel claims on TOON?", "should_trigger": true },
+    { "query": "How do I deploy a container to Akash?", "should_trigger": false },
+    { "query": "How do I write a unit test in vitest?", "should_trigger": false },
+    { "query": "How do I create a badge definition with NIP-58?", "should_trigger": false },
+    { "query": "What is the git object binary format?", "should_trigger": false }
+  ]
+}

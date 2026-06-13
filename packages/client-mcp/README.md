@@ -1,0 +1,166 @@
+# @toon-protocol/client-mcp
+
+Let a Claude agent — **Claude Desktop or Claude Code** — act as a full TOON
+Protocol client: **pay-to-write** publishing, **free** reads/subscriptions,
+payment-channel/balance management, and mill swaps.
+
+The agent surface is an **MCP server** (`toon-mcp`). The two long-lived
+connections that can't live in an ephemeral agent session — a **BTP** session
+(paid writes via the connector/apex, optionally over a managed `.anyone`
+SOCKS5h proxy) and a **town-relay Nostr-WS** subscription (free reads) — live in
+an **always-on detached daemon** (`toon-clientd`). The MCP server is a thin
+stdio proxy that auto-spawns the daemon and never holds chain keys.
+
+```
+Claude (Desktop / Code)
+        │  stdio (MCP)
+        ▼
+   toon-mcp  ──HTTP──▶  toon-clientd (detached, always-on)
+                          ├─ ToonClient: BTP session + payment channels + signer
+                          └─ RelaySubscription: persistent town-relay Nostr-WS
+```
+
+## Architecture
+
+| Layer | Bin / module | Responsibility |
+|---|---|---|
+| **Daemon** | `toon-clientd` | Owns one `ToonClient` (BTP + managed anon + channels + mnemonic keystore + network targeting) **plus** a persistent town-relay subscription. Loopback HTTP control API, single-instance PID lock, channel nonce-watermark persistence, graceful shutdown. |
+| **MCP server** | `toon-mcp` | `@modelcontextprotocol/sdk` stdio server. Maps tools → daemon HTTP; auto-spawns the daemon detached if down; reports "bootstrapping — retry" while anon boots; holds no keys. |
+| **Skill** | `.claude/skills/toon-client/` | Teaches the agent pay-to-write / free-read / settlement semantics. |
+
+## Tools
+
+| MCP tool | Daemon endpoint | Backing |
+|---|---|---|
+| `toon_status` / `toon_identity` | `GET /status` | identity getters, `getNetworkStatus`, relay/BTP health, `bootstrapping?` |
+| `toon_publish(event,{destination?,fee?})` | `POST /publish` | `signBalanceProof` + `publishEvent` |
+| `toon_subscribe(filters)` / `toon_read({subId?,cursor?,limit?})` | `POST /subscribe`, `GET /events` | persistent relay subscription buffer (free) |
+| `toon_open_channel` / `toon_channels` | `POST /channels`, `GET /channels` | `openChannel`, `getTrackedChannels`/`getChannelNonce`/`getChannelCumulativeAmount` |
+| `toon_swap(destination,amount,toonData?)` | `POST /swap` | `sendSwapPacket` |
+
+## Install
+
+```bash
+pnpm add -g @toon-protocol/client-mcp     # or use npx/pnpm dlx
+```
+
+This installs two bins: `toon-clientd` and `toon-mcp`.
+
+## Configure the daemon
+
+The daemon reads `~/.toon-client/config.json` (override with `TOON_CLIENT_CONFIG`).
+The **mnemonic is never stored in plaintext by default** — supply it via env or an
+encrypted keystore (scrypt + AES-256-GCM, mode 0600).
+
+```jsonc
+// ~/.toon-client/config.json
+{
+  "network": "testnet",                       // settlement presets (#209)
+  "keystorePath": "~/.toon-client/keystore.json",
+  "btpUrl": "ws://<apex-host>.anyone:3000/btp",
+  "relayUrl": "wss://<relay-host>.anyone/",   // free reads
+  "destination": "g.townhouse.town",
+  "feePerEvent": "1",
+  "httpPort": 8787,
+  // HS / direct-apex mode: bootstrap finds 0 peers, so name the apex's
+  // settlement address directly (mirrors the docker entrypoint):
+  "apex": {
+    "destination": "g.townhouse.town",
+    "peerId": "town",
+    "chain": "evm",
+    "chainKey": "evm:base:84532",
+    "chainId": 84532,
+    "settlementAddress": "0x<apex-receive-addr>",
+    "tokenAddress": "0x<usdc>",
+    "tokenNetwork": "0x<token-network>"
+  }
+}
+```
+
+Environment overrides: `TOON_CLIENT_MNEMONIC`, `TOON_CLIENT_KEYSTORE_PASSWORD`,
+`TOON_CLIENT_BTP_URL`, `TOON_CLIENT_RELAY_URL`, `TOON_CLIENT_SOCKS`,
+`TOON_CLIENT_HTTP_PORT`, `TOON_CLIENT_NETWORK`, `TOON_CLIENT_HOME`.
+
+The managed `.anyone` SOCKS5h proxy auto-starts when `btpUrl` is a `.anyone`
+host and no explicit `socksProxy` is set. The first bootstrap pays the anon
+warm-up cost (~30–90s) **once** — the detached daemon then stays up.
+
+### Create an encrypted keystore
+
+```bash
+TOON_CLIENT_MNEMONIC="word word ..." \
+TOON_CLIENT_KEYSTORE_PASSWORD="…" \
+node -e "import('@toon-protocol/client').then(m => m.importKeystore(process.env.HOME+'/.toon-client/keystore.json', process.env.TOON_CLIENT_MNEMONIC, process.env.TOON_CLIENT_KEYSTORE_PASSWORD))"
+```
+
+## Daemon lifecycle (Claude Code only — it has a shell)
+
+```bash
+toon-clientd start     # spawn detached, wait until reachable
+toon-clientd status    # print status JSON
+toon-clientd stop      # SIGTERM the locked PID
+toon-clientd run       # run in the foreground (what the detached spawn runs)
+```
+
+The MCP server auto-spawns the daemon, so `start` is optional.
+
+## Register with Claude
+
+### Claude Code
+
+```bash
+claude mcp add toon -- toon-mcp
+```
+
+…or add to `.mcp.json` in your project:
+
+```json
+{
+  "mcpServers": {
+    "toon": { "command": "toon-mcp" }
+  }
+}
+```
+
+### Claude Desktop
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "toon": {
+      "command": "toon-mcp",
+      "env": {
+        "TOON_CLIENT_KEYSTORE_PASSWORD": "…"
+      }
+    }
+  }
+}
+```
+
+Then restart Claude Desktop. The TOON tools appear in the tool list; the first
+`toon_publish` after a cold start may report "bootstrapping — retry" while the
+anon proxy + BTP session come up.
+
+## Security
+
+- The daemon holds the mnemonic/keystore; the agent sees **only addresses and
+  results**, never private keys.
+- A single-instance PID lock prevents two daemons from racing the channel nonce
+  watermark (which would corrupt the payment proof).
+- The control plane binds `127.0.0.1` only (no auth layer — it never leaves
+  loopback).
+
+## Tests
+
+```bash
+pnpm --filter @toon-protocol/client-mcp test              # unit
+RUN_LIVE_HS_E2E=1 …env… \
+  pnpm --filter @toon-protocol/client-mcp test:integration # gated live-HS round-trip
+```
+
+The gated integration test boots the daemon against a live `.anyone` HS apex,
+publishes a paid event, reads it back through the subscription, verifies the
+channel nonce advanced, restarts the daemon, and confirms the nonce watermark
+persisted. See `src/__integration__/`.
