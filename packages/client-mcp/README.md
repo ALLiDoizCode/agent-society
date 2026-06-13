@@ -158,6 +158,67 @@ Then restart Claude Desktop. The TOON tools appear in the tool list; the first
 `toon_publish` after a cold start may report "bootstrapping — retry" while the
 anon proxy + BTP session come up.
 
+## Usage example
+
+You don't call these tools by hand — the agent does, in response to plain
+requests. A typical "post a note, then read it back" flow:
+
+> **You:** Post a note to TOON saying "gm from my agent", then show me when it lands.
+
+The agent runs:
+
+1. **`toon_status`** → confirm the client is up.
+   ```json
+   { "ready": true, "bootstrapping": false, "settlementChain": "evm",
+     "relay": { "connected": true }, "identity": { "evmAddress": "0x99ed…" } }
+   ```
+   (If it returns `bootstrapping: true` or a "retry shortly" message, wait ~30–90s
+   for the anon proxy + BTP session, then retry.)
+
+2. **`toon_subscribe`** for its own author so it can read the note back:
+   ```json
+   { "filters": { "authors": ["<my-hex-pubkey>"], "kinds": [1] } }
+   → { "subId": "sub-1" }
+   ```
+
+3. **`toon_publish`** the signed kind:1 event (the daemon signs the payment-channel
+   claim and forwards it over BTP):
+   ```json
+   { "event": { "kind": 1, "content": "gm from my agent", "id": "…", "sig": "…", … } }
+   → { "eventId": "0d0c1f98…", "channelId": "0xc73a77…", "nonce": 7 }
+   ```
+
+4. **`toon_read`** until the event appears (free; cursor long-poll):
+   ```json
+   { "subId": "sub-1" }
+   → { "events": [ { "id": "0d0c1f98…", "content": "gm from my agent", … } ],
+       "cursor": 12, "hasMore": false }
+   ```
+
+5. **`toon_channels`** to show what it cost:
+   ```json
+   → { "channels": [ { "channelId": "0xc73a77…", "nonce": 7, "cumulativeAmount": "7" } ] }
+   ```
+
+Other common calls: **`toon_open_channel`** to pre-open a channel before a burst
+of publishes, and **`toon_swap({ destination, amount })`** to pay a mill peer and
+receive a target-chain claim.
+
+> **CLI equivalent** (handy for scripting/debugging — the MCP tools map 1:1 to
+> these daemon endpoints):
+> ```bash
+> toon-clientd start                                   # boot the daemon
+> curl -s localhost:8787/status | jq                   # toon_status
+> curl -s -XPOST localhost:8787/subscribe \
+>   -H content-type:application/json \
+>   -d '{"filters":{"authors":["<hex>"],"kinds":[1]}}' # toon_subscribe
+> curl -s -XPOST localhost:8787/publish \
+>   -H content-type:application/json \
+>   -d '{"event":{…signed kind:1…}}'                   # toon_publish
+> curl -s 'localhost:8787/events?subId=sub-1' | jq     # toon_read
+> curl -s localhost:8787/channels | jq                 # toon_channels
+> ```
+
 ## Security
 
 - The daemon holds the mnemonic/keystore; the agent sees **only addresses and
