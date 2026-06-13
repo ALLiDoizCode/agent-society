@@ -625,4 +625,118 @@ logging:
       }
     });
   });
+
+  // ── P1: TOWNHOUSE_MNEMONIC operator/agent wallet mode ──
+  // The wallet loads DIRECTLY from the env mnemonic — no encrypted wallet file
+  // and no password. See docs/townhouse-mcp-design.md §3.
+  describe('TOWNHOUSE_MNEMONIC operator mode (P1)', () => {
+    // Valid BIP-39 test vector (the Anvil/Hardhat default mnemonic).
+    const TEST_MNEMONIC =
+      'test test test test test test test test test test test junk';
+    const origMnemonic = process.env['TOWNHOUSE_MNEMONIC'];
+    const origPassword = process.env['TOWNHOUSE_WALLET_PASSWORD'];
+
+    afterEach(() => {
+      if (origMnemonic === undefined) delete process.env['TOWNHOUSE_MNEMONIC'];
+      else process.env['TOWNHOUSE_MNEMONIC'] = origMnemonic;
+      if (origPassword === undefined)
+        delete process.env['TOWNHOUSE_WALLET_PASSWORD'];
+      else process.env['TOWNHOUSE_WALLET_PASSWORD'] = origPassword;
+    });
+
+    // Config pointing at a NONEXISTENT wallet file — mnemonic mode must ignore it.
+    function writeConfigWithMissingWallet(dir: string): string {
+      const configPath = join(dir, 'config.yaml');
+      writeFileSync(
+        configPath,
+        `
+nodes:
+  town:
+    enabled: true
+    feePerEvent: 1000
+  mill:
+    enabled: false
+    feeBasisPoints: 50
+  dvm:
+    enabled: false
+    feePerJob: 5000
+wallet:
+  encrypted_path: ${join(dir, 'nonexistent-wallet.enc')}
+connector:
+  image: ghcr.io/toon-protocol/connector:3.3.3
+  adminPort: 9401
+transport:
+  mode: direct
+api:
+  port: 9400
+  host: 127.0.0.1
+logging:
+  level: info
+`,
+        'utf-8'
+      );
+      return configPath;
+    }
+
+    it('wallet show works with no wallet file and no password', async () => {
+      const dir = makeTempDir();
+      try {
+        delete process.env['TOWNHOUSE_WALLET_PASSWORD'];
+        process.env['TOWNHOUSE_MNEMONIC'] = TEST_MNEMONIC;
+        const configPath = writeConfigWithMissingWallet(dir);
+
+        await main(['wallet', 'show', '-c', configPath]);
+
+        const output = consoleSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
+        expect(output).toMatch(/npub1[a-z0-9]+/); // derived Nostr npub
+        expect(output).toMatch(/0x[0-9a-fA-F]{40}/); // derived EVM address
+
+        const errOutput = consoleErrorSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
+        expect(errOutput).not.toMatch(/Wallet password required/);
+        expect(errOutput).not.toMatch(/No wallet found/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('wallet seed returns the env mnemonic verbatim (no password)', async () => {
+      const dir = makeTempDir();
+      try {
+        delete process.env['TOWNHOUSE_WALLET_PASSWORD'];
+        process.env['TOWNHOUSE_MNEMONIC'] = TEST_MNEMONIC;
+        const configPath = writeConfigWithMissingWallet(dir);
+
+        await main(['wallet', 'seed', '--confirm', '-c', configPath]);
+
+        const output = consoleSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
+        expect(output).toContain(TEST_MNEMONIC);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('still errors (no crash) when neither mnemonic, password, nor file exist', async () => {
+      const dir = makeTempDir();
+      try {
+        delete process.env['TOWNHOUSE_WALLET_PASSWORD'];
+        delete process.env['TOWNHOUSE_MNEMONIC'];
+        const configPath = writeConfigWithMissingWallet(dir);
+
+        await main(['wallet', 'show', '-c', configPath]);
+
+        const errOutput = consoleErrorSpy.mock.calls
+          .map((c) => String(c[0]))
+          .join('\n');
+        expect(errOutput).toMatch(/wallet|password/i);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
 });

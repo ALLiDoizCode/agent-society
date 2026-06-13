@@ -676,39 +676,44 @@ async function handleWalletShow(
   options: { json?: boolean; hex?: boolean; paths?: boolean } = {}
 ): Promise<void> {
   const walletPath = config.wallet.encrypted_path;
-  const result = await loadWallet(walletPath);
-
-  if (!result) {
-    console.error('No wallet found. Run `townhouse init` first.');
-    process.exitCode = 1;
-    return;
-  }
-
-  if (result.permissionsWarning) {
-    console.error(result.permissionsWarning);
-  }
-
-  const walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
-  if (!walletPassword) {
-    console.error(
-      'Wallet password required. Use --password flag or TOWNHOUSE_WALLET_PASSWORD env var.'
-    );
-    process.exitCode = 1;
-    return;
-  }
-
-  const walletManager = new WalletManager({ encryptedPath: walletPath });
-  try {
-    // Decrypt mnemonic in minimal scope — fromMnemonic derives keys then
-    // the mnemonic string becomes unreachable (eligible for GC)
-    await walletManager.fromMnemonic(
-      decryptWallet(result.wallet, walletPassword)
-    );
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`Failed to decrypt wallet: ${msg}`);
-    process.exitCode = 1;
-    return;
+  // TOWNHOUSE_MNEMONIC (direct, no password) OR encrypted wallet + password.
+  // P1 / docs/townhouse-mcp-design.md §3.
+  let walletManager: WalletManager | undefined =
+    (await tryEnvMnemonicWallet(walletPath)) ?? undefined;
+  let walletPassword: string | undefined;
+  if (!walletManager) {
+    const result = await loadWallet(walletPath);
+    if (!result) {
+      console.error(
+        'No wallet found. Run `townhouse init` first (or set TOWNHOUSE_MNEMONIC).'
+      );
+      process.exitCode = 1;
+      return;
+    }
+    if (result.permissionsWarning) {
+      console.error(result.permissionsWarning);
+    }
+    walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
+    if (!walletPassword) {
+      console.error(
+        'Wallet password required. Use --password flag or TOWNHOUSE_WALLET_PASSWORD env var (or set TOWNHOUSE_MNEMONIC).'
+      );
+      process.exitCode = 1;
+      return;
+    }
+    walletManager = new WalletManager({ encryptedPath: walletPath });
+    try {
+      // Decrypt mnemonic in minimal scope — fromMnemonic derives keys then
+      // the mnemonic string becomes unreachable (eligible for GC)
+      await walletManager.fromMnemonic(
+        decryptWallet(result.wallet, walletPassword)
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Failed to decrypt wallet: ${msg}`);
+      process.exitCode = 1;
+      return;
+    }
   }
 
   try {
@@ -793,35 +798,43 @@ async function handleWalletSeed(
   }
 
   const walletPath = config.wallet.encrypted_path;
-  const result = await loadWallet(walletPath);
-  if (!result) {
-    console.error('No wallet found. Run `townhouse init` first.');
-    process.exitCode = 1;
-    return;
-  }
-  if (result.permissionsWarning) {
-    console.error(result.permissionsWarning);
-  }
+  // TOWNHOUSE_MNEMONIC (direct, no password) OR encrypted wallet + password. In
+  // mnemonic mode `getMnemonic()` returns the env seed — P1 / §3.
+  let walletManager: WalletManager | undefined =
+    (await tryEnvMnemonicWallet(walletPath)) ?? undefined;
+  if (!walletManager) {
+    const result = await loadWallet(walletPath);
+    if (!result) {
+      console.error(
+        'No wallet found. Run `townhouse init` first (or set TOWNHOUSE_MNEMONIC).'
+      );
+      process.exitCode = 1;
+      return;
+    }
+    if (result.permissionsWarning) {
+      console.error(result.permissionsWarning);
+    }
 
-  const walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
-  if (!walletPassword) {
-    console.error(
-      'Wallet password required. Use --password flag or TOWNHOUSE_WALLET_PASSWORD env var.'
-    );
-    process.exitCode = 1;
-    return;
-  }
+    const walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
+    if (!walletPassword) {
+      console.error(
+        'Wallet password required. Use --password flag or TOWNHOUSE_WALLET_PASSWORD env var (or set TOWNHOUSE_MNEMONIC).'
+      );
+      process.exitCode = 1;
+      return;
+    }
 
-  const walletManager = new WalletManager({ encryptedPath: walletPath });
-  try {
-    await walletManager.fromMnemonic(
-      decryptWallet(result.wallet, walletPassword)
-    );
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`Failed to decrypt wallet: ${msg}`);
-    process.exitCode = 1;
-    return;
+    walletManager = new WalletManager({ encryptedPath: walletPath });
+    try {
+      await walletManager.fromMnemonic(
+        decryptWallet(result.wallet, walletPassword)
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Failed to decrypt wallet: ${msg}`);
+      process.exitCode = 1;
+      return;
+    }
   }
 
   try {
@@ -898,6 +911,28 @@ async function resolveWalletPassword(
 }
 
 /**
+ * P1 — operator/agent wallet mode. When `TOWNHOUSE_MNEMONIC` is set, load the
+ * operator wallet DIRECTLY from that mnemonic: no encrypted wallet file and no
+ * password. Returns an unlocked {@link WalletManager}, or `null` when the env
+ * var is unset (callers then fall back to the encrypted-wallet + password
+ * flow). The agent owns the funds, so a single env-var secret replaces the
+ * password indirection — see docs/townhouse-mcp-design.md §3.
+ *
+ * In this mode the encrypted wallet file is irrelevant — the on-disk AR cache
+ * (keyed by the operator password) is simply skipped; `ensureArweaveKey` then
+ * pays the full RSA cost without a password.
+ */
+async function tryEnvMnemonicWallet(
+  walletPath: string
+): Promise<WalletManager | null> {
+  const mnemonic = process.env['TOWNHOUSE_MNEMONIC']?.trim();
+  if (!mnemonic) return null;
+  const walletManager = new WalletManager({ encryptedPath: walletPath });
+  await walletManager.fromMnemonic(mnemonic);
+  return walletManager;
+}
+
+/**
  * Read a single y/N answer from stdin, defaulting to N on empty input.
  * Mirrors the existing readline-based prompt in `hs down --rotate-keys`.
  */
@@ -971,36 +1006,42 @@ async function handleCreditsBuy(
     | undefined;
 
   // ── 2. Wallet unlock ──
+  // TOWNHOUSE_MNEMONIC (direct, no password) OR encrypted wallet + password. P1.
   const walletPath = config.wallet.encrypted_path;
-  const loaded = await loadWallet(walletPath);
-  if (!loaded) {
-    console.error(
-      `No wallet found at ${walletPath}. Run \`townhouse init\` first.`
-    );
-    process.exitCode = 1;
-    return;
-  }
-  if (loaded.permissionsWarning) console.error(loaded.permissionsWarning);
+  let wallet: WalletManager | undefined =
+    (await tryEnvMnemonicWallet(walletPath)) ?? undefined;
+  let resolvedPassword: string | undefined;
+  if (!wallet) {
+    const loaded = await loadWallet(walletPath);
+    if (!loaded) {
+      console.error(
+        `No wallet found at ${walletPath}. Run \`townhouse init\` first (or set TOWNHOUSE_MNEMONIC).`
+      );
+      process.exitCode = 1;
+      return;
+    }
+    if (loaded.permissionsWarning) console.error(loaded.permissionsWarning);
 
-  const resolvedPassword = await resolveWalletPassword(
-    values['password'] as string | undefined
-  );
-  if (!resolvedPassword) {
-    console.error(
-      'Wallet password required. Use --password flag or TOWNHOUSE_WALLET_PASSWORD env var.'
-    );
-    process.exitCode = 1;
-    return;
-  }
+    resolvedPassword =
+      (await resolveWalletPassword(values['password'] as string | undefined)) ??
+      undefined;
+    if (!resolvedPassword) {
+      console.error(
+        'Wallet password required. Use --password flag or TOWNHOUSE_WALLET_PASSWORD env var (or set TOWNHOUSE_MNEMONIC).'
+      );
+      process.exitCode = 1;
+      return;
+    }
 
-  const wallet = new WalletManager({ encryptedPath: walletPath });
-  try {
-    await wallet.fromMnemonic(decryptWallet(loaded.wallet, resolvedPassword));
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`Failed to decrypt wallet: ${msg}`);
-    process.exitCode = 1;
-    return;
+    wallet = new WalletManager({ encryptedPath: walletPath });
+    try {
+      await wallet.fromMnemonic(decryptWallet(loaded.wallet, resolvedPassword));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Failed to decrypt wallet: ${msg}`);
+      process.exitCode = 1;
+      return;
+    }
   }
 
   try {
@@ -1122,36 +1163,41 @@ async function handleCreditsBalance(
   }
   const token: TurboTokenId = tokenRaw;
 
+  // TOWNHOUSE_MNEMONIC (direct, no password) OR encrypted wallet + password. P1.
   const walletPath = config.wallet.encrypted_path;
-  const loaded = await loadWallet(walletPath);
-  if (!loaded) {
-    console.error(
-      `No wallet found at ${walletPath}. Run \`townhouse init\` first.`
-    );
-    process.exitCode = 1;
-    return;
-  }
-  if (loaded.permissionsWarning) console.error(loaded.permissionsWarning);
+  let wallet: WalletManager | undefined =
+    (await tryEnvMnemonicWallet(walletPath)) ?? undefined;
+  if (!wallet) {
+    const loaded = await loadWallet(walletPath);
+    if (!loaded) {
+      console.error(
+        `No wallet found at ${walletPath}. Run \`townhouse init\` first (or set TOWNHOUSE_MNEMONIC).`
+      );
+      process.exitCode = 1;
+      return;
+    }
+    if (loaded.permissionsWarning) console.error(loaded.permissionsWarning);
 
-  const resolvedPassword = await resolveWalletPassword(
-    values['password'] as string | undefined
-  );
-  if (!resolvedPassword) {
-    console.error(
-      'Wallet password required. Use --password flag or TOWNHOUSE_WALLET_PASSWORD env var.'
+    const resolvedPassword = await resolveWalletPassword(
+      values['password'] as string | undefined
     );
-    process.exitCode = 1;
-    return;
-  }
+    if (!resolvedPassword) {
+      console.error(
+        'Wallet password required. Use --password flag or TOWNHOUSE_WALLET_PASSWORD env var (or set TOWNHOUSE_MNEMONIC).'
+      );
+      process.exitCode = 1;
+      return;
+    }
 
-  const wallet = new WalletManager({ encryptedPath: walletPath });
-  try {
-    await wallet.fromMnemonic(decryptWallet(loaded.wallet, resolvedPassword));
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`Failed to decrypt wallet: ${msg}`);
-    process.exitCode = 1;
-    return;
+    wallet = new WalletManager({ encryptedPath: walletPath });
+    try {
+      await wallet.fromMnemonic(decryptWallet(loaded.wallet, resolvedPassword));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Failed to decrypt wallet: ${msg}`);
+      process.exitCode = 1;
+      return;
+    }
   }
 
   try {
@@ -1355,18 +1401,23 @@ async function handleUp(
   // wallet file exists, we log a warning and skip API startup entirely so
   // orchestration-only callers (CI, tooling, smoke tests) still work.
   const walletPath = config.wallet.encrypted_path;
-  let walletManager: WalletManager | undefined;
-  if (!existsSync(walletPath)) {
-    console.error(
-      `Wallet not found at ${walletPath}. Run \`townhouse setup\` first (or restore your wallet backup).`
-    );
-    process.exitCode = 1;
-    return;
-  } else {
-    const walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
+  // Resolve the operator wallet: TOWNHOUSE_MNEMONIC (direct, no password) OR the
+  // encrypted wallet + password. P1 / docs/townhouse-mcp-design.md §3.
+  let walletManager: WalletManager | undefined =
+    (await tryEnvMnemonicWallet(walletPath)) ?? undefined;
+  let walletPassword: string | undefined;
+  if (!walletManager) {
+    if (!existsSync(walletPath)) {
+      console.error(
+        `Wallet not found at ${walletPath}. Run \`townhouse setup\` first (or restore your wallet backup), or set TOWNHOUSE_MNEMONIC.`
+      );
+      process.exitCode = 1;
+      return;
+    }
+    walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
     if (!walletPassword) {
       throw new Error(
-        'Wallet password required to start the API. Use --password flag or TOWNHOUSE_WALLET_PASSWORD env var.'
+        'Wallet password required to start the API. Use --password flag or TOWNHOUSE_WALLET_PASSWORD env var (or set TOWNHOUSE_MNEMONIC).'
       );
     }
     const loaded = await loadWallet(walletPath);
@@ -1385,22 +1436,24 @@ async function handleUp(
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to decrypt wallet: ${msg}`);
     }
+  }
 
-    // Pre-warm AR cache when DVM is in the boot set. The orchestrator's later
-    // ensureArweaveKey('dvm') call (without password) would otherwise pay the
-    // full 5–30s RSA cost AND not write back to disk. Calling here with the
-    // password populates both the in-memory + on-disk caches once and lets
-    // every subsequent invocation be sub-second (epic-49 Followup A).
-    if (profiles.includes('dvm')) {
-      try {
-        await walletManager.ensureArweaveKey('dvm', walletPassword);
-      } catch (err: unknown) {
-        // Non-fatal: orchestrator's own ensureArweaveKey call will retry.
-        const msg = err instanceof Error ? err.message : String(err);
-        console.warn(
-          `[townhouse up] AR pre-warm failed (non-fatal, orchestrator will retry): ${msg}`
-        );
-      }
+  // Pre-warm AR cache when DVM is in the boot set. The orchestrator's later
+  // ensureArweaveKey('dvm') call (without password) would otherwise pay the
+  // full 5–30s RSA cost AND not write back to disk. Calling here with the
+  // password populates both the in-memory + on-disk caches once and lets
+  // every subsequent invocation be sub-second (epic-49 Followup A). In
+  // TOWNHOUSE_MNEMONIC mode walletPassword is undefined — ensureArweaveKey then
+  // skips the disk cache and pays the RSA cost (still correct, just not cached).
+  if (profiles.includes('dvm')) {
+    try {
+      await walletManager.ensureArweaveKey('dvm', walletPassword);
+    } catch (err: unknown) {
+      // Non-fatal: orchestrator's own ensureArweaveKey call will retry.
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[townhouse up] AR pre-warm failed (non-fatal, orchestrator will retry): ${msg}`
+      );
     }
   }
 
@@ -1809,52 +1862,59 @@ async function handleHsUp(
     }
   }
 
-  // Resolve wallet password (AC #10): --password → env var → interactive prompt → reject
+  // Resolve the operator wallet (AC #10): TOWNHOUSE_MNEMONIC (direct, no
+  // password) OR the encrypted wallet + password (--password → env → TTY).
+  // See P1 / docs/townhouse-mcp-design.md §3.
   const walletPath = config.wallet.encrypted_path;
-  if (!existsSync(walletPath)) {
-    console.error(
-      `Wallet not found at ${walletPath}. Run \`townhouse init\` first.`
-    );
-    process.exitCode = 1;
-    return;
-  }
+  let walletManager: WalletManager | undefined =
+    (await tryEnvMnemonicWallet(walletPath)) ?? undefined;
+  // Hoisted: injected into the townhouse-api container env below. Undefined in
+  // TOWNHOUSE_MNEMONIC mode (the container then receives TOWNHOUSE_MNEMONIC).
+  let resolvedPassword: string | undefined;
+  if (!walletManager) {
+    if (!existsSync(walletPath)) {
+      console.error(
+        `Wallet not found at ${walletPath}. Run \`townhouse init\` first (or set TOWNHOUSE_MNEMONIC).`
+      );
+      process.exitCode = 1;
+      return;
+    }
 
-  const walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
+    const walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
 
-  let resolvedPassword: string;
-  if (walletPassword) {
-    resolvedPassword = walletPassword;
-  } else if (process.stdin.isTTY) {
-    resolvedPassword = await promptPassword('Wallet password: ');
-  } else {
-    // No interactive terminal (CI, SSH without a TTY, piped stdin). Make the
-    // reason explicit so the user knows why no prompt appeared and what to do.
-    console.error(
-      'Wallet password required, but no interactive terminal is available to prompt.\n' +
-        'Pass --password <pw> or set TOWNHOUSE_WALLET_PASSWORD.'
-    );
-    process.exitCode = 1;
-    return;
-  }
+    if (walletPassword) {
+      resolvedPassword = walletPassword;
+    } else if (process.stdin.isTTY) {
+      resolvedPassword = await promptPassword('Wallet password: ');
+    } else {
+      // No interactive terminal (CI, SSH without a TTY, piped stdin). Make the
+      // reason explicit so the user knows why no prompt appeared and what to do.
+      console.error(
+        'Wallet password required, but no interactive terminal is available to prompt.\n' +
+          'Pass --password <pw>, set TOWNHOUSE_WALLET_PASSWORD, or set TOWNHOUSE_MNEMONIC.'
+      );
+      process.exitCode = 1;
+      return;
+    }
 
-  const loaded = await loadWallet(walletPath);
-  if (!loaded) {
-    console.error(`Wallet at ${walletPath} could not be read.`);
-    process.exitCode = 1;
-    return;
-  }
+    const loaded = await loadWallet(walletPath);
+    if (!loaded) {
+      console.error(`Wallet at ${walletPath} could not be read.`);
+      process.exitCode = 1;
+      return;
+    }
 
-  let walletManager: WalletManager | undefined;
-  try {
-    walletManager = new WalletManager({ encryptedPath: walletPath });
-    await walletManager.fromMnemonic(
-      decryptWallet(loaded.wallet, resolvedPassword)
-    );
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`Failed to decrypt wallet: ${msg}`);
-    process.exitCode = 1;
-    return;
+    try {
+      walletManager = new WalletManager({ encryptedPath: walletPath });
+      await walletManager.fromMnemonic(
+        decryptWallet(loaded.wallet, resolvedPassword)
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Failed to decrypt wallet: ${msg}`);
+      process.exitCode = 1;
+      return;
+    }
   }
 
   const ribbon = new OnboardingRibbon();
@@ -2018,7 +2078,13 @@ async function handleHsUp(
     const prevWalletDir = process.env['TOWNHOUSE_WALLET_DIR'];
     const prevDockerGid = process.env['TOWNHOUSE_DOCKER_GID'];
     process.env['TOWNHOUSE_HOME'] = configDir;
-    process.env['TOWNHOUSE_WALLET_PASSWORD'] = resolvedPassword;
+    // In TOWNHOUSE_MNEMONIC mode resolvedPassword is undefined; leave the
+    // container's TOWNHOUSE_WALLET_PASSWORD unset (assigning undefined would
+    // coerce to the string "undefined"). The operator's TOWNHOUSE_MNEMONIC is
+    // already in process.env and is forwarded by the compose template instead.
+    if (resolvedPassword !== undefined) {
+      process.env['TOWNHOUSE_WALLET_PASSWORD'] = resolvedPassword;
+    }
     process.env['TOWNHOUSE_UID'] = String(process.getuid?.() ?? 1000);
     // Inject the wallet dir as an absolute host path so the townhouse-api
     // container can find the wallet at the same path as config.wallet.encrypted_path.
@@ -2214,9 +2280,9 @@ async function handleDirectUp(
   // failure deterministic regardless of whether some unrelated connector admin
   // happens to answer the idempotency probe on the canonical port.
   const walletPath = config.wallet.encrypted_path;
-  if (!existsSync(walletPath)) {
+  if (!process.env['TOWNHOUSE_MNEMONIC'] && !existsSync(walletPath)) {
     console.error(
-      `Wallet not found at ${walletPath}. Run \`townhouse init\` first.`
+      `Wallet not found at ${walletPath}. Run \`townhouse init\` first (or set TOWNHOUSE_MNEMONIC).`
     );
     process.exitCode = 1;
     return;
@@ -2266,41 +2332,47 @@ async function handleDirectUp(
     }
   }
 
-  // Resolve wallet password (--password → env var → interactive prompt → reject).
-  // (walletPath existence was already validated above, before the probe.)
-  const walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
-  let resolvedPassword: string;
-  if (walletPassword) {
-    resolvedPassword = walletPassword;
-  } else if (process.stdin.isTTY) {
-    resolvedPassword = await promptPassword('Wallet password: ');
-  } else {
-    console.error(
-      'Wallet password required, but no interactive terminal is available to prompt.\n' +
-        'Pass --password <pw> or set TOWNHOUSE_WALLET_PASSWORD.'
-    );
-    process.exitCode = 1;
-    return;
-  }
+  // Resolve the operator wallet: TOWNHOUSE_MNEMONIC (direct, no password) OR the
+  // encrypted wallet + password (--password → env → TTY). walletPath existence
+  // was already validated above (skipped in mnemonic mode). P1 / §3.
+  let walletManager: WalletManager | undefined =
+    (await tryEnvMnemonicWallet(walletPath)) ?? undefined;
+  // Hoisted: injected into the townhouse-api container env below. Undefined in
+  // TOWNHOUSE_MNEMONIC mode (the container then receives TOWNHOUSE_MNEMONIC).
+  let resolvedPassword: string | undefined;
+  if (!walletManager) {
+    const walletPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
+    if (walletPassword) {
+      resolvedPassword = walletPassword;
+    } else if (process.stdin.isTTY) {
+      resolvedPassword = await promptPassword('Wallet password: ');
+    } else {
+      console.error(
+        'Wallet password required, but no interactive terminal is available to prompt.\n' +
+          'Pass --password <pw>, set TOWNHOUSE_WALLET_PASSWORD, or set TOWNHOUSE_MNEMONIC.'
+      );
+      process.exitCode = 1;
+      return;
+    }
 
-  const loaded = await loadWallet(walletPath);
-  if (!loaded) {
-    console.error(`Wallet at ${walletPath} could not be read.`);
-    process.exitCode = 1;
-    return;
-  }
+    const loaded = await loadWallet(walletPath);
+    if (!loaded) {
+      console.error(`Wallet at ${walletPath} could not be read.`);
+      process.exitCode = 1;
+      return;
+    }
 
-  let walletManager: WalletManager | undefined;
-  try {
-    walletManager = new WalletManager({ encryptedPath: walletPath });
-    await walletManager.fromMnemonic(
-      decryptWallet(loaded.wallet, resolvedPassword)
-    );
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`Failed to decrypt wallet: ${msg}`);
-    process.exitCode = 1;
-    return;
+    try {
+      walletManager = new WalletManager({ encryptedPath: walletPath });
+      await walletManager.fromMnemonic(
+        decryptWallet(loaded.wallet, resolvedPassword)
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Failed to decrypt wallet: ${msg}`);
+      process.exitCode = 1;
+      return;
+    }
   }
 
   const ribbon = new OnboardingRibbon();
@@ -2421,7 +2493,13 @@ async function handleDirectUp(
     const prevWalletDir = process.env['TOWNHOUSE_WALLET_DIR'];
     const prevDockerGid = process.env['TOWNHOUSE_DOCKER_GID'];
     process.env['TOWNHOUSE_HOME'] = configDir;
-    process.env['TOWNHOUSE_WALLET_PASSWORD'] = resolvedPassword;
+    // In TOWNHOUSE_MNEMONIC mode resolvedPassword is undefined; leave the
+    // container's TOWNHOUSE_WALLET_PASSWORD unset (assigning undefined would
+    // coerce to the string "undefined"). The operator's TOWNHOUSE_MNEMONIC is
+    // already in process.env and is forwarded by the compose template instead.
+    if (resolvedPassword !== undefined) {
+      process.env['TOWNHOUSE_WALLET_PASSWORD'] = resolvedPassword;
+    }
     process.env['TOWNHOUSE_UID'] = String(process.getuid?.() ?? 1000);
     process.env['TOWNHOUSE_WALLET_DIR'] = dirname(
       resolve(config.wallet.encrypted_path)
