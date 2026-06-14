@@ -211,6 +211,39 @@ describe('CLI', () => {
     });
   });
 
+  describe('--version', () => {
+    const semver = /^\d+\.\d+\.\d+/;
+
+    it('prints the bare version and exits cleanly (--version)', async () => {
+      await expect(main(['--version'])).rejects.toThrow(CliHelpRequested);
+      const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(output).toMatch(semver);
+    });
+
+    it('prints { version } as JSON with --json', async () => {
+      await expect(main(['--version', '--json'])).rejects.toThrow(
+        CliHelpRequested
+      );
+      const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      const parsed = JSON.parse(output.trim()) as { version: string };
+      expect(parsed.version).toMatch(semver);
+    });
+
+    it('supports the `version` subcommand too', async () => {
+      await expect(main(['version', '--json'])).rejects.toThrow(
+        CliHelpRequested
+      );
+      const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(JSON.parse(output.trim())).toHaveProperty('version');
+    });
+
+    it('help text documents --version', async () => {
+      await expect(main(['--help'])).rejects.toThrow(CliHelpRequested);
+      const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(output).toContain('--version');
+    });
+  });
+
   describe('init (T-001, T-004)', () => {
     it('init --force creates config in specified directory', async () => {
       const dir = makeTempDir();

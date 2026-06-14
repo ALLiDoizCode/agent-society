@@ -50,3 +50,12 @@ export {
   type ResourceDefinition,
   type ResourceContents,
 } from './resources.js';
+export {
+  readSelfPackage,
+  computeVersionInfo,
+  lowerBound,
+  compareSemver,
+  satisfiesLowerBound,
+  type SelfPackage,
+  type VersionInfo,
+} from './version.js';

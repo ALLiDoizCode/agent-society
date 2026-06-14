@@ -88,6 +88,7 @@ describe('TOOL_DEFINITIONS', () => {
         'townhouse_transport',
         'townhouse_up',
         'townhouse_up_status',
+        'townhouse_version',
         'townhouse_withdraw',
       ].sort()
     );
@@ -230,6 +231,38 @@ describe('dispatchTool — telemetry stream/CLI source', () => {
     const res = await dispatchTool(ctx({ cli }), 'townhouse_metrics', {});
     expect(cli.runJson).toHaveBeenCalledWith(['metrics']);
     expect(parse(res)).toMatchObject({ source: 'cli', packetsForwarded: 9 });
+  });
+});
+
+describe('dispatchTool — townhouse_version', () => {
+  it('probes `townhouse version` and reports against the pinned range', async () => {
+    const cli = { runJson: vi.fn().mockResolvedValue({ version: '9.9.9' }) };
+    const res = await dispatchTool(ctx({ cli }), 'townhouse_version', {});
+    expect(cli.runJson).toHaveBeenCalledWith(['version']);
+    const info = parse(res) as Record<string, unknown>;
+    expect(info).toMatchObject({ detectedCliVersion: '9.9.9' });
+    // The MCP package pins a floor >= 0.26.0; a 9.9.9 CLI clears it.
+    expect(info['satisfies']).toBe(true);
+  });
+
+  it('reports a too-old CLI as version skew', async () => {
+    const cli = { runJson: vi.fn().mockResolvedValue({ version: '0.10.0' }) };
+    const res = await dispatchTool(ctx({ cli }), 'townhouse_version', {});
+    expect(parse(res)).toMatchObject({
+      detectedCliVersion: '0.10.0',
+      satisfies: false,
+    });
+  });
+
+  it('reports satisfies:null when the CLI lacks `version`', async () => {
+    const cli = {
+      runJson: vi.fn().mockRejectedValue(new CliError('unknown', 1, 'nope')),
+    };
+    const res = await dispatchTool(ctx({ cli }), 'townhouse_version', {});
+    expect(parse(res)).toMatchObject({
+      detectedCliVersion: null,
+      satisfies: null,
+    });
   });
 });
 

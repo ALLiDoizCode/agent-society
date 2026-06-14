@@ -32,6 +32,14 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0"
   },
+  "peerDependencies": {
+    "@toon-protocol/townhouse": ">=0.26.0"
+  },
+  "peerDependenciesMeta": {
+    "@toon-protocol/townhouse": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@toon-protocol/townhouse": "workspace:*",
     "@types/node": "^20.0.0",

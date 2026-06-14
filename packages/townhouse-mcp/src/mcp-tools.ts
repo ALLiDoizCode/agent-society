@@ -17,6 +17,7 @@ import {
   metricsSnapshotViaWs,
   tailLogsViaSse,
 } from './streams.js';
+import { computeVersionInfo, readSelfPackage } from './version.js';
 import type { WithdrawRequest } from '@toon-protocol/townhouse';
 
 /** A JSON-Schema-described MCP tool. */
@@ -255,6 +256,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     description: 'Probe apex / api / nodes / .anyone.',
     inputSchema: EMPTY,
   },
+  {
+    name: 'townhouse_version',
+    description:
+      'Report this MCP package version, the pinned townhouse range, and the ' +
+      'detected CLI version — flags version skew (a too-old townhouse CLI).',
+    inputSchema: EMPTY,
+  },
 ];
 
 /**
@@ -338,6 +346,8 @@ export async function dispatchTool(
         // health exits 1 when any probe is unhealthy but still reports the full
         // breakdown — surface that to the agent rather than a generic CLI error.
         return ok(await cli.runJsonLenient(['health']));
+      case 'townhouse_version':
+        return ok(await versionInfo(ctx));
 
       default:
         return err(`Unknown tool: ${name}`);
@@ -485,6 +495,24 @@ async function tailLogsViaCli(
       (level === undefined || l['level'] === level)
   );
   return { source: 'cli', count: filtered.length, events: filtered };
+}
+
+/**
+ * Version-skew report. Probes the `townhouse version` CLI command (added
+ * alongside this tool) and compares it to the pinned peer range. A CLI too old
+ * to support `version` exits non-zero / prints no JSON → CliError → reported as
+ * "couldn't probe", itself a skew signal.
+ */
+async function versionInfo(ctx: ToolCtx): Promise<unknown> {
+  const self = readSelfPackage();
+  return computeVersionInfo(self, async () => {
+    try {
+      const v = await ctx.cli.runJson<{ version: string }>(['version']);
+      return v.version;
+    } catch {
+      return undefined;
+    }
+  });
 }
 
 function toErrorResult(e: unknown, cfg: ResolvedConfig): ToolResult {

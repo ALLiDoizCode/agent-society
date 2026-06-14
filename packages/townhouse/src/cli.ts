@@ -16,6 +16,7 @@ import { parseArgs } from 'node:util';
 import {
   mkdirSync,
   writeFileSync,
+  readFileSync,
   existsSync,
   renameSync,
   rmSync,
@@ -114,9 +115,27 @@ export class CliHelpRequested extends Error {
   }
 }
 
+/**
+ * This package's version, read from its own package.json at runtime. Used by
+ * `townhouse --version` so tooling that shells out (e.g. @toon-protocol/
+ * townhouse-mcp's version-skew probe) has a real version to compare against.
+ * Resolves `../package.json` relative to the module — package root from
+ * `dist/cli.js`, and `packages/townhouse/package.json` under vitest/src.
+ */
+export function readCliVersion(): string {
+  try {
+    const pkgUrl = new URL('../package.json', import.meta.url);
+    const pkg = JSON.parse(readFileSync(pkgUrl, 'utf8')) as { version: string };
+    return pkg.version;
+  } catch {
+    return '0.0.0';
+  }
+}
+
 const HELP_TEXT = `townhouse — TOON node orchestrator
 
 Usage:
+  townhouse --version [--json]                    Print the package version (--json: { "version" })
   townhouse setup [--no-browser] [--port <n>] [--config-dir <dir>]  Run the first-run setup wizard
   townhouse init [--force] [--config-dir <dir>] [--password <pw>] [--preset <name>] [--network <mode>] [--yes] [--json]   Initialize config + wallet
   townhouse up [--transport direct|hs] [--dev] [--town] [--mill] [--dvm] [-c <path>] [--password <pw>]
@@ -3229,6 +3248,7 @@ export async function main(
     args: argv,
     options: {
       help: { type: 'boolean' },
+      version: { type: 'boolean' },
       force: { type: 'boolean' },
       config: { type: 'string', short: 'c' },
       'config-dir': { type: 'string' },
@@ -3285,6 +3305,14 @@ export async function main(
   });
 
   const command = positionals[0];
+
+  // `townhouse --version` / `townhouse version` — print the package version and
+  // exit cleanly. `--json` yields `{ "version": "x.y.z" }` for tooling probes.
+  if (values.version === true || command === 'version') {
+    const version = readCliVersion();
+    console.log(values.json === true ? JSON.stringify({ version }) : version);
+    throw new CliHelpRequested();
+  }
 
   // Handle `townhouse node <verb> --help` before the global --help check so
   // node sub-help takes priority over the global HELP_TEXT.
