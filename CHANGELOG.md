@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.3](https://github.com/toon-protocol/town/compare/v0.29.2...v0.29.3) (2026-06-14)
+
+### Bug Fixes
+
+* **townhouse:** normalize HS hostname .anon → .anyone (closes [#210](https://github.com/toon-protocol/town/issues/210)) ([#244](https://github.com/toon-protocol/town/issues/244)) ([337412e](https://github.com/toon-protocol/town/commit/337412e5a894ad8956e9ea1c0b6283695e65e8e4))
+* **townhouse:** pack @toon-protocol/mina-zkapp into the mill image ([#240](https://github.com/toon-protocol/town/issues/240)) ([#241](https://github.com/toon-protocol/town/issues/241)) ([1651342](https://github.com/toon-protocol/town/commit/16513426e72bdc9acdda0e2c364e216222f335a3))
+
 ## [0.29.2](https://github.com/toon-protocol/town/compare/v0.29.1...v0.29.2) (2026-06-14)
 
 ### Bug Fixes
