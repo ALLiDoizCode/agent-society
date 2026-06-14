@@ -2037,7 +2037,8 @@ async function handleHsUp(
     try {
       const existing = await probe.getHsHostname();
       if (existing.hostname !== null) {
-        // hostname from the connector already includes the .anyone suffix.
+        // getHsHostname() normalizes the connector's `.anon` scheme to the
+        // routable `.anyone` TLD, so this hostname is already `.anyone`.
         console.log(`Apex live at ${existing.hostname}`);
         emitUpStep(json, 'done', {
           transport: 'hs',
@@ -2443,7 +2444,8 @@ async function handleHsUp(
     });
 
     // Step 8: ribbon phase 3 + final stdout line (AC #5).
-    // hostname from the connector already includes the .anyone suffix.
+    // getHsHostname() normalizes the connector's `.anon` scheme to the routable
+    // `.anyone` TLD, so this hostname is already `.anyone`.
     // ribbon.start('live', hostname) prints: "Apex live at <hostname>" as the FINAL stdout line.
     ribbon.start('live', hostname);
     emitUpStep(json, 'done', { transport: 'hs', hostname });
@@ -3263,6 +3265,16 @@ async function handleChains(
         process.exitCode = 1;
         return;
       }
+      if (jsonMode) {
+        console.log(
+          JSON.stringify({
+            added: true,
+            chainType: entry.chainType,
+            chainId: entry.chainId,
+          })
+        );
+        return;
+      }
       console.log(
         `Added ${entry.chainType} settlement chain '${entry.chainId}'.`
       );
@@ -3287,6 +3299,10 @@ async function handleChains(
         ...config,
         chainProviders: next.length > 0 ? next : undefined,
       });
+      if (jsonMode) {
+        console.log(JSON.stringify({ removed: true, chainId: chainIdArg }));
+        return;
+      }
       console.log(`Removed settlement chain '${chainIdArg}'.`);
       console.log('Apply with:  townhouse hs down && townhouse hs up');
       return;

@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.6](https://github.com/toon-protocol/town/compare/v0.29.5...v0.29.6) (2026-06-14)
+
+### Bug Fixes
+
+* **core:** point Mina devnet preset at the funded, settling zkApp ([#205](https://github.com/toon-protocol/town/issues/205)) ([#248](https://github.com/toon-protocol/town/issues/248)) ([80fcb31](https://github.com/toon-protocol/town/commit/80fcb31fadb443e92f0ca7ae375e5ccb4de3364d)), closes [#217](https://github.com/toon-protocol/town/issues/217)
+
+## [0.29.5](https://github.com/toon-protocol/town/compare/v0.29.4...v0.29.5) (2026-06-14)
+
+### Bug Fixes
+
+* **client:** pin sha256 for all anon zip platforms (closes [#204](https://github.com/toon-protocol/town/issues/204)) ([#247](https://github.com/toon-protocol/town/issues/247)) ([781874f](https://github.com/toon-protocol/town/commit/781874f87c83e9c392827577c8486d5d3f005479))
+
+## [0.29.4](https://github.com/toon-protocol/town/compare/v0.29.3...v0.29.4) (2026-06-14)
+
+### Bug Fixes
+
+* **townhouse:** bump default connector 3.10.3 → 3.10.4 (closes [#213](https://github.com/toon-protocol/town/issues/213)) ([#243](https://github.com/toon-protocol/town/issues/243)) ([9cd95d1](https://github.com/toon-protocol/town/commit/9cd95d1fec9a09a5fd8be16f689a52fa26e0d2ba)), closes [connector#137](https://github.com/toon-protocol/connector/issues/137) [connector#136](https://github.com/toon-protocol/connector/issues/136)
+* **townhouse:** write per-chain base58/EK keyId for Solana/Mina providers ([#215](https://github.com/toon-protocol/town/issues/215)) ([#245](https://github.com/toon-protocol/town/issues/245)) ([56db447](https://github.com/toon-protocol/town/commit/56db447d6796d6dbb7772d53a165a5d11f074307))
+
+## [0.29.3](https://github.com/toon-protocol/town/compare/v0.29.2...v0.29.3) (2026-06-14)
+
+### Bug Fixes
+
+* **townhouse:** normalize HS hostname .anon → .anyone (closes [#210](https://github.com/toon-protocol/town/issues/210)) ([#244](https://github.com/toon-protocol/town/issues/244)) ([337412e](https://github.com/toon-protocol/town/commit/337412e5a894ad8956e9ea1c0b6283695e65e8e4))
+* **townhouse:** pack @toon-protocol/mina-zkapp into the mill image ([#240](https://github.com/toon-protocol/town/issues/240)) ([#241](https://github.com/toon-protocol/town/issues/241)) ([1651342](https://github.com/toon-protocol/town/commit/16513426e72bdc9acdda0e2c364e216222f335a3))
+
+## [0.29.2](https://github.com/toon-protocol/town/compare/v0.29.1...v0.29.2) (2026-06-14)
+
+### Bug Fixes
+
+* **townhouse:** chains add/remove --json emit JSON, not human text ([#232](https://github.com/toon-protocol/town/issues/232)) ([#239](https://github.com/toon-protocol/town/issues/239)) ([c491268](https://github.com/toon-protocol/town/commit/c49126850f193ce13213e9932a8d7ef8d03b638e)), closes [#4c](https://github.com/toon-protocol/town/issues/4c)
+
+## [0.29.1](https://github.com/toon-protocol/town/compare/v0.29.0...v0.29.1) (2026-06-14)
+
+### Bug Fixes
+
+* **townhouse-mcp:** surface lifecycle error detail + correct retryable classification ([#232](https://github.com/toon-protocol/town/issues/232)) ([#237](https://github.com/toon-protocol/town/issues/237)) ([65a3cfc](https://github.com/toon-protocol/town/commit/65a3cfcd4b81ca8ea5361645dd779bba4000221d)), closes [#3](https://github.com/toon-protocol/town/issues/3) [#4](https://github.com/toon-protocol/town/issues/4)
+* **townhouse:** wallet balances/withdraw read network-profile chain env ([#232](https://github.com/toon-protocol/town/issues/232)) ([#238](https://github.com/toon-protocol/town/issues/238)) ([6e19a95](https://github.com/toon-protocol/town/commit/6e19a9556402579890962b2fb728e81185a8251d)), closes [#1](https://github.com/toon-protocol/town/issues/1)
+
+## [0.29.0](https://github.com/toon-protocol/town/compare/v0.28.0...v0.29.0) (2026-06-14)
+
+### Features
+
+* **townhouse-operator:** companion skill + plugin for the operator MCP ([#234](https://github.com/toon-protocol/town/issues/234)) ([6e98e67](https://github.com/toon-protocol/town/commit/6e98e679987bfa72177edc9a4003421e259103ad))
+
 ## [0.28.0](https://github.com/toon-protocol/town/compare/v0.27.0...v0.28.0) (2026-06-14)
 
 ### Features

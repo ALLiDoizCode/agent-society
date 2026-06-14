@@ -99,7 +99,7 @@ permissions:
 # `workflow_dispatch.inputs.connector_version.default` above is deliberately
 # left empty so it can never drift from this env literal (Story 50.0 review F6).
 env:
-  CONNECTOR_VERSION_DEFAULT: '3.10.3'
+  CONNECTOR_VERSION_DEFAULT: '3.10.4'
 
 jobs:
   # ---------------------------------------------------------------------------
