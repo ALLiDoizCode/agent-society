@@ -66,10 +66,7 @@ export function lowerBound(range: string): string {
 /** Numeric semver compare of `a` vs `b`: -1 | 0 | 1 (pre-release tags ignored). */
 export function compareSemver(a: string, b: string): number {
   const parse = (v: string): number[] =>
-    v
-      .split('-')[0]!
-      .split('.')
-      .map((n) => Number.parseInt(n, 10) || 0);
+    (v.split('-')[0] ?? v).split('.').map((n) => Number.parseInt(n, 10) || 0);
   const pa = parse(a);
   const pb = parse(b);
   for (let i = 0; i < 3; i++) {

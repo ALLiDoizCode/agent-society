@@ -10,7 +10,7 @@ vi.mock('./apex-lifecycle.js', () => ({
 // Keep the real `StreamsUnavailableError` so dispatch's `instanceof` fallback
 // branches still work.
 vi.mock('./streams.js', async (importActual) => {
-  const actual = await importActual<typeof import('./streams.js')>();
+  const actual = await importActual<typeof StreamsModule>();
   return {
     ...actual,
     tailLogsViaSse: vi.fn(),
@@ -27,6 +27,7 @@ import {
   tailLogsViaSse,
   metricsSnapshotViaWs,
 } from './streams.js';
+import type * as StreamsModule from './streams.js';
 import type { Mock } from 'vitest';
 import type { ApiClient } from './api-client.js';
 import type { CliDriver } from './cli-driver.js';
