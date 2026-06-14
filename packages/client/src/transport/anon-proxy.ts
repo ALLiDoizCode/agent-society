@@ -44,9 +44,10 @@ const RELEASE_BASE = `https://github.com/anyone-protocol/ator-protocol/releases/
 
 /**
  * Per-platform `anon` zip asset descriptor. `sha256` is the pinned checksum of the
- * release zip; entries with `sha256: null` are recognised (correct asset name) but
- * cannot be auto-downloaded until a checksum is pinned — cross-reference issue #204
- * to add the remaining hashes (linux amd64/arm64, macos amd64).
+ * release zip. All supported platforms are pinned (issue #204); the type stays
+ * `string | null` and the download gate still defensively refuses a `null` entry,
+ * so adding a new (not-yet-hashed) platform fails closed rather than skipping
+ * verification.
  */
 export interface AnonAsset {
   /** Release asset file name, e.g. `anon-beta-macos-arm64.zip`. */
