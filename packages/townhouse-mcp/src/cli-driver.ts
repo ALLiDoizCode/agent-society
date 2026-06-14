@@ -68,6 +68,31 @@ export class CliDriver {
     return JSON.parse(stdout) as T;
   }
 
+  /**
+   * Like {@link runJson}, but a non-zero exit is NOT treated as failure when the
+   * command still emitted a valid JSON payload on stdout. Some commands use the
+   * exit code as a *status signal* while reporting structurally — e.g.
+   * `townhouse health` exits 1 when any probe is unhealthy yet still prints the
+   * full health breakdown the agent wants to see. Only throws when there is no
+   * parseable JSON to return.
+   */
+  async runJsonLenient<T>(args: string[]): Promise<T> {
+    const { stdout, stderr, code } = await this.exec(
+      this.cfg.townhouseBin,
+      [...args, '--json'],
+      this.childEnv()
+    );
+    try {
+      return JSON.parse(stdout) as T;
+    } catch {
+      throw new CliError(
+        `townhouse ${args.join(' ')} exited ${code}`,
+        code,
+        stderr
+      );
+    }
+  }
+
   /** Run a command emitting NDJSON (`logs`), parse one object per line. */
   async runNdjson<T>(args: string[]): Promise<T[]> {
     const { stdout, stderr, code } = await this.exec(

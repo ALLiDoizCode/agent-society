@@ -326,7 +326,9 @@ export async function dispatchTool(
       case 'townhouse_channels':
         return ok(await cli.runJson(['channels']));
       case 'townhouse_health':
-        return ok(await cli.runJson(['health']));
+        // health exits 1 when any probe is unhealthy but still reports the full
+        // breakdown — surface that to the agent rather than a generic CLI error.
+        return ok(await cli.runJsonLenient(['health']));
 
       default:
         return err(`Unknown tool: ${name}`);
