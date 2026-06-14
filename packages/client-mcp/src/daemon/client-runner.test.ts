@@ -413,7 +413,12 @@ describe('ClientRunner', () => {
       state: 'failed',
       claims: [],
       rejections: [
-        { packetIndex: 0, sourceAmount: 1000n, code: 'F99', message: 'Payment rejected' },
+        {
+          packetIndex: 0,
+          sourceAmount: 1000n,
+          code: 'F99',
+          message: 'Payment rejected',
+        },
       ],
       errors: [],
       abortReason: 'all-rejected',

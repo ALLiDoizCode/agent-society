@@ -417,9 +417,7 @@ export class ClientRunner {
           : {}),
         ...(c.claimId ? { claimId: c.claimId } : {}),
         ...(c.nonce ? { nonce: c.nonce } : {}),
-        ...(c.cumulativeAmount
-          ? { cumulativeAmount: c.cumulativeAmount }
-          : {}),
+        ...(c.cumulativeAmount ? { cumulativeAmount: c.cumulativeAmount } : {}),
       })),
       cumulativeSource: result.cumulativeSource.toString(),
       cumulativeTarget: result.cumulativeTarget.toString(),
