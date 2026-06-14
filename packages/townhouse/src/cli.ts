@@ -118,14 +118,14 @@ const HELP_TEXT = `townhouse — TOON node orchestrator
 
 Usage:
   townhouse setup [--no-browser] [--port <n>] [--config-dir <dir>]  Run the first-run setup wizard
-  townhouse init [--force] [--config-dir <dir>] [--password <pw>] [--preset <name>] [--network <mode>] [--yes]   Initialize config + wallet
+  townhouse init [--force] [--config-dir <dir>] [--password <pw>] [--preset <name>] [--network <mode>] [--yes] [--json]   Initialize config + wallet
   townhouse up [--transport direct|hs] [--dev] [--town] [--mill] [--dvm] [-c <path>] [--password <pw>]
                                                  Boot a direct-BTP apex + children (default; clients dial ws://host:3000/btp). --transport hs = HS path; --dev = contributor children-only dev stack
-  townhouse down [-c <path>]                     Stop all nodes
-  townhouse status [-c <path>]                   Show node status
+  townhouse down [-c <path>] [--json]            Stop all nodes
+  townhouse status [-c <path>] [--json]          Show node status
   townhouse metrics [-c <path>]                  Show connector metrics
   townhouse wallet show [--json] [--hex] [--paths] [-c <path>] [--password <pw>]  Show derived addresses
-  townhouse wallet seed --confirm [-c <path>] [--password <pw>]    Print the BIP-39 seed phrase (password-gated, requires --confirm)
+  townhouse wallet seed --confirm [-c <path>] [--password <pw>] [--json]    Print the BIP-39 seed phrase (password-gated, requires --confirm)
   townhouse credits buy --token <id> --amount <decimal> [--fee-multiplier <n>] [--quote-only] [--yes] [-c <path>] [--password <pw>]
                                                  Buy Arweave upload credits (token: eth|sol|pol|base-eth|base-usdc|usdc-eth|usdc-pol)
   townhouse credits balance --token <id> [-c <path>] [--password <pw>]  Show Turbo credit balance for the funding address
@@ -265,7 +265,8 @@ async function handleInit(
   preset?: 'demo',
   yes?: boolean,
   network?: NetworkMode,
-  endpoints?: { evmUrl?: string; solUrl?: string }
+  endpoints?: { evmUrl?: string; solUrl?: string },
+  json = false
 ): Promise<void> {
   const dir = resolve(configDir ?? DEFAULT_CONFIG_DIR);
   const configPath = join(dir, 'config.yaml');
@@ -292,9 +293,11 @@ async function handleInit(
     // deterministic demo password. Documented as DEMO ONLY.
     if (yes && !password) {
       password = DEMO_DETERMINISTIC_PASSWORD;
-      console.log(
-        '[demo preset] Using deterministic demo password (insecure — demo only).'
-      );
+      if (!json) {
+        console.log(
+          '[demo preset] Using deterministic demo password (insecure — demo only).'
+        );
+      }
     }
   } else {
     configToWrite = getDefaultConfig();
@@ -319,11 +322,15 @@ async function handleInit(
     mode: 0o600,
   });
 
-  console.log(`Config created at ${configPath}`);
+  if (!json) console.log(`Config created at ${configPath}`);
 
   // Generate wallet — use config dir for wallet path (overrides default home dir path)
   const walletPath = join(dir, 'wallet.enc');
   if (existsSync(walletPath) && !force) {
+    if (json) {
+      console.log(JSON.stringify({ created: false, configPath, walletPath }));
+      return;
+    }
     console.log('');
     console.log(
       `Wallet already exists at ${walletPath} — keeping your existing keys.`
@@ -350,28 +357,52 @@ async function handleInit(
   const walletManager = new WalletManager({ encryptedPath: walletPath });
   const { mnemonic } = await walletManager.generate();
 
-  // Display mnemonic ONCE for backup — this is the only place it ever appears
-  console.log('');
-  console.log('=== IMPORTANT: Back up your seed phrase ===');
-  console.log('');
-  console.log(`  ${mnemonic}`);
-  console.log('');
-  console.log('This is the ONLY time your seed phrase will be shown.');
-  console.log('Store it safely. You will need it to recover your node keys.');
-  console.log('============================================');
-  console.log('');
+  if (!json) {
+    // Display mnemonic ONCE for backup — this is the only place it ever appears
+    console.log('');
+    console.log('=== IMPORTANT: Back up your seed phrase ===');
+    console.log('');
+    console.log(`  ${mnemonic}`);
+    console.log('');
+    console.log('This is the ONLY time your seed phrase will be shown.');
+    console.log('Store it safely. You will need it to recover your node keys.');
+    console.log('============================================');
+    console.log('');
+  }
 
   // Encrypt and save — mnemonic reference is not stored beyond this block
   const encrypted = encryptWallet(mnemonic, walletPassword);
   await saveWallet(walletPath, encrypted);
-  console.log(`Wallet saved to ${walletPath}`);
+  if (!json) console.log(`Wallet saved to ${walletPath}`);
+
+  const allKeys = walletManager.getAllKeys();
+  const addresses = allKeys.map((info) => ({
+    nodeType: info.nodeType,
+    nostrPubkey: info.nostrPubkey,
+    evmAddress: info.evmAddress,
+  }));
+
+  if (json) {
+    // The agent is the custodian — return the mnemonic for cold-start backup
+    // (docs/townhouse-mcp-design.md §3). Zero key material afterwards.
+    console.log(
+      JSON.stringify({
+        created: true,
+        configPath,
+        walletPath,
+        mnemonic,
+        addresses,
+      })
+    );
+    walletManager.lock();
+    return;
+  }
 
   // Display derived addresses
   console.log('');
   console.log('Derived Node Addresses:');
   console.log('-----------------------');
-  const allKeys = walletManager.getAllKeys();
-  for (const info of allKeys) {
+  for (const info of addresses) {
     console.log(`  ${info.nodeType.padEnd(6)} Nostr: ${info.nostrPubkey}`);
     console.log(`  ${''.padEnd(6)} EVM:   ${info.evmAddress}`);
   }
@@ -787,7 +818,8 @@ async function handleWalletShow(
 async function handleWalletSeed(
   config: TownhouseConfig,
   password: string | undefined,
-  confirm: boolean
+  confirm: boolean,
+  json = false
 ): Promise<void> {
   if (!confirm) {
     console.error(
@@ -844,6 +876,11 @@ async function handleWalletSeed(
       // races with concurrent lock() calls in long-running test processes.
       console.error('Internal error: mnemonic unavailable after unlock.');
       process.exitCode = 1;
+      return;
+    }
+
+    if (json) {
+      console.log(JSON.stringify({ mnemonic }));
       return;
     }
 
@@ -1279,44 +1316,77 @@ function formatLocalEarningsError(err: unknown): string {
 async function handleStatus(
   docker: Docker,
   config: TownhouseConfig,
-  opts: { units: 'usdc' | 'sats'; satsPerUsdc?: number; configPath: string } = {
+  opts: {
+    units: 'usdc' | 'sats';
+    satsPerUsdc?: number;
+    configPath: string;
+    json?: boolean;
+  } = {
     units: 'usdc',
     configPath: DEFAULT_CONFIG_PATH,
   }
 ): Promise<void> {
+  const json = opts.json === true;
   const orchestrator = new DockerOrchestrator(docker, config, undefined, {
     profile: 'dev',
   });
   const statuses = await orchestrator.status();
 
-  console.log('Node Status:');
-  console.log('------------');
-  for (const s of statuses) {
-    const health = s.health ? ` (${s.health})` : '';
-    console.log(`  ${s.name.padEnd(12)} ${s.state}${health}`);
+  // Accumulated for --json; the human output below mirrors it section by section.
+  const payload: {
+    nodes: { name: string; state: string; health?: string }[];
+    hiddenServices?: { connector?: string; relay?: string };
+    connector: {
+      available: boolean;
+      packetsForwarded?: number;
+      activePeers?: number;
+      totalPeers?: number;
+    };
+    earnings?: unknown;
+  } = {
+    nodes: statuses.map((s) => ({
+      name: s.name,
+      state: s.state,
+      ...(s.health ? { health: s.health } : {}),
+    })),
+    connector: { available: false },
+  };
+
+  if (!json) {
+    console.log('Node Status:');
+    console.log('------------');
+    for (const s of statuses) {
+      const health = s.health ? ` (${s.health})` : '';
+      console.log(`  ${s.name.padEnd(12)} ${s.state}${health}`);
+    }
   }
 
   const connectorHs = config.transport.hiddenService;
   const relayHs = config.transport.relayHiddenService;
+  const connectorUrl = connectorHs?.externalUrl ?? config.transport.externalUrl;
   if (
     config.transport.mode === 'hs' ||
     connectorHs?.externalUrl ||
     relayHs?.externalUrl ||
     config.transport.externalUrl
   ) {
-    console.log('');
-    console.log('Hidden Services:');
-    console.log('----------------');
-    const connectorUrl =
-      connectorHs?.externalUrl ?? config.transport.externalUrl;
-    if (connectorUrl) {
-      console.log(`  Connector (BTP):  ${connectorUrl}`);
-    }
-    if (relayHs?.externalUrl) {
-      console.log(`  Relay (Nostr):    ${relayHs.externalUrl}`);
-    }
-    if (!connectorUrl && !relayHs?.externalUrl) {
-      console.log('  (hs mode set but no externalUrl configured)');
+    payload.hiddenServices = {
+      ...(connectorUrl ? { connector: connectorUrl } : {}),
+      ...(relayHs?.externalUrl ? { relay: relayHs.externalUrl } : {}),
+    };
+    if (!json) {
+      console.log('');
+      console.log('Hidden Services:');
+      console.log('----------------');
+      if (connectorUrl) {
+        console.log(`  Connector (BTP):  ${connectorUrl}`);
+      }
+      if (relayHs?.externalUrl) {
+        console.log(`  Relay (Nostr):    ${relayHs.externalUrl}`);
+      }
+      if (!connectorUrl && !relayHs?.externalUrl) {
+        console.log('  (hs mode set but no externalUrl configured)');
+      }
     }
   }
 
@@ -1328,22 +1398,40 @@ async function handleStatus(
     const metrics = await adminClient.getMetrics();
     const peers = await adminClient.getPeers();
     const activePeers = peers.filter((p) => p.connected).length;
+    payload.connector = {
+      available: true,
+      packetsForwarded: metrics.aggregate.packetsForwarded,
+      activePeers,
+      totalPeers: peers.length,
+    };
 
-    console.log('');
-    console.log('Connector Metrics:');
-    console.log('------------------');
-    console.log(`  Packets forwarded: ${metrics.aggregate.packetsForwarded}`);
-    console.log(`  Active peers:      ${activePeers}/${peers.length}`);
+    if (!json) {
+      console.log('');
+      console.log('Connector Metrics:');
+      console.log('------------------');
+      console.log(`  Packets forwarded: ${metrics.aggregate.packetsForwarded}`);
+      console.log(`  Active peers:      ${activePeers}/${peers.length}`);
+    }
   } catch {
-    console.log('');
-    console.log('Connector Metrics: unavailable');
+    if (!json) {
+      console.log('');
+      console.log('Connector Metrics: unavailable');
+    }
   }
 
-  if (opts.units === 'sats' && opts.satsPerUsdc === undefined) return;
+  if (opts.units === 'sats' && opts.satsPerUsdc === undefined) {
+    if (json) console.log(JSON.stringify(payload));
+    return;
+  }
   const earnings = await resolveEarnings(
     `http://127.0.0.1:${config.connector.adminPort}`,
     opts.configPath
   );
+  payload.earnings = earnings;
+  if (json) {
+    console.log(JSON.stringify(payload));
+    return;
+  }
   for (const line of renderEarningsSection({
     earnings,
     units: opts.units,
@@ -1623,22 +1711,29 @@ async function handleUp(
 
 async function handleDown(
   config: TownhouseConfig,
-  docker: Docker
+  docker: Docker,
+  json = false
 ): Promise<void> {
   const orchestrator = new DockerOrchestrator(docker, config, undefined, {
     profile: 'dev',
   });
 
+  const nodes: { name: string; state: string }[] = [];
   orchestrator.on(
     'containerState',
     (event: { name: string; state: string }) => {
-      console.log(`  ${event.name}: ${event.state}`);
+      nodes.push(event);
+      if (!json) console.log(`  ${event.name}: ${event.state}`);
     }
   );
 
-  console.log('Stopping nodes...');
+  if (!json) console.log('Stopping nodes...');
   await orchestrator.down();
-  console.log('All nodes stopped.');
+  if (json) {
+    console.log(JSON.stringify({ stopped: true, nodes }));
+  } else {
+    console.log('All nodes stopped.');
+  }
 }
 
 /** Connector admin URL for HS mode. */
@@ -3178,7 +3273,8 @@ export async function main(
         presetVal,
         values.yes === true,
         networkVal as NetworkMode | undefined,
-        endpoints
+        endpoints,
+        values.json === true
       );
       break;
     }
@@ -3198,7 +3294,8 @@ export async function main(
         await handleWalletSeed(
           config,
           values.password as string | undefined,
-          values.confirm === true
+          values.confirm === true,
+          values.json === true
         );
       } else {
         console.error(
@@ -3253,7 +3350,7 @@ export async function main(
       await handleStatus(
         dockerInstance ?? new Docker(),
         loadConfig(configPath),
-        { units, satsPerUsdc, configPath }
+        { units, satsPerUsdc, configPath, json: values.json === true }
       );
       break;
     }
@@ -3320,7 +3417,7 @@ export async function main(
       const configPath = (values.config as string) ?? DEFAULT_CONFIG_PATH;
       const config = loadConfig(configPath);
       const docker = dockerInstance ?? new Docker();
-      await handleDown(config, docker);
+      await handleDown(config, docker, values.json === true);
       break;
     }
     case 'channels':
