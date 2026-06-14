@@ -4,7 +4,7 @@
   <p>A network where sending a message and sending money are the same action.</p>
   <a href="https://discord.gg/whPFHRTwBg"><img src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
   <a href="https://x.com/toonprotocol"><img src="https://img.shields.io/badge/Follow-%40toonprotocol-000000?logo=x" alt="X (Twitter)" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue" alt="License" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue" alt="License" /></a>
 </div>
 
 ---
@@ -274,4 +274,4 @@ Or wire just the MCP server: `claude mcp add toon -- npx -y @toon-protocol/clien
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE) for details.
