@@ -185,7 +185,10 @@ describe('daemon config', () => {
     });
     expect(withChildren.apexChildPeers).toEqual(['dvm', 'mill']);
 
-    const without = resolveConfig({ mnemonic: MNEMONIC, btpUrl: 'ws://apex/btp' });
+    const without = resolveConfig({
+      mnemonic: MNEMONIC,
+      btpUrl: 'ws://apex/btp',
+    });
     expect(without.apexChildPeers).toBeUndefined();
   });
 
