@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.6](https://github.com/toon-protocol/town/compare/v0.29.5...v0.29.6) (2026-06-14)
+
+### Bug Fixes
+
+* **core:** point Mina devnet preset at the funded, settling zkApp ([#205](https://github.com/toon-protocol/town/issues/205)) ([#248](https://github.com/toon-protocol/town/issues/248)) ([80fcb31](https://github.com/toon-protocol/town/commit/80fcb31fadb443e92f0ca7ae375e5ccb4de3364d)), closes [#217](https://github.com/toon-protocol/town/issues/217)
+
 ## [0.29.5](https://github.com/toon-protocol/town/compare/v0.29.4...v0.29.5) (2026-06-14)
 
 ### Bug Fixes
