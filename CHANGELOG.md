@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.2](https://github.com/toon-protocol/town/compare/v0.29.1...v0.29.2) (2026-06-14)
+
+### Bug Fixes
+
+* **townhouse:** chains add/remove --json emit JSON, not human text ([#232](https://github.com/toon-protocol/town/issues/232)) ([#239](https://github.com/toon-protocol/town/issues/239)) ([c491268](https://github.com/toon-protocol/town/commit/c49126850f193ce13213e9932a8d7ef8d03b638e)), closes [#4c](https://github.com/toon-protocol/town/issues/4c)
+
 ## [0.29.1](https://github.com/toon-protocol/town/compare/v0.29.0...v0.29.1) (2026-06-14)
 
 ### Bug Fixes
