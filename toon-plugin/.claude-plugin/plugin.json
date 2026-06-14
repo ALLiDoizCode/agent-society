@@ -7,10 +7,7 @@
     "email": "dev.jonathan.green@gmail.com"
   },
   "homepage": "https://github.com/toon-protocol/town/tree/main/toon-plugin",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/toon-protocol/town"
-  },
+  "repository": "https://github.com/toon-protocol/town",
   "license": "MIT",
   "keywords": ["toon", "nostr", "interledger", "ilp", "mcp", "pay-to-write"]
 }
