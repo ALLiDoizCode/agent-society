@@ -137,7 +137,7 @@ const HELP_TEXT = `townhouse — TOON node orchestrator
 Usage:
   townhouse --version [--json]                    Print the package version (--json: { "version" })
   townhouse setup [--no-browser] [--port <n>] [--config-dir <dir>]  Run the first-run setup wizard
-  townhouse init [--force] [--config-dir <dir>] [--password <pw>] [--preset <name>] [--network <mode>] [--yes] [--json]   Initialize config + wallet
+  townhouse init [--force] [--config-dir <dir>] [--password <pw>] [--preset <name>] [--network <mode>] [--yes] [--json]   Initialize config + wallet (set TOWNHOUSE_MNEMONIC + no password = config-only, no encrypted wallet)
   townhouse up [--transport direct|hs] [--dev] [--town] [--mill] [--dvm] [-c <path>] [--password <pw>]
                                                  Boot a direct-BTP apex + children (default; clients dial ws://host:3000/btp). --transport hs = HS path; --dev = contributor children-only dev stack
   townhouse down [-c <path>] [--json]            Stop all nodes
@@ -149,7 +149,7 @@ Usage:
                                                  Buy Arweave upload credits (token: eth|sol|pol|base-eth|base-usdc|usdc-eth|usdc-pol)
   townhouse credits balance --token <id> [-c <path>] [--password <pw>]  Show Turbo credit balance for the funding address
   townhouse hs up [--password <pw>] [--skip-preflight] [-c <path>]  Boot/enable hidden-service mode (opt-in, anonymous .anon apex) (launches dashboard TUI in TTY mode)
-  townhouse hs enable [--password <pw>] [-c <path>]          Switch a running direct apex to hidden-service mode (down direct → up HS)
+  townhouse hs enable [--password <pw>] [-c <path>] [--json]   Switch a running direct apex to hidden-service mode (down direct → up HS; --json emits NDJSON boot steps)
   townhouse hs down [--rotate-keys] [-c <path>]               Stop apex (--rotate-keys deletes .anyone keypair)
   townhouse node add [<type>] [--json] [-c <path>]    Provision a child node (default: town)
   townhouse node remove <id> [--yes] [--json] [-c <path>]   Deprovision a child node
@@ -345,6 +345,53 @@ async function handleInit(
 
   // Generate wallet — use config dir for wallet path (overrides default home dir path)
   const walletPath = join(dir, 'wallet.enc');
+
+  // Mnemonic mode (design §3): when TOWNHOUSE_MNEMONIC is set and no wallet
+  // password is supplied, scaffold config ONLY — derive + report addresses from
+  // the env seed without writing an encrypted wallet. The stack loads the seed
+  // directly at `up` time (P1: tryEnvMnemonicWallet), so no wallet.enc /
+  // password is needed. Lets an agent operator init non-interactively.
+  const envMnemonic = process.env['TOWNHOUSE_MNEMONIC']?.trim();
+  const suppliedPassword = password ?? process.env['TOWNHOUSE_WALLET_PASSWORD'];
+  if (envMnemonic && !suppliedPassword) {
+    const walletManager = new WalletManager({ encryptedPath: walletPath });
+    await walletManager.fromMnemonic(envMnemonic);
+    const addresses = walletManager.getAllKeys().map((info) => ({
+      nodeType: info.nodeType,
+      nostrPubkey: info.nostrPubkey,
+      evmAddress: info.evmAddress,
+    }));
+    walletManager.lock();
+
+    if (json) {
+      // No `mnemonic` (the agent already holds it via the env) and no
+      // `walletPath` (none written) — a distinct shape from the encrypted path.
+      console.log(
+        JSON.stringify({
+          created: true,
+          configPath,
+          walletMode: 'mnemonic',
+          addresses,
+        })
+      );
+      return;
+    }
+
+    console.log('');
+    console.log(
+      'Mnemonic mode — using TOWNHOUSE_MNEMONIC (no encrypted wallet written).'
+    );
+    console.log('');
+    console.log('Derived Node Addresses:');
+    console.log('-----------------------');
+    for (const info of addresses) {
+      console.log(`  ${info.nodeType.padEnd(6)} Nostr: ${info.nostrPubkey}`);
+      console.log(`  ${''.padEnd(6)} EVM:   ${info.evmAddress}`);
+    }
+    printInitNextStep(dir);
+    return;
+  }
+
   if (existsSync(walletPath) && !force) {
     if (json) {
       console.log(JSON.stringify({ created: false, configPath, walletPath }));
@@ -2787,22 +2834,33 @@ async function handleHsEnable(
     force?: boolean;
     skipPreflight?: boolean;
     hsOverrides?: CliHsOverrides;
+    json?: boolean;
   }
 ): Promise<void> {
   const { hsOverrides } = options;
+  const json = options.json === true;
+  emitUpStep(json, 'starting', { transport: 'hs', action: 'enable' });
 
   // Already HS? Nothing to do — point at the HS up path for a re-attach.
   if (detectExistingHsConfig(configDir)) {
-    console.log(
-      'Hidden-service apex already configured. Use `townhouse hs up` to (re)attach.'
-    );
+    if (json) {
+      emitUpStep(json, 'done', {
+        transport: 'hs',
+        action: 'enable',
+        alreadyHs: true,
+      });
+    } else {
+      console.log(
+        'Hidden-service apex already configured. Use `townhouse hs up` to (re)attach.'
+      );
+    }
     return;
   }
 
   // Tear the direct stack down so its BTP :3000 host bind + container/network
   // namespace are free before the HS stack comes up. Best-effort: a missing
   // direct stack (fresh install) is fine — handleHsUp does a clean cold boot.
-  console.log('Switching direct apex → hidden-service mode...');
+  if (!json) console.log('Switching direct apex → hidden-service mode...');
   try {
     const materialize =
       hsOverrides?.materializeComposeTemplate ?? materializeComposeTemplate;
@@ -2824,18 +2882,24 @@ async function handleHsEnable(
     await orch.down();
   } catch (err: unknown) {
     const detail = err instanceof Error ? err.message : String(err);
-    console.warn(
-      `[townhouse hs enable] direct stack teardown skipped (non-fatal): ${detail}`
-    );
+    if (json) {
+      emitUpStep(json, 'teardown-skipped', { detail });
+    } else {
+      console.warn(
+        `[townhouse hs enable] direct stack teardown skipped (non-fatal): ${detail}`
+      );
+    }
   }
 
   // Bring up HS. force:true ensures the direct connector.yaml is overwritten
   // with the HS config (anon.enabled:true) rather than reused by idempotency.
+  // `json` flows through so handleHsUp emits its terminal done/error NDJSON step.
   await handleHsUp(configPath, configDir, config, docker, {
     password: options.password,
     force: true,
     skipPreflight: options.skipPreflight,
     hsOverrides,
+    json,
   });
 }
 
@@ -3578,6 +3642,7 @@ export async function main(
           force: values.force === true,
           skipPreflight: values['skip-preflight'] === true,
           hsOverrides,
+          json: values.json === true,
         });
       } else if (action === 'down') {
         await handleHsDown(configDir, config, docker, {
