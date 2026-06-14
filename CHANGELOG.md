@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0](https://github.com/toon-protocol/town/compare/v0.29.6...v0.30.0) (2026-06-14)
+
+### Features
+
+* **client-mcp:** route apex child peers through the shared apex channel ([#242](https://github.com/toon-protocol/town/issues/242)) ([97d282f](https://github.com/toon-protocol/town/commit/97d282f104211863161e8ea7485e3d8b11dff672)), closes [#197](https://github.com/toon-protocol/town/issues/197)
+
 ## [0.29.6](https://github.com/toon-protocol/town/compare/v0.29.5...v0.29.6) (2026-06-14)
 
 ### Bug Fixes
