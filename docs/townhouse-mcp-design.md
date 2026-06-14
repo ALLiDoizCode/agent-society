@@ -281,7 +281,8 @@ _(Still open:)_
 
 - **P1 — `TOWNHOUSE_MNEMONIC` direct load (§3). ✅ DONE (`975baeb`).** `tryEnvMnemonicWallet` helper across 7 CLI unlock sites; covers CLI-backed tools + in-process `up --dev`.
 - **P1b — containerized `townhouse-api` mnemonic support (§3). ✅ DONE (`9826c8d`).** Entrypoint direct-load path + compose passthrough (both templates) + orchestrator redaction. Published image must be rebuilt to ship it. Enables the apex `:9400` API (the MCP server's `balances`/`earnings`/`list_nodes`/`withdraw` tools) in mnemonic mode.
-- **P2 — `--json` on the remaining commands (§2).** `init`, `up`, `hs up`, `status`, `wallet seed`, `credits buy/balance`, `down`, `hs enable/down`. Terminal → one object; `up`/`hs up` → NDJSON progress + final summary. Additive, prioritize `up`/`status`/`init`.
+- **P2 — `--json` on terminal commands (§2). ✅ DONE (`babb113`).** `init` (→ `{created, configPath, walletPath, mnemonic, addresses}` — the cold-start seed), `status` (→ `{nodes, hiddenServices?, connector, earnings?}`, graceful when the connector is down), `down` (→ `{stopped, nodes}`), `wallet seed` (→ `{mnemonic}`). `--json` is a global strict:false flag so each handler just gained a JSON branch; human output unchanged without it.
+- **P2b — `--json`/NDJSON on the harder commands (§2). REMAINING.** `credits buy/balance` (buy is interactive/streaming) and the long-running `up`/`hs up` NDJSON progress stream that `townhouse_up_status` reads (per-step events + a terminal `{"step":"done"|"error"}`). Until then the MCP `townhouse_credits` and `townhouse_up_status` tools are incomplete.
 
 **MCP package:**
 
