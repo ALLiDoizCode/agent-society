@@ -1,5 +1,6 @@
 {
   "name": "toon",
+  "description": "Official TOON Protocol plugins for Claude — pay-to-write Nostr over Interledger.",
   "owner": {
     "name": "TOON Protocol",
     "url": "https://github.com/toon-protocol/town"
