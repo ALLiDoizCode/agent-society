@@ -9,6 +9,11 @@
       "name": "toon",
       "source": "./toon-plugin",
       "description": "TOON Protocol client: toon-client skill + toon-mcp MCP server (pay-to-write Nostr over ILP)."
+    },
+    {
+      "name": "townhouse",
+      "source": "./townhouse-plugin",
+      "description": "TOON Protocol Townhouse operator: townhouse-operator skill + townhouse-mcp MCP server (run the apex + town/mill/dvm nodes, earn fees)."
     }
   ]
 }
