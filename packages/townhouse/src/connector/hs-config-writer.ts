@@ -153,7 +153,7 @@ function buildApexGenerator(
  * them blank intentionally); only a PRESENT, wrong-format keyId throws.
  */
 function validateChainProviderKeyIds(
-  providers: ReadonlyArray<ChainProviderEntry>
+  providers: readonly ChainProviderEntry[]
 ): void {
   const EVM_KEY = /^0x[0-9a-fA-F]{64}$/;
   // base58 alphabet (Bitcoin): no 0, O, I, l.
