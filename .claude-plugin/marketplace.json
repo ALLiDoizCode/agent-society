@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "toon",
-      "source": "./",
+      "source": "./toon-plugin",
       "description": "TOON Protocol client: toon-client skill + toon-mcp MCP server (pay-to-write Nostr over ILP)."
     }
   ]
