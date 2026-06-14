@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.5](https://github.com/toon-protocol/town/compare/v0.29.4...v0.29.5) (2026-06-14)
+
+### Bug Fixes
+
+* **client:** pin sha256 for all anon zip platforms (closes [#204](https://github.com/toon-protocol/town/issues/204)) ([#247](https://github.com/toon-protocol/town/issues/247)) ([781874f](https://github.com/toon-protocol/town/commit/781874f87c83e9c392827577c8486d5d3f005479))
+
 ## [0.29.4](https://github.com/toon-protocol/town/compare/v0.29.3...v0.29.4) (2026-06-14)
 
 ### Bug Fixes
