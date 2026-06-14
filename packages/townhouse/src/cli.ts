@@ -1041,6 +1041,14 @@ async function handleCreditsBuy(
   const destinationOverride = values['credit-destination'] as
     | string
     | undefined;
+  const json = values['json'] === true;
+  // --json is non-interactive: a submit must be pre-confirmed with --yes (the
+  // y/N prompt would otherwise stall a machine consumer like the MCP server).
+  if (json && !quoteOnly && !skipConfirm) {
+    console.error('credits buy --json requires --yes (non-interactive).');
+    process.exitCode = 1;
+    return;
+  }
 
   // ── 2. Wallet unlock ──
   // TOWNHOUSE_MNEMONIC (direct, no password) OR encrypted wallet + password. P1.
@@ -1091,9 +1099,11 @@ async function handleCreditsBuy(
     if (destinationOverride) {
       destinationAddress = destinationOverride;
     } else if (token !== 'ar' && nodeType === 'dvm') {
-      process.stdout.write(
-        `Resolving DVM Arweave credit address (first run, ~10s)...\n`
-      );
+      if (!json) {
+        process.stdout.write(
+          `Resolving DVM Arweave credit address (first run, ~10s)...\n`
+        );
+      }
       await wallet.ensureArweaveKey('dvm', resolvedPassword);
       const dvmKeys = wallet.getNodeKeys('dvm');
       if (!dvmKeys.arweaveAddress) {
@@ -1105,9 +1115,11 @@ async function handleCreditsBuy(
     }
 
     // ── 4. Quote step ──
-    process.stdout.write(
-      `Quoting ${amountRaw} ${token} for ${nodeType}'s credit address...\n`
-    );
+    if (!json) {
+      process.stdout.write(
+        `Quoting ${amountRaw} ${token} for ${nodeType}'s credit address...\n`
+      );
+    }
     const quote = await buyCredits({
       wallet,
       nodeType,
@@ -1119,19 +1131,37 @@ async function handleCreditsBuy(
     if (quote.kind !== 'quote') {
       throw new Error('Internal error: quoteOnly returned non-quote result');
     }
-    const quotedDisplay = `${quote.winc.toString()} winc (${formatWincAsBytes(quote.winc)})`;
-    process.stdout.write(
-      `Quote: ${formatTokenAmount(token, quote.baseAmount)} → ${quotedDisplay}\n`
-    );
-    process.stdout.write(`Source address (${token}): ${quote.fromAddress}\n`);
-    process.stdout.write(`Credit recipient: ${quote.creditAddress}\n`);
+    if (!json) {
+      const quotedDisplay = `${quote.winc.toString()} winc (${formatWincAsBytes(quote.winc)})`;
+      process.stdout.write(
+        `Quote: ${formatTokenAmount(token, quote.baseAmount)} → ${quotedDisplay}\n`
+      );
+      process.stdout.write(`Source address (${token}): ${quote.fromAddress}\n`);
+      process.stdout.write(`Credit recipient: ${quote.creditAddress}\n`);
+    }
 
     if (quoteOnly) {
-      process.stdout.write('Quote-only; no on-chain transaction submitted.\n');
+      if (json) {
+        console.log(
+          JSON.stringify({
+            kind: 'quote',
+            token,
+            baseAmount: quote.baseAmount.toString(),
+            winc: quote.winc.toString(),
+            bytes: formatWincAsBytes(quote.winc),
+            fromAddress: quote.fromAddress,
+            creditAddress: quote.creditAddress,
+          })
+        );
+      } else {
+        process.stdout.write(
+          'Quote-only; no on-chain transaction submitted.\n'
+        );
+      }
       return;
     }
 
-    // ── 5. Confirmation ──
+    // ── 5. Confirmation ── (json mode is pre-gated on --yes above)
     if (!skipConfirm) {
       const ok = await promptYesNo('Proceed? [y/N] ');
       if (!ok) {
@@ -1142,7 +1172,7 @@ async function handleCreditsBuy(
     }
 
     // ── 6. Submit ──
-    process.stdout.write('Submitting on-chain transaction...\n');
+    if (!json) process.stdout.write('Submitting on-chain transaction...\n');
     const result = await buyCredits({
       wallet,
       nodeType,
@@ -1154,15 +1184,29 @@ async function handleCreditsBuy(
     if (result.kind !== 'submit') {
       throw new Error('Internal error: submit path returned non-submit result');
     }
-    process.stdout.write(`Transaction submitted: ${result.id}\n`);
-    process.stdout.write(`Status: ${result.status}\n`);
-    process.stdout.write(
-      `Credited: ${result.winc.toString()} winc (${formatWincAsBytes(result.winc)})\n`
-    );
-    if (result.block !== undefined) {
-      process.stdout.write(`Block: ${result.block}\n`);
+    if (json) {
+      console.log(
+        JSON.stringify({
+          kind: 'submit',
+          token,
+          id: result.id,
+          status: result.status,
+          winc: result.winc.toString(),
+          bytes: formatWincAsBytes(result.winc),
+          ...(result.block !== undefined ? { block: result.block } : {}),
+        })
+      );
+    } else {
+      process.stdout.write(`Transaction submitted: ${result.id}\n`);
+      process.stdout.write(`Status: ${result.status}\n`);
+      process.stdout.write(
+        `Credited: ${result.winc.toString()} winc (${formatWincAsBytes(result.winc)})\n`
+      );
+      if (result.block !== undefined) {
+        process.stdout.write(`Block: ${result.block}\n`);
+      }
+      process.stdout.write('Done.\n');
     }
-    process.stdout.write('Done.\n');
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`credits buy failed: ${msg}`);
@@ -1237,16 +1281,29 @@ async function handleCreditsBalance(
     }
   }
 
+  const json = values['json'] === true;
   try {
     const balance = await getCreditBalance({ wallet, nodeType, token });
-    process.stdout.write(`Address (${token}): ${balance.address}\n`);
-    process.stdout.write(
-      `Balance: ${balance.winc.toString()} winc (${formatWincAsBytes(balance.winc)})\n`
-    );
-    if (balance.effectiveBalance !== balance.winc) {
-      process.stdout.write(
-        `Effective (incl. received approvals): ${balance.effectiveBalance.toString()} winc (${formatWincAsBytes(balance.effectiveBalance)})\n`
+    if (json) {
+      console.log(
+        JSON.stringify({
+          token,
+          address: balance.address,
+          winc: balance.winc.toString(),
+          effectiveBalance: balance.effectiveBalance.toString(),
+          bytes: formatWincAsBytes(balance.winc),
+        })
       );
+    } else {
+      process.stdout.write(`Address (${token}): ${balance.address}\n`);
+      process.stdout.write(
+        `Balance: ${balance.winc.toString()} winc (${formatWincAsBytes(balance.winc)})\n`
+      );
+      if (balance.effectiveBalance !== balance.winc) {
+        process.stdout.write(
+          `Effective (incl. received approvals): ${balance.effectiveBalance.toString()} winc (${formatWincAsBytes(balance.effectiveBalance)})\n`
+        );
+      }
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -1868,6 +1925,21 @@ async function attachDashboard(hostname: string): Promise<void> {
   }
 }
 
+/**
+ * P2b — emit one NDJSON boot-progress step on stdout when `townhouse up --json`
+ * / `hs up --json` is active. The townhouse-mcp server's `townhouse_up_status`
+ * tool reads these from up.log; a terminal `done`/`error` step tells it the
+ * boot finished (success/failure). Human ribbon output is left intact — the
+ * MCP reader skips non-JSON lines — so this is purely additive and low-risk.
+ */
+function emitUpStep(
+  json: boolean,
+  step: string,
+  extra: Record<string, unknown> = {}
+): void {
+  if (json) console.log(JSON.stringify({ step, ...extra }));
+}
+
 async function handleHsUp(
   _configPath: string,
   configDir: string,
@@ -1878,9 +1950,12 @@ async function handleHsUp(
     force?: boolean;
     skipPreflight?: boolean;
     hsOverrides?: CliHsOverrides;
+    json?: boolean;
   }
 ): Promise<void> {
   const { password, force, skipPreflight, hsOverrides } = options;
+  const json = options.json === true;
+  emitUpStep(json, 'starting', { transport: 'hs' });
 
   // ── Idempotency probe (AC #7) — BEFORE the preflight ────────────────────────
   // If our apex is already live, this is a re-run: re-print the address, refresh
@@ -1898,6 +1973,11 @@ async function handleHsUp(
       if (existing.hostname !== null) {
         // hostname from the connector already includes the .anyone suffix.
         console.log(`Apex live at ${existing.hostname}`);
+        emitUpStep(json, 'done', {
+          transport: 'hs',
+          hostname: existing.hostname,
+          alreadyLive: true,
+        });
         _writeHostJson(configDir, {
           hostname: existing.hostname,
           publishedAt: existing.publishedAt ?? new Date().toISOString(),
@@ -2300,12 +2380,17 @@ async function handleHsUp(
     // hostname from the connector already includes the .anyone suffix.
     // ribbon.start('live', hostname) prints: "Apex live at <hostname>" as the FINAL stdout line.
     ribbon.start('live', hostname);
+    emitUpStep(json, 'done', { transport: 'hs', hostname });
 
     // Story 48.1: foreground Ink TUI when stdout is a TTY. Apex is already live
     // here (host.json written, "Apex live at …" printed above); attachDashboard
     // isolates any TUI failure so it is never reported as a boot failure.
     await attachDashboard(hostname);
   } catch (err: unknown) {
+    emitUpStep(json, 'error', {
+      transport: 'hs',
+      message: err instanceof Error ? err.message : String(err),
+    });
     const { exitCode } = renderFailure(err);
     process.exitCode = exitCode;
   } finally {
@@ -2344,9 +2429,12 @@ async function handleDirectUp(
     force?: boolean;
     skipPreflight?: boolean;
     hsOverrides?: CliHsOverrides;
+    json?: boolean;
   }
 ): Promise<void> {
   const { password, force, skipPreflight, hsOverrides } = options;
+  const json = options.json === true;
+  emitUpStep(json, 'starting', { transport: 'direct' });
 
   const adminClientFactory =
     hsOverrides?.createAdminClient ??
@@ -2397,6 +2485,7 @@ async function handleDirectUp(
       try {
         await ping();
         console.log(`Apex live (direct BTP) at ${DIRECT_BTP_DIAL_URL}`);
+        emitUpStep(json, 'done', { transport: 'direct', alreadyLive: true });
         return;
       } catch {
         // Not running / not ready → fall through to preflight + cold boot.
@@ -2639,7 +2728,12 @@ async function handleDirectUp(
     // Step 6: success — print the direct dial address as the FINAL stdout line.
     ribbon.stop();
     console.log(`Apex live (direct BTP) at ${DIRECT_BTP_DIAL_URL}`);
+    emitUpStep(json, 'done', { transport: 'direct' });
   } catch (err: unknown) {
+    emitUpStep(json, 'error', {
+      transport: 'direct',
+      message: err instanceof Error ? err.message : String(err),
+    });
     const { exitCode } = renderFailure(err);
     process.exitCode = exitCode;
   } finally {
@@ -3400,6 +3494,7 @@ export async function main(
           force: values.force === true,
           skipPreflight: values['skip-preflight'] === true,
           hsOverrides,
+          json: values.json === true,
         });
         break;
       }
@@ -3410,6 +3505,7 @@ export async function main(
         force: values.force === true,
         skipPreflight: values['skip-preflight'] === true,
         hsOverrides,
+        json: values.json === true,
       });
       break;
     }
@@ -3446,6 +3542,7 @@ export async function main(
           force: values.force === true,
           skipPreflight: values['skip-preflight'] === true,
           hsOverrides,
+          json: values.json === true,
         });
       } else if (action === 'enable') {
         await handleHsEnable(configPath, configDir, config, docker, {

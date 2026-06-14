@@ -408,6 +408,34 @@ describe('CLI hs subcommand', () => {
     }
   });
 
+  it('hs up --json emits a terminal {step:"done"} NDJSON marker (P2b)', async () => {
+    const hostname = 'apex123.anyone';
+    const { configDir, configPath } = await makeHsTestDir();
+    try {
+      const overrides = makeHsOverrides({ hostname });
+      await main(
+        ['hs', 'up', '-c', configPath, '--json'],
+        undefined,
+        undefined,
+        overrides
+      );
+
+      // emitUpStep writes NDJSON via console.log; townhouse_up_status keys on
+      // a terminal done/error step.
+      const steps = consoleSpy.mock.calls
+        .map((c) => String(c[0]))
+        .filter((l) => l.trim().startsWith('{'))
+        .map((l) => JSON.parse(l) as { step?: string; transport?: string });
+      expect(steps.some((s) => s.step === 'starting')).toBe(true);
+      const done = steps.find((s) => s.step === 'done');
+      expect(done).toBeDefined();
+      expect(done?.transport).toBe('hs');
+      expect(steps.some((s) => s.step === 'error')).toBe(false);
+    } finally {
+      rmSync(configDir, { recursive: true, force: true });
+    }
+  });
+
   it('hs up with --password flag does NOT prompt interactively', async () => {
     const { configDir, configPath } = await makeHsTestDir();
     // Remove env var so only --password is available
