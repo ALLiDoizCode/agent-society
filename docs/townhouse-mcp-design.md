@@ -269,9 +269,14 @@ _(Resolved by investigation — kept for the record:)_
 - **Long-running `up`** — decided: **job handle + poll, not a held-open streaming call.** NDJSON is a reliable substrate for _server-internal_ consumption and a poll-able job record, but it is **not** reliable as a stream-to-the-model mechanism: an MCP tool call is request/response (one result), `notifications/progress` is a percentage bar with uneven client support, and holding a call open for the minutes `up`/`hs up` take (image pulls, HS bootstrap, the ~20s town inbound-session race) exposes it to MCP client timeouts and drops. So: P2 makes `up`/`hs up` emit NDJSON progress events; the `up` tool spawns and returns a job handle fast; the server consumes the child's NDJSON in the background (buffering partial lines) into a job-state record; the agent polls `up_status`/`get_status`. MCP progress notifications are an optional layer on top, never the source of truth. (See §5.)
 - **Mnemonic generation ownership** — decided: when `TOWNHOUSE_MNEMONIC` is empty, **`init_apex` generates the mnemonic and returns it** to the agent (cold-start). When the env var is set, that seed is authoritative and `init_apex` uses it.
 
-_(Still open:)_
+_(Resolved in implementation:)_
 
-1. **API vs CLI version skew.** Neither surface is versioned. Pin the MCP package to a townhouse version range via `peerDependencies`, or add a version probe?
+1. **API vs CLI version skew.** Done — **both**. The MCP package pins `@toon-protocol/townhouse` as an optional `peerDependencies` range (`>=0.26.0`, install-time warning), and a runtime `townhouse_version` tool shells `townhouse version` (a new CLI command) and lower-bound-checks the detected CLI against that pin (`satisfies` true/false/null). `version.ts` + `mcp-tools.ts`.
+
+**Implemented since the original design:**
+
+- **Streams adapter (§5)** — `streams.ts`: `townhouse_metrics` prefers WS `/metrics`, `townhouse_logs` prefers SSE `/api/logs/stream`, each with a CLI fallback and a `source` discriminator.
+- **MCP resources (§5)** — `resources.ts`: `townhouse://status` + `townhouse://earnings`, thin aliases over the mirroring telemetry tools.
 
 ---
 

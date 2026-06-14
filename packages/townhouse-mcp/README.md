@@ -66,15 +66,28 @@ Nodes: `townhouse_list_nodes`, `townhouse_add_node`, `townhouse_remove_node`, `t
 Chains/transport: `townhouse_chains`, `townhouse_transport`.
 Wallet/$: `townhouse_balances`, `townhouse_earnings`, `townhouse_seed`, `townhouse_withdraw`, `townhouse_credits`.
 Telemetry: `townhouse_logs`, `townhouse_metrics`, `townhouse_channels`, `townhouse_health`.
+Meta: `townhouse_version` (reports this package version, the pinned `townhouse` range, and the detected CLI version — flags version skew).
 
 `townhouse_up` returns immediately with a handle — poll `townhouse_up_status` for per-step boot progress (a boot can take minutes; image pulls / HS bootstrap). Withdraw supports `dryRun:true` for a gas/fee estimate.
 
+`townhouse_metrics` and `townhouse_logs` prefer the apex's live streams (WS `/metrics`, SSE `/api/logs/stream`) and fall back to the `townhouse` CLI JSON path; each result carries a `source` field.
+
+## Resources
+
+Two cheap read views are also exposed as MCP resources for clients that prefer resource reads:
+
+- `townhouse://status` — apex / connector / node / transport snapshot (mirrors `townhouse_status`).
+- `townhouse://earnings` — apex + per-peer earnings with deltas (mirrors `townhouse_earnings`).
+
 ## Status
 
-Scaffold. Depends on two small upstream changes in `@toon-protocol/townhouse` to run fully end-to-end:
+Code-complete; pending end-to-end live validation against a real apex (see issue #229). The upstream prerequisites and deferred package items have landed:
 
-- **P1** — a `TOWNHOUSE_MNEMONIC` direct-load path in the CLI (no encrypted-wallet password).
-- **P2** — `--json` output on `up` / `hs up` / `status` / `init` / `wallet seed` / `credits` (the commands this server consumes that don't emit JSON yet).
+- **P1/P1b** — `TOWNHOUSE_MNEMONIC` direct-load path (CLI + `townhouse-api` container), no encrypted-wallet password.
+- **P2/P2b** — `--json` / NDJSON across every command this server consumes (`init` / `up` / `hs up` / `hs enable` / `status` / `down` / `wallet seed` / `credits`).
+- Streams adapter (WS `/metrics` + SSE `/api/logs/stream`), MCP resources, and a `townhouse_version` skew probe (pinned via `peerDependencies` on `@toon-protocol/townhouse`).
+
+This package pins `@toon-protocol/townhouse` as an optional `peerDependency`; `townhouse_version` surfaces any skew at runtime.
 
 See `docs/townhouse-mcp-design.md` and `docs/townhouse-mcp-skeleton.md`.
 
