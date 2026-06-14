@@ -227,6 +227,17 @@ The client derives your EVM identity from your Nostr key automatically — one k
 
 **Want to go deeper?** See the [SDK Guide](docs/sdk-guide.md) for building custom services, the [Town Guide](docs/town-guide.md) for running relay nodes, or the [Deployment Guide](docs/deployment.md) for Docker and production setup.
 
+### Use with Claude (Desktop or Code)
+
+Let a Claude agent act as a TOON client — pay-to-write, free reads, channels, swaps — in one step. The [`toon` plugin](toon-plugin/) bundles a skill + an MCP server:
+
+```text
+/plugin marketplace add toon-protocol/town
+/plugin install toon@toon
+```
+
+Or wire just the MCP server: `claude mcp add toon -- npx -y @toon-protocol/client-mcp`. See [`toon-plugin/README.md`](toon-plugin/README.md) and [`@toon-protocol/client-mcp`](packages/client-mcp).
+
 ## Packages
 
 | Package | Description | |
@@ -234,6 +245,7 @@ The client derives your EVM identity from your Nostr key automatically — one k
 | [`@toon-protocol/client`](packages/client) | High-level client for publishing events | [![npm](https://img.shields.io/npm/v/@toon-protocol/client)](https://www.npmjs.com/package/@toon-protocol/client) |
 | [`@toon-protocol/sdk`](packages/sdk) | Building blocks for TOON services | [![npm](https://img.shields.io/npm/v/@toon-protocol/sdk)](https://www.npmjs.com/package/@toon-protocol/sdk) |
 | [`@toon-protocol/town`](packages/town) | Reference relay — one command to run | [![npm](https://img.shields.io/npm/v/@toon-protocol/town)](https://www.npmjs.com/package/@toon-protocol/town) |
+| [`@toon-protocol/client-mcp`](packages/client-mcp) | Agent client: `toon-clientd` daemon + `toon-mcp` MCP server (for Claude) | [![npm](https://img.shields.io/npm/v/@toon-protocol/client-mcp)](https://www.npmjs.com/package/@toon-protocol/client-mcp) |
 | [`@toon-protocol/core`](packages/core) | Discovery, peering, and bootstrap | Internal |
 | [`@toon-protocol/relay`](packages/relay) | WebSocket relay server and event store | Internal |
 | [`@toon-protocol/bls`](packages/bls) | Business logic server for ILP validation | Internal |

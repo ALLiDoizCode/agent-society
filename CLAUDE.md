@@ -198,6 +198,7 @@ All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Con
 | Client control API + HTTP client | `packages/client-mcp/src/control-api.ts`, `src/control-client.ts` |
 | `toon-client` agent skill | `.claude/skills/toon-client/SKILL.md` |
 | Client-MCP live-HS gated E2E (`RUN_LIVE_HS_E2E=1`) | `packages/client-mcp/src/__integration__/live-hs-daemon.integration.test.ts` |
+| **`toon` Claude Code plugin** (skill + MCP server, one-step install) | `toon-plugin/` (`plugin.json`, `.mcp.json`, `skills/toon-client/`); marketplace manifest at repo-root `.claude-plugin/marketplace.json`. Install: `/plugin marketplace add toon-protocol/town` → `/plugin install toon@toon`. Docs: `toon-plugin/README.md` |
 | SDK swap modules (gift-wrap, handler, stream, settlement) | `packages/sdk/src/gift-wrap.ts`, `swap-handler.ts`, `stream-swap.ts`, `settlement/` |
 | SwapPair validation + chain-id | `packages/core/src/events/swap-pair-validation.ts`, `packages/core/src/chain/chain-id.ts` |
 | Content publishing pipeline | `_bmad-output/planning-artifacts/content-strategy-2026-q1.md` |
