@@ -197,6 +197,8 @@ All bindings on `127.0.0.1:` only. Script: `scripts/townhouse-dev-infra.sh`. Con
 | Client persistent relay subscription (free reads) | `packages/client-mcp/src/relay-subscription.ts` |
 | Client control API + HTTP client | `packages/client-mcp/src/control-api.ts`, `src/control-client.ts` |
 | `toon-client` agent skill | `.claude/skills/toon-client/SKILL.md` |
+| `townhouse-operator` agent skill | `.claude/skills/townhouse-operator/SKILL.md` (+ publishable copy in `townhouse-plugin/`) |
+| Townhouse operator plugin (skill + townhouse-mcp) | `townhouse-plugin/` (marketplace entry in `.claude-plugin/marketplace.json`) |
 | Client-MCP live-HS gated E2E (`RUN_LIVE_HS_E2E=1`) | `packages/client-mcp/src/__integration__/live-hs-daemon.integration.test.ts` |
 | **`toon` Claude Code plugin** (skill + MCP server, one-step install) | `toon-plugin/` (`plugin.json`, `.mcp.json`, `skills/toon-client/`); marketplace manifest at repo-root `.claude-plugin/marketplace.json`. Install: `/plugin marketplace add toon-protocol/town` → `/plugin install toon@toon`. Docs: `toon-plugin/README.md` |
 | SDK swap modules (gift-wrap, handler, stream, settlement) | `packages/sdk/src/gift-wrap.ts`, `swap-handler.ts`, `stream-swap.ts`, `settlement/` |
