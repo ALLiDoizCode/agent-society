@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.4](https://github.com/toon-protocol/town/compare/v0.29.3...v0.29.4) (2026-06-14)
+
+### Bug Fixes
+
+* **townhouse:** bump default connector 3.10.3 → 3.10.4 (closes [#213](https://github.com/toon-protocol/town/issues/213)) ([#243](https://github.com/toon-protocol/town/issues/243)) ([9cd95d1](https://github.com/toon-protocol/town/commit/9cd95d1fec9a09a5fd8be16f689a52fa26e0d2ba)), closes [connector#137](https://github.com/toon-protocol/connector/issues/137) [connector#136](https://github.com/toon-protocol/connector/issues/136)
+* **townhouse:** write per-chain base58/EK keyId for Solana/Mina providers ([#215](https://github.com/toon-protocol/town/issues/215)) ([#245](https://github.com/toon-protocol/town/issues/245)) ([56db447](https://github.com/toon-protocol/town/commit/56db447d6796d6dbb7772d53a165a5d11f074307))
+
 ## [0.29.3](https://github.com/toon-protocol/town/compare/v0.29.2...v0.29.3) (2026-06-14)
 
 ### Bug Fixes
