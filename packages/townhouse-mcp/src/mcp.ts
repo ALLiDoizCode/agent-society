@@ -16,11 +16,15 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
   type CallToolResult,
+  type ReadResourceResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { ApiClient } from './api-client.js';
 import { CliDriver } from './cli-driver.js';
 import { dispatchTool, TOOL_DEFINITIONS } from './mcp-tools.js';
+import { RESOURCE_DEFINITIONS, readResource } from './resources.js';
 import { resolveConfig } from './config.js';
 import { autoUpIfEnabled } from './apex-lifecycle.js';
 
@@ -40,8 +44,10 @@ async function main(): Promise<void> {
 
   const server = new Server(
     { name: 'townhouse-operator', version: '0.1.0' },
-    { capabilities: { tools: {} } }
+    { capabilities: { tools: {}, resources: {} } }
   );
+
+  const ctx = { api, cli, cfg };
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: TOOL_DEFINITIONS,
@@ -51,12 +57,20 @@ async function main(): Promise<void> {
     const name = request.params.name;
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
     // Our ToolResult is a structural subset of CallToolResult (content + isError).
-    return (await dispatchTool(
-      { api, cli, cfg },
-      name,
-      args
-    )) as CallToolResult;
+    return (await dispatchTool(ctx, name, args)) as CallToolResult;
   });
+
+  // Resources: read-only aliases over the cheap telemetry views (design §5).
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+    resources: RESOURCE_DEFINITIONS,
+  }));
+
+  server.setRequestHandler(
+    ReadResourceRequestSchema,
+    async (request) =>
+      // ResourceContents is a structural subset of ReadResourceResult.
+      (await readResource(ctx, request.params.uri)) as ReadResourceResult
+  );
 
   await server.connect(new StdioServerTransport());
   log(`ready; api=${cfg.apiUrl} bin=${cfg.townhouseBin}`);

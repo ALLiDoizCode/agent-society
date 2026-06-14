@@ -43,3 +43,10 @@ export {
   type WsLike,
   type WsFactory,
 } from './streams.js';
+export {
+  RESOURCE_DEFINITIONS,
+  isKnownResource,
+  readResource,
+  type ResourceDefinition,
+  type ResourceContents,
+} from './resources.js';
