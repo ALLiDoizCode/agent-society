@@ -33,3 +33,13 @@ export {
   type ToolResult,
   type ToolCtx,
 } from './mcp-tools.js';
+export {
+  StreamsUnavailableError,
+  tailLogsViaSse,
+  metricsSnapshotViaWs,
+  type LogEvent,
+  type TailLogsOptions,
+  type MetricsSnapshotOptions,
+  type WsLike,
+  type WsFactory,
+} from './streams.js';

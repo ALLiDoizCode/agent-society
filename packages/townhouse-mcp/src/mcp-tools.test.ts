@@ -6,10 +6,28 @@ vi.mock('./apex-lifecycle.js', () => ({
   readUpStatus: vi.fn(() => ({ events: ['e'], done: true, failed: false })),
 }));
 
+// Mock the streaming adapters so telemetry tools don't open real sockets.
+// Keep the real `StreamsUnavailableError` so dispatch's `instanceof` fallback
+// branches still work.
+vi.mock('./streams.js', async (importActual) => {
+  const actual = await importActual<typeof import('./streams.js')>();
+  return {
+    ...actual,
+    tailLogsViaSse: vi.fn(),
+    metricsSnapshotViaWs: vi.fn(),
+  };
+});
+
 import { dispatchTool, TOOL_DEFINITIONS, type ToolCtx } from './mcp-tools.js';
 import { ApiError, ApexUnreachableError } from './api-client.js';
 import { CliError } from './cli-driver.js';
 import { spawnUpDetached, readUpStatus } from './apex-lifecycle.js';
+import {
+  StreamsUnavailableError,
+  tailLogsViaSse,
+  metricsSnapshotViaWs,
+} from './streams.js';
+import type { Mock } from 'vitest';
 import type { ApiClient } from './api-client.js';
 import type { CliDriver } from './cli-driver.js';
 import type { ResolvedConfig } from './config.js';
@@ -38,6 +56,13 @@ const parse = (r: { content: { text: string }[] }): unknown =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: streams unavailable → telemetry tools fall back to the CLI.
+  (tailLogsViaSse as unknown as Mock).mockRejectedValue(
+    new StreamsUnavailableError('http://x/api/logs/stream')
+  );
+  (metricsSnapshotViaWs as unknown as Mock).mockRejectedValue(
+    new StreamsUnavailableError('ws://x/metrics')
+  );
 });
 
 describe('TOOL_DEFINITIONS', () => {
@@ -150,7 +175,7 @@ describe('dispatchTool — CLI-backed tools', () => {
     ]);
   });
 
-  it('townhouse_logs tails NDJSON and filters by service', async () => {
+  it('townhouse_logs falls back to NDJSON history when SSE is unavailable', async () => {
     const cli = {
       runNdjson: vi.fn().mockResolvedValue([
         { service: 'town', level: 'info', message: 'a' },
@@ -161,7 +186,50 @@ describe('dispatchTool — CLI-backed tools', () => {
       service: 'town',
     });
     expect(cli.runNdjson).toHaveBeenCalledWith(['logs', '--lines', '100']);
-    expect(parse(res)).toMatchObject({ count: 1 });
+    expect(parse(res)).toMatchObject({ source: 'cli', count: 1 });
+  });
+});
+
+describe('dispatchTool — telemetry stream/CLI source', () => {
+  it('townhouse_logs prefers the live SSE stream when it yields events', async () => {
+    const events = [{ ts: 't', service: 'town', level: 'info', msg: 'live' }];
+    (tailLogsViaSse as unknown as Mock).mockResolvedValue(events);
+    const cli = { runNdjson: vi.fn() };
+    const res = await dispatchTool(ctx({ cli }), 'townhouse_logs', {});
+    expect(parse(res)).toMatchObject({ source: 'sse', count: 1, events });
+    expect(cli.runNdjson).not.toHaveBeenCalled();
+  });
+
+  it('townhouse_logs falls back to the CLI when the SSE tail is empty', async () => {
+    (tailLogsViaSse as unknown as Mock).mockResolvedValue([]);
+    const cli = { runNdjson: vi.fn().mockResolvedValue([]) };
+    const res = await dispatchTool(ctx({ cli }), 'townhouse_logs', {});
+    expect(cli.runNdjson).toHaveBeenCalled();
+    expect(parse(res)).toMatchObject({ source: 'cli' });
+  });
+
+  it('townhouse_metrics prefers the WS snapshot', async () => {
+    const payload = {
+      packetsForwarded: 3,
+      packetsRejected: 0,
+      bytesSent: 1,
+      attribution: 'aggregate',
+      available: true,
+    };
+    (metricsSnapshotViaWs as unknown as Mock).mockResolvedValue(payload);
+    const cli = { runJson: vi.fn() };
+    const res = await dispatchTool(ctx({ cli }), 'townhouse_metrics', {});
+    expect(parse(res)).toMatchObject({ source: 'ws', packetsForwarded: 3 });
+    expect(cli.runJson).not.toHaveBeenCalled();
+  });
+
+  it('townhouse_metrics falls back to the CLI when WS is unavailable', async () => {
+    const cli = {
+      runJson: vi.fn().mockResolvedValue({ packetsForwarded: 9 }),
+    };
+    const res = await dispatchTool(ctx({ cli }), 'townhouse_metrics', {});
+    expect(cli.runJson).toHaveBeenCalledWith(['metrics']);
+    expect(parse(res)).toMatchObject({ source: 'cli', packetsForwarded: 9 });
   });
 });
 

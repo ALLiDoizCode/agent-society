@@ -12,6 +12,11 @@ import type { CliDriver } from './cli-driver.js';
 import { CliError } from './cli-driver.js';
 import type { ResolvedConfig } from './config.js';
 import { readUpStatus, spawnUpDetached } from './apex-lifecycle.js';
+import {
+  StreamsUnavailableError,
+  metricsSnapshotViaWs,
+  tailLogsViaSse,
+} from './streams.js';
 import type { WithdrawRequest } from '@toon-protocol/townhouse';
 
 /** A JSON-Schema-described MCP tool. */
@@ -220,7 +225,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   // ── telemetry ──
   {
     name: 'townhouse_logs',
-    description: 'Tail a bounded slice of node logs (filter by service/level).',
+    description:
+      'Tail a bounded slice of node logs (live SSE stream, falling back to ' +
+      'recent CLI history; filter by service/level). Result carries `source`.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -233,7 +240,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'townhouse_metrics',
-    description: 'Connector metrics snapshot.',
+    description:
+      'Connector metrics snapshot (live WS /metrics, falling back to the ' +
+      'CLI). Result carries `source`.',
     inputSchema: EMPTY,
   },
   {
@@ -322,7 +331,7 @@ export async function dispatchTool(
       case 'townhouse_logs':
         return ok(await tailLogs(ctx, args));
       case 'townhouse_metrics':
-        return ok(await cli.runJson(['metrics']));
+        return ok(await metricsSnapshot(ctx));
       case 'townhouse_channels':
         return ok(await cli.runJson(['channels']));
       case 'townhouse_health':
@@ -411,25 +420,71 @@ async function credits(
   throw new ApiError(`invalid credits op: ${String(op)}`, 400, false);
 }
 
+/**
+ * Connector metrics. Prefer the live WS /metrics snapshot (design §5); fall back
+ * to the `townhouse metrics` CLI JSON when the apex WS path is unavailable
+ * (e.g. runtime without a global WebSocket, or the apex not yet up).
+ */
+async function metricsSnapshot(ctx: ToolCtx): Promise<unknown> {
+  try {
+    const payload = await metricsSnapshotViaWs({ baseUrl: ctx.cfg.apiUrl });
+    return { source: 'ws', ...payload };
+  } catch (e) {
+    if (!(e instanceof StreamsUnavailableError)) throw e;
+    return { source: 'cli', ...(await ctx.cli.runJson<object>(['metrics'])) };
+  }
+}
+
+/**
+ * Bounded log tail. Prefer the live SSE stream (design §5); fall back to the
+ * CLI's recent-history view when the stream is unavailable OR yields nothing in
+ * the window (a forward-looking live tail is empty on a quiet system, whereas
+ * the agent asking for "logs" usually wants the most recent lines).
+ */
 async function tailLogs(
   ctx: ToolCtx,
   args: Record<string, unknown>
 ): Promise<unknown> {
   const maxLines =
     typeof args['maxLines'] === 'number' ? args['maxLines'] : 100;
+  const service =
+    typeof args['service'] === 'string' ? args['service'] : undefined;
+  const level = typeof args['level'] === 'string' ? args['level'] : undefined;
+
+  try {
+    const events = await tailLogsViaSse({
+      baseUrl: ctx.cfg.apiUrl,
+      maxLines,
+      ...(service ? { service } : {}),
+      ...(level ? { level } : {}),
+    });
+    if (events.length > 0) {
+      return { source: 'sse', count: events.length, events };
+    }
+    // Quiet live tail — fall through to the CLI's recent history.
+  } catch (e) {
+    if (!(e instanceof StreamsUnavailableError)) throw e;
+  }
+  return tailLogsViaCli(ctx, maxLines, service, level);
+}
+
+async function tailLogsViaCli(
+  ctx: ToolCtx,
+  maxLines: number,
+  service?: string,
+  level?: string
+): Promise<unknown> {
   const lines = await ctx.cli.runNdjson<Record<string, unknown>>([
     'logs',
     '--lines',
     String(maxLines),
   ]);
-  const service = args['service'];
-  const level = args['level'];
   const filtered = lines.filter(
     (l) =>
       (service === undefined || l['service'] === service) &&
       (level === undefined || l['level'] === level)
   );
-  return { count: filtered.length, events: filtered };
+  return { source: 'cli', count: filtered.length, events: filtered };
 }
 
 function toErrorResult(e: unknown, cfg: ResolvedConfig): ToolResult {
