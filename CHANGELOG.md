@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.1](https://github.com/toon-protocol/town/compare/v0.29.0...v0.29.1) (2026-06-14)
+
+### Bug Fixes
+
+* **townhouse-mcp:** surface lifecycle error detail + correct retryable classification ([#232](https://github.com/toon-protocol/town/issues/232)) ([#237](https://github.com/toon-protocol/town/issues/237)) ([65a3cfc](https://github.com/toon-protocol/town/commit/65a3cfcd4b81ca8ea5361645dd779bba4000221d)), closes [#3](https://github.com/toon-protocol/town/issues/3) [#4](https://github.com/toon-protocol/town/issues/4)
+* **townhouse:** wallet balances/withdraw read network-profile chain env ([#232](https://github.com/toon-protocol/town/issues/232)) ([#238](https://github.com/toon-protocol/town/issues/238)) ([6e19a95](https://github.com/toon-protocol/town/commit/6e19a9556402579890962b2fb728e81185a8251d)), closes [#1](https://github.com/toon-protocol/town/issues/1)
+
 ## [0.29.0](https://github.com/toon-protocol/town/compare/v0.28.0...v0.29.0) (2026-06-14)
 
 ### Features
