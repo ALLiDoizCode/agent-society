@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.2](https://github.com/toon-protocol/town/compare/v0.31.1...v0.31.2) (2026-06-15)
+
+### Bug Fixes
+
+* **client-mcp:** onboard fresh users + infer relay transport from its own URL ([#251](https://github.com/toon-protocol/town/issues/251)) ([#252](https://github.com/toon-protocol/town/issues/252)) ([000be51](https://github.com/toon-protocol/town/commit/000be51f8053db2aa456bec77003b225501221b5))
+
 ## [0.31.1](https://github.com/toon-protocol/town/compare/v0.31.0...v0.31.1) (2026-06-14)
 
 ### Bug Fixes
