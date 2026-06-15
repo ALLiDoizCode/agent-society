@@ -236,7 +236,7 @@ Let a Claude agent act as a TOON client — pay-to-write, free reads, channels, 
 /plugin install toon@toon
 ```
 
-Or wire just the MCP server: `claude mcp add toon -- npx -y @toon-protocol/client-mcp`. See [`toon-plugin/README.md`](toon-plugin/README.md) and [`@toon-protocol/client-mcp`](packages/client-mcp).
+Or wire just the MCP server: `claude mcp add toon -- npx -y -p @toon-protocol/client-mcp toon-mcp`. See [`toon-plugin/README.md`](toon-plugin/README.md) and [`@toon-protocol/client-mcp`](packages/client-mcp).
 
 ## Packages
 
