@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0](https://github.com/toon-protocol/town/compare/v0.32.0...v0.33.0) (2026-06-15)
+
+### Features
+
+* **townhouse:** first-class node config + negotiation values (relays, turbo, rebind, settlement token/chain) ([#254](https://github.com/toon-protocol/town/issues/254)) ([5e5009f](https://github.com/toon-protocol/town/commit/5e5009f191fe68cb88d191267e8406593c2486bf))
+
+### Bug Fixes
+
+* **client-mcp:** return a retryable 504 for apex discovery timeout ([#255](https://github.com/toon-protocol/town/issues/255)) ([72976c4](https://github.com/toon-protocol/town/commit/72976c4b0534615ca1c25763ae0309f5d16a89e4))
+
 ## [0.32.0](https://github.com/toon-protocol/town/compare/v0.31.2...v0.32.0) (2026-06-15)
 
 ### Features
