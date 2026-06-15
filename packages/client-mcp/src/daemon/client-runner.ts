@@ -42,7 +42,11 @@ import type {
   SwapResponse,
   TargetsResponse,
 } from '../control-api.js';
-import type { EventsQuery, PublishRequest, SwapRequest } from '../control-api.js';
+import type {
+  EventsQuery,
+  PublishRequest,
+  SwapRequest,
+} from '../control-api.js';
 import {
   configDir,
   type ApexNegotiationConfig,
@@ -295,7 +299,8 @@ export class ClientRunner {
     });
     this.relays.set(relayUrl, relay);
     // A new relay joins every active fan-out subscription.
-    for (const [subId, filters] of this.fanoutSubs) relay.subscribe(filters, subId);
+    for (const [subId, filters] of this.fanoutSubs)
+      relay.subscribe(filters, subId);
     return relay;
   }
 
@@ -353,9 +358,7 @@ export class ClientRunner {
   subscribe(req: SubscribeRequest): SubscribeResponse {
     const subId = req.subId ?? `sub-${++this.subIdCounter}`;
     const filters = Array.isArray(req.filters) ? req.filters : [req.filters];
-    const targets = req.relayUrl
-      ? [req.relayUrl]
-      : [...this.relays.keys()];
+    const targets = req.relayUrl ? [req.relayUrl] : [...this.relays.keys()];
     if (req.relayUrl && !this.relays.has(req.relayUrl)) {
       throw new TargetError(`No such relay: ${req.relayUrl}`);
     }
@@ -426,10 +429,14 @@ export class ClientRunner {
       this.routeChildPeersThroughApexChannel(apex);
       apex.ready = true;
       apex.lastError = undefined;
-      this.log(`[runner] apex ${apex.btpUrl} ready; channel ${apex.apexChannelId}`);
+      this.log(
+        `[runner] apex ${apex.btpUrl} ready; channel ${apex.apexChannelId}`
+      );
     } catch (err) {
       apex.lastError = err instanceof Error ? err.message : String(err);
-      this.log(`[runner] apex ${apex.btpUrl} bootstrap failed: ${apex.lastError}`);
+      this.log(
+        `[runner] apex ${apex.btpUrl} bootstrap failed: ${apex.lastError}`
+      );
     } finally {
       apex.bootstrapping = false;
     }
@@ -586,7 +593,9 @@ export class ClientRunner {
     if (this.stopReadProxy) return;
     const socksPort = this.config.readProxySocksPort ?? 9050;
     try {
-      this.log(`[runner] starting managed read proxy on 127.0.0.1:${socksPort}`);
+      this.log(
+        `[runner] starting managed read proxy on 127.0.0.1:${socksPort}`
+      );
       const proxy = await this.startReadProxy({
         socksPort,
         log: (m) => this.log(`[anon] ${m}`),
@@ -740,7 +749,9 @@ export class ClientRunner {
       },
       transport: {
         type: this.config.socksProxy ? 'socks5' : 'direct',
-        ...(this.config.socksProxy ? { socksProxy: this.config.socksProxy } : {}),
+        ...(this.config.socksProxy
+          ? { socksProxy: this.config.socksProxy }
+          : {}),
         ...(apex ? { btpUrl: apex.btpUrl } : {}),
       },
       relay: {
@@ -969,7 +980,10 @@ function errMsg(err: unknown): string {
 
 /** Filesystem-safe slug for a per-apex channel-store filename. */
 function sanitize(s: string): string {
-  return s.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+  return s
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
 }
 
 function isAnyoneHost(url: string): boolean {

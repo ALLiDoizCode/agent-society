@@ -197,9 +197,12 @@ describe('dispatchTool', () => {
   });
 
   it('toon_add_apex forwards discovery params (only those provided)', async () => {
-    const addApex = vi
-      .fn()
-      .mockResolvedValue({ btpUrl: 'ws://a/btp', destination: 'g.x', chain: 'evm', ready: false });
+    const addApex = vi.fn().mockResolvedValue({
+      btpUrl: 'ws://a/btp',
+      destination: 'g.x',
+      chain: 'evm',
+      ready: false,
+    });
     await dispatchTool(stubClient({ addApex }), 'toon_add_apex', {
       ilpAddress: 'g.x.town',
       relayUrl: 'ws://r',

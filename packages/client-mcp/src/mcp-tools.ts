@@ -289,7 +289,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         childPeers: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Child peers via this apex’s channel (e.g. ["dvm","mill"]).',
+          description:
+            'Child peers via this apex’s channel (e.g. ["dvm","mill"]).',
         },
         feePerEvent: {
           type: 'string',
@@ -399,7 +400,9 @@ export async function dispatchTool(
       case 'toon_targets':
         return ok(await client.targets());
       case 'toon_add_relay':
-        return ok(await client.addRelay({ relayUrl: String(args['relayUrl']) }));
+        return ok(
+          await client.addRelay({ relayUrl: String(args['relayUrl']) })
+        );
       case 'toon_remove_relay':
         return ok(
           await client.removeRelay({ relayUrl: String(args['relayUrl']) })

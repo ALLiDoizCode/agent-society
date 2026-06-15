@@ -58,7 +58,11 @@ describe('discoverApex', () => {
   it('maps a kind:10032 announcement to a negotiation (preferred chain)', async () => {
     const { relay, open, emit } = controllableRelay();
     open();
-    emit(['EVENT', 'apex-discovery-g.townhouse.town', announcement('g.townhouse.town')]);
+    emit([
+      'EVENT',
+      'apex-discovery-g.townhouse.town',
+      announcement('g.townhouse.town'),
+    ]);
 
     const result = await discoverApex({
       relay,
@@ -86,7 +90,11 @@ describe('discoverApex', () => {
   it('falls back to the first advertised chain when none requested', async () => {
     const { relay, open, emit } = controllableRelay();
     open();
-    emit(['EVENT', 'apex-discovery-g.townhouse.town', announcement('g.townhouse.town')]);
+    emit([
+      'EVENT',
+      'apex-discovery-g.townhouse.town',
+      announcement('g.townhouse.town'),
+    ]);
     const result = await discoverApex({
       relay,
       ilpAddress: 'g.townhouse.town',

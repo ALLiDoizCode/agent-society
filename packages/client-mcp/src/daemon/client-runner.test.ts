@@ -529,7 +529,10 @@ function relayFactory(): {
   }) => RelaySubscription;
   emit: (relayUrl: string, subId: string, event: NostrEvent) => void;
 } {
-  const handlersByUrl = new Map<string, Record<string, (a?: unknown) => void>>();
+  const handlersByUrl = new Map<
+    string,
+    Record<string, (a?: unknown) => void>
+  >();
   const createRelay = (opts: {
     relayUrl: string;
     onEvent: (subId: string, event: NostrEvent) => void;
@@ -550,9 +553,9 @@ function relayFactory(): {
     });
   };
   const emit = (relayUrl: string, subId: string, event: NostrEvent): void =>
-    handlersByUrl.get(relayUrl)?.['message']?.(
-      JSON.stringify(['EVENT', subId, event])
-    );
+    handlersByUrl
+      .get(relayUrl)
+      ?.['message']?.(JSON.stringify(['EVENT', subId, event]));
   return { createRelay, emit };
 }
 
@@ -623,7 +626,10 @@ describe('ClientRunner multi-target', () => {
     emit('ws://relay2.test', subId, note('2'.repeat(64)));
 
     const first = runner.getEvents({});
-    expect(first.events.map((e) => e.id)).toEqual(['1'.repeat(64), '2'.repeat(64)]);
+    expect(first.events.map((e) => e.id)).toEqual([
+      '1'.repeat(64),
+      '2'.repeat(64),
+    ]);
     // Cursor advances; a second drain past it is empty.
     expect(runner.getEvents({ cursor: first.cursor }).events).toEqual([]);
   });
@@ -653,10 +659,12 @@ describe('ClientRunner multi-target', () => {
     const { runner } = build();
     runner.start();
     await runner.addRelay('ws://relay2.test');
-    expect(runner.getTargets().relays.map((r) => r.relayUrl).sort()).toEqual([
-      'ws://relay.test',
-      'ws://relay2.test',
-    ]);
+    expect(
+      runner
+        .getTargets()
+        .relays.map((r) => r.relayUrl)
+        .sort()
+    ).toEqual(['ws://relay.test', 'ws://relay2.test']);
     expect(loadTargets(targetsPath).relays).toEqual([
       { relayUrl: 'ws://relay2.test' },
     ]);
@@ -697,7 +705,11 @@ describe('ClientRunner multi-target', () => {
     const { runner, emit } = build();
     runner.start();
     // Pre-buffer the apex's kind:10032 on the discovery relay.
-    emit('ws://relay.test', 'apex-discovery-g.other.town', apexAnnouncement('g.other.town'));
+    emit(
+      'ws://relay.test',
+      'apex-discovery-g.other.town',
+      apexAnnouncement('g.other.town')
+    );
 
     const res = await runner.addApex({
       ilpAddress: 'g.other.town',
