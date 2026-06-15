@@ -54,6 +54,7 @@ import {
   type RebindDeps,
   type RebindSummary,
 } from './rebind.js';
+import { resolvePublicBtpUrl } from './state/node-env.js';
 import { createApiServer } from './api/server.js';
 import { createWizardApiServer } from './api/wizard-server.js';
 import type { ApiServer } from './api/index.js';
@@ -1950,6 +1951,24 @@ async function rebindAndReconcileChildren(opts: {
     opts;
   const nodesYamlPath = join(configDir, 'nodes.yaml');
 
+  // Resolve the apex public BTP URL the town advertises in its kind:10032. The
+  // .anyone hostname is read from host.json (written by a prior `hs up`); on a
+  // restart it's already present, so the rebound town gets a reachable endpoint.
+  let publicBtpUrl: string | undefined;
+  try {
+    let hostname: string | undefined;
+    try {
+      const raw = readFileSync(join(configDir, 'host.json'), 'utf-8');
+      const parsed = JSON.parse(raw) as { hostname?: unknown };
+      if (typeof parsed.hostname === 'string') hostname = parsed.hostname;
+    } catch {
+      /* host.json absent on first boot — direct/externalUrl still resolve */
+    }
+    publicBtpUrl = resolvePublicBtpUrl(config, hostname);
+  } catch {
+    publicBtpUrl = undefined;
+  }
+
   // Stage 1: rebind child containers.
   const rebindFn = hsOverrides?.rebindChildren ?? rebindChildContainers;
   if (walletManager && typeof orch.startNodeViaCompose === 'function') {
@@ -1960,6 +1979,7 @@ async function rebindAndReconcileChildren(opts: {
         wallet: walletManager,
         orchestrator: { startNodeViaCompose },
         config,
+        publicBtpUrl,
         log: (line) => console.error(`${logPrefix} ${line}`),
       });
       for (const s of summary.skipped) {

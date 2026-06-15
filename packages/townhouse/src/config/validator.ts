@@ -109,6 +109,13 @@ function validateNodeConfig(
   if (raw['image'] !== undefined) {
     assertString(raw['image'], `${path}.image`);
   }
+  // town: settlement asset advertised in kind:10032.
+  if (raw['assetCode'] !== undefined) {
+    assertString(raw['assetCode'], `${path}.assetCode`);
+  }
+  if (raw['assetScale'] !== undefined) {
+    assertNumber(raw['assetScale'], `${path}.assetScale`);
+  }
   // mill: operator-supplied Nostr relay URLs (persisted from `node add mill`).
   if (raw['relays'] !== undefined) {
     assertStringArray(raw['relays'], `${path}.relays`);
@@ -246,6 +253,32 @@ export function validateConfig(raw: unknown): TownhouseConfig {
         '(connector-managed anon binary). Without one of these, the underlying ' +
         'connector will reject the manifest at boot.'
     );
+  }
+
+  // apex (optional) — connector negotiation values (routing fee).
+  let apex: TownhouseConfig['apex'];
+  if (raw['apex'] !== undefined) {
+    assertObject(raw['apex'], 'config.apex');
+    const a = raw['apex'] as Record<string, unknown>;
+    if (a['routingFeeBasisPoints'] !== undefined) {
+      assertNumber(
+        a['routingFeeBasisPoints'],
+        'config.apex.routingFeeBasisPoints'
+      );
+      if (
+        !Number.isInteger(a['routingFeeBasisPoints'] as number) ||
+        (a['routingFeeBasisPoints'] as number) < 0
+      ) {
+        throw new ConfigValidationError(
+          'config.apex.routingFeeBasisPoints must be a non-negative integer'
+        );
+      }
+    }
+    apex = {
+      ...(a['routingFeeBasisPoints'] !== undefined
+        ? { routingFeeBasisPoints: a['routingFeeBasisPoints'] as number }
+        : {}),
+    };
   }
 
   // network (optional)
@@ -456,7 +489,12 @@ export function validateConfig(raw: unknown): TownhouseConfig {
     nodes: {
       town: {
         enabled: town['enabled'] as boolean,
-        ...pickOptional(town, ['feePerEvent', 'image']),
+        ...pickOptional(town, [
+          'feePerEvent',
+          'assetCode',
+          'assetScale',
+          'image',
+        ]),
       },
       mill: {
         enabled: mill['enabled'] as boolean,
@@ -518,6 +556,7 @@ export function validateConfig(raw: unknown): TownhouseConfig {
     ...(network !== undefined ? { network } : {}),
     ...(endpoints !== undefined ? { endpoints } : {}),
     ...(chainProviders !== undefined ? { chainProviders } : {}),
+    ...(apex !== undefined ? { apex } : {}),
   };
 }
 

@@ -61,6 +61,27 @@ describe('validateConfig', () => {
     expect(config.nodes.dvm.turboToken).toBe('{"kty":"RSA"}');
   });
 
+  it('accepts + round-trips town.assetCode/assetScale and apex.routingFeeBasisPoints', () => {
+    const raw = validRaw();
+    const nodes = raw['nodes'] as Record<string, Record<string, unknown>>;
+    (nodes['town'] as Record<string, unknown>)['assetCode'] = 'USDC';
+    (nodes['town'] as Record<string, unknown>)['assetScale'] = 6;
+    raw['apex'] = { routingFeeBasisPoints: 25 };
+
+    const config = validateConfig(raw);
+    expect(config.nodes.town.assetCode).toBe('USDC');
+    expect(config.nodes.town.assetScale).toBe(6);
+    expect(config.apex?.routingFeeBasisPoints).toBe(25);
+  });
+
+  it('rejects apex.routingFeeBasisPoints that is negative or non-integer', () => {
+    const raw = validRaw();
+    raw['apex'] = { routingFeeBasisPoints: -1 };
+    expect(() => validateConfig(raw)).toThrow(ConfigValidationError);
+    raw['apex'] = { routingFeeBasisPoints: 1.5 };
+    expect(() => validateConfig(raw)).toThrow(ConfigValidationError);
+  });
+
   it('rejects mill.relays that is not an array of strings', () => {
     const raw = validRaw();
     const nodes = raw['nodes'] as Record<string, Record<string, unknown>>;

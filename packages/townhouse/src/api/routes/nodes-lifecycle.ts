@@ -25,6 +25,7 @@ import {
   assembleNodeEnv,
   resolveMillRelays,
   resolveDvmTurboToken,
+  resolvePublicBtpUrl,
 } from '../../state/node-env.js';
 import type { ApiDeps } from '../types.js';
 import type { NodeType } from '../types.js';
@@ -177,6 +178,23 @@ function buildMillSwapPairConfig(config: TownhouseConfig): object {
  * Body content is intentionally ignored — only HTTP status matters, so this
  * helper stays decoupled from the three distinct node health payload shapes.
  */
+/**
+ * Read the published `.anyone` hostname from `<homeDir>/host.json` (written by
+ * `townhouse hs up`). Returns undefined if the file is absent or unparseable —
+ * the caller falls back to config/direct resolution. Best-effort: never throws.
+ */
+async function readHostJsonHostname(
+  homeDir: string
+): Promise<string | undefined> {
+  try {
+    const raw = await fs.readFile(join(homeDir, 'host.json'), 'utf-8');
+    const parsed = JSON.parse(raw) as { hostname?: unknown };
+    return typeof parsed.hostname === 'string' ? parsed.hostname : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function waitForHealthy(url: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   const POLL_INTERVAL_MS = 1_000;
@@ -563,6 +581,17 @@ export function registerNodeLifecycleRoutes(
         // with the add request — they no longer depend on the API container's
         // frozen process.env. Same assembler the boot rebinder uses, so a node
         // started here and restarted on `hs up` get identical env.
+        // Resolve the apex public BTP URL for the town's kind:10032. The
+        // .anyone hostname (HS) is read from host.json, written by `hs up` once
+        // the connector publishes — present when the operator adds a town after
+        // the apex is live. If absent now, the next `hs up` rebind re-injects it.
+        const publicBtpUrl =
+          type === 'town'
+            ? resolvePublicBtpUrl(
+                deps.config,
+                await readHostJsonHostname(homeDir)
+              )
+            : undefined;
         const nodeEnv = assembleNodeEnv({
           type,
           nostrSecretKeyHex,
@@ -573,6 +602,7 @@ export function registerNodeLifecycleRoutes(
           config: deps.config,
           relays: millRelays,
           turboToken: dvmTurboToken || undefined,
+          publicBtpUrl,
         });
         try {
           await deps.orchestrator.startNodeViaCompose(type, nodeEnv);

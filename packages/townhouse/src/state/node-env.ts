@@ -126,6 +126,32 @@ export function resolveDvmTurboToken(
   );
 }
 
+/**
+ * Resolve the apex's PUBLIC BTP URL that the town advertises in its kind:10032,
+ * so clients learn where to route packets destined for `g.townhouse.town`.
+ * Precedence:
+ *   1. operator override `transport.externalUrl` (when set and not the literal
+ *      `'auto'`), normalised to end in `/btp`;
+ *   2. HS mode → `wss://<hostname>/btp` from the resolved `.anyone` hostname
+ *      (host.json), or undefined when not yet published;
+ *   3. direct mode → the loopback dial URL (operators expose externally via
+ *      `transport.externalUrl` or a reverse proxy).
+ */
+export function resolvePublicBtpUrl(
+  config: TownhouseConfig,
+  hostname?: string
+): string | undefined {
+  const ext = config.transport.externalUrl;
+  if (ext && ext !== 'auto') {
+    const trimmed = ext.replace(/\/+$/, '');
+    return trimmed.endsWith('/btp') ? trimmed : `${trimmed}/btp`;
+  }
+  if (config.transport.mode === 'hs') {
+    return hostname ? `wss://${hostname}/btp` : undefined;
+  }
+  return 'ws://127.0.0.1:3000/btp';
+}
+
 /** Inputs for {@link assembleNodeEnv}. */
 export interface AssembleNodeEnvParams {
   type: NodeType;
@@ -139,6 +165,8 @@ export interface AssembleNodeEnvParams {
   relays?: string[];
   /** dvm: pre-resolved Turbo token (from `--turbo-token`). Omit to resolve config/env. */
   turboToken?: string;
+  /** town: apex public BTP URL to advertise in kind:10032 (see resolvePublicBtpUrl). */
+  publicBtpUrl?: string;
 }
 
 /**
@@ -172,6 +200,21 @@ export function assembleNodeEnv(
     const token =
       params.turboToken?.trim() || resolveDvmTurboToken(undefined, config);
     if (token) env['TURBO_TOKEN'] = token;
+  }
+  if (type === 'town') {
+    // Negotiation values the town advertises in its kind:10032 + enforces:
+    // the apex public BTP URL, the publish price (feePerEvent), and the
+    // settlement asset. compose interpolates these into the town container,
+    // which maps them to TOON_* via docker/src/entrypoint-town.ts.
+    const town = config.nodes.town;
+    if (params.publicBtpUrl) env['PUBLIC_BTP_URL'] = params.publicBtpUrl;
+    if (town.feePerEvent !== undefined) {
+      env['FEE_PER_EVENT'] = String(town.feePerEvent);
+    }
+    if (town.assetCode) env['ASSET_CODE'] = town.assetCode;
+    if (town.assetScale !== undefined) {
+      env['ASSET_SCALE'] = String(town.assetScale);
+    }
   }
   return env;
 }

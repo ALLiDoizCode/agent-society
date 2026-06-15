@@ -44,6 +44,13 @@ export interface RebindDeps {
   wallet: RebindWallet;
   orchestrator: RebindOrchestrator;
   config: TownhouseConfig;
+  /**
+   * Apex public BTP URL injected into the town's env so its kind:10032
+   * advertises a reachable endpoint (resolved by the caller from
+   * config/host.json — see resolvePublicBtpUrl). Omit for non-town or when the
+   * hostname isn't resolved yet (town falls back to its default).
+   */
+  publicBtpUrl?: string;
   /** Optional progress sink (defaults to no-op). */
   log?: (line: string) => void;
 }
@@ -113,6 +120,7 @@ export async function rebindChildContainers(
         mnemonic,
         apexEvmAddress,
         config: deps.config,
+        publicBtpUrl: deps.publicBtpUrl,
       });
       await deps.orchestrator.startNodeViaCompose(type, env);
       summary.started.push(entry.id);
