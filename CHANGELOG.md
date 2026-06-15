@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.1](https://github.com/toon-protocol/town/compare/v0.33.0...v0.33.1) (2026-06-15)
+
+### Bug Fixes
+
+* **townhouse:** default unset network to settlement-ready testnet ([#256](https://github.com/toon-protocol/town/issues/256)) ([5aaba3e](https://github.com/toon-protocol/town/commit/5aaba3e3e04cfee715f2e3b1b897de153991c008)), closes [#215-class](https://github.com/toon-protocol/town/issues/215-class)
+
 ## [0.33.0](https://github.com/toon-protocol/town/compare/v0.32.0...v0.33.0) (2026-06-15)
 
 ### Features
