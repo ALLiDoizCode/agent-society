@@ -21,6 +21,7 @@ import { dirname, join } from 'node:path';
 import { bytesToHex } from '@noble/hashes/utils';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { resolveConfigNetworkProfile } from '../../config/network-profile.js';
+import { saveConfig } from '../../config/loader.js';
 import type { ApiDeps } from '../types.js';
 import type { NodeType } from '../types.js';
 import type {
@@ -269,6 +270,50 @@ function buildNodeEnv(
   }
 }
 
+/**
+ * Resolve the mill's Nostr relay URLs with precedence: request-body `--relays`
+ * flag > persisted `config.nodes.mill.relays` > legacy `MILL_RELAYS` env var
+ * (back-compat for operators who exported it before `townhouse hs up`). Trims
+ * and drops blank entries. Returns [] when nothing is supplied anywhere — the
+ * caller turns that into an actionable 400. Resolving from the request body and
+ * config (not just process.env) is what frees `node add mill` from the
+ * "MILL_RELAYS must be exported before hs up or the API never sees it" trap.
+ */
+export function resolveMillRelays(
+  bodyRelays: string[] | undefined,
+  config: TownhouseConfig
+): string[] {
+  const fromBody = (bodyRelays ?? []).map((r) => r.trim()).filter(Boolean);
+  if (fromBody.length > 0) return fromBody;
+  const fromConfig = (config.nodes.mill.relays ?? [])
+    .map((r) => r.trim())
+    .filter(Boolean);
+  if (fromConfig.length > 0) return fromConfig;
+  return (process.env['MILL_RELAYS'] ?? '')
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Resolve the DVM's Arweave Turbo credential with the same precedence chain:
+ * request-body `--turbo-token` > `config.nodes.dvm.turboToken` > legacy
+ * `TURBO_TOKEN` env. Returns '' when unset anywhere — the DVM boots fine without
+ * it (free-tier <100KB uploads still work), so this is intentionally NOT a hard
+ * requirement, only an injected value when present.
+ */
+export function resolveDvmTurboToken(
+  bodyToken: string | undefined,
+  config: TownhouseConfig
+): string {
+  return (
+    bodyToken?.trim() ||
+    config.nodes.dvm.turboToken?.trim() ||
+    process.env['TURBO_TOKEN']?.trim() ||
+    ''
+  );
+}
+
 export function registerNodeLifecycleRoutes(
   app: FastifyInstance,
   deps: ApiDeps
@@ -339,7 +384,9 @@ export function registerNodeLifecycleRoutes(
 
   // ── POST /api/nodes ────────────────────────────────────────────────────────
 
-  app.post<{ Body: { type: NodeType } }>(
+  app.post<{
+    Body: { type: NodeType; relays?: string[]; turboToken?: string };
+  }>(
     '/api/nodes',
     {
       schema: {
@@ -349,6 +396,14 @@ export function registerNodeLifecycleRoutes(
           required: ['type'],
           properties: {
             type: { type: 'string', enum: ['town', 'mill', 'dvm'] },
+            // mill: Nostr relay URLs (CLI `--relays`, comma-split into an array).
+            relays: {
+              type: 'array',
+              items: { type: 'string', maxLength: 512 },
+              maxItems: 64,
+            },
+            // dvm: Arweave Turbo credential (CLI `--turbo-token`, a JWK string).
+            turboToken: { type: 'string', maxLength: 8192 },
           },
         },
       },
@@ -359,7 +414,11 @@ export function registerNodeLifecycleRoutes(
       }
 
       try {
-        const { type } = request.body;
+        const {
+          type,
+          relays: bodyRelays,
+          turboToken: bodyTurboToken,
+        } = request.body;
         const homeDir = dirname(deps.configPath);
         const nodesYamlPath = join(homeDir, 'nodes.yaml');
         const imageManifestPath = join(homeDir, 'image-manifest.json');
@@ -376,15 +435,28 @@ export function registerNodeLifecycleRoutes(
           });
         }
 
-        // Pre-check: MILL_RELAYS must be set before any state is written.
-        // Mill's validateConfig() throws INVALID_CONFIG on an empty relayUrls
-        // array, producing a silent 60-second healthcheck timeout. Catching the
-        // missing var here — before writeNodesYaml (step 3) — means no rollback
-        // is needed and the caller gets an actionable 400 with zero side-effects.
-        if (type === 'mill' && !process.env['MILL_RELAYS']?.trim()) {
+        // Resolve operator-supplied node inputs (flag > config > env) BEFORE any
+        // state mutation, so a validation failure rolls back nothing and the
+        // resolved values can be both injected into the container env (step 4)
+        // and — for mill relays — persisted to config.yaml (step 6).
+        const millRelays =
+          type === 'mill' ? resolveMillRelays(bodyRelays, deps.config) : [];
+        const dvmTurboToken =
+          type === 'dvm'
+            ? resolveDvmTurboToken(bodyTurboToken, deps.config)
+            : '';
+
+        // Pre-check: mill REQUIRES at least one relay URL — mill's
+        // validateConfig() throws INVALID_CONFIG on an empty relayUrls array,
+        // producing a silent 60-second healthcheck timeout. Resolved from
+        // flag/config/env above so the operator can pass `--relays` at add time
+        // (no MILL_RELAYS export before `hs up` needed). Catching it here —
+        // before writeNodesYaml (step 3) — means no rollback and an actionable
+        // 400 with zero side-effects.
+        if (type === 'mill' && millRelays.length === 0) {
           return reply.status(400).send({
             step: 'preflight',
-            err: 'MILL_RELAYS is not set or is blank. Export a comma-separated list of relay URLs before provisioning Mill (e.g. export MILL_RELAYS=wss://relay.example.com). See packages/townhouse/README.md.',
+            err: 'No relay URLs for Mill. Pass `--relays wss://relay1,wss://relay2` to `townhouse node add mill`, set nodes.mill.relays in config.yaml, or export MILL_RELAYS before `townhouse hs up`. See packages/townhouse/README.md.',
           });
         }
 
@@ -516,7 +588,7 @@ export function registerNodeLifecycleRoutes(
         // ── Step 3b: mill — write mill.config.json (same rollback bucket as step 3) ──
         let millConfigWritten = false;
         if (type === 'mill') {
-          // MILL_RELAYS pre-check already ran in pre-checks above — guaranteed set here.
+          // millRelays resolved + non-empty guaranteed by the preflight above.
           try {
             const defaultMillConfig = JSON.stringify(
               buildMillSwapPairConfig(deps.config),
@@ -607,6 +679,17 @@ export function registerNodeLifecycleRoutes(
           apexEvmAddress,
           buildNetworkNodeEnv(deps.config)
         );
+        // Layer the resolved operator inputs onto the env overlay. compose
+        // interpolates `${MILL_RELAYS:-}` / `${TURBO_TOKEN:-}` in the child
+        // service from this overlay (startNodeViaCompose merges it over
+        // process.env), so the value travels with the add request — it no
+        // longer depends on the API container's frozen process.env.
+        if (type === 'mill') {
+          nodeEnv['MILL_RELAYS'] = millRelays.join(',');
+        }
+        if (type === 'dvm' && dvmTurboToken) {
+          nodeEnv['TURBO_TOKEN'] = dvmTurboToken;
+        }
         try {
           await deps.orchestrator.startNodeViaCompose(type, nodeEnv);
         } catch (err: unknown) {
@@ -776,6 +859,30 @@ export function registerNodeLifecycleRoutes(
             err: errMsg,
             rollbackError: combinedRollbackError,
           });
+        }
+
+        // Persist the resolved mill relays to config.yaml so a later
+        // `node remove && node add` (and any future reconciliation) reads them
+        // back without re-supplying a flag or shell env var. Non-fatal: the node
+        // is already live + registered, so a config-write failure must NOT fail
+        // the request — log a warning and return success. The dvm Turbo token is
+        // intentionally NOT persisted (it's a secret — see schema.ts).
+        if (type === 'mill') {
+          try {
+            deps.config.nodes.mill.relays = millRelays;
+            saveConfig(deps.configPath, deps.config);
+          } catch (err: unknown) {
+            request.log.warn(
+              {
+                event: 'node_lifecycle_config_persist_warn',
+                type,
+                err: sanitizeErrorMessage(
+                  err instanceof Error ? err.message : String(err)
+                ),
+              },
+              'Provisioned mill but failed to persist relays to config.yaml — node is live; rerun with --relays if it is recreated'
+            );
+          }
         }
 
         request.log.info(

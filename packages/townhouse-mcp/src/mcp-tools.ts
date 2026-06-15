@@ -107,10 +107,18 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'townhouse_add_node',
-    description: 'Provision a town | mill | dvm child node.',
+    description:
+      'Provision a town | mill | dvm child node. mill requires relays ' +
+      '(Nostr relay URLs); dvm optionally takes turboToken (Arweave Turbo JWK ' +
+      'for larger uploads). Supplying these here avoids exporting MILL_RELAYS/' +
+      'TURBO_TOKEN before the apex was started.',
     inputSchema: {
       type: 'object',
-      properties: { type: { type: 'string', enum: ['town', 'mill', 'dvm'] } },
+      properties: {
+        type: { type: 'string', enum: ['town', 'mill', 'dvm'] },
+        relays: { type: 'array', items: { type: 'string' } },
+        turboToken: { type: 'string' },
+      },
       required: ['type'],
       additionalProperties: false,
     },
@@ -315,8 +323,23 @@ export async function dispatchTool(
       // ── nodes → API ──
       case 'townhouse_list_nodes':
         return ok(await api.listNodes());
-      case 'townhouse_add_node':
-        return ok(await api.addNode({ type: asNodeType(args['type']) }));
+      case 'townhouse_add_node': {
+        const addBody: {
+          type: 'town' | 'mill' | 'dvm';
+          relays?: string[];
+          turboToken?: string;
+        } = { type: asNodeType(args['type']) };
+        if (Array.isArray(args['relays'])) {
+          const relays = (args['relays'] as unknown[])
+            .map((r) => String(r).trim())
+            .filter(Boolean);
+          if (relays.length > 0) addBody.relays = relays;
+        }
+        if (typeof args['turboToken'] === 'string' && args['turboToken']) {
+          addBody.turboToken = args['turboToken'];
+        }
+        return ok(await api.addNode(addBody));
+      }
       case 'townhouse_remove_node':
         return ok(await api.removeNode(String(args['id'])));
       case 'townhouse_set_node_fees':

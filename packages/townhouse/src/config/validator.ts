@@ -37,6 +37,16 @@ function assertString(value: unknown, path: string): asserts value is string {
   }
 }
 
+function assertStringArray(
+  value: unknown,
+  path: string
+): asserts value is string[] {
+  if (!Array.isArray(value)) {
+    throw new ConfigValidationError(`${path} must be an array of strings`);
+  }
+  value.forEach((item, idx) => assertString(item, `${path}[${idx}]`));
+}
+
 function assertNumber(value: unknown, path: string): asserts value is number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new ConfigValidationError(`${path} must be a finite number`);
@@ -98,6 +108,14 @@ function validateNodeConfig(
   }
   if (raw['image'] !== undefined) {
     assertString(raw['image'], `${path}.image`);
+  }
+  // mill: operator-supplied Nostr relay URLs (persisted from `node add mill`).
+  if (raw['relays'] !== undefined) {
+    assertStringArray(raw['relays'], `${path}.relays`);
+  }
+  // dvm: operator-supplied Arweave Turbo credential (persisted from node add).
+  if (raw['turboToken'] !== undefined) {
+    assertString(raw['turboToken'], `${path}.turboToken`);
   }
 
   return raw as { enabled: boolean } & Record<string, unknown>;
@@ -442,11 +460,16 @@ export function validateConfig(raw: unknown): TownhouseConfig {
       },
       mill: {
         enabled: mill['enabled'] as boolean,
-        ...pickOptional(mill, ['feeBasisPoints', 'image']),
+        ...pickOptional(mill, ['feeBasisPoints', 'image', 'relays']),
       },
       dvm: {
         enabled: dvm['enabled'] as boolean,
-        ...pickOptional(dvm, ['feePerJob', 'kindPricing', 'image']),
+        ...pickOptional(dvm, [
+          'feePerJob',
+          'kindPricing',
+          'image',
+          'turboToken',
+        ]),
       },
     },
     wallet: { encrypted_path: wallet['encrypted_path'] as string },

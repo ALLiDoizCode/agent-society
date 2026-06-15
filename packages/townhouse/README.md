@@ -127,11 +127,20 @@ The apex on its own only routes and takes a fee. To actually **earn**, attach a 
 
 ```bash
 npx @toon-protocol/townhouse node add        # provision a town relay (default)
-npx @toon-protocol/townhouse node add mill   # or a multi-chain swap node
-npx @toon-protocol/townhouse node add dvm    # or a NIP-90 compute / Arweave node
+npx @toon-protocol/townhouse node add mill --relays wss://relay.damus.io,wss://nos.lol   # multi-chain swap node
+npx @toon-protocol/townhouse node add dvm --turbo-token "$(cat arweave.json)"            # NIP-90 compute / Arweave node
 ```
 
 `node add` provisions the container, registers it as a child of your apex, and routes paid client traffic to it for free. List and remove nodes with `node list` and `node remove <id>`.
+
+**Per-node configuration.** `town` needs nothing extra. Two node types take an operator-supplied input, resolved in the order **flag → `config.yaml` → environment variable**:
+
+| Node   | Input                  | How to supply it                                                                                   |
+| ------ | ---------------------- | ------------------------------------------------------------------------------------------------- |
+| `mill` | Nostr relay URLs (**required**) | `--relays wss://a,wss://b` · or `nodes.mill.relays` in `config.yaml` · or `MILL_RELAYS` env        |
+| `dvm`  | Arweave Turbo credential (optional) | `--turbo-token '<jwk>'` · or `TURBO_TOKEN` env (free-tier <100KB uploads work without it)   |
+
+Prefer the flags — they travel with the `node add` request, so you don't have to export `MILL_RELAYS`/`TURBO_TOKEN` **before** `up`/`hs up` (the API container's environment is fixed at boot, so a variable exported afterward is never seen). Mill relays you pass are persisted to `config.yaml`, so a later `node remove && node add` doesn't need the flag again. The DVM Turbo credential is a secret and is **not** written to `config.yaml` — pass it via `--turbo-token` (or `TURBO_TOKEN`) each time.
 
 ### 4. Stop your apex — `hs down`
 

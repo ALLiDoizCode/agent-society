@@ -146,6 +146,74 @@ describe('CLI node subcommand', () => {
     expect(out).toContain('Live');
   });
 
+  it('node add mill --relays → POSTs relays array (comma-split, trimmed)', async () => {
+    const overrides = makeNodeOverrides(201, {
+      id: 'mill',
+      type: 'mill',
+      peerId: 'mill',
+      ilpAddress: 'g.townhouse.mill',
+      hsRoute: 'g.townhouse.mill',
+      healthCheckUrl: 'http://townhouse-hs-mill:3200/health',
+    });
+    await main(
+      ['node', 'add', 'mill', '--relays', 'wss://a.example, wss://b.example'],
+      undefined,
+      undefined,
+      undefined,
+      overrides
+    );
+    expect(process.exitCode).toBeUndefined();
+    const fetched = (overrides.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(fetched[1].body as string);
+    expect(body.type).toBe('mill');
+    expect(body.relays).toEqual(['wss://a.example', 'wss://b.example']);
+  });
+
+  it('node add dvm --turbo-token → POSTs turboToken in the body', async () => {
+    const overrides = makeNodeOverrides(201, {
+      id: 'dvm',
+      type: 'dvm',
+      peerId: 'dvm',
+      ilpAddress: 'g.townhouse.dvm',
+      hsRoute: 'g.townhouse.dvm',
+      healthCheckUrl: 'http://townhouse-hs-dvm:3400/health',
+    });
+    await main(
+      ['node', 'add', 'dvm', '--turbo-token', '{"kty":"RSA"}'],
+      undefined,
+      undefined,
+      undefined,
+      overrides
+    );
+    expect(process.exitCode).toBeUndefined();
+    const fetched = (overrides.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(fetched[1].body as string);
+    expect(body.type).toBe('dvm');
+    expect(body.turboToken).toBe('{"kty":"RSA"}');
+  });
+
+  it('node add town --relays → relays NOT sent (mill-only flag ignored for town)', async () => {
+    const overrides = makeNodeOverrides(201, {
+      id: 'town',
+      type: 'town',
+      peerId: 'town',
+      ilpAddress: 'g.townhouse.town',
+      hsRoute: 'g.townhouse.town',
+      healthCheckUrl: 'http://townhouse-hs-town:3100/health',
+    });
+    await main(
+      ['node', 'add', 'town', '--relays', 'wss://a.example'],
+      undefined,
+      undefined,
+      undefined,
+      overrides
+    );
+    expect(process.exitCode).toBeUndefined();
+    const fetched = (overrides.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(fetched[1].body as string);
+    expect(body).not.toHaveProperty('relays');
+  });
+
   it('node add on 201 — stdout includes all four stages and the new node id', async () => {
     const overrides = makeNodeOverrides(201, {
       id: 'town',
@@ -248,7 +316,7 @@ describe('CLI node subcommand', () => {
     expect(stderrText()).toContain('townhouse hs up');
   });
 
-  it('node add --help → stdout contains upsell string (AC #7)', async () => {
+  it('node add --help → stdout documents the mill --relays example (AC #7)', async () => {
     await expect(
       main(
         ['node', 'add', '--help'],
@@ -259,9 +327,10 @@ describe('CLI node subcommand', () => {
       )
     ).rejects.toThrow(CliHelpRequested);
     const out = consoleText();
-    expect(out).toContain(
-      'townhouse node add mill   # earn from chain swaps (5x earnings unlock)'
-    );
+    // The mill upsell now doubles as the canonical --relays usage example, so
+    // operators see how to supply relays inline rather than via a shell export.
+    expect(out).toContain('townhouse node add mill --relays');
+    expect(out).toContain('--turbo-token');
   });
 
   // ── node remove ───────────────────────────────────────────────────────────

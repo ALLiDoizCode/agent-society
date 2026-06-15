@@ -33,6 +33,16 @@ export interface MillNodeConfig {
   /** Docker image override */
   image?: string;
   /**
+   * Nostr relay URLs the mill listens on for swap requests. Mill's
+   * `validateConfig()` REQUIRES a non-empty list, so this must be supplied at
+   * `node add mill` time — via `--relays`, this field, or the `MILL_RELAYS`
+   * env var (resolution precedence: flag > config > env). Persisted here so
+   * subsequent `node remove && node add` and reconciliation no longer depend on
+   * a shell env var being exported at the right moment. Injected into the mill
+   * container as the comma-joined `MILL_RELAYS` env.
+   */
+  relays?: string[];
+  /**
    * Chain RPC endpoints the mill should swap against (D2). The orchestrator
    * does not currently forward this directly into MILL_CONFIG_JSON — it
    * round-trips through YAML so the dashboard and future stories can read it.
@@ -50,6 +60,20 @@ export interface DvmNodeConfig {
   kindPricing?: Record<string, number>;
   /** Docker image override */
   image?: string;
+  /**
+   * Arweave Turbo upload credential (a JWK JSON string) for kind:5094 blob
+   * jobs. OPTIONAL — the DVM boots without it and free-tier (<100KB)
+   * unauthenticated uploads still work; only larger/paid uploads need it.
+   * Supplied at `node add dvm` time via `--turbo-token`, this field, or the
+   * `TURBO_TOKEN` env var (resolution precedence: flag > config > env), then
+   * injected into the dvm container as `TURBO_TOKEN`.
+   *
+   * SECRET: unlike `mill.relays`, this is NOT auto-written here by `node add`
+   * (a private key in plaintext config.yaml is avoided by design). It is only
+   * READ if an operator chooses to set it manually, accepting that risk. The
+   * `--turbo-token` flag injects at runtime without persisting.
+   */
+  turboToken?: string;
 }
 
 export interface NodesConfig {

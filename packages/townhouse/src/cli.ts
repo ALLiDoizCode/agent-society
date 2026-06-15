@@ -1743,10 +1743,10 @@ async function handleUp(
     !process.env['TURBO_TOKEN']
   ) {
     console.warn(
-      '[townhouse] WARN: TURBO_TOKEN is not set — Arweave DVM (kind:5094) uploads will fail at first job.'
+      '[townhouse] WARN: TURBO_TOKEN is not set — Arweave DVM (kind:5094) free-tier (<100KB) uploads still work, but larger/paid uploads will fail.'
     );
     console.warn(
-      '[townhouse] Export TURBO_TOKEN=<arweave-jwk-json> before `townhouse up` to enable uploads.'
+      '[townhouse] Pass `townhouse node add dvm --turbo-token <arweave-jwk-json>` (HS mode) or export TURBO_TOKEN before `townhouse up` to enable full uploads.'
     );
   }
 
@@ -3379,6 +3379,9 @@ export async function main(
       'graphql-url': { type: 'string' },
       zkapp: { type: 'string' },
       'key-id': { type: 'string' },
+      // node add operator inputs (mill relays / dvm Arweave Turbo credential)
+      relays: { type: 'string' },
+      'turbo-token': { type: 'string' },
     },
     strict: false,
     allowPositionals: true,
@@ -3692,6 +3695,8 @@ export async function main(
             apiUrl: nodeApiUrl,
             fetch: nodeCommandOverrides?.fetch,
             confirm: nodeCommandOverrides?.confirm,
+            relays: values['relays'] as string | undefined,
+            turboToken: values['turbo-token'] as string | undefined,
           });
           break;
         }
