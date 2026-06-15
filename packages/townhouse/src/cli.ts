@@ -54,7 +54,7 @@ import {
   type RebindDeps,
   type RebindSummary,
 } from './rebind.js';
-import { resolvePublicBtpUrl } from './state/node-env.js';
+import { resolvePublicBtpUrl, resolveRelayUrl } from './state/node-env.js';
 import { listSupportedSettlementAssets } from './config/supported-tokens.js';
 import { createApiServer } from './api/server.js';
 import { createWizardApiServer } from './api/wizard-server.js';
@@ -1952,22 +1952,32 @@ async function rebindAndReconcileChildren(opts: {
     opts;
   const nodesYamlPath = join(configDir, 'nodes.yaml');
 
-  // Resolve the apex public BTP URL the town advertises in its kind:10032. The
-  // .anyone hostname is read from host.json (written by a prior `hs up`); on a
-  // restart it's already present, so the rebound town gets a reachable endpoint.
+  // Resolve the public BTP (write) + relay (read) URLs the town advertises in
+  // its kind:10032. The .anyone hostnames are read from host.json (written by a
+  // prior `hs up`); on a restart they're already present, so the rebound town
+  // gets reachable endpoints.
   let publicBtpUrl: string | undefined;
+  let relayUrl: string | undefined;
   try {
     let hostname: string | undefined;
+    let relayHostname: string | undefined;
     try {
       const raw = readFileSync(join(configDir, 'host.json'), 'utf-8');
-      const parsed = JSON.parse(raw) as { hostname?: unknown };
+      const parsed = JSON.parse(raw) as {
+        hostname?: unknown;
+        relayHostname?: unknown;
+      };
       if (typeof parsed.hostname === 'string') hostname = parsed.hostname;
+      if (typeof parsed.relayHostname === 'string')
+        relayHostname = parsed.relayHostname;
     } catch {
       /* host.json absent on first boot — direct/externalUrl still resolve */
     }
     publicBtpUrl = resolvePublicBtpUrl(config, hostname);
+    relayUrl = resolveRelayUrl(config, relayHostname);
   } catch {
     publicBtpUrl = undefined;
+    relayUrl = undefined;
   }
 
   // The child compose services interpolate ${TOWNHOUSE_HOME}/${TOWNHOUSE_WALLET_DIR}
@@ -2006,6 +2016,7 @@ async function rebindAndReconcileChildren(opts: {
           orchestrator: { startNodeViaCompose },
           config,
           publicBtpUrl,
+          relayUrl,
           log: (line) => console.error(`${logPrefix} ${line}`),
         });
         for (const s of summary.skipped) {
