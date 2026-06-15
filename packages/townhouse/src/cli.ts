@@ -1969,56 +1969,88 @@ async function rebindAndReconcileChildren(opts: {
     publicBtpUrl = undefined;
   }
 
-  // Stage 1: rebind child containers.
-  const rebindFn = hsOverrides?.rebindChildren ?? rebindChildContainers;
-  if (walletManager && typeof orch.startNodeViaCompose === 'function') {
-    const startNodeViaCompose = orch.startNodeViaCompose.bind(orch);
-    try {
-      const summary = await rebindFn({
-        nodesYamlPath,
-        wallet: walletManager,
-        orchestrator: { startNodeViaCompose },
-        config,
-        publicBtpUrl,
-        log: (line) => console.error(`${logPrefix} ${line}`),
-      });
-      for (const s of summary.skipped) {
-        console.error(`${logPrefix} node ${s.id} not rebound: ${s.reason}`);
-      }
-      for (const f of summary.failed) {
-        console.error(
-          `${logPrefix} node ${f.id} rebind failed (non-fatal): ${f.err}`
-        );
-      }
-    } catch (rebindErr: unknown) {
-      const detail =
-        rebindErr instanceof Error
-          ? (rebindErr.stack ?? rebindErr.message)
-          : String(rebindErr);
-      console.error(`${logPrefix} child rebind error (non-fatal): ${detail}`);
-    }
+  // The child compose services interpolate ${TOWNHOUSE_HOME}/${TOWNHOUSE_WALLET_DIR}
+  // /${TOWNHOUSE_UID}/${TOWNHOUSE_DOCKER_GID} (bind mounts, uid). `node add` gets
+  // these from the api container's env, but the rebind runs on the HOST after
+  // `up`'s env block was already torn down — so set them here for the rebind's
+  // `docker compose up` subprocess (else the bind spec is `:/.townhouse` → error).
+  const composeEnvPrev: Record<string, string | undefined> = {
+    TOWNHOUSE_HOME: process.env['TOWNHOUSE_HOME'],
+    TOWNHOUSE_WALLET_DIR: process.env['TOWNHOUSE_WALLET_DIR'],
+    TOWNHOUSE_UID: process.env['TOWNHOUSE_UID'],
+    TOWNHOUSE_DOCKER_GID: process.env['TOWNHOUSE_DOCKER_GID'],
+  };
+  process.env['TOWNHOUSE_HOME'] = configDir;
+  process.env['TOWNHOUSE_WALLET_DIR'] = dirname(
+    resolve(config.wallet.encrypted_path)
+  );
+  process.env['TOWNHOUSE_UID'] = String(process.getuid?.() ?? 1000);
+  try {
+    process.env['TOWNHOUSE_DOCKER_GID'] = String(
+      statSync('/var/run/docker.sock').gid
+    );
+  } catch {
+    process.env['TOWNHOUSE_DOCKER_GID'] = '0';
   }
 
-  // Stage 2: reconcile connector peer state to nodes.yaml (Story 46.1).
-  const reconcilerLogPath = join(configDir, 'reconciler.log');
-  const reconcilerFactory =
-    hsOverrides?.createReconciler ??
-    ((nodesPath: string, logPath: string) => {
-      const reconcilerAdminClient = new ConnectorAdminClient(
-        HS_CONNECTOR_ADMIN_URL,
-        5_000
-      );
-      return new BootReconciler(reconcilerAdminClient, nodesPath, logPath);
-    });
-  const reconciler = reconcilerFactory(nodesYamlPath, reconcilerLogPath);
   try {
-    await reconcileWithBriefRetry(reconciler, 5_000);
-  } catch (reconcilerErr: unknown) {
-    const detail =
-      reconcilerErr instanceof Error
-        ? (reconcilerErr.stack ?? reconcilerErr.message)
-        : String(reconcilerErr);
-    console.error(`${logPrefix} reconciler error (non-fatal): ${detail}`);
+    // Stage 1: rebind child containers.
+    const rebindFn = hsOverrides?.rebindChildren ?? rebindChildContainers;
+    if (walletManager && typeof orch.startNodeViaCompose === 'function') {
+      const startNodeViaCompose = orch.startNodeViaCompose.bind(orch);
+      try {
+        const summary = await rebindFn({
+          nodesYamlPath,
+          wallet: walletManager,
+          orchestrator: { startNodeViaCompose },
+          config,
+          publicBtpUrl,
+          log: (line) => console.error(`${logPrefix} ${line}`),
+        });
+        for (const s of summary.skipped) {
+          console.error(`${logPrefix} node ${s.id} not rebound: ${s.reason}`);
+        }
+        for (const f of summary.failed) {
+          console.error(
+            `${logPrefix} node ${f.id} rebind failed (non-fatal): ${f.err}`
+          );
+        }
+      } catch (rebindErr: unknown) {
+        const detail =
+          rebindErr instanceof Error
+            ? (rebindErr.stack ?? rebindErr.message)
+            : String(rebindErr);
+        console.error(`${logPrefix} child rebind error (non-fatal): ${detail}`);
+      }
+    }
+
+    // Stage 2: reconcile connector peer state to nodes.yaml (Story 46.1).
+    const reconcilerLogPath = join(configDir, 'reconciler.log');
+    const reconcilerFactory =
+      hsOverrides?.createReconciler ??
+      ((nodesPath: string, logPath: string) => {
+        const reconcilerAdminClient = new ConnectorAdminClient(
+          HS_CONNECTOR_ADMIN_URL,
+          5_000
+        );
+        return new BootReconciler(reconcilerAdminClient, nodesPath, logPath);
+      });
+    const reconciler = reconcilerFactory(nodesYamlPath, reconcilerLogPath);
+    try {
+      await reconcileWithBriefRetry(reconciler, 5_000);
+    } catch (reconcilerErr: unknown) {
+      const detail =
+        reconcilerErr instanceof Error
+          ? (reconcilerErr.stack ?? reconcilerErr.message)
+          : String(reconcilerErr);
+      console.error(`${logPrefix} reconciler error (non-fatal): ${detail}`);
+    }
+  } finally {
+    // Restore the compose-interpolation env vars we set for the rebind.
+    for (const [k, v] of Object.entries(composeEnvPrev)) {
+      if (v === undefined) Reflect.deleteProperty(process.env, k);
+      else process.env[k] = v;
+    }
   }
 }
 

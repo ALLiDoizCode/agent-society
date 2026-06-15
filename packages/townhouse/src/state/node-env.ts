@@ -146,10 +146,13 @@ export function resolvePublicBtpUrl(
     const trimmed = ext.replace(/\/+$/, '');
     return trimmed.endsWith('/btp') ? trimmed : `${trimmed}/btp`;
   }
-  if (config.transport.mode === 'hs') {
-    return hostname ? `wss://${hostname}/btp` : undefined;
-  }
-  return 'ws://127.0.0.1:3000/btp';
+  // A resolved .anyone hostname (from host.json) is the authoritative signal
+  // that the apex is running as a hidden service — `hs up` does NOT rewrite
+  // config.transport.mode (it stays 'direct' from init), so keying off the
+  // hostname's presence is correct where the config mode is not.
+  if (hostname) return `wss://${hostname}/btp`;
+  if (config.transport.mode === 'direct') return 'ws://127.0.0.1:3000/btp';
+  return undefined;
 }
 
 /** Inputs for {@link assembleNodeEnv}. */

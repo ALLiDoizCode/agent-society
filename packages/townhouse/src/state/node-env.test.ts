@@ -93,7 +93,7 @@ describe('resolvePublicBtpUrl', () => {
     expect(resolvePublicBtpUrl(config)).toBe('wss://op.example/btp');
   });
 
-  it('HS mode builds wss://<hostname>/btp from the resolved hostname', () => {
+  it('builds wss://<hostname>/btp whenever a .anyone hostname is resolved', () => {
     const base = getDefaultConfig();
     const config: TownhouseConfig = {
       ...base,
@@ -104,7 +104,17 @@ describe('resolvePublicBtpUrl', () => {
     );
   });
 
-  it('HS mode returns undefined when the hostname is not yet resolved', () => {
+  it('prefers the resolved hostname even when config.mode is still "direct"', () => {
+    // Regression (live E2E): `hs up` does not rewrite config.transport.mode, so
+    // a hidden-service apex carries mode:'direct' in config.yaml. The presence
+    // of a host.json hostname must still yield the .anyone URL, not loopback.
+    const config = getDefaultConfig(); // mode: 'direct'
+    expect(resolvePublicBtpUrl(config, 'abc.anyone')).toBe(
+      'wss://abc.anyone/btp'
+    );
+  });
+
+  it('HS config with no resolved hostname yet returns undefined', () => {
     const base = getDefaultConfig();
     const config: TownhouseConfig = {
       ...base,
@@ -113,7 +123,7 @@ describe('resolvePublicBtpUrl', () => {
     expect(resolvePublicBtpUrl(config, undefined)).toBeUndefined();
   });
 
-  it('direct mode falls back to the loopback dial URL', () => {
+  it('direct mode with no hostname falls back to the loopback dial URL', () => {
     const config = getDefaultConfig(); // mode: 'direct'
     expect(resolvePublicBtpUrl(config)).toBe('ws://127.0.0.1:3000/btp');
   });
