@@ -149,6 +149,7 @@ Usage:
                                                  Boot a direct-BTP apex + children (default; clients dial ws://host:3000/btp). --transport hs = HS path; --dev = contributor children-only dev stack
   townhouse down [-c <path>] [--json]            Stop all nodes
   townhouse status [-c <path>] [--json]          Show node status
+  townhouse urls [-c <path>] [--json]            Print BTP (write) + relay (read) URLs to share with clients
   townhouse metrics [-c <path>]                  Show connector metrics
   townhouse wallet show [--json] [--hex] [--paths] [-c <path>] [--password <pw>]  Show derived addresses
   townhouse wallet seed --confirm [-c <path>] [--password <pw>] [--json]    Print the BIP-39 seed phrase (password-gated, requires --confirm)
@@ -3687,6 +3688,60 @@ export async function main(
             '  townhouse credits balance --token <id> [-c <path>] [--password <pw>]'
         );
         process.exitCode = 1;
+      }
+      break;
+    }
+    case 'urls': {
+      // Print the apex BTP (pay-to-write) + town relay (free-read) URLs an
+      // operator shares out-of-band with clients. Resolves from config +
+      // host.json (the .anyone hostnames written by `hs up`).
+      const configPath = (values['config'] as string) ?? DEFAULT_CONFIG_PATH;
+      const cfg = loadConfig(configPath);
+      const dir = dirname(configPath);
+      let hostname: string | undefined;
+      let relayHostname: string | undefined;
+      try {
+        const raw = readFileSync(join(dir, 'host.json'), 'utf-8');
+        const parsed = JSON.parse(raw) as {
+          hostname?: unknown;
+          relayHostname?: unknown;
+        };
+        if (typeof parsed.hostname === 'string') hostname = parsed.hostname;
+        if (typeof parsed.relayHostname === 'string')
+          relayHostname = parsed.relayHostname;
+      } catch {
+        /* host.json absent (apex not booted) — fall back to config-only */
+      }
+      const btpUrl = resolvePublicBtpUrl(cfg, hostname);
+      const relayUrl = resolveRelayUrl(cfg, relayHostname);
+      // The town's ILP destination (only meaningful once a town is provisioned).
+      let ilpDestination: string | undefined;
+      try {
+        const ny = readFileSync(join(dir, 'nodes.yaml'), 'utf-8');
+        if (/type:\s*town/.test(ny)) ilpDestination = 'g.townhouse.town';
+      } catch {
+        /* no nodes.yaml yet */
+      }
+      if (values['json'] === true) {
+        console.log(
+          JSON.stringify({
+            write: btpUrl ?? null,
+            ilpDestination: ilpDestination ?? null,
+            read: relayUrl ?? null,
+          })
+        );
+      } else {
+        console.log('Share these with clients (out-of-band):');
+        console.log('');
+        console.log(
+          `  Write (pay-to-publish, BTP):  ${btpUrl ?? '(apex not running — run `townhouse up` / `hs up`)'}`
+        );
+        if (ilpDestination) {
+          console.log(`  ILP destination:              ${ilpDestination}`);
+        }
+        console.log(
+          `  Read  (free Nostr reads):     ${relayUrl ?? '(relay not publicly exposed — set transport.relayExternalUrl or enable the relay hidden service)'}`
+        );
       }
       break;
     }
