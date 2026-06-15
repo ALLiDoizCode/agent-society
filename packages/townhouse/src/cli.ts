@@ -226,6 +226,9 @@ export interface CliHsOverrides {
       type: NodeType,
       env: Record<string, string>
     ) => Promise<void>;
+    /** Relay hidden-service sidecar lifecycle (HS-mode public relay reads). */
+    ensureRelaySidecar?: () => Promise<void>;
+    getRelayHsHostname?: (timeoutMs?: number) => Promise<string | null>;
   };
   /**
    * Override the boot rebinder (auto-rebind of child containers on `hs up`).
@@ -2571,6 +2574,42 @@ async function handleHsUp(
       hsOverrides,
     });
 
+    // Step 5c: relay hidden service — publish the town's Nostr relay over a
+    // `.anyone` HS so external clients can READ for free (separate from the
+    // apex BTP write path). Default-on in HS mode, but only meaningful once a
+    // town exists (the sidecar forwards to it), so gated on a town being
+    // provisioned + (re)started by the rebind above. Non-fatal. The resolved
+    // hostname → host.json.relayHostname; the town picks it up (relayUrl in its
+    // kind:10032) on the next boot, and `townhouse urls` shows it immediately.
+    let relayHostname: string | undefined;
+    if (
+      nodesYamlHasTown(configDir) &&
+      typeof orch.ensureRelaySidecar === 'function' &&
+      typeof orch.getRelayHsHostname === 'function'
+    ) {
+      try {
+        await orch.ensureRelaySidecar();
+        relayHostname = (await orch.getRelayHsHostname()) ?? undefined;
+        if (relayHostname) {
+          console.error(
+            `[townhouse hs up] relay hidden service published: wss://${relayHostname}/`
+          );
+        } else {
+          console.error(
+            '[townhouse hs up] relay hidden service started; hostname not resolved yet (will appear on next `hs up` / `townhouse urls`)'
+          );
+        }
+      } catch (relayErr: unknown) {
+        const detail =
+          relayErr instanceof Error
+            ? (relayErr.stack ?? relayErr.message)
+            : String(relayErr);
+        console.error(
+          `[townhouse hs up] relay hidden service error (non-fatal): ${detail}`
+        );
+      }
+    }
+
     // Step 6: fetch published hostname and publishedAt for host.json (AC #6).
     const adminClientFactory2 =
       hsOverrides?.createAdminClient ??
@@ -2586,6 +2625,7 @@ async function handleHsUp(
       hostname,
       publishedAt,
       writtenAt: new Date().toISOString(),
+      ...(relayHostname ? { relayHostname } : {}),
     });
 
     // Step 8: ribbon phase 3 + final stdout line (AC #5).
@@ -3064,9 +3104,25 @@ async function handleHsEnable(
 }
 
 /** Atomically write ~/.townhouse/host.json (AC #6). */
+/** True if `<configDir>/nodes.yaml` records a provisioned town node. */
+function nodesYamlHasTown(configDir: string): boolean {
+  try {
+    return /type:\s*town/.test(
+      readFileSync(join(configDir, 'nodes.yaml'), 'utf-8')
+    );
+  } catch {
+    return false;
+  }
+}
+
 function _writeHostJson(
   configDir: string,
-  data: { hostname: string; publishedAt: string; writtenAt: string }
+  data: {
+    hostname: string;
+    publishedAt: string;
+    writtenAt: string;
+    relayHostname?: string;
+  }
 ): void {
   const hostJsonPath = join(configDir, 'host.json');
   const tmpPath = `${hostJsonPath}.tmp`;
@@ -3075,6 +3131,8 @@ function _writeHostJson(
     {
       hostname: data.hostname,
       publishedAt: data.publishedAt,
+      // Relay hidden-service .anyone hostname (free client reads), when published.
+      ...(data.relayHostname ? { relayHostname: data.relayHostname } : {}),
       connectorAdminUrl: HS_CONNECTOR_ADMIN_URL,
       townhouseApiUrl: HS_TOWNHOUSE_API_URL,
       writtenAt: data.writtenAt,
