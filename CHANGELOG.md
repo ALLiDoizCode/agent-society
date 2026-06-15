@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0](https://github.com/toon-protocol/town/compare/v0.31.2...v0.32.0) (2026-06-15)
+
+### Features
+
+* **client-mcp:** dynamic 1-to-many relay/apex targets ([#253](https://github.com/toon-protocol/town/issues/253)) ([22c0b5a](https://github.com/toon-protocol/town/commit/22c0b5a91f77dc2fe3618b395912deb6c9f02052))
+
 ## [0.31.2](https://github.com/toon-protocol/town/compare/v0.31.1...v0.31.2) (2026-06-15)
 
 ### Bug Fixes
