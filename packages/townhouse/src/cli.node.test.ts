@@ -192,6 +192,40 @@ describe('CLI node subcommand', () => {
     expect(body.turboToken).toBe('{"kty":"RSA"}');
   });
 
+  it('node add town --settlement-chain --asset → POSTs settlementChainId + assetCode', async () => {
+    const overrides = makeNodeOverrides(201, {
+      id: 'town',
+      type: 'town',
+      peerId: 'town',
+      ilpAddress: 'g.townhouse.town',
+      hsRoute: 'g.townhouse.town',
+      healthCheckUrl: 'http://townhouse-hs-town:3100/health',
+    });
+    await main(
+      [
+        'node',
+        'add',
+        'town',
+        '--settlement-chain',
+        'evm:base:8453',
+        '--asset',
+        'USDC',
+      ],
+      undefined,
+      undefined,
+      undefined,
+      overrides
+    );
+    expect(process.exitCode).toBeUndefined();
+    const fetched = (overrides.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(fetched[1].body as string);
+    expect(body).toMatchObject({
+      type: 'town',
+      settlementChainId: 'evm:base:8453',
+      assetCode: 'USDC',
+    });
+  });
+
   it('node add town --relays → relays NOT sent (mill-only flag ignored for town)', async () => {
     const overrides = makeNodeOverrides(201, {
       id: 'town',

@@ -101,6 +101,9 @@ export class ApiClient {
     relays?: string[];
     // dvm: Arweave Turbo credential (JWK string) for larger/paid uploads.
     turboToken?: string;
+    // town: settlement chain + token advertised in kind:10032.
+    settlementChainId?: string;
+    assetCode?: string;
   }): Promise<unknown> {
     return this.request('POST', '/api/nodes', body);
   }

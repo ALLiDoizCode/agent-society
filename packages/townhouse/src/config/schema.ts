@@ -15,9 +15,25 @@ export interface TownNodeConfig {
    * the town's kind:10032 `feePerByte` so clients know the cost before sending.
    */
   feePerEvent?: number;
-  /** Settlement asset code advertised in kind:10032 (default 'USD'). */
+  /**
+   * Settlement chain the town advertises + prices in (kind:10032). Must be one
+   * of the deployment's supported chains (the `network` profile ∪ `chains add`).
+   * Picked via `node add town --settlement-chain`. When unset, defaults to the
+   * deployment's first supported chain. Validated at provision time.
+   */
+  settlementChainId?: string;
+  /**
+   * Settlement token on `settlementChainId` (USDC | ETH | SOL | MINA). Must be a
+   * token that chain supports (EVM: USDC/ETH · Solana: USDC/SOL · Mina: MINA
+   * only). Picked via `--asset`. When unset, defaults to USDC where supported,
+   * else the native token. `assetScale` is DERIVED from this token, not set here.
+   */
   assetCode?: string;
-  /** Settlement asset scale (decimals) advertised in kind:10032 (default 6). */
+  /**
+   * @deprecated assetScale is derived from `assetCode`/`settlementChainId`
+   * (USDC 6, ETH 18, SOL 9, MINA 9). Retained for back-compat; ignored for the
+   * advertised value.
+   */
   assetScale?: number;
   /** Docker image override */
   image?: string;

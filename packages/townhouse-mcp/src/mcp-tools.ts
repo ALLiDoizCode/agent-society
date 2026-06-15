@@ -110,7 +110,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     description:
       'Provision a town | mill | dvm child node. mill requires relays ' +
       '(Nostr relay URLs); dvm optionally takes turboToken (Arweave Turbo JWK ' +
-      'for larger uploads). Supplying these here avoids exporting MILL_RELAYS/' +
+      'for larger uploads); town optionally takes settlementChainId + assetCode ' +
+      '(the kind:10032 settlement chain/token, validated against supported — see ' +
+      'townhouse_chains). Supplying these here avoids exporting MILL_RELAYS/' +
       'TURBO_TOKEN before the apex was started.',
     inputSchema: {
       type: 'object',
@@ -118,6 +120,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         type: { type: 'string', enum: ['town', 'mill', 'dvm'] },
         relays: { type: 'array', items: { type: 'string' } },
         turboToken: { type: 'string' },
+        settlementChainId: { type: 'string' },
+        assetCode: { type: 'string' },
       },
       required: ['type'],
       additionalProperties: false,
@@ -328,6 +332,8 @@ export async function dispatchTool(
           type: 'town' | 'mill' | 'dvm';
           relays?: string[];
           turboToken?: string;
+          settlementChainId?: string;
+          assetCode?: string;
         } = { type: asNodeType(args['type']) };
         if (Array.isArray(args['relays'])) {
           const relays = (args['relays'] as unknown[])
@@ -337,6 +343,15 @@ export async function dispatchTool(
         }
         if (typeof args['turboToken'] === 'string' && args['turboToken']) {
           addBody.turboToken = args['turboToken'];
+        }
+        if (
+          typeof args['settlementChainId'] === 'string' &&
+          args['settlementChainId']
+        ) {
+          addBody.settlementChainId = args['settlementChainId'];
+        }
+        if (typeof args['assetCode'] === 'string' && args['assetCode']) {
+          addBody.assetCode = args['assetCode'];
         }
         return ok(await api.addNode(addBody));
       }

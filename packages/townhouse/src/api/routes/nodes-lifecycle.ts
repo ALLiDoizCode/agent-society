@@ -27,6 +27,10 @@ import {
   resolveDvmTurboToken,
   resolvePublicBtpUrl,
 } from '../../state/node-env.js';
+import {
+  resolveTownSettlementAsset,
+  UnsupportedSettlementError,
+} from '../../config/supported-tokens.js';
 import type { ApiDeps } from '../types.js';
 import type { NodeType } from '../types.js';
 import type {
@@ -289,7 +293,13 @@ export function registerNodeLifecycleRoutes(
   // ── POST /api/nodes ────────────────────────────────────────────────────────
 
   app.post<{
-    Body: { type: NodeType; relays?: string[]; turboToken?: string };
+    Body: {
+      type: NodeType;
+      relays?: string[];
+      turboToken?: string;
+      settlementChainId?: string;
+      assetCode?: string;
+    };
   }>(
     '/api/nodes',
     {
@@ -308,6 +318,9 @@ export function registerNodeLifecycleRoutes(
             },
             // dvm: Arweave Turbo credential (CLI `--turbo-token`, a JWK string).
             turboToken: { type: 'string', maxLength: 8192 },
+            // town: settlement chain + token (CLI `--settlement-chain` / `--asset`).
+            settlementChainId: { type: 'string', maxLength: 128 },
+            assetCode: { type: 'string', maxLength: 16 },
           },
         },
       },
@@ -322,6 +335,8 @@ export function registerNodeLifecycleRoutes(
           type,
           relays: bodyRelays,
           turboToken: bodyTurboToken,
+          settlementChainId: bodySettlementChainId,
+          assetCode: bodyAssetCode,
         } = request.body;
         const homeDir = dirname(deps.configPath);
         const nodesYamlPath = join(homeDir, 'nodes.yaml');
@@ -362,6 +377,33 @@ export function registerNodeLifecycleRoutes(
             step: 'preflight',
             err: 'No relay URLs for Mill. Pass `--relays wss://relay1,wss://relay2` to `townhouse node add mill`, set nodes.mill.relays in config.yaml, or export MILL_RELAYS before `townhouse hs up`. See packages/townhouse/README.md.',
           });
+        }
+
+        // Pre-check: resolve + validate the town's settlement chain/token
+        // (flag > config) against the deployment's supported set. Invalid →
+        // actionable 400 before any state is written. The resolved selection is
+        // written back onto deps.config so assembleNodeEnv derives the asset and
+        // the success-path persist captures it.
+        if (type === 'town') {
+          try {
+            const asset = resolveTownSettlementAsset(deps.config, {
+              settlementChainId:
+                bodySettlementChainId ??
+                deps.config.nodes.town.settlementChainId,
+              assetCode: bodyAssetCode ?? deps.config.nodes.town.assetCode,
+            });
+            if (asset) {
+              deps.config.nodes.town.settlementChainId = asset.chainId;
+              deps.config.nodes.town.assetCode = asset.assetCode;
+            }
+          } catch (err: unknown) {
+            if (err instanceof UnsupportedSettlementError) {
+              return reply
+                .status(400)
+                .send({ step: 'preflight', err: err.message });
+            }
+            throw err;
+          }
         }
 
         const derivationIndex = ACCOUNT_INDEX[type];
@@ -781,9 +823,11 @@ export function registerNodeLifecycleRoutes(
         // is already live + registered, so a config-write failure must NOT fail
         // the request — log a warning and return success. The dvm Turbo token is
         // intentionally NOT persisted (it's a secret — see schema.ts).
-        if (type === 'mill') {
+        // (town's resolved settlementChainId/assetCode were already written onto
+        // deps.config in the preflight above.)
+        if (type === 'mill') deps.config.nodes.mill.relays = millRelays;
+        if (type === 'mill' || type === 'town') {
           try {
-            deps.config.nodes.mill.relays = millRelays;
             saveConfig(deps.configPath, deps.config);
           } catch (err: unknown) {
             request.log.warn(
@@ -794,7 +838,7 @@ export function registerNodeLifecycleRoutes(
                   err instanceof Error ? err.message : String(err)
                 ),
               },
-              'Provisioned mill but failed to persist relays to config.yaml — node is live; rerun with --relays if it is recreated'
+              'Provisioned node but failed to persist its config.yaml selection — node is live; re-supply the flag if it is recreated'
             );
           }
         }

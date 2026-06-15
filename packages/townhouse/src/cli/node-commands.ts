@@ -44,16 +44,20 @@ Arguments:
   <type>          Node type to provision: town, mill, dvm (default: town)
 
 Flags:
-  --relays        mill only: comma-separated Nostr relay URLs (required for mill
-                  unless set in config.yaml or the MILL_RELAYS env var)
-  --turbo-token   dvm only: Arweave Turbo credential (JWK string) enabling
-                  larger/paid kind:5094 uploads (free-tier <100KB works without)
-  --json          Machine-readable JSON output
-  -c              Path to config file
+  --relays            mill only: comma-separated Nostr relay URLs (required for mill
+                      unless set in config.yaml or the MILL_RELAYS env var)
+  --turbo-token       dvm only: Arweave Turbo credential (JWK string) enabling
+                      larger/paid kind:5094 uploads (free-tier <100KB works without)
+  --settlement-chain  town only: settlement chain advertised in kind:10032; must be
+                      a supported chain (see 'townhouse chains supported')
+  --asset             town only: settlement token on that chain — USDC | ETH | SOL |
+                      MINA (default USDC where supported, else native)
+  --json              Machine-readable JSON output
+  -c                  Path to config file
 
 Examples:
   townhouse node add                                          # provision a Town relay (default)
-  townhouse node add town                                     # same as above
+  townhouse node add town --settlement-chain evm:base:8453 --asset USDC   # price publishes in USDC on Base
   townhouse node add mill --relays wss://relay.damus.io,wss://nos.lol   # chain-swap node
   townhouse node add dvm --turbo-token "$(cat arweave.json)"  # DVM compute / Arweave node`;
 
@@ -149,6 +153,10 @@ export interface NodeAddOptions {
   relays?: string;
   /** dvm only: Arweave Turbo credential JWK string (`--turbo-token`). */
   turboToken?: string;
+  /** town only: settlement chain id to advertise (`--settlement-chain`), e.g. evm:base:8453. */
+  settlementChain?: string;
+  /** town only: settlement token on that chain (`--asset`): USDC | ETH | SOL | MINA. */
+  asset?: string;
 }
 
 export async function handleNodeAdd(
@@ -177,10 +185,15 @@ export async function handleNodeAdd(
   // Build the request body. Operator inputs travel with the add request so the
   // API resolves them from the body (precedence flag > config > env) instead of
   // its own frozen process.env. Only attach a field when relevant + provided.
-  const requestBody: { type: string; relays?: string[]; turboToken?: string } =
-    {
-      type,
-    };
+  const requestBody: {
+    type: string;
+    relays?: string[];
+    turboToken?: string;
+    settlementChainId?: string;
+    assetCode?: string;
+  } = {
+    type,
+  };
   if (type === 'mill' && options.relays !== undefined) {
     const relays = options.relays
       .split(',')
@@ -190,6 +203,12 @@ export async function handleNodeAdd(
   }
   if (type === 'dvm' && options.turboToken) {
     requestBody.turboToken = options.turboToken;
+  }
+  if (type === 'town') {
+    if (options.settlementChain) {
+      requestBody.settlementChainId = options.settlementChain.trim();
+    }
+    if (options.asset) requestBody.assetCode = options.asset.trim();
   }
 
   if (!options.json) {

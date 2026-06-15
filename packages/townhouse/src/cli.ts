@@ -55,6 +55,7 @@ import {
   type RebindSummary,
 } from './rebind.js';
 import { resolvePublicBtpUrl } from './state/node-env.js';
+import { listSupportedSettlementAssets } from './config/supported-tokens.js';
 import { createApiServer } from './api/server.js';
 import { createWizardApiServer } from './api/wizard-server.js';
 import type { ApiServer } from './api/index.js';
@@ -3524,9 +3525,12 @@ export async function main(
       'graphql-url': { type: 'string' },
       zkapp: { type: 'string' },
       'key-id': { type: 'string' },
-      // node add operator inputs (mill relays / dvm Arweave Turbo credential)
+      // node add operator inputs (mill relays / dvm Arweave Turbo credential /
+      // town settlement chain + token)
       relays: { type: 'string' },
       'turbo-token': { type: 'string' },
+      'settlement-chain': { type: 'string' },
+      asset: { type: 'string' },
     },
     strict: false,
     allowPositionals: true,
@@ -3842,6 +3846,8 @@ export async function main(
             confirm: nodeCommandOverrides?.confirm,
             relays: values['relays'] as string | undefined,
             turboToken: values['turbo-token'] as string | undefined,
+            settlementChain: values['settlement-chain'] as string | undefined,
+            asset: values['asset'] as string | undefined,
           });
           break;
         }
@@ -3879,6 +3885,29 @@ export async function main(
       const configPath = (values.config as string) ?? DEFAULT_CONFIG_PATH;
       const action = positionals[1];
       const chainIdArg = positionals[2];
+      // `chains supported` — list the (chain, token) settlement options the
+      // operator can pass to `node add town --settlement-chain/--asset`.
+      if (action === 'supported') {
+        const cfg = loadConfig(configPath);
+        const assets = listSupportedSettlementAssets(cfg);
+        if (values.json === true) {
+          console.log(JSON.stringify({ chains: assets }));
+        } else if (assets.length === 0) {
+          console.log(
+            'No supported settlement chains. Set `network` (mainnet/testnet/devnet) or run `townhouse chains add`.'
+          );
+        } else {
+          console.log(
+            'Supported settlement chains/tokens — use with `node add town --settlement-chain <id> --asset <code>`:'
+          );
+          for (const a of assets) {
+            console.log(
+              `  ${a.chainId}  ${a.assetCode} (scale ${a.assetScale})${a.native ? ' [native]' : ''}`
+            );
+          }
+        }
+        break;
+      }
       const flags: ChainsFlags = {
         chainType: values['chain-type'] as string | undefined,
         chainId: values['chain-id'] as string | undefined,

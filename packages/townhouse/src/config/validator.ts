@@ -109,7 +109,10 @@ function validateNodeConfig(
   if (raw['image'] !== undefined) {
     assertString(raw['image'], `${path}.image`);
   }
-  // town: settlement asset advertised in kind:10032.
+  // town: settlement chain/asset advertised in kind:10032.
+  if (raw['settlementChainId'] !== undefined) {
+    assertString(raw['settlementChainId'], `${path}.settlementChainId`);
+  }
   if (raw['assetCode'] !== undefined) {
     assertString(raw['assetCode'], `${path}.assetCode`);
   }
@@ -491,6 +494,7 @@ export function validateConfig(raw: unknown): TownhouseConfig {
         enabled: town['enabled'] as boolean,
         ...pickOptional(town, [
           'feePerEvent',
+          'settlementChainId',
           'assetCode',
           'assetScale',
           'image',

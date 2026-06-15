@@ -33,6 +33,18 @@ function withTown(
   const base = getDefaultConfig();
   return {
     ...base,
+    // Explicit EVM provider → deterministic supported set (USDC + ETH) for the
+    // asset derivation, independent of network-preset resolution.
+    network: 'custom',
+    chainProviders: [
+      {
+        chainType: 'evm',
+        chainId: 'evm:base:8453',
+        rpcUrl: 'https://mainnet.base.org',
+        registryAddress: '0x0000000000000000000000000000000000000001',
+        tokenAddress: '0x0000000000000000000000000000000000000002',
+      },
+    ],
     nodes: { ...base.nodes, town: { ...base.nodes.town, ...over } },
   };
 }
@@ -40,28 +52,35 @@ function withTown(
 afterEach(() => vi.unstubAllEnvs());
 
 describe('assembleNodeEnv — town negotiation values', () => {
-  it('injects PUBLIC_BTP_URL, FEE_PER_EVENT, ASSET_CODE, ASSET_SCALE', () => {
-    const config = withTown({
-      feePerEvent: 1000,
-      assetCode: 'USDC',
-      assetScale: 6,
-    });
+  it('injects PUBLIC_BTP_URL, FEE_PER_EVENT, and the derived USDC asset', () => {
+    // getDefaultConfig() resolves to mainnet → EVM (Base/Arbitrum) supported.
+    const config = withTown({ feePerEvent: 1000, assetCode: 'USDC' });
     const env = assembleNodeEnv(
       baseParams({ type: 'town', config, publicBtpUrl: 'wss://abc.anyone/btp' })
     );
     expect(env['PUBLIC_BTP_URL']).toBe('wss://abc.anyone/btp');
     expect(env['FEE_PER_EVENT']).toBe('1000');
     expect(env['ASSET_CODE']).toBe('USDC');
-    expect(env['ASSET_SCALE']).toBe('6');
-    // identity still present
+    expect(env['ASSET_SCALE']).toBe('6'); // derived, not from config
     expect(env['TOWN_SECRET_KEY']).toBe('11'.repeat(32));
   });
 
-  it('omits PUBLIC_BTP_URL when not provided; omits fee/asset when unset', () => {
-    const env = assembleNodeEnv(baseParams({ type: 'town' }));
+  it('derives the native asset (ETH/18) when assetCode=ETH on an EVM chain', () => {
+    const config = withTown({ assetCode: 'ETH' });
+    const env = assembleNodeEnv(baseParams({ type: 'town', config }));
+    expect(env['ASSET_CODE']).toBe('ETH');
+    expect(env['ASSET_SCALE']).toBe('18');
+  });
+
+  it('defaults the asset to USDC/6 when no token is selected', () => {
+    const env = assembleNodeEnv(
+      baseParams({ type: 'town', config: withTown({}) })
+    );
+    // No publicBtpUrl / fee provided → omitted; asset defaults to USDC.
     expect(env).not.toHaveProperty('PUBLIC_BTP_URL');
     expect(env).not.toHaveProperty('FEE_PER_EVENT');
-    expect(env).not.toHaveProperty('ASSET_CODE');
+    expect(env['ASSET_CODE']).toBe('USDC');
+    expect(env['ASSET_SCALE']).toBe('6');
   });
 
   it('does not inject town vars for non-town node types', () => {
@@ -71,6 +90,7 @@ describe('assembleNodeEnv — town negotiation values', () => {
     );
     expect(env).not.toHaveProperty('PUBLIC_BTP_URL');
     expect(env).not.toHaveProperty('FEE_PER_EVENT');
+    expect(env).not.toHaveProperty('ASSET_CODE');
   });
 });
 

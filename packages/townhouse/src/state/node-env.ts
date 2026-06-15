@@ -10,6 +10,7 @@
  */
 
 import { resolveConfigNetworkProfile } from '../config/network-profile.js';
+import { resolveTownSettlementAsset } from '../config/supported-tokens.js';
 import type { TownhouseConfig } from '../config/schema.js';
 import type { NodeType } from '../api/types.js';
 
@@ -214,9 +215,23 @@ export function assembleNodeEnv(
     if (town.feePerEvent !== undefined) {
       env['FEE_PER_EVENT'] = String(town.feePerEvent);
     }
-    if (town.assetCode) env['ASSET_CODE'] = town.assetCode;
-    if (town.assetScale !== undefined) {
-      env['ASSET_SCALE'] = String(town.assetScale);
+    // Derive the advertised settlement asset (assetCode + scale) from the
+    // operator's chain/token selection, validated against the deployment's
+    // supported set (USDC/ETH/SOL/MINA per chain). assetScale is ALWAYS derived
+    // from the resolved token — never operator-typed. Best-effort here:
+    // provision-time preflight already rejected invalid selections, so on any
+    // resolution error we leave it unset and the town uses its built-in default.
+    try {
+      const asset = resolveTownSettlementAsset(config, {
+        settlementChainId: town.settlementChainId,
+        assetCode: town.assetCode,
+      });
+      if (asset) {
+        env['ASSET_CODE'] = asset.assetCode;
+        env['ASSET_SCALE'] = String(asset.assetScale);
+      }
+    } catch {
+      // invalid selection — leave unset; the town falls back to its default
     }
   }
   return env;
