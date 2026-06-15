@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.2](https://github.com/toon-protocol/town/compare/v0.34.1...v0.34.2) (2026-06-15)
+
+### Bug Fixes
+
+* **townhouse:** announce reachable HS endpoints in kind:10032 ([#259](https://github.com/toon-protocol/town/issues/259)) ([#260](https://github.com/toon-protocol/town/issues/260)) ([511d3e7](https://github.com/toon-protocol/town/commit/511d3e7008280d54beaca0cfd99684a2465289d6))
+
 ## [0.34.1](https://github.com/toon-protocol/town/compare/v0.34.0...v0.34.1) (2026-06-15)
 
 ### Bug Fixes
