@@ -1922,6 +1922,87 @@ async function reconcileWithBriefRetry(
 }
 
 /**
+ * Auto-rebind provisioned child nodes from `~/.townhouse/nodes.yaml` after the
+ * apex is up. Shared by `hs up` (HS) and `up` (direct), which both run
+ * `orchestrator.up([])` (apex only) and both tear children down on `down`. Two
+ * stages, in order:
+ *   1. rebind containers — rebuild each child's env from wallet + config and
+ *      (re)start it (idempotent; picks up config edits). Containers must exist
+ *      before peers re-register.
+ *   2. reconcile peers — re-register each child with the connector (the connector
+ *      restart on `up` drops the in-memory child routes).
+ * Every step is non-fatal: failures are logged with `logPrefix`, boot proceeds.
+ */
+async function rebindAndReconcileChildren(opts: {
+  configDir: string;
+  walletManager: WalletManager | undefined;
+  orch: {
+    startNodeViaCompose?: (
+      type: NodeType,
+      env: Record<string, string>
+    ) => Promise<void>;
+  };
+  config: TownhouseConfig;
+  logPrefix: string;
+  hsOverrides?: CliHsOverrides;
+}): Promise<void> {
+  const { configDir, walletManager, orch, config, logPrefix, hsOverrides } =
+    opts;
+  const nodesYamlPath = join(configDir, 'nodes.yaml');
+
+  // Stage 1: rebind child containers.
+  const rebindFn = hsOverrides?.rebindChildren ?? rebindChildContainers;
+  if (walletManager && typeof orch.startNodeViaCompose === 'function') {
+    const startNodeViaCompose = orch.startNodeViaCompose.bind(orch);
+    try {
+      const summary = await rebindFn({
+        nodesYamlPath,
+        wallet: walletManager,
+        orchestrator: { startNodeViaCompose },
+        config,
+        log: (line) => console.error(`${logPrefix} ${line}`),
+      });
+      for (const s of summary.skipped) {
+        console.error(`${logPrefix} node ${s.id} not rebound: ${s.reason}`);
+      }
+      for (const f of summary.failed) {
+        console.error(
+          `${logPrefix} node ${f.id} rebind failed (non-fatal): ${f.err}`
+        );
+      }
+    } catch (rebindErr: unknown) {
+      const detail =
+        rebindErr instanceof Error
+          ? (rebindErr.stack ?? rebindErr.message)
+          : String(rebindErr);
+      console.error(`${logPrefix} child rebind error (non-fatal): ${detail}`);
+    }
+  }
+
+  // Stage 2: reconcile connector peer state to nodes.yaml (Story 46.1).
+  const reconcilerLogPath = join(configDir, 'reconciler.log');
+  const reconcilerFactory =
+    hsOverrides?.createReconciler ??
+    ((nodesPath: string, logPath: string) => {
+      const reconcilerAdminClient = new ConnectorAdminClient(
+        HS_CONNECTOR_ADMIN_URL,
+        5_000
+      );
+      return new BootReconciler(reconcilerAdminClient, nodesPath, logPath);
+    });
+  const reconciler = reconcilerFactory(nodesYamlPath, reconcilerLogPath);
+  try {
+    await reconcileWithBriefRetry(reconciler, 5_000);
+  } catch (reconcilerErr: unknown) {
+    const detail =
+      reconcilerErr instanceof Error
+        ? (reconcilerErr.stack ?? reconcilerErr.message)
+        : String(reconcilerErr);
+    console.error(`${logPrefix} reconciler error (non-fatal): ${detail}`);
+  }
+}
+
+/**
  * Boot the apex (connector + townhouse-api) via `townhouse hs up`.
  * Idempotent: if the apex is already running, re-prints the hostname and exits 0.
  * After the apex is live, writes `~/.townhouse/host.json` and prints the final line.
@@ -2412,78 +2493,18 @@ async function handleHsUp(
       }
     }
 
-    const nodesYamlPath = join(configDir, 'nodes.yaml');
-
-    // Step 5a: rebind provisioned child containers from nodes.yaml (+ config +
-    // wallet). `hs down` removed them and `up([])` only boots the apex, so
-    // without this a restart leaves children stopped. startNodeViaCompose is
-    // idempotent — unchanged children no-op; a config change (e.g. edited mill
-    // relays) recreates them. Must run BEFORE the peer reconciler so containers
-    // exist when peers re-register. Non-fatal: failures are logged, boot proceeds.
-    const rebindFn = hsOverrides?.rebindChildren ?? rebindChildContainers;
-    if (walletManager && typeof orch.startNodeViaCompose === 'function') {
-      const startNodeViaCompose = orch.startNodeViaCompose.bind(orch);
-      try {
-        const rebindSummary = await rebindFn({
-          nodesYamlPath,
-          wallet: walletManager,
-          orchestrator: { startNodeViaCompose },
-          config,
-          log: (line) => console.error(`[townhouse hs up] ${line}`),
-        });
-        for (const s of rebindSummary.skipped) {
-          console.error(
-            `[townhouse hs up] node ${s.id} not rebound: ${s.reason}`
-          );
-        }
-        for (const f of rebindSummary.failed) {
-          console.error(
-            `[townhouse hs up] node ${f.id} rebind failed (non-fatal): ${f.err}`
-          );
-        }
-      } catch (rebindErr: unknown) {
-        const detail =
-          rebindErr instanceof Error
-            ? (rebindErr.stack ?? rebindErr.message)
-            : String(rebindErr);
-        console.error(
-          `[townhouse hs up] child rebind error (non-fatal): ${detail}`
-        );
-      }
-    }
-
-    // Step 5b: reconcile connector peer state to nodes.yaml (Story 46.1).
-    // Runs after orchestrator.up([]) but BEFORE host.json is written and the
-    // hostname is printed. Reconciler divergences are non-fatal — the
+    // Step 5b: auto-rebind child containers + reconcile connector peers from
+    // nodes.yaml (Story 46.1 + rebind). Runs after orchestrator.up([]) but
+    // BEFORE host.json is written and the hostname is printed. Non-fatal — any
     // failure is logged to stderr but does not block apex boot.
-    const reconcilerLogPath = join(configDir, 'reconciler.log');
-    const reconcilerFactory =
-      hsOverrides?.createReconciler ??
-      ((nodesPath: string, logPath: string) => {
-        const reconcilerAdminClient = new ConnectorAdminClient(
-          HS_CONNECTOR_ADMIN_URL,
-          5_000
-        );
-        return new BootReconciler(reconcilerAdminClient, nodesPath, logPath);
-      });
-    const reconciler = reconcilerFactory(nodesYamlPath, reconcilerLogPath);
-    // Brief retry on cold-boot transient errors — orchestrator.up() returns
-    // once Docker accepts the create call, not when the connector inside
-    // the container has bound its admin port. A short retry budget keeps
-    // cold-boot stderr quiet on the common "connector still warming" case
-    // while still surfacing genuine connector-down failures via the final
-    // non-fatal log below.
-    try {
-      await reconcileWithBriefRetry(reconciler, 5_000);
-    } catch (reconcilerErr: unknown) {
-      const detail =
-        reconcilerErr instanceof Error
-          ? (reconcilerErr.stack ?? reconcilerErr.message)
-          : String(reconcilerErr);
-      console.error(
-        `[townhouse hs up] reconciler error (non-fatal): ${detail}`
-      );
-    }
+    await rebindAndReconcileChildren({
+      configDir,
+      walletManager,
+      orch,
+      config,
+      logPrefix: '[townhouse hs up]',
+      hsOverrides,
+    });
 
     // Step 6: fetch published hostname and publishedAt for host.json (AC #6).
     const adminClientFactory2 =
@@ -2851,6 +2872,19 @@ async function handleDirectUp(
         process.env['TOWNHOUSE_DOCKER_GID'] = prevDockerGid;
       }
     }
+
+    // Step 5b: auto-rebind child containers + reconcile connector peers from
+    // nodes.yaml — same as `hs up`. Direct mode also tears children down on
+    // `down` and restarts the connector on `up`, so without this a restart leaves
+    // children stopped and unrouted. Non-fatal: failures are logged, boot proceeds.
+    await rebindAndReconcileChildren({
+      configDir,
+      walletManager,
+      orch,
+      config,
+      logPrefix: '[townhouse up]',
+      hsOverrides,
+    });
 
     // Step 6: success — print the direct dial address as the FINAL stdout line.
     ribbon.stop();

@@ -1680,6 +1680,33 @@ describe('CLI up — direct-BTP default (Phase 3)', () => {
     }
   });
 
+  it('plain `up` auto-rebinds children + reconciles peers (direct mode)', async () => {
+    const { configDir, configPath } = await makeHsTestDir();
+    try {
+      const rebindSpy = vi.fn(async () => ({
+        started: [],
+        skipped: [],
+        failed: [],
+      }));
+      const reconcileSpy = vi.fn(async () => undefined);
+      const overrides = makeHsOverrides({ rebindSpy, reconcileSpy });
+      await main(['up', '-c', configPath], undefined, undefined, overrides);
+
+      expect(rebindSpy).toHaveBeenCalledTimes(1);
+      expect(rebindSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          nodesYamlPath: join(configDir, 'nodes.yaml'),
+        })
+      );
+      // Direct mode now also re-registers child peers (it didn't before).
+      expect(overrides.createReconciler).toHaveBeenCalledTimes(1);
+      expect(reconcileSpy).toHaveBeenCalledTimes(1);
+      expect(process.exitCode).toBeUndefined();
+    } finally {
+      rmSync(configDir, { recursive: true, force: true });
+    }
+  });
+
   it('`up --transport direct` is a synonym for the default direct path', async () => {
     const { configDir, configPath } = await makeHsTestDir();
     try {
