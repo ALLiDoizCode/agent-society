@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.1](https://github.com/toon-protocol/town/compare/v0.34.0...v0.34.1) (2026-06-15)
+
+### Bug Fixes
+
+* **client-mcp:** make apex discovery robust to the relay's global event dedup ([#258](https://github.com/toon-protocol/town/issues/258)) ([f0d3e87](https://github.com/toon-protocol/town/commit/f0d3e879fc09e207b71adddf33df5a8d9272301f))
+
 ## [0.34.0](https://github.com/toon-protocol/town/compare/v0.33.1...v0.34.0) (2026-06-15)
 
 ### Features
