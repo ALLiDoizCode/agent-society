@@ -142,6 +142,8 @@ npx @toon-protocol/townhouse node add dvm --turbo-token "$(cat arweave.json)"   
 
 Prefer the flags — they travel with the `node add` request, so you don't have to export `MILL_RELAYS`/`TURBO_TOKEN` **before** `up`/`hs up` (the API container's environment is fixed at boot, so a variable exported afterward is never seen). Mill relays you pass are persisted to `config.yaml`, so a later `node remove && node add` doesn't need the flag again. The DVM Turbo credential is a secret and is **not** written to `config.yaml` — pass it via `--turbo-token` (or `TURBO_TOKEN`) each time.
 
+**Restart = auto-rebind.** Your provisioned nodes are recorded in `~/.townhouse/nodes.yaml`. On every `townhouse hs up`, townhouse rebuilds each child's env from the wallet + `config.yaml` and restarts its container, then re-registers it with the apex — so after `hs down && hs up` (or a host reboot followed by `hs up`) your town/mill/dvm come back automatically, no `node add` needed. Editing a value in `config.yaml` (e.g. `nodes.mill.relays`) and re-running `hs up` recreates that child with the new config. The DVM Turbo token isn't persisted, so re-export `TURBO_TOKEN` before `hs up` if you rely on it for large uploads.
+
 ### 4. Stop your apex — `hs down`
 
 ```bash

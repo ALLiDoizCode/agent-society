@@ -20,8 +20,12 @@ import { promises as fs } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { bytesToHex } from '@noble/hashes/utils';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { resolveConfigNetworkProfile } from '../../config/network-profile.js';
 import { saveConfig } from '../../config/loader.js';
+import {
+  assembleNodeEnv,
+  resolveMillRelays,
+  resolveDvmTurboToken,
+} from '../../state/node-env.js';
 import type { ApiDeps } from '../types.js';
 import type { NodeType } from '../types.js';
 import type {
@@ -193,124 +197,6 @@ async function waitForHealthy(url: string, timeoutMs: number): Promise<void> {
   }
   throw new Error(
     `Health check timeout: ${url} did not return 200 within ${timeoutMs}ms`
-  );
-}
-
-/**
- * Build the per-node env vars that compose interpolates at `up -d` time.
- * Callers must start from `process.env` and layer these on top (done inside
- * `startNodeViaCompose`). The returned object is the SECRET OVERLAY ONLY.
- *
- * NEVER log the return value of this function — it contains secret keys.
- */
-/**
- * Resolve the network-mode chain env (EVM_CHAIN/EVM_RPC_URL/EVM_CHAIN_ID/
- * EVM_USDC_ADDRESS/SOLANA_*) the HS compose interpolates into the town/mill
- * containers. Same source of truth as the apex connector (hs-config-writer)
- * and the `.env` written by env-writer — so the children use the public RPCs
- * for the operator's chosen network instead of falling back to the unreachable
- * local `anvil` default (the cause of the "disconnected" boot-loop).
- */
-export function buildNetworkNodeEnv(
-  config: TownhouseConfig
-): Record<string, string> {
-  const profile = resolveConfigNetworkProfile(config);
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(profile.nodeEnv)) {
-    if (value !== undefined) env[key] = value;
-  }
-  return env;
-}
-
-function buildNodeEnv(
-  type: NodeType,
-  nostrSecretKeyHex: string,
-  nostrPubkeyHex: string,
-  evmPrivateKeyHex: string,
-  mnemonic: string | null,
-  apexEvmAddress: string,
-  chainEnv: Record<string, string>
-): Record<string, string> {
-  // Town's TOON_SETTLEMENT_PRIVATE_KEY (and mill's settlement key, if it
-  // were ever read) requires a 0x-prefixed 32-byte hex string. bytesToHex
-  // from @noble/hashes returns unprefixed hex — without the 0x, town
-  // crashes at boot with `TOON_SETTLEMENT_PRIVATE_KEY must be a 0x-prefixed
-  // 32-byte hex string`. Story 46.4 live gate run (Finding O, 2026-05-12).
-  const evmPrivateKeyHex0x = `0x${evmPrivateKeyHex}`;
-  // The *_NOSTR_PUBKEY overlay is interpolated into each service's
-  // NODE_NOSTR_PUBKEY env in the HS compose template. It is the x-only pubkey
-  // derived from the same secret the container already receives — purely
-  // informational so operators / SDK clients can read it via `docker inspect`
-  // or `node list --json` without re-deriving from the secret (issue #81).
-  // Safe to log (public key), unlike the *_SECRET_KEY overlay.
-  switch (type) {
-    case 'town':
-      return {
-        TOWN_SECRET_KEY: nostrSecretKeyHex,
-        TOWN_NOSTR_PUBKEY: nostrPubkeyHex,
-        TOWN_SETTLEMENT_PRIVATE_KEY: evmPrivateKeyHex0x,
-        APEX_EVM_ADDRESS: apexEvmAddress,
-        ...chainEnv,
-      };
-    case 'mill':
-      return {
-        MILL_SECRET_KEY: nostrSecretKeyHex,
-        MILL_NOSTR_PUBKEY: nostrPubkeyHex,
-        MILL_SETTLEMENT_PRIVATE_KEY: evmPrivateKeyHex0x,
-        MILL_MNEMONIC: mnemonic ?? '',
-        APEX_EVM_ADDRESS: apexEvmAddress,
-        ...chainEnv,
-      };
-    case 'dvm':
-      // DVM does no on-chain settlement — no chain env needed.
-      return {
-        DVM_SECRET_KEY: nostrSecretKeyHex,
-        DVM_NOSTR_PUBKEY: nostrPubkeyHex,
-      };
-  }
-}
-
-/**
- * Resolve the mill's Nostr relay URLs with precedence: request-body `--relays`
- * flag > persisted `config.nodes.mill.relays` > legacy `MILL_RELAYS` env var
- * (back-compat for operators who exported it before `townhouse hs up`). Trims
- * and drops blank entries. Returns [] when nothing is supplied anywhere — the
- * caller turns that into an actionable 400. Resolving from the request body and
- * config (not just process.env) is what frees `node add mill` from the
- * "MILL_RELAYS must be exported before hs up or the API never sees it" trap.
- */
-export function resolveMillRelays(
-  bodyRelays: string[] | undefined,
-  config: TownhouseConfig
-): string[] {
-  const fromBody = (bodyRelays ?? []).map((r) => r.trim()).filter(Boolean);
-  if (fromBody.length > 0) return fromBody;
-  const fromConfig = (config.nodes.mill.relays ?? [])
-    .map((r) => r.trim())
-    .filter(Boolean);
-  if (fromConfig.length > 0) return fromConfig;
-  return (process.env['MILL_RELAYS'] ?? '')
-    .split(',')
-    .map((r) => r.trim())
-    .filter(Boolean);
-}
-
-/**
- * Resolve the DVM's Arweave Turbo credential with the same precedence chain:
- * request-body `--turbo-token` > `config.nodes.dvm.turboToken` > legacy
- * `TURBO_TOKEN` env. Returns '' when unset anywhere — the DVM boots fine without
- * it (free-tier <100KB uploads still work), so this is intentionally NOT a hard
- * requirement, only an injected value when present.
- */
-export function resolveDvmTurboToken(
-  bodyToken: string | undefined,
-  config: TownhouseConfig
-): string {
-  return (
-    bodyToken?.trim() ||
-    config.nodes.dvm.turboToken?.trim() ||
-    process.env['TURBO_TOKEN']?.trim() ||
-    ''
   );
 }
 
@@ -670,26 +556,24 @@ export function registerNodeLifecycleRoutes(
           },
           'Step 4: starting container via compose'
         );
-        const nodeEnv = buildNodeEnv(
+        // Assemble the full container env (identity keys + chain env + resolved
+        // operator inputs). compose interpolates `${MILL_RELAYS:-}` /
+        // `${TURBO_TOKEN:-}` in the child service from this overlay
+        // (startNodeViaCompose merges it over process.env), so the values travel
+        // with the add request — they no longer depend on the API container's
+        // frozen process.env. Same assembler the boot rebinder uses, so a node
+        // started here and restarted on `hs up` get identical env.
+        const nodeEnv = assembleNodeEnv({
           type,
           nostrSecretKeyHex,
-          keys.nostrPubkey,
+          nostrPubkey: keys.nostrPubkey,
           evmPrivateKeyHex,
-          mnemonicSnapshot,
+          mnemonic: mnemonicSnapshot,
           apexEvmAddress,
-          buildNetworkNodeEnv(deps.config)
-        );
-        // Layer the resolved operator inputs onto the env overlay. compose
-        // interpolates `${MILL_RELAYS:-}` / `${TURBO_TOKEN:-}` in the child
-        // service from this overlay (startNodeViaCompose merges it over
-        // process.env), so the value travels with the add request — it no
-        // longer depends on the API container's frozen process.env.
-        if (type === 'mill') {
-          nodeEnv['MILL_RELAYS'] = millRelays.join(',');
-        }
-        if (type === 'dvm' && dvmTurboToken) {
-          nodeEnv['TURBO_TOKEN'] = dvmTurboToken;
-        }
+          config: deps.config,
+          relays: millRelays,
+          turboToken: dvmTurboToken || undefined,
+        });
         try {
           await deps.orchestrator.startNodeViaCompose(type, nodeEnv);
         } catch (err: unknown) {

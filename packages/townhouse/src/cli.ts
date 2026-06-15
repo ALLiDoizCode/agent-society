@@ -49,6 +49,11 @@ import {
 import { materializeComposeTemplate } from './compose-loader.js';
 import type { ComposeLoaderOptions } from './compose-loader.js';
 import { BootReconciler } from './reconciler.js';
+import {
+  rebindChildContainers,
+  type RebindDeps,
+  type RebindSummary,
+} from './rebind.js';
 import { createApiServer } from './api/server.js';
 import { createWizardApiServer } from './api/wizard-server.js';
 import type { ApiServer } from './api/index.js';
@@ -209,7 +214,22 @@ export interface CliHsOverrides {
      * the cold-pull narration phase is skipped (silent degrade).
      */
     pullImage?: (image: string) => Promise<void>;
+    /**
+     * Start/recreate a child node container with the given env overlay. Used by
+     * the boot rebinder; optional on the stub so existing tests that don't
+     * provision children need not implement it.
+     */
+    startNodeViaCompose?: (
+      type: NodeType,
+      env: Record<string, string>
+    ) => Promise<void>;
   };
+  /**
+   * Override the boot rebinder (auto-rebind of child containers on `hs up`).
+   * Tests inject a spy to assert wiring without touching Docker/the wallet.
+   * When omitted, the default calls the real `rebindChildContainers`.
+   */
+  rebindChildren?: (deps: RebindDeps) => Promise<RebindSummary>;
   /** Override ConnectorAdminClient construction (avoids real HTTP in tests). */
   createAdminClient?: (
     baseUrl: string,
@@ -2392,11 +2412,50 @@ async function handleHsUp(
       }
     }
 
+    const nodesYamlPath = join(configDir, 'nodes.yaml');
+
+    // Step 5a: rebind provisioned child containers from nodes.yaml (+ config +
+    // wallet). `hs down` removed them and `up([])` only boots the apex, so
+    // without this a restart leaves children stopped. startNodeViaCompose is
+    // idempotent — unchanged children no-op; a config change (e.g. edited mill
+    // relays) recreates them. Must run BEFORE the peer reconciler so containers
+    // exist when peers re-register. Non-fatal: failures are logged, boot proceeds.
+    const rebindFn = hsOverrides?.rebindChildren ?? rebindChildContainers;
+    if (walletManager && typeof orch.startNodeViaCompose === 'function') {
+      const startNodeViaCompose = orch.startNodeViaCompose.bind(orch);
+      try {
+        const rebindSummary = await rebindFn({
+          nodesYamlPath,
+          wallet: walletManager,
+          orchestrator: { startNodeViaCompose },
+          config,
+          log: (line) => console.error(`[townhouse hs up] ${line}`),
+        });
+        for (const s of rebindSummary.skipped) {
+          console.error(
+            `[townhouse hs up] node ${s.id} not rebound: ${s.reason}`
+          );
+        }
+        for (const f of rebindSummary.failed) {
+          console.error(
+            `[townhouse hs up] node ${f.id} rebind failed (non-fatal): ${f.err}`
+          );
+        }
+      } catch (rebindErr: unknown) {
+        const detail =
+          rebindErr instanceof Error
+            ? (rebindErr.stack ?? rebindErr.message)
+            : String(rebindErr);
+        console.error(
+          `[townhouse hs up] child rebind error (non-fatal): ${detail}`
+        );
+      }
+    }
+
     // Step 5b: reconcile connector peer state to nodes.yaml (Story 46.1).
     // Runs after orchestrator.up([]) but BEFORE host.json is written and the
     // hostname is printed. Reconciler divergences are non-fatal — the
     // failure is logged to stderr but does not block apex boot.
-    const nodesYamlPath = join(configDir, 'nodes.yaml');
     const reconcilerLogPath = join(configDir, 'reconciler.log');
     const reconcilerFactory =
       hsOverrides?.createReconciler ??
