@@ -35,6 +35,7 @@ import {
   HandlerRegistry,
   createSwapHandler,
   fromMnemonic,
+  fromSecretKey,
   base58Encode,
 } from '@toon-protocol/sdk';
 import type { NodeIdentity, CreateSwapHandlerConfig } from '@toon-protocol/sdk';
@@ -98,7 +99,12 @@ export interface Publisher {
 /**
  * Configuration for starting a TOON Mill via `startMill()`.
  *
- * Exactly one of `mnemonic` or `secretKey` MUST be supplied.
+ * A `mnemonic` is required (BIP-32 swap-key derivation, D12-011). A `secretKey`
+ * may ALSO be supplied alongside it: when present it overrides the Nostr
+ * identity (so a child node provisioned at a non-zero derivation index runs
+ * with its assigned distinct key instead of re-deriving index 0 from the shared
+ * mnemonic — issue #266). Supplying ONLY a `secretKey` is an identity-only
+ * config that cannot derive swap keys (rejected by the mnemonic guard).
  *
  * Connector wiring — three modes (mutually exclusive `connector` / `connectorUrl`):
  *   - `connector` supplied        → operator owns lifecycle; not closed on stop()
@@ -507,12 +513,10 @@ export function validateConfig(config: MillConfig): void {
   const hasMnemonic = config.mnemonic !== undefined;
   const hasSecretKey = config.secretKey !== undefined;
 
-  if (hasMnemonic && hasSecretKey) {
-    throw new MillStartError(
-      'INVALID_CONFIG',
-      'MillConfig: provide either mnemonic or secretKey, not both'
-    );
-  }
+  // Both is allowed: the mnemonic drives BIP-32 swap-key derivation while an
+  // optional secretKey overrides the Nostr identity, so a child provisioned at
+  // a non-zero derivation index runs with its assigned distinct key rather than
+  // colliding with the apex/town index-0 key (issue #266).
   if (!hasMnemonic && !hasSecretKey) {
     throw new MillStartError(
       'INVALID_CONFIG',
@@ -679,14 +683,17 @@ export async function startMill(config: MillConfig): Promise<MillInstance> {
     );
   }
 
-  // The mill's Nostr identity is derived from the MILL_MNEMONIC (NOT from any
-  // NODE_NOSTR_SECRET_KEY). This SAME `identity` is the swap-handler gift-wrap
-  // recipient (`recipientSecretKey: identity.secretKey`, below) and is
-  // published as the kind:10032 IlpPeerInfo `pubkey` (below). streamSwap
-  // callers therefore gift-wrap to `identity.pubkey` and pass it as
-  // `millPubkey`. See issues #80/#88 and docs/protocol.md ("Swap recipient
-  // key discovery").
-  const identity: NodeIdentity = fromMnemonic(config.mnemonic);
+  // The mill's Nostr identity: prefer an explicit `secretKey` (the per-node key
+  // the orchestrator derived at this node's assigned NIP-06 account index) so
+  // children get DISTINCT identities; fall back to the mnemonic-derived index-0
+  // key only when no secretKey was supplied (issue #266). Either way this is the
+  // swap-handler gift-wrap recipient (`recipientSecretKey: identity.secretKey`,
+  // below) and the published kind:10032 IlpPeerInfo `pubkey` (below). streamSwap
+  // callers gift-wrap to `identity.pubkey` and pass it as `millPubkey`. See
+  // issues #80/#88/#266 and docs/protocol.md ("Swap recipient key discovery").
+  const identity: NodeIdentity = config.secretKey
+    ? fromSecretKey(config.secretKey)
+    : fromMnemonic(config.mnemonic);
   const millKeys: MillKeys = await deriveMillKeys({
     mnemonic: config.mnemonic,
     chains: config.chains,
