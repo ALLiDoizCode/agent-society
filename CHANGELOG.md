@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.3](https://github.com/toon-protocol/town/compare/v0.34.2...v0.34.3) (2026-06-16)
+
+### Bug Fixes
+
+* **town:** NIP-40 TTL + heartbeat on kind:10032 so dead apexes expire ([#261](https://github.com/toon-protocol/town/issues/261)) ([#262](https://github.com/toon-protocol/town/issues/262)) ([#263](https://github.com/toon-protocol/town/issues/263)) ([8735bd5](https://github.com/toon-protocol/town/commit/8735bd58be246a7ea84f4aa1467c84b1922e507e))
+
 ## [0.34.2](https://github.com/toon-protocol/town/compare/v0.34.1...v0.34.2) (2026-06-15)
 
 ### Bug Fixes
