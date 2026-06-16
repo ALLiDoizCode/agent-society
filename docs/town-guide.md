@@ -61,8 +61,16 @@ await town.stop();
 | `chainRpcUrls` | `Record<string, string>` | — | No | RPC URLs per chain |
 | `tokenNetworks` | `Record<string, string>` | — | No | TokenNetwork contract per chain |
 | `preferredTokens` | `Record<string, string>` | — | No | Preferred token per chain |
+| `announcementTtlSeconds` | `number` | `3600` | No | NIP-40 TTL for the kind:10032 announcement; re-published at half this interval. `0` disables the expiration tag + heartbeat |
 
 Provide exactly one of `mnemonic` or `secretKey` — not both, not neither.
+
+The node stamps its `kind:10032` announcement with a NIP-40 `expiration`
+(`created_at + announcementTtlSeconds`) and re-publishes on a heartbeat at half
+the TTL. A live apex keeps a fresh announcement; once it stops, the last one
+expires so discovery clients skip its now-unreachable BTP endpoint instead of
+failing against it (issue #261). Set `0` to advertise a non-expiring
+announcement (legacy behavior).
 
 ### Environment Variables
 
@@ -76,6 +84,7 @@ Provide exactly one of `mnemonic` or `secretKey` — not both, not neither.
 | `TOON_DATA_DIR` | `--data-dir` |
 | `TOON_DEV_MODE` | `--dev-mode` |
 | `TOON_KNOWN_PEERS` | `--known-peers` (JSON array) |
+| `TOON_ANNOUNCEMENT_TTL_SECONDS` | `announcementTtlSeconds` (NIP-40 kind:10032 TTL; default `3600`, `0` disables) |
 
 ### CLI Flags
 
