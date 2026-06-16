@@ -11,7 +11,11 @@
  * unit-testable with a fake WS and reuses a relay the runner already manages.
  */
 
-import { ILP_PEER_INFO_KIND, parseIlpPeerInfo } from '@toon-protocol/core';
+import {
+  ILP_PEER_INFO_KIND,
+  parseIlpPeerInfo,
+  isEventExpired,
+} from '@toon-protocol/core';
 import type { NostrEvent } from 'nostr-tools/pure';
 import type { RelaySubscription } from '../relay-subscription.js';
 import type { ApexNegotiationConfig } from './config.js';
@@ -100,6 +104,10 @@ export async function discoverApex(
 /** Whether a kind:10032 event announces the target apex's ILP address. */
 function matchesApex(event: NostrEvent, ilpAddress: string): boolean {
   if (event.kind !== ILP_PEER_INFO_KIND) return false;
+  // A NIP-40-expired announcement means the apex stopped re-publishing — it is
+  // offline and its advertised BTP endpoint is unreachable, so don't match it
+  // (issue #261). Discovery keeps waiting for a fresh, unexpired announcement.
+  if (isEventExpired(event)) return false;
   try {
     const info = parseIlpPeerInfo(event);
     const addrs = info.ilpAddresses ?? [info.ilpAddress];
