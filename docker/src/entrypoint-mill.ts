@@ -345,19 +345,31 @@ export function applyEnvOverlay(cfg: MillConfig): MillConfig {
   const out = { ...cfg };
   const env = process.env;
 
-  // MILL_MNEMONIC takes priority — required for BIP-32 swap key derivation.
-  // NODE_NOSTR_SECRET_KEY is accepted as a fallback for identity-only starts
-  // (no swap key derivation), but startMill() will throw MILL_REQUIRES_MNEMONIC
-  // unless a mnemonic is present.
+  // MILL_MNEMONIC is required for BIP-32 swap key derivation. When set, an
+  // accompanying NODE_NOSTR_SECRET_KEY (the per-node Nostr key the orchestrator
+  // derived at this node's assigned account index) is KEPT as an identity
+  // override — so a child runs with its distinct assigned key instead of
+  // re-deriving index 0 from the shared mnemonic (issue #266); the mnemonic
+  // still drives swap-key derivation. NODE_NOSTR_SECRET_KEY alone (no mnemonic)
+  // is an identity-only start; startMill() then throws MILL_REQUIRES_MNEMONIC.
+  const nostrSecretHex = env['NODE_NOSTR_SECRET_KEY'];
   if (env['MILL_MNEMONIC'] && env['MILL_MNEMONIC'].trim()) {
     out.mnemonic = env['MILL_MNEMONIC'].trim();
-    delete out.secretKey;
-  } else if (env['NODE_NOSTR_SECRET_KEY']) {
-    const hex = env['NODE_NOSTR_SECRET_KEY'];
-    if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    if (nostrSecretHex && nostrSecretHex.trim()) {
+      if (!/^[0-9a-fA-F]{64}$/.test(nostrSecretHex.trim())) {
+        throw new Error('NODE_NOSTR_SECRET_KEY must be a 64-char hex string');
+      }
+      out.secretKey = Uint8Array.from(
+        Buffer.from(nostrSecretHex.trim(), 'hex')
+      );
+    } else {
+      delete out.secretKey;
+    }
+  } else if (nostrSecretHex) {
+    if (!/^[0-9a-fA-F]{64}$/.test(nostrSecretHex)) {
       throw new Error('NODE_NOSTR_SECRET_KEY must be a 64-char hex string');
     }
-    out.secretKey = Uint8Array.from(Buffer.from(hex, 'hex'));
+    out.secretKey = Uint8Array.from(Buffer.from(nostrSecretHex, 'hex'));
     delete out.mnemonic;
   }
 

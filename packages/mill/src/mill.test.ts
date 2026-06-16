@@ -696,14 +696,14 @@ describe('T-058 startMill fails fast on missing mnemonic (AC-2, AC-4 phase 3)', 
     });
   });
 
-  it('[P1] throws INVALID_CONFIG when both mnemonic AND secretKey provided', async () => {
-    const startMill = await loadStartMill();
-    const MillStartError = await loadMillStartError();
-    const cfg = baseConfig({ secretKey: new Uint8Array(32) });
-    await expect(startMill(cfg)).rejects.toBeInstanceOf(MillStartError);
-    await expect(startMill(cfg)).rejects.toMatchObject({
-      code: 'INVALID_CONFIG',
-    });
+  it('[P1] ACCEPTS both mnemonic AND secretKey — secretKey is the Nostr identity override (#266)', async () => {
+    // A child node provisioned at a non-zero derivation index supplies its
+    // assigned per-node Nostr secretKey ALONGSIDE the shared mnemonic (which
+    // still drives BIP-32 swap-key derivation). validateConfig must allow this
+    // so children get distinct identities instead of all deriving index 0.
+    const validateConfig = await loadValidateConfig();
+    const cfg = baseConfig({ secretKey: new Uint8Array(32).fill(1) });
+    expect(() => validateConfig(cfg)).not.toThrow();
   });
 
   it('[P1] throws MILL_REQUIRES_MNEMONIC when only secretKey is supplied (D12-011)', async () => {

@@ -174,15 +174,26 @@ function parseRawConfig(raw: CliRawConfig): MillConfig {
 function applyEnvOverlay(cfg: MillConfig): MillConfig {
   const out = { ...cfg };
   const env = process.env;
+  // With a mnemonic (BIP-32 swap keys), an accompanying MILL_SECRET_KEY_HEX is
+  // kept as a Nostr identity override so children run with their assigned
+  // distinct key rather than the shared index-0 key (issue #266). Secret key
+  // alone is an identity-only start.
+  const secretHex = env['MILL_SECRET_KEY_HEX'];
   if (env['MILL_MNEMONIC']) {
     out.mnemonic = env['MILL_MNEMONIC'];
-    delete out.secretKey;
-  } else if (env['MILL_SECRET_KEY_HEX']) {
-    const hex = env['MILL_SECRET_KEY_HEX'];
-    if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    if (secretHex) {
+      if (!/^[0-9a-fA-F]{64}$/.test(secretHex)) {
+        throw new Error('MILL_SECRET_KEY_HEX must be a 64-char hex string');
+      }
+      out.secretKey = Uint8Array.from(Buffer.from(secretHex, 'hex'));
+    } else {
+      delete out.secretKey;
+    }
+  } else if (secretHex) {
+    if (!/^[0-9a-fA-F]{64}$/.test(secretHex)) {
       throw new Error('MILL_SECRET_KEY_HEX must be a 64-char hex string');
     }
-    out.secretKey = Uint8Array.from(Buffer.from(hex, 'hex'));
+    out.secretKey = Uint8Array.from(Buffer.from(secretHex, 'hex'));
     delete out.mnemonic;
   }
   if (env['MILL_BLS_PORT']) {
